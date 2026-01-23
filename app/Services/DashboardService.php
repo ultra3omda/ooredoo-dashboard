@@ -1985,6 +1985,7 @@ class DashboardService
                 ->get();
             
             // Corriger le plan basé sur pricepointId pour chaque abonnement Timwe
+            // ET corriger le prix pour les plans Trial (doit être 0)
             $subscriptionsArray = $subscriptions->map(function($subscription) use ($transactions, $billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
                 $subArray = (array)$subscription;
                 $operator = $subArray['operator'] ?? '';
@@ -2001,6 +2002,11 @@ class DashboardService
                             $subArray['plan'] = 'Mensuel';
                         }
                     }
+                }
+                
+                // ⭐ CORRECTION DU PRIX : Les plans Trial sont gratuits (0 TND)
+                if (isset($subArray['plan']) && $subArray['plan'] === 'Trial') {
+                    $subArray['price'] = 0;
                 }
                 
                 return $subArray;

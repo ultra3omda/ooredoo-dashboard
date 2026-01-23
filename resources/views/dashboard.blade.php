@@ -9067,7 +9067,10 @@
           const activationDate = sub.activation_date ? (typeof sub.activation_date === 'string' ? sub.activation_date.substring(0, 10) : sub.activation_date) : '-';
           const endDate = sub.end_date ? (typeof sub.end_date === 'string' ? sub.end_date.substring(0, 10) : sub.end_date) : '-';
           const status = sub.status || 'Inconnu';
-          const price = sub.price ? parseFloat(sub.price).toFixed(2) + ' TND' : '-';
+          // ⭐ CORRECTION: Les plans Trial sont gratuits
+          const price = (plan === 'Trial' || parseFloat(sub.price) === 0) 
+            ? '<span style="color: var(--success); font-weight: 600;">Gratuit</span>' 
+            : (sub.price ? parseFloat(sub.price).toFixed(2) + ' TND' : '-');
           
           const statusBadge = status === 'Actif' ? 
             '<span style="background: var(--success); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Actif</span>' :
