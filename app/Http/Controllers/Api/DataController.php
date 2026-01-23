@@ -113,9 +113,37 @@ class DataController extends Controller
             // Générer la clé de cache
             $cacheKey = $this->generateCacheKey($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator, $user->id);
             
-            // Cache intelligent: 30-120s selon la longueur de période
+            // Cache intelligent avec TTL adaptatif optimisé
             $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
-            $ttl = $periodDays > 120 ? 120 : ($periodDays > 30 ? 90 : 30);
+            $endDateCarbon = Carbon::parse($endDate);
+            $daysSinceEnd = Carbon::now()->diffInDays($endDateCarbon, false); // Négatif si dans le passé
+            
+            // Logique de TTL améliorée :
+            // - Périodes complètement passées (> 7 jours) : cache long (30 min)
+            // - Périodes récentes/actuelles : cache court (30-120s selon durée)
+            // - Longues périodes (> 180j) : cache moyen (5 min)
+            if ($daysSinceEnd < -7) {
+                // Période historique complète (terminée il y a plus de 7 jours) : données stables
+                $ttl = 1800; // 30 minutes
+                Log::info("Cache TTL: 30 min (période historique stable)");
+            } elseif ($periodDays > 180) {
+                // Très longue période (> 6 mois) : calcul coûteux
+                $ttl = 300; // 5 minutes
+                Log::info("Cache TTL: 5 min (longue période)");
+            } elseif ($periodDays > 90) {
+                // Longue période (3-6 mois)
+                $ttl = 180; // 3 minutes
+                Log::info("Cache TTL: 3 min (période moyenne-longue)");
+            } elseif ($periodDays > 30) {
+                // Période moyenne (1-3 mois)
+                $ttl = 90; // 90 secondes
+                Log::info("Cache TTL: 90s (période moyenne)");
+            } else {
+                // Courte période (< 1 mois)
+                $ttl = 30; // 30 secondes
+                Log::info("Cache TTL: 30s (courte période)");
+            }
+            
             $data = Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator) {
                 return $this->fetchDashboardDataFromDatabase($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator);
             });

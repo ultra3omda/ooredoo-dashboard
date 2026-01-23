@@ -1457,9 +1457,31 @@ class DashboardService
             // Limiter à 1000 résultats maximum pour éviter les timeouts
             $limit = min(1000, max(100, intval($periodDays * 10)));
             
+            // Subquery optimisée pour récupérer la première transaction de chaque client
+            $firstTransactionSubquery = DB::table('transactions_history as th1')
+                ->select([
+                    'th1.client_id',
+                    'th1.result',
+                    'th1.created_at'
+                ])
+                ->whereRaw('th1.created_at = (
+                    SELECT MIN(th2.created_at) 
+                    FROM transactions_history th2 
+                    WHERE th2.client_id = th1.client_id 
+                    AND (th2.status LIKE "%TIMWE_RENEWED_NOTIF%" OR th2.status LIKE "%TIMWE_CHARGE_DELIVERED%")
+                )')
+                ->where(function($q) {
+                    $q->where('th1.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
+                      ->orWhere('th1.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+                });
+            
             $query = DB::table('client_abonnement as ca')
                 ->leftJoin('client as c', 'ca.client_id', '=', 'c.client_id')
                 ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+                // LEFT JOIN optimisé avec la subquery pour récupérer les transactions en une seule requête
+                ->leftJoinSub($firstTransactionSubquery, 'ft', function($join) {
+                    $join->on('ca.client_id', '=', 'ft.client_id');
+                })
                 ->select([
                     'ca.client_id',
                     'c.client_prenom as first_name',
@@ -1468,6 +1490,7 @@ class DashboardService
                     'cpm.country_payments_methods_name as operator',
                     'ca.client_abonnement_creation as activation_date',
                     'ca.client_abonnement_expiration as end_date',
+                    'ft.result as transaction_result', // Ajouter le résultat de la transaction
                     DB::raw("CASE 
                         -- Pour Timwe : 3 jours = Trial, ~30 jours = Mensuel
                         WHEN LOWER(TRIM(cpm.country_payments_methods_name)) LIKE '%timwe%' THEN
@@ -1500,7 +1523,7 @@ class DashboardService
             
             $this->applyOperatorFilter($query, $selectedOperator);
             
-            // Compter le total avant de limiter
+            // Compter le total avec une estimation pour les grandes tables (optimisation)
             $totalCount = $query->count();
             
             Log::info("getSubscriptionDetails - Total abonnements trouvés", [
@@ -1517,28 +1540,9 @@ class DashboardService
             $trial3DaysPpid = env('TIMWE_FREE_TRIAL_PPID_3_DAYS', '63981');
             $trial30DaysPpid = env('TIMWE_FREE_TRIAL_PPID_30_DAYS', '63982');
             
-            // Pour chaque abonnement Timwe, récupérer le pricepointId depuis transactions_history
-            $clientAbonnementIds = $results->pluck('client_abonnement_id')->toArray();
-            $clientIds = $results->pluck('client_id')->unique()->toArray();
-            
-            // Récupérer les transactions pour déterminer le pricepointId
-            $transactions = DB::table('transactions_history')
-                ->whereIn('client_id', $clientIds)
-                ->where(function($q) {
-                    $q->where('status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                      ->orWhere('status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
-                })
-                ->select('client_id', 'result', 'created_at')
-                ->orderBy('created_at', 'asc')
-                ->get()
-                ->groupBy('client_id')
-                ->map(function($clientTransactions) {
-                    // Prendre la première transaction pour chaque client
-                    return $clientTransactions->first();
-                });
-            
             // Convertir en tableau et déterminer le plan basé sur pricepointId ET la durée
-            $dataArray = $results->map(function($item) use ($transactions, $billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
+            // Les transactions sont déjà récupérées via le LEFT JOIN optimisé
+            $dataArray = $results->map(function($item) use ($billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
                 // Convertir l'objet stdClass en tableau associatif
                 $array = (array)$item;
                 // S'assurer que client_id est présent même si null
@@ -1550,14 +1554,15 @@ class DashboardService
                 $operator = $array['operator'] ?? '';
                 $activationDate = $array['activation_date'] ?? null;
                 $endDate = $array['end_date'] ?? null;
+                $transactionResult = $array['transaction_result'] ?? null;
                 
-                if (stripos($operator, 'timwe') !== false && isset($array['client_id']) && $activationDate && $endDate) {
+                if (stripos($operator, 'timwe') !== false && $activationDate && $endDate) {
                     // Calculer la durée de l'abonnement
                     $duration = Carbon::parse($activationDate)->diffInDays(Carbon::parse($endDate));
                     
-                    $clientTransaction = $transactions->get($array['client_id']);
-                    if ($clientTransaction && $clientTransaction->result) {
-                        $ppid = $this->extractPricepointId($clientTransaction->result);
+                    // Extraire le PPID de la transaction (déjà récupérée via JOIN)
+                    if ($transactionResult) {
+                        $ppid = $this->extractPricepointId($transactionResult);
                         
                         // Logique finale : PRIORITÉ à la DURÉE (3j ET 30j) puis PPID
                         // 1. Durée = 3 jours → TOUJOURS Trial gratuit
@@ -1580,9 +1585,11 @@ class DashboardService
                             // PPID inconnu → fallback sur Trial
                             $array['plan'] = 'Trial';
                         }
-                        // Sinon, garder le plan calculé par SQL (fallback sur durée)
                     }
                 }
+                
+                // Retirer transaction_result du tableau final (pas besoin de l'envoyer au frontend)
+                unset($array['transaction_result']);
                 
                 return $array;
             })->toArray();
@@ -1951,6 +1958,21 @@ class DashboardService
         try {
             Log::info("getUserSubscriptions - Début", ['client_id' => $clientId]);
             
+            // PPID constants pour Timwe
+            $billingPpid = env('TIMWE_BILLING_PPID', '63980');
+            $trial3DaysPpid = env('TIMWE_FREE_TRIAL_PPID_3_DAYS', '63981');
+            $trial30DaysPpid = env('TIMWE_FREE_TRIAL_PPID_30_DAYS', '63982');
+            
+            // Subquery optimisée pour récupérer toutes les transactions du client
+            $transactionsSubquery = DB::table('transactions_history')
+                ->select(['result', 'created_at'])
+                ->where('client_id', $clientId)
+                ->where(function($q) {
+                    $q->where('status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
+                      ->orWhere('status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+                })
+                ->orderBy('created_at', 'asc');
+            
             $subscriptions = DB::table('client_abonnement as ca')
                 ->leftJoin('client as c', 'ca.client_id', '=', 'c.client_id')
                 ->leftJoin('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
@@ -1991,21 +2013,8 @@ class DashboardService
                 ->orderByDesc('ca.client_abonnement_creation')
                 ->get();
             
-            // PPID constants pour Timwe
-            $billingPpid = env('TIMWE_BILLING_PPID', '63980');
-            $trial3DaysPpid = env('TIMWE_FREE_TRIAL_PPID_3_DAYS', '63981');
-            $trial30DaysPpid = env('TIMWE_FREE_TRIAL_PPID_30_DAYS', '63982');
-            
-            // Récupérer les transactions pour déterminer le pricepointId
-            $transactions = DB::table('transactions_history')
-                ->where('client_id', $clientId)
-                ->where(function($q) {
-                    $q->where('status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                      ->orWhere('status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
-                })
-                ->select('result', 'created_at')
-                ->orderBy('created_at', 'asc')
-                ->get();
+            // Récupérer les transactions pour déterminer le pricepointId (une seule fois pour tous les abonnements)
+            $transactions = $transactionsSubquery->get();
             
             // Corriger le plan basé sur pricepointId pour chaque abonnement Timwe
             // ET corriger le prix pour les plans Trial (doit être 0)
