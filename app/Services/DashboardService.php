@@ -1537,7 +1537,7 @@ class DashboardService
                     return $clientTransactions->first();
                 });
             
-            // Convertir en tableau et déterminer le plan basé sur pricepointId
+            // Convertir en tableau et déterminer le plan basé sur pricepointId ET la durée
             $dataArray = $results->map(function($item) use ($transactions, $billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
                 // Convertir l'objet stdClass en tableau associatif
                 $array = (array)$item;
@@ -1546,15 +1546,35 @@ class DashboardService
                     $array['client_id'] = null;
                 }
                 
-                // Pour Timwe, déterminer le plan basé sur pricepointId
+                // Pour Timwe, déterminer le plan basé sur pricepointId ET la durée de l'abonnement
                 $operator = $array['operator'] ?? '';
-                if (stripos($operator, 'timwe') !== false && isset($array['client_id'])) {
+                $activationDate = $array['activation_date'] ?? null;
+                $endDate = $array['end_date'] ?? null;
+                
+                if (stripos($operator, 'timwe') !== false && isset($array['client_id']) && $activationDate && $endDate) {
+                    // Calculer la durée de l'abonnement
+                    $duration = Carbon::parse($activationDate)->diffInDays(Carbon::parse($endDate));
+                    
                     $clientTransaction = $transactions->get($array['client_id']);
                     if ($clientTransaction && $clientTransaction->result) {
                         $ppid = $this->extractPricepointId($clientTransaction->result);
-                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                        
+                        // Logique améliorée (identique à getUserSubscriptions) :
+                        // 1. Si durée = 3 jours ET PPID = Trial → Trial gratuit
+                        // 2. Si durée ~30 jours (20-40) → Mensuel payant (peu importe le PPID)
+                        // 3. Sinon, utiliser le PPID pour déterminer
+                        
+                        if ($duration === 3 && ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid)) {
+                            // Vrai Trial de 3 jours (gratuit)
+                            $array['plan'] = 'Trial';
+                        } elseif ($duration >= 20 && $duration <= 40) {
+                            // Abonnement mensuel (soit direct, soit après Trial auto-renouvelé)
+                            $array['plan'] = 'Mensuel';
+                        } elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                            // Trial (mais durée anormale)
                             $array['plan'] = 'Trial';
                         } elseif ($ppid === $billingPpid) {
+                            // Mensuel direct
                             $array['plan'] = 'Mensuel';
                         }
                         // Sinon, garder le plan calculé par SQL (fallback sur durée)
@@ -1989,22 +2009,47 @@ class DashboardService
             $subscriptionsArray = $subscriptions->map(function($subscription) use ($transactions, $billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
                 $subArray = (array)$subscription;
                 $operator = $subArray['operator'] ?? '';
+                $activationDate = $subArray['activation_date'] ?? null;
+                $endDate = $subArray['end_date'] ?? null;
                 
-                // Pour Timwe, déterminer le plan basé sur pricepointId
-                if (stripos($operator, 'timwe') !== false && $transactions->isNotEmpty()) {
-                    // Prendre la première transaction (la plus ancienne)
-                    $firstTransaction = $transactions->first();
-                    if ($firstTransaction && $firstTransaction->result) {
-                        $ppid = $this->extractPricepointId($firstTransaction->result);
-                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                // Pour Timwe, déterminer le plan basé sur pricepointId ET la durée de l'abonnement
+                if (stripos($operator, 'timwe') !== false && $transactions->isNotEmpty() && $activationDate && $endDate) {
+                    // Calculer la durée de l'abonnement
+                    $duration = Carbon::parse($activationDate)->diffInDays(Carbon::parse($endDate));
+                    
+                    // Trouver la transaction la plus proche de la date d'activation
+                    $relevantTransaction = $transactions->sortBy(function($t) use ($activationDate) {
+                        return abs(Carbon::parse($t->created_at)->diffInSeconds(Carbon::parse($activationDate)));
+                    })->first();
+                    
+                    if ($relevantTransaction && $relevantTransaction->result) {
+                        $ppid = $this->extractPricepointId($relevantTransaction->result);
+                        
+                        // Logique améliorée :
+                        // 1. Si durée = 3 jours → Trial gratuit
+                        // 2. Si durée ~30 jours ET PPID = Trial → C'était un Trial qui s'est auto-renouvelé en Mensuel → Mensuel payant
+                        // 3. Si durée ~30 jours ET PPID = Billing → Mensuel direct → Mensuel payant
+                        
+                        if ($duration === 3 && ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid)) {
+                            // Vrai Trial de 3 jours (gratuit)
                             $subArray['plan'] = 'Trial';
+                            $subArray['price'] = 0;
+                        } elseif ($duration >= 20 && $duration <= 40) {
+                            // Abonnement mensuel (soit direct, soit après Trial auto-renouvelé)
+                            $subArray['plan'] = 'Mensuel';
+                            // Prix reste celui de la base de données (3 DT)
+                        } elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                            // Trial (mais durée anormale)
+                            $subArray['plan'] = 'Trial';
+                            $subArray['price'] = 0;
                         } elseif ($ppid === $billingPpid) {
+                            // Mensuel direct
                             $subArray['plan'] = 'Mensuel';
                         }
                     }
                 }
                 
-                // ⭐ CORRECTION DU PRIX : Les plans Trial sont gratuits (0 TND)
+                // ⭐ CORRECTION DU PRIX : Les plans Trial sont toujours gratuits (0 TND)
                 if (isset($subArray['plan']) && $subArray['plan'] === 'Trial') {
                     $subArray['price'] = 0;
                 }
