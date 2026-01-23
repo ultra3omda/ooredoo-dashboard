@@ -631,13 +631,27 @@ class DashboardService
         // Récupérer les données d'abonnements avec activations quotidiennes
         $subscriptions = $this->getSubscriptionsData($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive);
         
+        // Ajouter les données Ooredoo/DGV (comme dans getStandardDashboardData)
+        $ooredooStats = [
+            'daily_statistics' => $this->getOoredooDailyStatistics($startBound, $endExclusive),
+            'daily_statistics_comparison' => $this->getOoredooDailyStatistics($compStartBound, $compEndExclusive)
+        ];
+        
+        // Grouper les statistiques Ooredoo par mois avec détails quotidiens
+        $ooredooStats['ooredoo_monthly_stats'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics']);
+        $ooredooStats['ooredoo_monthly_stats_comparison'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics_comparison']);
+        
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
         
         // Log pour déboguer les KPIs Timwe et Analyses Avancées
-        Log::info("getStandardDashboardData - KPIs retournés", [
+        Log::info("getOptimizedDashboardData - KPIs retournés", [
             'billingRateTimwe' => $kpis['billingRateTimwe'] ?? 'missing',
             'totalTimweClients' => $kpis['totalTimweClients'] ?? 'missing',
             'totalTimweBillings' => $kpis['totalTimweBillings'] ?? 'missing',
+            'billingRateOoredoo' => $kpis['billingRateOoredoo'] ?? 'missing',
+            'totalOoredooClients' => $kpis['totalOoredooClients'] ?? 'missing',
+            'totalOoreodooBillings' => $kpis['totalOoreodooBillings'] ?? 'missing',
+            'ooredoo_monthly_stats_count' => count($ooredooStats['ooredoo_monthly_stats'] ?? []),
             'has_activations_by_channel' => isset($subscriptions['activations_by_channel']),
             'has_plan_distribution' => isset($subscriptions['plan_distribution']),
             'has_renewal_rate' => isset($subscriptions['renewal_rate']),
@@ -655,6 +669,7 @@ class DashboardService
             "categoryDistribution" => $merchants['categories'],
             "transactions" => $transactions,
             "subscriptions" => $subscriptions,
+            "ooredoo_stats" => $ooredooStats,
             "insights" => [
                 "positive" => ["Mode optimisé activé pour période étendue"],
                 "challenges" => ["Analyse détaillée limitée pour optimiser les performances"],
@@ -1745,18 +1760,21 @@ class DashboardService
                 ];
             }
 
-            // Si pas de données dans le cache, vérifier la période
+            // Si pas de données dans le cache, retourner 0 et loguer un avertissement
             $periodDays = $startBound->diffInDays($endExclusive);
+            Log::warning("calculateTimweBillingRate - Aucune donnée dans le cache", [
+                'period_days' => $periodDays,
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d'),
+                'suggestion' => 'Exécuter: php artisan timwe:calculate-historical --from=' . $startBound->format('Y-m-d') . ' --to=' . $endDate->format('Y-m-d')
+            ]);
             
-            // Pour les périodes > 90 jours, ne pas calculer (trop long)
-            if ($periodDays > 90) {
-                return [
-                    'rate' => 0.0,
-                    'total_clients' => 0,
-                    'billed_clients' => 0,
-                    'total_billings' => 0
-                ];
-            }
+            return [
+                'rate' => 0.0,
+                'total_clients' => 0,
+                'billed_clients' => 0,
+                'total_billings' => 0
+            ];
             
             
             // PPID constants
@@ -2019,32 +2037,48 @@ class DashboardService
         try {
             // Essayer d'utiliser la table de cache d'abord
             $endDate = $endExclusive->copy()->subDay();
+            
+            Log::info("calculateOoredooBillingRate - DÉBUT", [
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d')
+            ]);
+            
             $stats = \App\Models\OoredooDailyStat::getStatsForPeriod($startBound, $endDate);
+
+            Log::info("calculateOoredooBillingRate - Stats récupérées", [
+                'count' => $stats->count()
+            ]);
 
             if ($stats->isNotEmpty()) {
                 // Utiliser les données de la table de cache
                 $lastDayStat = $stats->last();
                 
-                return [
+                $result = [
                     'rate' => $lastDayStat->billing_rate,
                     'total_clients' => $lastDayStat->total_clients,
                     'billed_clients' => 0,
                     'total_billings' => $stats->sum('total_billings')
                 ];
+                
+                Log::info("calculateOoredooBillingRate - RETOUR avec données", $result);
+                return $result;
             }
 
-            // Si pas de données dans le cache, vérifier la période
+            // Si pas de données dans le cache, retourner 0 et loguer un avertissement
             $periodDays = $startBound->diffInDays($endExclusive);
+            Log::warning("calculateOoredooBillingRate - Aucune donnée dans le cache", [
+                'period_days' => $periodDays,
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d'),
+                'suggestion' => 'Exécuter: php artisan ooredoo:calculate-historical --start-date=' . $startBound->format('Y-m-d') . ' --end-date=' . $endDate->format('Y-m-d')
+            ]);
             
-            // Pour les périodes > 90 jours, ne pas calculer (trop long)
-            if ($periodDays > 90) {
-                return [
-                    'rate' => 0.0,
-                    'total_clients' => 0,
-                    'billed_clients' => 0,
-                    'total_billings' => 0
-                ];
-            }
+            return [
+                'rate' => 0.0,
+                'total_clients' => 0,
+                'billed_clients' => 0,
+                'total_billings' => 0
+            ];
 
             // Récupérer les IDs d'opérateurs Ooredoo
             $ooredooOperatorIds = DB::table('country_payments_methods')
@@ -2111,6 +2145,7 @@ class DashboardService
 
     /**
      * Récupère les statistiques quotidiennes Ooredoo/DGV pour affichage dans le tableau
+     * OPTIMISATION: Les données sont pré-calculées dans ooredoo_daily_stats, pas de timeout
      */
     private function getOoredooDailyStatistics(Carbon $startBound, Carbon $endExclusive): array
     {
@@ -2118,22 +2153,22 @@ class DashboardService
             $endDate = $endExclusive->copy()->subDay();
             $periodDays = $startBound->diffInDays($endDate) + 1;
             
-            // Pour les TRÈS longues périodes (> 90 jours), limiter à 90 jours max pour éviter timeout
-            if ($periodDays > 90) {
-                Log::info("getOoredooDailyStatistics - Période longue détectée, limitation à 90 jours", [
-                    'period_days' => $periodDays,
-                    'original_start' => $startBound->format('Y-m-d'),
-                    'original_end' => $endDate->format('Y-m-d')
-                ]);
-                $startBound = $endDate->copy()->subDays(89); // 90 jours max
-            }
+            Log::info("getOoredooDailyStatistics - Récupération depuis cache", [
+                'period_days' => $periodDays,
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d')
+            ]);
             
+            // Récupération depuis la table de cache - pas de limitation de période
+            // Les données sont pré-calculées quotidiennement via les commandes artisan
             $stats = \App\Models\OoredooDailyStat::getStatsForPeriod($startBound, $endDate);
 
             if ($stats->isEmpty()) {
+                Log::warning("getOoredooDailyStatistics - Aucune donnée trouvée, exécuter: php artisan ooredoo:calculate-historical");
                 return [];
             }
 
+            Log::info("getOoredooDailyStatistics - Stats récupérées: " . $stats->count() . " jours");
             return $stats->toArray();
             
         } catch (\Exception $e) {
@@ -2166,25 +2201,24 @@ class DashboardService
             $endDate = $endExclusive->copy()->subDay();
             $periodDays = $startBound->diffInDays($endDate) + 1;
             
-            // Pour les TRÈS longues périodes (> 90 jours), limiter à 90 jours max pour éviter timeout
-            if ($periodDays > 90) {
-                Log::info("getDailyStatistics - Période longue détectée, limitation à 90 jours", [
-                    'period_days' => $periodDays,
-                    'original_start' => $startBound->format('Y-m-d'),
-                    'original_end' => $endDate->format('Y-m-d')
-                ]);
-                $startBound = $endDate->copy()->subDays(89); // 90 jours max
-                $periodDays = 90; // Recalculer periodDays après limitation
-            }
+            Log::info("getDailyStatistics - Récupération depuis cache Timwe", [
+                'period_days' => $periodDays,
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d')
+            ]);
             
+            // Récupération depuis la table de cache - pas de limitation de période
             $stats = TimweDailyStat::getStatsForPeriod($startBound, $endDate);
             $missingDays = $periodDays - $stats->count();
             
             // Seulement calculer les jours manquants si :
             // 1. Il y a moins de 7 jours manquants
             // 2. La période totale est < 30 jours
-            // 3. Pas en mode optimisé (pas déjà forcé à 90 jours)
             if ($missingDays > 0 && $missingDays <= 7 && $periodDays <= 30) {
+                Log::info("getDailyStatistics - Calcul des jours manquants", [
+                    'missing_days' => $missingDays
+                ]);
+                
                 // Calculer les jours manquants silencieusement
                 $existingDates = $stats->pluck('stat_date')->map(function($date) {
                     return $date->format('Y-m-d');
@@ -2200,6 +2234,13 @@ class DashboardService
                 
                 // Recharger les stats après calcul
                 $stats = TimweDailyStat::getStatsForPeriod($startBound, $endDate);
+            } elseif ($missingDays > 0) {
+                Log::warning("getDailyStatistics - Données Timwe incomplètes", [
+                    'missing_days' => $missingDays,
+                    'found_days' => $stats->count(),
+                    'expected_days' => $periodDays,
+                    'suggestion' => 'Exécuter: php artisan timwe:calculate-historical --from=' . $startBound->format('Y-m-d') . ' --to=' . $endDate->format('Y-m-d') . ' --force'
+                ]);
             }
 
             if ($stats->isNotEmpty()) {
