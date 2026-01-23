@@ -1559,23 +1559,23 @@ class DashboardService
                     if ($clientTransaction && $clientTransaction->result) {
                         $ppid = $this->extractPricepointId($clientTransaction->result);
                         
-                        // Logique améliorée (identique à getUserSubscriptions) :
-                        // 1. Si durée = 3 jours ET PPID = Trial → Trial gratuit
-                        // 2. Si durée ~30 jours (20-40) → Mensuel payant (peu importe le PPID)
-                        // 3. Sinon, utiliser le PPID pour déterminer
+                        // Logique corrigée basée sur le PPID (prioritaire) :
+                        // 1. PPID = Trial → Plan = Trial (gratuit), quelle que soit la durée
+                        // 2. PPID = Billing → Plan = Mensuel (payant, 3 DT)
                         
-                        if ($duration === 3 && ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid)) {
-                            // Vrai Trial de 3 jours (gratuit)
-                            $array['plan'] = 'Trial';
-                        } elseif ($duration >= 20 && $duration <= 40) {
-                            // Abonnement mensuel (soit direct, soit après Trial auto-renouvelé)
-                            $array['plan'] = 'Mensuel';
-                        } elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
-                            // Trial (mais durée anormale)
+                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                            // PPID Trial → C'est un abonnement Trial (gratuit)
                             $array['plan'] = 'Trial';
                         } elseif ($ppid === $billingPpid) {
-                            // Mensuel direct
+                            // PPID Billing → C'est un abonnement Mensuel (payant)
                             $array['plan'] = 'Mensuel';
+                        } else {
+                            // PPID inconnu → déterminer par durée
+                            if ($duration >= 20 && $duration <= 40) {
+                                $array['plan'] = 'Mensuel';
+                            } else {
+                                $array['plan'] = 'Trial';
+                            }
                         }
                         // Sinon, garder le plan calculé par SQL (fallback sur durée)
                     }
@@ -2025,26 +2025,27 @@ class DashboardService
                     if ($relevantTransaction && $relevantTransaction->result) {
                         $ppid = $this->extractPricepointId($relevantTransaction->result);
                         
-                        // Logique améliorée :
-                        // 1. Si durée = 3 jours → Trial gratuit
-                        // 2. Si durée ~30 jours ET PPID = Trial → C'était un Trial qui s'est auto-renouvelé en Mensuel → Mensuel payant
-                        // 3. Si durée ~30 jours ET PPID = Billing → Mensuel direct → Mensuel payant
+                        // Logique corrigée basée sur le PPID (prioritaire) :
+                        // 1. PPID = Trial → Plan = Trial (gratuit), quelle que soit la durée
+                        //    → Un abonnement de 30 jours avec PPID Trial représente la période d'essai initiale
+                        // 2. PPID = Billing → Plan = Mensuel (payant, 3 DT)
                         
-                        if ($duration === 3 && ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid)) {
-                            // Vrai Trial de 3 jours (gratuit)
-                            $subArray['plan'] = 'Trial';
-                            $subArray['price'] = 0;
-                        } elseif ($duration >= 20 && $duration <= 40) {
-                            // Abonnement mensuel (soit direct, soit après Trial auto-renouvelé)
-                            $subArray['plan'] = 'Mensuel';
-                            // Prix reste celui de la base de données (3 DT)
-                        } elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
-                            // Trial (mais durée anormale)
+                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                            // PPID Trial → C'est un abonnement Trial (gratuit)
                             $subArray['plan'] = 'Trial';
                             $subArray['price'] = 0;
                         } elseif ($ppid === $billingPpid) {
-                            // Mensuel direct
+                            // PPID Billing → C'est un abonnement Mensuel (payant)
                             $subArray['plan'] = 'Mensuel';
+                            // Prix reste celui de la base de données (3 DT)
+                        } else {
+                            // PPID inconnu → déterminer par durée
+                            if ($duration >= 20 && $duration <= 40) {
+                                $subArray['plan'] = 'Mensuel';
+                            } else {
+                                $subArray['plan'] = 'Trial';
+                                $subArray['price'] = 0;
+                            }
                         }
                     }
                 }
