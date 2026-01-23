@@ -1559,11 +1559,15 @@ class DashboardService
                     if ($clientTransaction && $clientTransaction->result) {
                         $ppid = $this->extractPricepointId($clientTransaction->result);
                         
-                        // Logique corrigée basée sur le PPID (prioritaire) :
-                        // 1. PPID = Trial → Plan = Trial (gratuit), quelle que soit la durée
-                        // 2. PPID = Billing → Plan = Mensuel (payant, 3 DT)
+                        // Logique corrigée avec PRIORITÉ à la durée de 3 jours :
+                        // 1. Durée = 3 jours → TOUJOURS Trial gratuit (peu importe PPID)
+                        // 2. PPID = Trial → Plan = Trial (gratuit), quelle que soit la durée
+                        // 3. PPID = Billing → Plan = Mensuel (payant, 3 DT)
                         
-                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                        if ($duration === 3) {
+                            // PRIORITÉ ABSOLUE : Un abonnement de 3 jours est TOUJOURS un Trial gratuit
+                            $array['plan'] = 'Trial';
+                        } elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
                             // PPID Trial → C'est un abonnement Trial (gratuit)
                             $array['plan'] = 'Trial';
                         } elseif ($ppid === $billingPpid) {
@@ -2025,12 +2029,17 @@ class DashboardService
                     if ($relevantTransaction && $relevantTransaction->result) {
                         $ppid = $this->extractPricepointId($relevantTransaction->result);
                         
-                        // Logique corrigée basée sur le PPID (prioritaire) :
-                        // 1. PPID = Trial → Plan = Trial (gratuit), quelle que soit la durée
-                        //    → Un abonnement de 30 jours avec PPID Trial représente la période d'essai initiale
-                        // 2. PPID = Billing → Plan = Mensuel (payant, 3 DT)
+                        // Logique corrigée avec PRIORITÉ à la durée de 3 jours :
+                        // 1. Durée = 3 jours → TOUJOURS Trial gratuit (peu importe PPID)
+                        //    → Car un abonnement de 3 jours est forcément une période d'essai
+                        // 2. PPID = Trial → Plan = Trial (gratuit), quelle que soit la durée
+                        // 3. PPID = Billing → Plan = Mensuel (payant, 3 DT)
                         
-                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                        if ($duration === 3) {
+                            // PRIORITÉ ABSOLUE : Un abonnement de 3 jours est TOUJOURS un Trial gratuit
+                            $subArray['plan'] = 'Trial';
+                            $subArray['price'] = 0;
+                        } elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
                             // PPID Trial → C'est un abonnement Trial (gratuit)
                             $subArray['plan'] = 'Trial';
                             $subArray['price'] = 0;
