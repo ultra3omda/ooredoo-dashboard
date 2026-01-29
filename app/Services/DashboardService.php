@@ -121,6 +121,7 @@ class DashboardService
     
     /**
      * Version légère : retourne seulement les KPIs essentiels (rapide)
+     * Inclut les données minimales nécessaires aux graphiques
      */
     public function getLightDashboardData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedOperator): array
     {
@@ -138,6 +139,49 @@ class DashboardService
         // Marchands (rapide aussi)
         $merchants = $this->getMerchantsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
         
+        // ⚡ OPTIMISATION: Calculer les statistiques quotidiennes UNE SEULE FOIS
+        // et les réutiliser pour Timwe stats ET subscriptions
+        $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
+        $dailyStatisticsComparison = $compStartBound && $compEndExclusive 
+            ? $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator)
+            : [];
+        
+        // Données Timwe (réutilise les stats déjà calculées)
+        $timweStatsLight = [
+            'daily_statistics' => $dailyStatistics,
+            'daily_statistics_comparison' => $dailyStatisticsComparison
+        ];
+        $timweStatsLight['timwe_monthly_stats'] = $this->groupTimweStatsByMonth($dailyStatistics);
+        $timweStatsLight['timwe_monthly_stats_comparison'] = $this->groupTimweStatsByMonth($dailyStatisticsComparison);
+        
+        // Données Ooredoo (séparées car différente source)
+        $ooredooStatsLight = [
+            'daily_statistics' => $this->getOoredooDailyStatistics($startBound, $endExclusive),
+            'daily_statistics_comparison' => $compStartBound && $compEndExclusive
+                ? $this->getOoredooDailyStatistics($compStartBound, $compEndExclusive)
+                : []
+        ];
+        $ooredooStatsLight['ooredoo_monthly_stats'] = $this->groupOoredooStatsByMonth($ooredooStatsLight['daily_statistics']);
+        $ooredooStatsLight['ooredoo_monthly_stats_comparison'] = $this->groupOoredooStatsByMonth($ooredooStatsLight['daily_statistics_comparison']);
+        
+        // Données minimales pour les graphiques (passe les stats déjà calculées)
+        $subscriptionsLight = $this->getSubscriptionsDataLight($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive, $dailyStatistics, $dailyStatisticsComparison);
+        
+        Log::info("getLightDashboardData - subscriptionsLight", [
+            'daily_activations_count' => count($subscriptionsLight['daily_activations'] ?? []),
+            'retention_trend_count' => count($subscriptionsLight['retention_trend'] ?? []),
+            'activations_by_channel' => $subscriptionsLight['activations_by_channel'] ?? 'null',
+            'plan_distribution' => $subscriptionsLight['plan_distribution'] ?? 'null'
+        ]);
+        
+        // Transactions minimales (pour les graphiques)
+        $transactionsLight = $this->getTransactionsData($startBound, $endExclusive, $selectedOperator);
+        
+        Log::info("getLightDashboardData - transactionsLight", [
+            'daily_volume_count' => count($transactionsLight['daily_volume'] ?? []),
+            'sample' => array_slice($transactionsLight['daily_volume'] ?? [], 0, 2)
+        ]);
+        
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
         
         return [
@@ -149,14 +193,97 @@ class DashboardService
             "merchants" => $merchants['data'],
             "categoryDistribution" => $merchants['categories'],
             "insights" => $this->generateInsights($kpis, $merchants['data']),
+            "subscriptions" => $subscriptionsLight,
+            "transactions" => $transactionsLight,
+            "ooredoo_stats" => $ooredooStatsLight,
+            "timwe_stats" => $timweStatsLight,
             "last_updated" => now()->toISOString(),
             "data_source" => "light_mode",
             "execution_time_ms" => $executionTime,
-            "light_mode" => true,
-            // Sections lourdes à charger séparément
-            "subscriptions" => null,
-            "transactions" => null,
-            "ooredoo_stats" => null
+            "light_mode" => true
+        ];
+    }
+    
+    /**
+     * Version légère de getSubscriptionsData - seulement les données nécessaires aux graphiques
+     * @param array|null $precomputedDailyStats Stats déjà calculées (évite les appels dupliqués)
+     * @param array|null $precomputedDailyStatsComparison Stats comparaison déjà calculées
+     */
+    private function getSubscriptionsDataLight(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?Carbon $compStartBound = null, ?Carbon $compEndExclusive = null, ?array $precomputedDailyStats = null, ?array $precomputedDailyStatsComparison = null): array
+    {
+        $periodDays = $startBound->diffInDays($endExclusive);
+        $granularity = $periodDays > 365 ? 'month' : 'day';
+        $caDateExpr = $granularity === 'month' ? "DATE_FORMAT(client_abonnement_creation, '%Y-%m-01')" : "DATE(client_abonnement_creation)";
+        
+        // Activations quotidiennes/mensuelles (rapide)
+        $activationsQuery = DB::table("client_abonnement as ca")
+            ->join("country_payments_methods as cpm", "ca.country_payments_methods_id", "=", "cpm.country_payments_methods_id")
+            ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
+            ->where("ca.client_abonnement_creation", ">=", $startBound)
+            ->where("ca.client_abonnement_creation", "<", $endExclusive);
+        
+        $this->applyOperatorFilter($activationsQuery, $selectedOperator);
+        
+        $activationsRaw = $activationsQuery
+            ->groupBy(DB::raw($caDateExpr))
+            ->orderBy("date")
+            ->get()
+            ->keyBy('date')
+            ->toArray();
+        
+        // Générer la série complète
+        $startDate = $startBound->copy();
+        $endDate = $endExclusive->copy()->subDay();
+        $dailyActivations = [];
+        
+        $current = $startDate->copy();
+        while ($current <= $endDate) {
+            $dateKey = $granularity === 'month' 
+                ? $current->format('Y-m-01') 
+                : $current->format('Y-m-d');
+            
+            $dailyActivations[] = [
+                'date' => $dateKey,
+                'activations' => isset($activationsRaw[$dateKey]) ? (int)$activationsRaw[$dateKey]->activations : 0
+            ];
+            
+            if ($granularity === 'month') {
+                $current->addMonth();
+            } else {
+                $current->addDay();
+            }
+        }
+        
+        // Retention trend (version simplifiée)
+        $retentionTrend = $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator);
+        
+        // Quarterly active locations (rapide) - utilise seulement la date de fin
+        $quarterlyActiveLocations = $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->format('Y-m-d'));
+        
+        // ⚡ OPTIMISATION: Utiliser les stats pré-calculées si disponibles
+        $dailyStatistics = $precomputedDailyStats ?? $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
+        $dailyStatisticsComparison = $precomputedDailyStatsComparison ?? ($compStartBound && $compEndExclusive 
+            ? $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator)
+            : []);
+        
+        // Calculer les données minimales pour les graphiques (rapide)
+        $activationsByChannel = $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator);
+        $planDistribution = $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator);
+        
+        return [
+            "daily_activations" => $dailyActivations,
+            "retention_trend" => $retentionTrend,
+            "quarterly_active_locations" => $quarterlyActiveLocations,
+            "daily_statistics" => $dailyStatistics,
+            "daily_statistics_comparison" => $dailyStatisticsComparison,
+            "activations_by_channel" => $activationsByChannel,
+            "plan_distribution" => $planDistribution,
+            // Sections lourdes à null (chargées séparément si nécessaire)
+            "details" => null,
+            "cohorts" => null,
+            "renewal_rate" => null,
+            "average_lifespan" => null,
+            "reactivation_rate" => null
         ];
     }
     
@@ -1593,7 +1720,7 @@ class DashboardService
                     return $clientTransactions->first();
                 });
             
-            // Convertir en tableau et déterminer le plan basé sur pricepointId
+            // Convertir en tableau et déterminer le plan basé sur la DURÉE (prioritaire) puis pricepointId
             $dataArray = $results->map(function($item) use ($transactions, $billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
                 // Convertir l'objet stdClass en tableau associatif
                 $array = (array)$item;
@@ -1602,18 +1729,48 @@ class DashboardService
                     $array['client_id'] = null;
                 }
                 
-                // Pour Timwe, déterminer le plan basé sur pricepointId
+                // Calculer la durée de cet abonnement spécifique
+                // ⚠️ Les champs sont: activation_date (start) et end_date (end)
+                $activationDate = $array['activation_date'] ?? null;
+                $endDate = $array['end_date'] ?? null;
+                $duration = 0;
+                
+                if ($activationDate && $endDate) {
+                    try {
+                        $start = Carbon::parse($activationDate);
+                        $end = Carbon::parse($endDate);
+                        $duration = $start->diffInDays($end);
+                    } catch (\Exception $e) {
+                        $duration = 0;
+                    }
+                }
+                
                 $operator = $array['operator'] ?? '';
-                if (stripos($operator, 'timwe') !== false && isset($array['client_id'])) {
+                
+                // ⭐ LOGIQUE CORRIGÉE: PRIORITÉ à la DURÉE
+                // 1. Durée = 3 jours (1-5) → TOUJOURS Trial gratuit (0 TND)
+                // 2. Durée ≈ 30 jours (20-40) → TOUJOURS Mensuel payant (3 TND)
+                // 3. Autres durées → Utiliser le PPID
+                
+                if ($duration >= 1 && $duration <= 5) {
+                    // Durée courte (1-5 jours) = Trial gratuit
+                    $array['plan'] = 'Trial';
+                    $array['price'] = 0;
+                } elseif ($duration >= 20 && $duration <= 40) {
+                    // Durée ~30 jours = Mensuel payant
+                    $array['plan'] = 'Mensuel';
+                    // Garder le prix de la DB (3 TND)
+                } elseif (stripos($operator, 'timwe') !== false && isset($array['client_id'])) {
+                    // Pour autres durées Timwe, utiliser le PPID
                     $clientTransaction = $transactions->get($array['client_id']);
                     if ($clientTransaction && $clientTransaction->result) {
                         $ppid = $this->extractPricepointId($clientTransaction->result);
                         if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
                             $array['plan'] = 'Trial';
+                            $array['price'] = 0;
                         } elseif ($ppid === $billingPpid) {
                             $array['plan'] = 'Mensuel';
                         }
-                        // Sinon, garder le plan calculé par SQL (fallback sur durée)
                     }
                 }
                 
@@ -2044,19 +2201,48 @@ class DashboardService
                 ->orderBy('created_at', 'asc')
                 ->get();
             
-            // Corriger le plan basé sur pricepointId pour chaque abonnement Timwe
+            // Corriger le plan basé sur la DURÉE (prioritaire) puis pricepointId
             $subscriptionsArray = $subscriptions->map(function($subscription) use ($transactions, $billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
                 $subArray = (array)$subscription;
                 $operator = $subArray['operator'] ?? '';
                 
-                // Pour Timwe, déterminer le plan basé sur pricepointId
-                if (stripos($operator, 'timwe') !== false && $transactions->isNotEmpty()) {
-                    // Prendre la première transaction (la plus ancienne)
+                // Calculer la durée de cet abonnement spécifique
+                // ⚠️ Les champs sont: activation_date (start) et end_date (end)
+                $activationDate = $subArray['activation_date'] ?? null;
+                $endDate = $subArray['end_date'] ?? null;
+                $duration = 0;
+                
+                if ($activationDate && $endDate) {
+                    try {
+                        $start = Carbon::parse($activationDate);
+                        $end = Carbon::parse($endDate);
+                        $duration = $start->diffInDays($end);
+                    } catch (\Exception $e) {
+                        $duration = 0;
+                    }
+                }
+                
+                // ⭐ LOGIQUE CORRIGÉE: PRIORITÉ à la DURÉE
+                // 1. Durée = 3 jours (1-5) → TOUJOURS Trial gratuit (0 TND)
+                // 2. Durée ≈ 30 jours (20-40) → TOUJOURS Mensuel payant (3 TND)
+                // 3. Autres durées → Utiliser le PPID
+                
+                if ($duration >= 1 && $duration <= 5) {
+                    // Durée courte (1-5 jours) = Trial gratuit
+                    $subArray['plan'] = 'Trial';
+                    $subArray['price'] = 0;
+                } elseif ($duration >= 20 && $duration <= 40) {
+                    // Durée ~30 jours = Mensuel payant
+                    $subArray['plan'] = 'Mensuel';
+                    // Garder le prix de la DB (3 TND)
+                } elseif (stripos($operator, 'timwe') !== false && $transactions->isNotEmpty()) {
+                    // Pour autres durées Timwe, utiliser le PPID
                     $firstTransaction = $transactions->first();
                     if ($firstTransaction && $firstTransaction->result) {
                         $ppid = $this->extractPricepointId($firstTransaction->result);
                         if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
                             $subArray['plan'] = 'Trial';
+                            $subArray['price'] = 0;
                         } elseif ($ppid === $billingPpid) {
                             $subArray['plan'] = 'Mensuel';
                         }
@@ -2196,14 +2382,15 @@ class DashboardService
             $endDate = $endExclusive->copy()->subDay();
             $periodDays = $startBound->diffInDays($endDate) + 1;
             
-            // Pour les TRÈS longues périodes (> 90 jours), limiter à 90 jours max pour éviter timeout
-            if ($periodDays > 90) {
-                Log::info("getOoredooDailyStatistics - Période longue détectée, limitation à 90 jours", [
+            // Pour les TRÈS longues périodes (> 730 jours), limiter à 730 jours max
+            // Note: Les données viennent de la table de cache ooredoo_daily_stats, donc la lecture est rapide
+            if ($periodDays > 730) {
+                Log::info("getOoredooDailyStatistics - Période très longue détectée, limitation à 730 jours", [
                     'period_days' => $periodDays,
                     'original_start' => $startBound->format('Y-m-d'),
                     'original_end' => $endDate->format('Y-m-d')
                 ]);
-                $startBound = $endDate->copy()->subDays(89); // 90 jours max
+                $startBound = $endDate->copy()->subDays(729); // 730 jours max (2 ans)
             }
             
             $stats = \App\Models\OoredooDailyStat::getStatsForPeriod($startBound, $endDate);
@@ -2244,15 +2431,16 @@ class DashboardService
             $endDate = $endExclusive->copy()->subDay();
             $periodDays = $startBound->diffInDays($endDate) + 1;
             
-            // Pour les TRÈS longues périodes (> 90 jours), limiter à 90 jours max pour éviter timeout
-            if ($periodDays > 90) {
-                Log::info("getDailyStatistics - Période longue détectée, limitation à 90 jours", [
+            // Pour les TRÈS longues périodes (> 730 jours), limiter à 730 jours max
+            // Note: Les données viennent de la table de cache timwe_daily_stats, donc la lecture est rapide
+            if ($periodDays > 730) {
+                Log::info("getDailyStatistics - Période très longue détectée, limitation à 730 jours", [
                     'period_days' => $periodDays,
                     'original_start' => $startBound->format('Y-m-d'),
                     'original_end' => $endDate->format('Y-m-d')
                 ]);
-                $startBound = $endDate->copy()->subDays(89); // 90 jours max
-                $periodDays = 90; // Recalculer periodDays après limitation
+                $startBound = $endDate->copy()->subDays(729); // 730 jours max (2 ans)
+                $periodDays = 730;
             }
             
             $stats = TimweDailyStat::getStatsForPeriod($startBound, $endDate);

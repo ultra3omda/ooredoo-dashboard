@@ -3532,8 +3532,8 @@
       // Initialize mobile navigation
       initializeMobileNavigation();
       
-      // Auto-refresh every 5 minutes
-      setInterval(loadDashboardData, 5 * 60 * 1000);
+      // ❌ Auto-refresh désactivé (demande utilisateur)
+      // setInterval(loadDashboardData, 5 * 60 * 1000);
       
       // Initialize keyboard shortcuts
       initializeKeyboardShortcuts();
@@ -6343,6 +6343,32 @@
 
     // Update dashboard with data - optimized for performance
     function updateDashboard(data) {
+      // Normaliser les données pour compatibilité mode light/complet
+      // En mode light, timwe_stats et ooredoo_stats sont au niveau racine
+      // En mode complet, elles sont dans subscriptions
+      if (data.light_mode) {
+        // Mode light : normaliser la structure
+        if (data.timwe_stats && !data.subscriptions) {
+          data.subscriptions = {};
+        }
+        if (data.timwe_stats) {
+          data.subscriptions.timwe_monthly_stats = data.timwe_stats.timwe_monthly_stats || [];
+          data.subscriptions.timwe_monthly_stats_comparison = data.timwe_stats.timwe_monthly_stats_comparison || [];
+          data.subscriptions.daily_statistics = data.timwe_stats.daily_statistics || [];
+        }
+        if (data.ooredoo_stats) {
+          // ooredoo_stats est déjà au bon endroit
+        }
+      } else {
+        // Mode complet : s'assurer que les données sont bien structurées
+        if (!data.subscriptions) {
+          data.subscriptions = {};
+        }
+        if (!data.ooredoo_stats) {
+          data.ooredoo_stats = {};
+        }
+      }
+      
       // Store globally FIRST so dependent functions can safely read it
       dashboardData = data;
 
@@ -6373,7 +6399,18 @@
 
     // Update KPI values
     function updateKPIs(kpis) {
-      const normalizeKPI = (obj) => (obj && typeof obj.current !== 'undefined') ? obj : { current: 0, previous: 0, change: 0 };
+      const normalizeKPI = (obj) => {
+        // Si c'est un objet avec current, l'utiliser tel quel
+        if (obj && typeof obj.current !== 'undefined') {
+          return obj;
+        }
+        // Si c'est un nombre simple, le convertir en objet
+        if (typeof obj === 'number') {
+          return { current: obj, previous: 0, change: 0 };
+        }
+        // Sinon retourner 0
+        return { current: 0, previous: 0, change: 0 };
+      };
       
       // Overview KPIs
       updateKPI('activatedSubscriptions', normalizeKPI(kpis?.activatedSubscriptions));
@@ -6407,8 +6444,10 @@
         updateKPI('timwe-total-billings', normalizeKPI(kpis?.totalTimweBillings));
         
         // Récupérer les statistiques mensuelles groupées Timwe depuis les données du dashboard
-        if (dashboardData && dashboardData.subscriptions && dashboardData.subscriptions.timwe_monthly_stats) {
-          updateTimweStatisticsTable(dashboardData.subscriptions.timwe_monthly_stats);
+        // Support mode light (timwe_stats au niveau racine) et mode complet (subscriptions.timwe_monthly_stats)
+        const timweStats = dashboardData?.timwe_stats?.timwe_monthly_stats || dashboardData?.subscriptions?.timwe_monthly_stats;
+        if (timweStats) {
+          updateTimweStatisticsTable(timweStats);
           
           // DÉSACTIVÉ POUR OPTIMISATION: Tableau des transactions Timwe par utilisateur
           // if (dashboardData.subscriptions.timwe_transactions_by_user) {
@@ -6418,8 +6457,8 @@
           // }
           
           // Calculer les KPIs agrégés avec comparaison (depuis les données mensuelles)
-          const monthlyStats = dashboardData.subscriptions.timwe_monthly_stats || [];
-          const monthlyStatsComparison = dashboardData.subscriptions.timwe_monthly_stats_comparison || [];
+          const monthlyStats = timweStats || [];
+          const monthlyStatsComparison = dashboardData?.timwe_stats?.timwe_monthly_stats_comparison || dashboardData?.subscriptions?.timwe_monthly_stats_comparison || [];
           
           const totals = calculateTimweTotals(monthlyStats);
           const comparisonTotals = monthlyStatsComparison.length > 0 
@@ -6764,6 +6803,16 @@
     }
 
     const points = (data.subscriptions && data.subscriptions.quarterly_active_locations) ? data.subscriptions.quarterly_active_locations : [];
+    
+    if (!points || points.length === 0) {
+      // Afficher un message si pas de données
+      const parent = ctx.parentElement;
+      if (parent) {
+        parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
+      }
+      return;
+    }
+    
     const labels = points.map(p => p.quarter);
     const values = points.map(p => p.locations);
 
@@ -6948,26 +6997,21 @@
       
       // Use real daily activations data from backend
       const dailyActivations = data.subscriptions?.daily_activations || [];
-      // Build a continuous date range (align X axis with other charts)
-      const dateToValue = new Map();
-      const parseISO = (s) => new Date(s + 'T00:00:00');
-      dailyActivations.forEach(it => {
-        if (it && it.date) {
-          dateToValue.set(it.date, Number(it.activations || 0));
+      
+      console.log('📊 Daily Activations data:', dailyActivations.length, 'entries', dailyActivations.slice(0, 3));
+      
+      if (!dailyActivations || dailyActivations.length === 0) {
+        // Afficher un message si pas de données
+        const parent = ctx.parentElement;
+        if (parent) {
+          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
         }
-      });
-
-      const sortedDates = Array.from(dateToValue.keys()).sort();
-      if (sortedDates.length === 0) return;
-      const start = parseISO(sortedDates[0]);
-      const end = parseISO(sortedDates[sortedDates.length - 1]);
-      const days = [];
-      const dailyData = [];
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const iso = d.toISOString().slice(0, 10);
-        days.push(iso);
-        dailyData.push(dateToValue.has(iso) ? dateToValue.get(iso) : 0);
+        return;
       }
+      
+      // Pour les longues périodes (données mensuelles), utiliser directement les données sans interpolation
+      const days = dailyActivations.map(it => it.date);
+      const dailyData = dailyActivations.map(it => Number(it.activations || 0));
       
       charts.subscriptionTrend = new Chart(ctx, {
         type: 'line',
@@ -7013,32 +7057,17 @@
       // Use real retention trend data from backend
       const retentionTrend = data.subscriptions?.retention_trend || [];
       
+      console.log('📊 Retention Trend data:', retentionTrend?.length, 'entries', retentionTrend?.slice(0, 3));
+      
       if (!retentionTrend || retentionTrend.length === 0) {
         // Afficher un message si pas de données
         ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
         return;
       }
       
-      // Aligner les dates avec le graphe Daily Activated Subscriptions
-      const mapDateToValue = new Map();
-      retentionTrend.forEach(it => {
-        if (it && (it.date || it.period)) {
-          const dateKey = it.date || it.period;
-          const value = Number((it.value ?? it.rate ?? 0) || 0);
-          mapDateToValue.set(dateKey, value);
-        }
-      });
-      
-      const sorted = Array.from(mapDateToValue.keys()).sort();
-      if (sorted.length === 0) {
-        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
-        return;
-      }
-      
-      // Utiliser directement les dates des données plutôt que de générer tous les jours
-      // Cela évite d'avoir beaucoup de valeurs nulles
-      const days = sorted;
-      const retentionData = sorted.map(date => mapDateToValue.get(date));
+      // Utiliser directement les données sans transformation complexe
+      const days = retentionTrend.map(it => it.date || it.period);
+      const retentionData = retentionTrend.map(it => Number((it.value ?? it.rate ?? 0) || 0));
       
       charts.retention = new Chart(ctx, {
         type: 'line',
@@ -7093,6 +7122,8 @@
       
       // Use real daily transactions data from backend
       const dailyTransactions = data.transactions?.daily_volume || [];
+      
+      console.log('📊 Daily Volume data:', dailyTransactions?.length, 'entries', dailyTransactions?.slice(0, 3));
       
       if (!dailyTransactions || dailyTransactions.length === 0) {
         // Afficher un message si pas de données
@@ -7155,6 +7186,8 @@
       
       // Use real daily transactions data from backend to extract users
       const dailyTransactions = data.transactions?.daily_volume || [];
+      
+      console.log('📊 Transacting Users data:', dailyTransactions?.length, 'entries');
       
       if (!dailyTransactions || dailyTransactions.length === 0) {
         // Afficher un message si pas de données
@@ -7404,6 +7437,16 @@
       const phoneVal = (activations.phone_balance && typeof activations.phone_balance === 'object') ? (activations.phone_balance.current ?? 0) : (activations.phone_balance ?? 0);
       const otherVal = (activations.other && typeof activations.other === 'object') ? (activations.other.current ?? 0) : (activations.other ?? 0);
 
+      const total = cbVal + rechargeVal + phoneVal + otherVal;
+      if (total === 0) {
+        // Afficher un message si pas de données
+        const parent = ctx.parentElement;
+        if (parent) {
+          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
+        }
+        return;
+      }
+
       console.log('📊 Activations By Channel Chart:', { activations, cbVal, rechargeVal, phoneVal, otherVal });
 
       charts.activationsByChannel = new Chart(ctx, {
@@ -7448,6 +7491,16 @@
       const monthlyVal = (plans.monthly && typeof plans.monthly === 'object') ? (plans.monthly.current ?? 0) : (plans.monthly ?? 0);
       const annualVal = (plans.annual && typeof plans.annual === 'object') ? (plans.annual.current ?? 0) : (plans.annual ?? 0);
       const otherPlanVal = (plans.other && typeof plans.other === 'object') ? (plans.other.current ?? 0) : (plans.other ?? 0);
+      
+      const total = dailyVal + monthlyVal + annualVal + otherPlanVal;
+      if (total === 0) {
+        // Afficher un message si pas de données
+        const parent = ctx.parentElement;
+        if (parent) {
+          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
+        }
+        return;
+      }
       
       console.log('📊 Plan Distribution Chart:', { plans, dailyVal, monthlyVal, annualVal, otherPlanVal });
       
