@@ -29,8 +29,8 @@ class DataControllerOptimized extends Controller
     public function getDashboardData(Request $request): JsonResponse
     {
         // Augmenter le temps d'exécution et la limite de mémoire pour les longues périodes
-        set_time_limit(120); // 120 secondes
-        ini_set('memory_limit', '512M'); // 512MB
+        set_time_limit(180); // 3 minutes pour supporter jusqu'à 2 ans
+        ini_set('memory_limit', '1G'); // 1GB pour très longues périodes
         
         $startTime = microtime(true);
         $lightMode = $request->boolean('light', false);
@@ -241,10 +241,16 @@ class DataControllerOptimized extends Controller
             throw new \InvalidArgumentException("La date de début doit être antérieure à la date de fin");
         }
         
-        // Limitation de la période maximale (1 an)
+        // Limitation de la période maximale (2 ans)
         $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate));
-        if ($periodDays > 365) {
-            throw new \InvalidArgumentException("Période maximale autorisée: 365 jours (demandé: {$periodDays} jours)");
+        if ($periodDays > 730) {
+            throw new \InvalidArgumentException("Période maximale autorisée: 730 jours (2 ans) (demandé: {$periodDays} jours)");
+        }
+        
+        // Activation automatique du mode light pour périodes > 90 jours
+        if ($periodDays > 90 && !$request->boolean('light', false)) {
+            Log::info("🚀 Activation automatique du mode light pour période de {$periodDays} jours");
+            $request->merge(['light' => true]);
         }
         
         return [

@@ -50,8 +50,15 @@ class DashboardCacheService
             Cache::put($fullKey, $data, $ttl);
             
             // Pour les longues périodes, stocker aussi une version "stale" pour fallback
+            // TTL stale = 5x le TTL normal (max 30 jours)
             if ($periodDays > 90) {
-                Cache::put($fullKey . ':stale', $data, $ttl * 3);
+                $staleTTL = min($ttl * 5, 2592000); // Max 30 jours (2592000 secondes)
+                Cache::put($fullKey . ':stale', $data, $staleTTL);
+                
+                // Ajouter flag stale dans les métadonnées
+                if (is_array($data) && isset($data['_cache_meta'])) {
+                    $data['_cache_meta']['is_stale'] = false;
+                }
             }
             
             Log::info("Cache STORED: {$fullKey} calculé en {$executionTime}ms, TTL={$ttl}s");
@@ -65,6 +72,12 @@ class DashboardCacheService
             $staleData = Cache::get($fullKey . ':stale');
             if ($staleData) {
                 Log::info("Cache FALLBACK: Utilisation de données stale pour {$fullKey}");
+                
+                // Marquer comme stale dans les métadonnées
+                if (is_array($staleData) && isset($staleData['_cache_meta'])) {
+                    $staleData['_cache_meta']['is_stale'] = true;
+                }
+                
                 return $staleData;
             }
             
@@ -133,33 +146,36 @@ class DashboardCacheService
     
     /**
      * TTL adaptatif selon la période et le type de données
+     * Optimisé pour supporter jusqu'à 730 jours (2 ans)
      */
     private function calculateTTL(int $periodDays, string $dataType): int
     {
-        // TTL de base selon le type
+        // TTL de base augmentés selon le type
         $baseTTL = match($dataType) {
-            'kpis' => 300,           // 5 minutes
-            'merchants' => 600,       // 10 minutes
-            'transactions' => 900,    // 15 minutes
-            'subscriptions' => 1200,  // 20 minutes
-            'heavy' => 1800,          // 30 minutes
-            'standard' => 600,        // 10 minutes
-            default => 300
+            'kpis' => 900,           // 15 minutes (augmenté de 5 min)
+            'merchants' => 1800,      // 30 minutes (augmenté de 10 min)
+            'transactions' => 2700,   // 45 minutes (augmenté de 15 min)
+            'subscriptions' => 3600,  // 60 minutes (augmenté de 20 min)
+            'heavy' => 7200,          // 2 heures (augmenté de 30 min)
+            'standard' => 1800,       // 30 minutes (augmenté de 10 min)
+            default => 900
         };
         
         // Multiplier selon la période (plus longue = cache plus long)
+        // Support jusqu'à 730 jours avec multiplicateur max de 48x
         $multiplier = match(true) {
-            $periodDays <= 7 => 1,      // 1x pour période courte
-            $periodDays <= 30 => 2,     // 2x pour période moyenne
-            $periodDays <= 90 => 4,     // 4x pour période longue
-            $periodDays <= 180 => 8,    // 8x pour très longue période
-            default => 12                // 12x pour période extrême
+            $periodDays <= 7 => 2,       // 2x pour période courte (ex: 15min × 2 = 30min)
+            $periodDays <= 30 => 4,      // 4x pour période moyenne (ex: 15min × 4 = 1h)
+            $periodDays <= 90 => 8,      // 8x pour période longue (ex: 15min × 8 = 2h)
+            $periodDays <= 180 => 16,   // 16x pour très longue période (ex: 15min × 16 = 4h)
+            $periodDays <= 365 => 24,    // 24x pour 1 an (ex: 15min × 24 = 6h)
+            default => 48                // 48x pour 2 ans (ex: 15min × 48 = 12h)
         };
         
         $ttl = $baseTTL * $multiplier;
         
-        // Limiter à 24h maximum
-        return min($ttl, 86400);
+        // Limiter à 12h maximum (43200 secondes) pour éviter la surcharge Redis
+        return min($ttl, 43200);
     }
     
     /**

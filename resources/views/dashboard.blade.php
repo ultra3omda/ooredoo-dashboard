@@ -5392,6 +5392,11 @@
             ? selectedOperators[0] 
             : selectedOperators.join(',');
         
+        // Calculer la période en jours
+        const startDateObj = new Date(startDate);
+        const endDateObj = new Date(endDate);
+        const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24));
+        
         // Build API URL with date parameters
         let apiUrl = '/api/dashboard/data';
         const params = new URLSearchParams();
@@ -5410,14 +5415,20 @@
           params.append('operator', selectedOperator);
         }
         
+        // Mode light automatique pour périodes > 90 jours
+        const shouldUseLightMode = periodDays > 90;
+        if (shouldUseLightMode) {
+          params.append('light', 'true');
+          console.log(`⚡ Mode light activé automatiquement pour période de ${periodDays} jours`);
+        }
+        
         const startTime = performance.now();
         
         // OPTIMISATION: Charger directement les données complètes (avec cache Redis, c'est rapide)
-        // Si le cache est vide, on charge en mode light d'abord, sinon on charge tout
         updateProgressiveLoading('Chargement des données...', 30);
         
         const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
+        timeoutId = setTimeout(() => controller.abort(), 150000); // 2.5 minutes timeout (augmenté pour périodes jusqu'à 2 ans)
         
         // Charger les données complètes (le cache Redis devrait rendre ça rapide)
         const response = await fetch(apiUrl + '?' + params.toString(), {
@@ -5509,8 +5520,8 @@
         // Masquer le message d'optimisation
         hideOptimizationMessage();
         
-        // Show performance indicator
-        updatePerformanceIndicator(loadTime);
+        // Show performance indicator avec métadonnées
+        updatePerformanceIndicator(loadTime, data);
         
         // Update dashboard and hide loading simultaneously
         updateProgressiveLoading('Finalisation...', 95);
@@ -5733,44 +5744,65 @@
       });
     }
 
-    function updatePerformanceIndicator(loadTime) {
+    function updatePerformanceIndicator(loadTime, data = null) {
       const indicator = document.getElementById('performance-indicator');
       if (!indicator) return;
       
+      // Calculer la période pour l'affichage
+      const startDate = document.getElementById('start-date')?.value;
+      const endDate = document.getElementById('end-date')?.value;
+      let periodDays = 0;
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      }
+      
+      // Déterminer la source des données
+      const isFromCache = data?._cache_meta || loadTime < 500;
+      const isStale = data?._cache_meta?.is_stale === true;
+      const dataType = data?._cache_meta?.data_type || 'standard';
+      
       if (loadTime < 500) {
-        // Fast load - likely from cache
+        // Excellent - Cache
         indicator.style.display = 'flex';
-        indicator.querySelector('.performance-text').textContent = 'Cache ⚡';
+        const cacheText = isStale ? '📦 Cache (stale)' : periodDays > 0 ? `📦 Cache (${periodDays}j)` : '📦 Cache';
+        indicator.querySelector('.performance-text').textContent = cacheText;
         indicator.style.background = 'rgba(16, 185, 129, 0.1)';
         indicator.style.borderColor = 'rgba(16, 185, 129, 0.3)';
         indicator.style.color = '#059669';
         
-        // Hide after 3 seconds
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 3000);
-      } else if (loadTime < 2000) {
-        // Medium load
+        }, 5000);
+      } else if (loadTime < 3000) {
+        // Bon - Optimisé
         indicator.style.display = 'flex';
-        indicator.querySelector('.performance-text').textContent = `${Math.round(loadTime)}ms`;
+        const optimizedText = periodDays > 0 
+          ? `${Math.round(loadTime)}ms (${periodDays}j)` 
+          : `${Math.round(loadTime)}ms (optimisé)`;
+        indicator.querySelector('.performance-text').textContent = optimizedText;
         indicator.style.background = 'rgba(245, 158, 11, 0.1)';
         indicator.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         indicator.style.color = '#d97706';
         
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 2000);
+        }, 4000);
       } else {
-        // Slow load
+        // Lent - Longue période
         indicator.style.display = 'flex';
-        indicator.querySelector('.performance-text').textContent = 'Lent';
+        const slowText = periodDays > 0 
+          ? `${Math.round(loadTime / 1000)}s (${periodDays}j)` 
+          : `${Math.round(loadTime / 1000)}s`;
+        indicator.querySelector('.performance-text').textContent = slowText;
         indicator.style.background = 'rgba(239, 68, 68, 0.1)';
         indicator.style.borderColor = 'rgba(239, 68, 68, 0.3)';
         indicator.style.color = '#dc2626';
         
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 4000);
+        }, 6000);
       }
     }
     
@@ -6127,14 +6159,34 @@
         document.getElementById('comparison-end-date').value = comparisonEndDate.toISOString().split('T')[0];
         
         updateDateRange();
-        loadDashboardData();
+        // Ne pas charger automatiquement - l'utilisateur doit cliquer sur "Actualiser"
       }
     }
 
-    // Update date range display
+    // Debounce timer pour les changements de dates
+    let dateChangeDebounceTimer = null;
+    
+    // Update date range display avec debouncing
     function updateDateRange() {
       const startDate = document.getElementById('start-date').value;
       const endDate = document.getElementById('end-date').value;
+      
+      // Calculer la période
+      let periodDays = 0;
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      }
+      
+      // Debounce de 800ms sur les changements de dates
+      // L'utilisateur doit cliquer sur "Actualiser" pour charger
+      clearTimeout(dateChangeDebounceTimer);
+      dateChangeDebounceTimer = setTimeout(() => {
+        if (periodDays > 0) {
+          console.log(`✅ Dates mises à jour (${periodDays}j) - Cliquez sur "Actualiser" pour charger`);
+        }
+      }, 800);
       
       if (startDate && endDate) {
         const start = new Date(startDate);

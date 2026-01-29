@@ -99,10 +99,14 @@ class DashboardService
         $cacheService = app(DashboardCacheService::class);
         $cacheKey = $cacheService->generateKey($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator, auth()->id());
         
-        // Déterminer le type de données selon la période
-        $dataType = $periodDays > 90 ? 'heavy' : 'standard';
+        // Détection intelligente des périodes
+        $dataType = match(true) {
+            $periodDays <= 30 => 'kpis',      // Mode complet pour périodes courtes
+            $periodDays <= 90 => 'standard',   // Mode optimisé pour périodes moyennes
+            default => 'heavy'                 // Mode ultra-optimisé pour longues périodes
+        };
         
-        Log::info("DashboardService: Période de {$periodDays} jours, Opérateur: {$selectedOperator}, Type: {$dataType}");
+        Log::info("🚀 DashboardService: Période de {$periodDays} jours, Opérateur: {$selectedOperator}, Type: {$dataType}");
         
         return $cacheService->remember($cacheKey, $periodDays, function () use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator, $periodDays, $startTime) {
             
