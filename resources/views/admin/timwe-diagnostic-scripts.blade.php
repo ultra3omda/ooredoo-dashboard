@@ -1,0 +1,187 @@
+<script>
+const diagnosticApp = {
+    data: null,
+    
+    init() {
+        document.getElementById('btnSearch').addEventListener('click', () => this.search());
+        document.getElementById('btnExport').addEventListener('click', () => this.exportCsv());
+        
+        // Auto-search au chargement
+        this.search();
+    },
+    
+    async search() {
+        const startDate = document.getElementById('start_date').value;
+        const endDate = document.getElementById('end_date').value;
+        const searchPhone = document.getElementById('search_phone').value;
+        const deliveryCode = document.getElementById('delivery_code').value;
+        
+        if (!startDate || !endDate) {
+            alert('Veuillez sélectionner une période');
+            return;
+        }
+        
+        this.showLoading(true);
+        document.getElementById('btnExport').disabled = true;
+        
+        try {
+            const params = new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate,
+                search_phone: searchPhone,
+                delivery_code: deliveryCode
+            });
+            
+            const response = await fetch(`/admin/timwe-diagnostic/data?${params}`);
+            const data = await response.json();
+            
+            if (!data.success) {
+                alert('Erreur: ' + (data.message || 'Impossible de charger les données'));
+                return;
+            }
+            
+            this.data = data;
+            this.renderData(data);
+            document.getElementById('btnExport').disabled = false;
+            
+        } catch (error) {
+            console.error('Erreur:', error);
+            alert('Erreur lors du chargement des données');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+    
+    renderData(data) {
+        // Afficher les sections
+        document.getElementById('summarySection').style.display = 'flex';
+        document.getElementById('diagnosticTabs').style.display = 'flex';
+        
+        // Résumé
+        document.getElementById('totalTransactions').textContent = data.summary.total_transactions.toLocaleString();
+        document.getElementById('uniquePhones').textContent = data.summary.unique_phones.toLocaleString();
+        document.getElementById('totalBilled').textContent = data.summary.total_billed.toLocaleString();
+        document.getElementById('billingRate').textContent = data.summary.billing_rate + '%';
+        document.getElementById('totalRevenue').textContent = data.summary.total_revenue_tnd.toLocaleString('fr-FR', {minimumFractionDigits: 2});
+        document.getElementById('deliveryCodesCount').textContent = data.summary.delivery_codes_count;
+        
+        // Table par téléphone
+        this.renderPhoneTable(data.by_phone);
+        
+        // Table par delivery code
+        this.renderDeliveryCodeTable(data.by_delivery_code);
+        
+        // Transactions récentes
+        this.renderTransactionsTable(data.recent_transactions);
+    },
+    
+    renderPhoneTable(phones) {
+        const tbody = document.getElementById('phoneTableBody');
+        
+        if (phones.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Aucune donnée trouvée</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = phones.map(phone => `
+            <tr>
+                <td><strong>${phone.phone}</strong></td>
+                <td>${phone.client_name || 'N/A'}</td>
+                <td><span class="badge bg-primary">${phone.total_attempts}</span></td>
+                <td><span class="badge bg-success">${phone.delivered}</span></td>
+                <td><span class="badge bg-warning text-dark">${phone.no_balance}</span></td>
+                <td><span class="badge bg-danger">${phone.not_delivered}</span></td>
+                <td><span class="badge bg-secondary">${phone.other}</span></td>
+                <td><strong>${phone.total_charged_tnd.toFixed(3)} TND</strong></td>
+                <td><small>${new Date(phone.last_attempt).toLocaleString('fr-FR')}</small></td>
+            </tr>
+        `).join('');
+    },
+    
+    renderDeliveryCodeTable(codes) {
+        const tbody = document.getElementById('deliveryCodeTableBody');
+        
+        if (codes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Aucune donnée trouvée</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = codes.map(code => {
+            const badgeClass = code.code === 'DELIVERED' ? 'bg-success' : 
+                              code.code === 'NO_BALANCE' ? 'bg-warning text-dark' : 
+                              code.code === 'NOT_DELIVERED' ? 'bg-danger' : 'bg-secondary';
+            
+            return `
+                <tr>
+                    <td><span class="badge ${badgeClass}">${code.code}</span></td>
+                    <td><strong>${code.count.toLocaleString()}</strong></td>
+                    <td>${code.unique_phones.toLocaleString()}</td>
+                    <td><strong>${code.total_charged_tnd.toFixed(3)} TND</strong></td>
+                    <td>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar ${badgeClass}" role="progressbar" style="width: ${code.percentage}%" 
+                                 aria-valuenow="${code.percentage}" aria-valuemin="0" aria-valuemax="100">
+                                ${code.percentage}%
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    },
+    
+    renderTransactionsTable(transactions) {
+        const tbody = document.getElementById('transactionsTableBody');
+        
+        if (transactions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Aucune transaction trouvée</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = transactions.map(tx => {
+            const badgeClass = tx.delivery_code === 'DELIVERED' ? 'bg-success' : 
+                              tx.delivery_code === 'NO_BALANCE' ? 'bg-warning text-dark' : 
+                              tx.delivery_code === 'NOT_DELIVERED' ? 'bg-danger' : 'bg-secondary';
+            
+            return `
+                <tr>
+                    <td><small>${new Date(tx.date).toLocaleString('fr-FR')}</small></td>
+                    <td>${tx.phone}</td>
+                    <td><small>${tx.client_name || 'N/A'}</small></td>
+                    <td><span class="badge ${badgeClass}">${tx.delivery_code}</span></td>
+                    <td><strong>${tx.total_charged_tnd.toFixed(3)} TND</strong></td>
+                    <td><span class="badge ${tx.is_billed ? 'bg-success' : 'bg-secondary'}">
+                        ${tx.is_billed ? 'Facturé' : 'Non facturé'}
+                    </span></td>
+                </tr>
+            `;
+        }).join('');
+    },
+    
+    exportCsv() {
+        if (!this.data) return;
+        
+        const startDate = document.getElementById('start_date').value;
+        const endDate = document.getElementById('end_date').value;
+        const searchPhone = document.getElementById('search_phone').value;
+        const deliveryCode = document.getElementById('delivery_code').value;
+        
+        const params = new URLSearchParams({
+            start_date: startDate,
+            end_date: endDate,
+            search_phone: searchPhone,
+            delivery_code: deliveryCode
+        });
+        
+        window.location.href = `/admin/timwe-diagnostic/export?${params}`;
+    },
+    
+    showLoading(show) {
+        document.getElementById('loadingIndicator').style.display = show ? 'inline' : 'none';
+        document.getElementById('btnSearch').disabled = show;
+    }
+};
+
+// Initialiser au chargement
+document.addEventListener('DOMContentLoaded', () => diagnosticApp.init());
+</script>
