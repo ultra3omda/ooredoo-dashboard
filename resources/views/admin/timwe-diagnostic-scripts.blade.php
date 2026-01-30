@@ -6,8 +6,34 @@ const diagnosticApp = {
         document.getElementById('btnSearch').addEventListener('click', () => this.search());
         document.getElementById('btnExport').addEventListener('click', () => this.exportCsv());
         
+        // Gestion des tabs
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const tabName = e.target.dataset.tab;
+                this.switchTab(tabName);
+            });
+        });
+        
         // Auto-search au chargement
         this.search();
+    },
+    
+    switchTab(tabName) {
+        // Désactiver tous les boutons
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Cacher tous les contenus
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        
+        // Activer le bouton cliqué
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Afficher le contenu correspondant
+        document.getElementById(tabName).classList.add('active');
     },
     
     async search() {
