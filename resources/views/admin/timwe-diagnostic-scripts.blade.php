@@ -6,8 +6,34 @@ const diagnosticApp = {
         document.getElementById('btnSearch').addEventListener('click', () => this.search());
         document.getElementById('btnExport').addEventListener('click', () => this.exportCsv());
         
+        // Gestion des tabs
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const tabName = e.target.dataset.tab;
+                this.switchTab(tabName);
+            });
+        });
+        
         // Auto-search au chargement
         this.search();
+    },
+    
+    switchTab(tabName) {
+        // Désactiver tous les boutons
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Cacher tous les contenus
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        
+        // Activer le bouton cliqué
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Afficher le contenu correspondant
+        document.getElementById(tabName).classList.add('active');
     },
     
     async search() {
@@ -52,10 +78,23 @@ const diagnosticApp = {
         }
     },
     
+    showLoading(show) {
+        const indicator = document.getElementById('loadingIndicator');
+        const btnSearch = document.getElementById('btnSearch');
+        
+        if (show) {
+            indicator.classList.add('active');
+            btnSearch.disabled = true;
+        } else {
+            indicator.classList.remove('active');
+            btnSearch.disabled = false;
+        }
+    },
+    
     renderData(data) {
         // Afficher les sections
-        document.getElementById('summarySection').style.display = 'flex';
-        document.getElementById('diagnosticTabs').style.display = 'flex';
+        document.getElementById('summarySection').classList.add('active');
+        document.getElementById('diagnosticTabs').classList.add('active');
         
         // Résumé
         document.getElementById('totalTransactions').textContent = data.summary.total_transactions.toLocaleString();
@@ -65,13 +104,9 @@ const diagnosticApp = {
         document.getElementById('totalRevenue').textContent = data.summary.total_revenue_tnd.toLocaleString('fr-FR', {minimumFractionDigits: 2});
         document.getElementById('deliveryCodesCount').textContent = data.summary.delivery_codes_count;
         
-        // Table par téléphone
+        // Tables
         this.renderPhoneTable(data.by_phone);
-        
-        // Table par delivery code
         this.renderDeliveryCodeTable(data.by_delivery_code);
-        
-        // Transactions récentes
         this.renderTransactionsTable(data.recent_transactions);
     },
     
@@ -79,7 +114,7 @@ const diagnosticApp = {
         const tbody = document.getElementById('phoneTableBody');
         
         if (phones.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Aucune donnée trouvée</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted); padding: 40px;">Aucune donnée trouvée</td></tr>';
             return;
         }
         
@@ -87,11 +122,11 @@ const diagnosticApp = {
             <tr>
                 <td><strong>${phone.phone}</strong></td>
                 <td>${phone.client_name || 'N/A'}</td>
-                <td><span class="badge bg-primary">${phone.total_attempts}</span></td>
-                <td><span class="badge bg-success">${phone.delivered}</span></td>
-                <td><span class="badge bg-warning text-dark">${phone.no_balance}</span></td>
-                <td><span class="badge bg-danger">${phone.not_delivered}</span></td>
-                <td><span class="badge bg-secondary">${phone.other}</span></td>
+                <td><span class="badge badge-primary">${phone.total_attempts}</span></td>
+                <td><span class="badge badge-success">${phone.delivered}</span></td>
+                <td><span class="badge badge-warning">${phone.no_balance}</span></td>
+                <td><span class="badge badge-danger">${phone.not_delivered}</span></td>
+                <td><span class="badge badge-secondary">${phone.other}</span></td>
                 <td><strong>${phone.total_charged_tnd.toFixed(3)} TND</strong></td>
                 <td><small>${new Date(phone.last_attempt).toLocaleString('fr-FR')}</small></td>
             </tr>
@@ -102,14 +137,18 @@ const diagnosticApp = {
         const tbody = document.getElementById('deliveryCodeTableBody');
         
         if (codes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Aucune donnée trouvée</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 40px;">Aucune donnée trouvée</td></tr>';
             return;
         }
         
         tbody.innerHTML = codes.map(code => {
-            const badgeClass = code.code === 'DELIVERED' ? 'bg-success' : 
-                              code.code === 'NO_BALANCE' ? 'bg-warning text-dark' : 
-                              code.code === 'NOT_DELIVERED' ? 'bg-danger' : 'bg-secondary';
+            const badgeClass = code.code === 'DELIVERED' ? 'badge-success' : 
+                              code.code === 'NO_BALANCE' ? 'badge-warning' : 
+                              code.code === 'NOT_DELIVERED' ? 'badge-danger' : 'badge-secondary';
+            
+            const progressClass = code.code === 'DELIVERED' ? 'success' : 
+                                 code.code === 'NO_BALANCE' ? 'warning' : 
+                                 code.code === 'NOT_DELIVERED' ? 'danger' : 'secondary';
             
             return `
                 <tr>
@@ -118,9 +157,8 @@ const diagnosticApp = {
                     <td>${code.unique_phones.toLocaleString()}</td>
                     <td><strong>${code.total_charged_tnd.toFixed(3)} TND</strong></td>
                     <td>
-                        <div class="progress" style="height: 20px;">
-                            <div class="progress-bar ${badgeClass}" role="progressbar" style="width: ${code.percentage}%" 
-                                 aria-valuenow="${code.percentage}" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress">
+                            <div class="progress-bar badge-${progressClass}" style="width: ${code.percentage}%; background: var(--${progressClass})">
                                 ${code.percentage}%
                             </div>
                         </div>
@@ -134,14 +172,14 @@ const diagnosticApp = {
         const tbody = document.getElementById('transactionsTableBody');
         
         if (transactions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Aucune transaction trouvée</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 40px;">Aucune transaction trouvée</td></tr>';
             return;
         }
         
         tbody.innerHTML = transactions.map(tx => {
-            const badgeClass = tx.delivery_code === 'DELIVERED' ? 'bg-success' : 
-                              tx.delivery_code === 'NO_BALANCE' ? 'bg-warning text-dark' : 
-                              tx.delivery_code === 'NOT_DELIVERED' ? 'bg-danger' : 'bg-secondary';
+            const badgeClass = tx.delivery_code === 'DELIVERED' ? 'badge-success' : 
+                              tx.delivery_code === 'NO_BALANCE' ? 'badge-warning' : 
+                              tx.delivery_code === 'NOT_DELIVERED' ? 'badge-danger' : 'badge-secondary';
             
             return `
                 <tr>
@@ -150,7 +188,7 @@ const diagnosticApp = {
                     <td><small>${tx.client_name || 'N/A'}</small></td>
                     <td><span class="badge ${badgeClass}">${tx.delivery_code}</span></td>
                     <td><strong>${tx.total_charged_tnd.toFixed(3)} TND</strong></td>
-                    <td><span class="badge ${tx.is_billed ? 'bg-success' : 'bg-secondary'}">
+                    <td><span class="badge ${tx.is_billed ? 'badge-success' : 'badge-secondary'}">
                         ${tx.is_billed ? 'Facturé' : 'Non facturé'}
                     </span></td>
                 </tr>
@@ -174,11 +212,6 @@ const diagnosticApp = {
         });
         
         window.location.href = `/admin/timwe-diagnostic/export?${params}`;
-    },
-    
-    showLoading(show) {
-        document.getElementById('loadingIndicator').style.display = show ? 'inline' : 'none';
-        document.getElementById('btnSearch').disabled = show;
     }
 };
 

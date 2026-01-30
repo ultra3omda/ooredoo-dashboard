@@ -39,10 +39,6 @@ class TimweDiagnosticController extends Controller
             // Query de base pour les transactions Timwe
             $query = TransactionHistory::query()
                 ->join('client as c', 'transactions_history.client_id', '=', 'c.client_id')
-                ->whereBetween('transactions_history.created_at', [
-                    $startDate . ' 00:00:00',
-                    $endDate . ' 23:59:59'
-                ])
                 ->where(function($q) {
                     $q->where('transactions_history.status', 'LIKE', '%TIMWE_RENEWED%')
                       ->orWhere('transactions_history.status', 'LIKE', '%TIMWE_CHARGE%');
@@ -59,9 +55,16 @@ class TimweDiagnosticController extends Controller
                     'c.client_prenom'
                 );
             
-            // Filtrer par numéro si recherche
+            // Filtrer par numéro si recherche (historique complet sans contrainte de date)
             if ($searchPhone) {
                 $query->where('c.client_telephone', 'LIKE', '%' . $searchPhone . '%');
+                Log::info("Recherche par numéro: {$searchPhone} - Historique complet (sans contrainte de date)");
+            } else {
+                // Appliquer le filtre de date uniquement pour les recherches globales
+                $query->whereBetween('transactions_history.created_at', [
+                    $startDate . ' 00:00:00',
+                    $endDate . ' 23:59:59'
+                ]);
             }
             
             $transactions = $query->orderBy('transactions_history.created_at', 'DESC')
@@ -76,8 +79,8 @@ class TimweDiagnosticController extends Controller
             return response()->json([
                 'success' => true,
                 'period' => [
-                    'start' => $startDate,
-                    'end' => $endDate
+                    'start' => $searchPhone ? 'Historique complet' : $startDate,
+                    'end' => $searchPhone ? '' : $endDate
                 ],
                 'summary' => $diagnosticData['summary'],
                 'by_phone' => $diagnosticData['by_phone'],
