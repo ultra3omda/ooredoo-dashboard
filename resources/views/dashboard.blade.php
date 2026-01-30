@@ -2046,6 +2046,9 @@
       <button class="nav-tab" onclick="showTab('eklektik')">📞 Eklektik</button>
       @endif
       <button class="nav-tab" onclick="showTab('comparison')">Comparison</button>
+      @if(Auth::user()->isSuperAdmin())
+      <button class="nav-tab" onclick="window.location.href='{{ route('admin.timwe-diagnostic') }}'">🩺 Diagnostic Timwe</button>
+      @endif
       <!-- <button class="nav-tab" onclick="showTab('insights')">Insights</button> -->
     </div>
 
