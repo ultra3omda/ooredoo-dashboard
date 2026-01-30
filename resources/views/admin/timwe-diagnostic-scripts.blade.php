@@ -212,11 +212,6 @@ const diagnosticApp = {
         });
         
         window.location.href = `/admin/timwe-diagnostic/export?${params}`;
-    },
-    
-    showLoading(show) {
-        document.getElementById('loadingIndicator').style.display = show ? 'inline' : 'none';
-        document.getElementById('btnSearch').disabled = show;
     }
 };
 
