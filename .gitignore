@@ -26,3 +26,11 @@ storage/logs/**/*.log
 *.zip
 *.pdf
 .env
+-e 
+# Environment files
+*.env
+*.env.*
+-e 
+# Environment files
+*.env
+*.env.*
