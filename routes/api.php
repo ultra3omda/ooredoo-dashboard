@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\DataController;
+use App\Http\Controllers\Api\DataControllerOptimized;
 use App\Http\Controllers\Api\EklektikController;
 use App\Http\Controllers\Api\EklektikStatsController;
 use App\Http\Controllers\Api\EklektikDashboardController;
@@ -27,7 +28,8 @@ Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\Operator
 
 // Dashboard API routes
 Route::prefix('dashboard')->name('api.dashboard.')->group(function () {
-    Route::get('/data', [DataController::class, 'getDashboardData'])->name('data');
+    Route::get('/data', [DataControllerOptimized::class, 'getDashboardData'])->name('data');
+    Route::get('/subscriptions/{clientId}', [DataControllerOptimized::class, 'getUserSubscriptions'])->name('user.subscriptions');
     Route::get('/operators', [DataController::class, 'getUserOperators'])->name('operators');
     Route::get('/partners', [DataController::class, 'getPartnersList'])->name('partners');
     Route::get('/kpis', [DataController::class, 'getKpis'])->name('kpis');

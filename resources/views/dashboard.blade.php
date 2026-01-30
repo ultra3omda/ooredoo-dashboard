@@ -2036,6 +2036,12 @@
       <button class="nav-tab" onclick="showTab('subscriptions')">Subscriptions</button>
       <button class="nav-tab" onclick="showTab('transactions')">Transactions</button>
       <button class="nav-tab" onclick="showTab('merchants')">Merchants</button>
+      @if(Auth::user()->canViewTimweSection())
+      <button class="nav-tab" onclick="showTab('timwe')">📱 Timwe</button>
+      @endif
+      @if(Auth::user()->canViewTimweSection())
+      <button class="nav-tab" onclick="showTab('ooredoo')">📱 Ooredoo/DGV</button>
+      @endif
       @if(Auth::user()->canViewEklektikSection())
       <button class="nav-tab" onclick="showTab('eklektik')">📞 Eklektik</button>
       @endif
@@ -2293,7 +2299,7 @@
         </div>
       </div>
 
-      <!-- Subscriptions KPIs: Row 2 (4 KPI) -->
+      <!-- Subscriptions KPIs: Row 2 (2 KPI) -->
       <div class="sub-kpis-row">
         <div class="card kpi-card">
           <div class="kpi-title">Deactivated (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Période: Tous les abonnements expirés dans la période sélectionnée.">ⓘ</span></div>
@@ -2334,7 +2340,8 @@
           </div>
         </div>
 
-      <!-- Nouveaux KPIs Avancés -->
+      <!-- Nouveaux KPIs Avancés - Masqué pour les collaborateurs -->
+      @if(!Auth::user()->isCollaborator())
       <div class="grid" style="margin-top: 20px;">
         <h3 style="grid-column: 1 / -1; margin-bottom: 15px; color: var(--text); font-size: 18px; font-weight: 600;">📊 Analyses Avancées</h3>
         
@@ -2385,10 +2392,10 @@
         </div>
         
       </div>
+      @endif
 
-      
-
-      <!-- Graphiques Avancés -->
+      <!-- Graphiques Avancés - Masqués pour les collaborateurs -->
+      @if(!Auth::user()->isCollaborator())
       <div class="grid" style="margin-top: 20px;">
         <div class="card chart-card">
           <div class="chart-title">Répartition des Activations par Canal <span style="margin-left:4px; cursor: help; color: var(--muted);" title="D'où viennent les activations: carte, recharge, solde téléphonique…">ⓘ</span></div>
@@ -2411,6 +2418,7 @@
           </div>
         </div>
       </div>
+      @endif
 
       <!-- Tableau des abonnements (détails) -->
       <div class="card table-card" style="margin-top: 20px;">
@@ -2435,15 +2443,17 @@
                 <th>Plan</th>
                 <th>Date Activation</th>
                 <th>Date Fin</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="subs-details-body">
-              <tr><td colspan="6" class="loading">Chargement...</td></tr>
+              <tr><td colspan="7" class="loading">Chargement...</td></tr>
             </tbody>
           </table>
         </div>
         <div class="subscriptions-pagination"></div>
       </div>
+
     </div>
 
     <!-- Tab 3: Detailed Transaction Analysis -->
@@ -2528,7 +2538,8 @@
           </div>
         </div>
 
-        <!-- Nouveaux graphiques d'analyse des transactions -->
+        <!-- Nouveaux graphiques d'analyse des transactions - Masqués pour les collaborateurs -->
+        @if(!Auth::user()->isCollaborator())
         <div class="card chart-card">
           <div class="chart-title">📊 Transactions par Opérateurs <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Répartition des transactions par moyen de paiement/opérateur.">ⓘ</span></div>
           <div class="chart-container">
@@ -2542,6 +2553,7 @@
             <canvas id="transactionsByPlanChart"></canvas>
           </div>
         </div>
+        @endif
       </div>
     </div>
 
@@ -2789,6 +2801,247 @@
         </div>
       </div>
 
+
+    </div>
+    @endif
+
+    <!-- Tab 5: Timwe Integration (Super Admin Only) -->
+    @if(Auth::user()->canViewTimweSection())
+    <div id="timwe" class="tab-content">
+
+      <!-- Statistiques Timwe KPIs - 3 lignes de KPIs -->
+      <div class="grid">
+        <!-- Première ligne - 4 KPIs principaux -->
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Taux de Facturation <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Clients facturés) / (Total clients Timwe) * 100. Seules les transactions avec pricepointId=63980 ET mnoDeliveryCode=DELIVERED sont comptées.">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-billing-rate">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Taux de Croissance Nette <span style="margin-left:4px; cursor: help; color: var(--muted);" title="((Nouveaux Abonnements - Désabonnements - Simchurn) / Active Subscriptions) × 100. Indique la croissance nette du portefeuille client.">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-net-growth-rate">Loading...</div>
+          <div class="kpi-delta" id="timwe-net-growth-rate-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Nombre Facturation <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de transactions de facturation réussies (pricepointId=63980 ET mnoDeliveryCode=DELIVERED)">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-total-billings">Loading...</div>
+          <div class="kpi-delta" id="timwe-total-billings-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Active Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre d'abonnements actifs à la fin de la période">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-active-subs">Loading...</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- Deuxième ligne - 4 KPIs d'abonnements -->
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Nouveaux Abonnements <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nouveaux abonnements créés dans la période">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-new-subscriptions">Loading...</div>
+          <div class="kpi-delta" id="timwe-new-subscriptions-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Désabonnements <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de désabonnements dans la période">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-unsubscriptions">Loading...</div>
+          <div class="kpi-delta" id="timwe-unsubscriptions-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Simchurn <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Abonnements créés et expirés le même jour">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-simchurn">Loading...</div>
+          <div class="kpi-delta" id="timwe-simchurn-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Revenu Simchurn <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenu généré par les simchurn">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-simchurn-revenue">Loading...</div>
+          <div class="kpi-delta" id="timwe-simchurn-revenue-delta">Loading...</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- Troisième ligne - 4 KPIs de revenus -->
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Revenu TTC (TND) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenu total TTC basé sur la somme des totalCharged (en TND)">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-revenue-tnd">Loading...</div>
+          <div class="kpi-delta" id="timwe-revenue-tnd-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">CA BigDeal HT (TND) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Chiffre d'affaires BigDeal Hors Taxes calculé selon le contrat">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-revenue-usd">Loading...</div>
+          <div class="kpi-delta" id="timwe-revenue-usd-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">ARPU (TND) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenu moyen par utilisateur normalisé sur 30 jours : (Revenu Total / Active Subs) × (30 / Nombre de jours)">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-arpu">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Revenu Moyen/Facturation <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenu moyen par facturation (Revenu Total / Total Facturations)">ⓘ</span></div>
+          <div class="kpi-value" id="timwe-avg-billing-revenue">Loading...</div>
+        </div>
+      </div>
+
+      <!-- Tableau Statistiques Quotidiennes Timwe -->
+      <div class="grid">
+        <div class="card" style="grid-column: span 12;">
+          <div class="chart-title">
+            📊 Statistiques Quotidiennes Timwe
+            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Statistiques détaillées par jour pour Timwe">ⓘ</span>
+            <button onclick="exportTimweStatsToExcel()" style="float: right; padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px;">
+              📥 Excel
+            </button>
+            <button onclick="copyTimweStatsToClipboard()" style="float: right; padding: 8px 16px; background: var(--secondary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+              📋 Copy
+            </button>
+          </div>
+          
+          <!-- Search bar -->
+          <div style="padding: 16px; border-bottom: 1px solid var(--border);">
+            <input type="text" id="timweStatsSearch" placeholder="🔍 Rechercher..." 
+                   onkeyup="filterTimweStats()" 
+                   style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px;">
+          </div>
+          
+          <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+            <table id="timweStatsTable">
+              <thead style="position: sticky; top: 0; background: var(--card); z-index: 10;">
+                <tr>
+                  <th style="width: 30px; text-align: center;"></th>
+                  <th style="text-align: left;">Période</th>
+                  <th style="text-align: center;">New Sub</th>
+                  <th style="text-align: center;">Unsub</th>
+                  <th style="text-align: center;">Simchurn</th>
+                  <th style="text-align: center;">Active Sub</th>
+                  <th style="text-align: center;">NB Facturation</th>
+                  <th style="text-align: center;">Taux Fact %</th>
+                  <th style="text-align: center;">Revenu TTC (TND)</th>
+                  <th style="text-align: center;">CA BigDeal HT (TND)</th>
+                </tr>
+              </thead>
+              <tbody id="timweStatsTableBody">
+                <tr>
+                  <td colspan="10" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-spinner fa-spin"></i> Chargement des statistiques...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- DÉSACTIVÉ POUR OPTIMISATION: Tableau des Transactions Timwe par Utilisateur -->
+      <!-- Ce tableau a été désactivé définitivement pour améliorer les performances du dashboard -->
+      <!--
+      <div class="grid" style="margin-top: 20px;">
+        <div class="card" style="grid-column: span 12;">
+          <div class="chart-title">
+            📋 Détails des Transactions Timwe par Utilisateur
+            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Liste des transactions Timwe (renouvellements et désabonnements) groupées par utilisateur">ⓘ</span>
+          </div>
+          <div style="padding: 40px; text-align: center; color: var(--muted);">
+            ⚠️ Tableau désactivé pour optimisation des performances
+          </div>
+        </div>
+      </div>
+      -->
+
+    </div>
+    @endif
+
+    <!-- Tab: Ooredoo/DGV Section -->
+    @if(Auth::user()->canViewTimweSection())
+    <div id="ooredoo" class="tab-content">
+
+      <!-- Statistiques Ooredoo KPIs - 2 lignes de KPIs -->
+      <div class="grid">
+        <!-- Première ligne - 4 KPIs principaux -->
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Taux de Facturation <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Clients facturés) / (Total clients Ooredoo) * 100. Transactions de type INVOICE avec statut SUCCESS.">ⓘ</span></div>
+          <div class="kpi-value" id="ooredoo-billing-rate">Loading...</div>
+          <div class="kpi-delta" id="ooredoo-billing-rate-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Total Facturations <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de transactions de facturation réussies (type INVOICE)">ⓘ</span></div>
+          <div class="kpi-value" id="ooredoo-total-billings">Loading...</div>
+          <div class="kpi-delta" id="ooredoo-total-billings-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Active Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre d'abonnements actifs à la fin de la période">ⓘ</span></div>
+          <div class="kpi-value" id="ooredoo-active-subs">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Nouveaux Abonnements <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nouveaux abonnements créés dans la période (OOREDOO_PAYMENT_SUCCESS)">ⓘ</span></div>
+          <div class="kpi-value" id="ooredoo-new-subscriptions">Loading...</div>
+          <div class="kpi-delta" id="ooredoo-new-subscriptions-delta">Loading...</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- Deuxième ligne - 4 KPIs d'abonnements -->
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Désabonnements <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de désabonnements dans la période">ⓘ</span></div>
+          <div class="kpi-value" id="ooredoo-unsubscriptions">Loading...</div>
+          <div class="kpi-delta" id="ooredoo-unsubscriptions-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Revenu Total TND <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenu total en TND (dinars tunisiens)">ⓘ</span></div>
+          <div class="kpi-value" id="ooredoo-revenue-tnd">Loading...</div>
+          <div class="kpi-delta" id="ooredoo-revenue-tnd-delta">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">ARPU (TND) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenu moyen par utilisateur normalisé sur 30 jours : (Revenu Total / Active Subs) × (30 / Nombre de jours)">ⓘ</span></div>
+          <div class="kpi-value" id="ooredoo-arpu">Loading...</div>
+        </div>
+        <div class="card kpi-card" style="grid-column: span 3;">
+          <div class="kpi-title">Revenu Moyen/Facturation <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenu moyen par transaction de facturation (Revenu Total / Total Facturations)">ⓘ</span></div>
+          <div class="kpi-value" id="ooredoo-avg-billing-revenue">Loading...</div>
+        </div>
+      </div>
+
+      <!-- Tableau Statistiques Mensuelles Ooredoo -->
+      <div class="grid">
+        <div class="card" style="grid-column: span 12;">
+          <div class="chart-title">
+            📊 Statistiques Mensuelles Ooredoo/DGV
+            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Statistiques groupées par mois pour Ooredoo/DGV. Cliquez sur un mois pour voir les détails quotidiens.">ⓘ</span>
+            <button onclick="exportOoredooStatsToExcel()" style="float: right; padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px;">
+              📥 Excel
+            </button>
+            <button onclick="copyOoredooStatsToClipboard()" style="float: right; padding: 8px 16px; background: var(--secondary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+              📋 Copy
+            </button>
+          </div>
+          
+          <!-- Search bar -->
+          <div style="padding: 16px; border-bottom: 1px solid var(--border);">
+            <input type="text" id="ooredooStatsSearch" placeholder="🔍 Rechercher..." 
+                   onkeyup="filterOoredooStats()" 
+                   style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px;">
+          </div>
+          
+          <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+            <table id="ooredooStatsTable">
+              <thead style="position: sticky; top: 0; background: var(--card); z-index: 10;">
+                <tr>
+                  <th style="cursor: pointer; width: 30px;"></th>
+                  <th onclick="sortOoredooStatistics(0)" style="cursor: pointer;">Période <span class="sort-icon">⇅</span></th>
+                  <th onclick="sortOoredooStatistics(1)" style="cursor: pointer;">New Sub <span class="sort-icon">⇅</span></th>
+                  <th onclick="sortOoredooStatistics(2)" style="cursor: pointer;">Unsub <span class="sort-icon">⇅</span></th>
+                  <th onclick="sortOoredooStatistics(3)" style="cursor: pointer;">Active Sub <span class="sort-icon">⇅</span></th>
+                  <th onclick="sortOoredooStatistics(4)" style="cursor: pointer;">NB Facturation <span class="sort-icon">⇅</span></th>
+                  <th onclick="sortOoredooStatistics(5)" style="cursor: pointer;">Taux Fact % <span class="sort-icon">⇅</span></th>
+                  <th onclick="sortOoredooStatistics(6)" style="cursor: pointer;">Revenu TND <span class="sort-icon">⇅</span></th>
+                </tr>
+              </thead>
+              <tbody id="ooredooStatsTableBody">
+                <tr>
+                  <td colspan="8" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-spinner fa-spin"></i> Chargement des statistiques...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
     </div>
     @endif
@@ -3268,27 +3521,19 @@
         console.error('❌ Chart.js non chargé');
       }
 
-      // Charger les données Eklektik une seule fois au démarrage
-      try {
-        if (typeof loadEklektikData === 'function') {
-          await loadEklektikData();
-        }
-        if (typeof loadEklektikCharts === 'function') {
-          setTimeout(() => loadEklektikCharts(), 150);
-        }
-      } catch (e) {
-        console.warn('Eklektik initial load skipped:', e);
-      }
-      
       setDefaultDates();
       updateDateRange();
       initializeDashboard();
       
+      // Charger les données Eklektik APRÈS le dashboard (non-bloquant)
+      // Ne pas charger automatiquement pour éviter les doubles chargements
+      // L'utilisateur peut charger Eklektik manuellement via l'onglet
+      
       // Initialize mobile navigation
       initializeMobileNavigation();
       
-      // Auto-refresh every 5 minutes
-      setInterval(loadDashboardData, 5 * 60 * 1000);
+      // ❌ Auto-refresh désactivé (demande utilisateur)
+      // setInterval(loadDashboardData, 5 * 60 * 1000);
       
       // Initialize keyboard shortcuts
       initializeKeyboardShortcuts();
@@ -3475,8 +3720,8 @@
         
         // Load operators in parallel (non-blocking)
         loadOperators().catch(error => {
-          console.warn('Operators loading failed, using fallback:', error);
-          setupFallbackOperators();
+          console.warn('Operators loading failed:', error);
+          // Ne pas utiliser setupFallbackOperators - laisser loadOperators gérer les retries
         });
         
       } catch (error) {
@@ -3486,16 +3731,15 @@
       }
     }
     
-    // Setup fallback operators if API fails
+    // Cette fonction n'est plus utilisée - les opérateurs doivent toujours venir de l'API
+    // Conservée uniquement pour référence mais ne devrait jamais être appelée
     function setupFallbackOperators() {
+      console.warn('⚠️ setupFallbackOperators appelée - cela ne devrait pas arriver');
       const operatorInfo = document.getElementById('operator-info');
-      
       if (operatorInfo) {
-        operatorInfo.textContent = 'Mode hors ligne - Vue globale activée';
+        operatorInfo.textContent = 'Erreur: Impossible de charger les opérateurs depuis l\'API. Veuillez rafraîchir la page.';
+        operatorInfo.style.color = '#ef4444';
       }
-      
-      // L'option par défaut est déjà dans le HTML, pas besoin de la recréer
-      console.log('🔄 Fallback: Using default operators');
     }
     
     // Show skeleton loading for KPIs immediately
@@ -3507,7 +3751,11 @@
       
       const kpiDeltas = document.querySelectorAll('.kpi-delta');
       kpiDeltas.forEach(el => {
-        el.innerHTML = '<div class="skeleton-text-small"></div>';
+        // Ne pas ajouter de skeleton pour les KPIs Timwe (qui seront masqués par updateKPI)
+        const isTimweKPI = el.id && el.id.startsWith('timwe-');
+        if (!isTimweKPI) {
+          el.innerHTML = '<div class="skeleton-text-small"></div>';
+        }
       });
       
       // Reset progress bars to 0
@@ -4035,7 +4283,8 @@
 
     // Variables globales pour les opérateurs
     let availableOperators = [];
-    let selectedOperators = ['ALL'];
+    let selectedOperators = []; // Sera initialisé selon le rôle utilisateur
+    let hasAllOption = false; // Indique si "Tous les opérateurs" est disponible
 
     // Center active tab on mobile
     function centerActiveTab(activeTab) {
@@ -5037,6 +5286,51 @@
     });
     
     // Helper functions
+    
+    /**
+     * Calcule le changement en pourcentage entre deux valeurs
+     * @param {number} current - Valeur actuelle
+     * @param {number} previous - Valeur précédente
+     * @returns {number} - Pourcentage de changement
+     */
+    function calculateChange(current, previous) {
+      if (!previous || previous === 0) return 0;
+      return ((current - previous) / previous) * 100;
+    }
+    
+    /**
+     * Formate un nombre avec espaces pour milliers, virgule pour décimales
+     * @param {number} value - Nombre à formater
+     * @param {number} decimals - Nombre de décimales (défaut 3)
+     * @returns {string} - Nombre formaté (ex: "20 238,000")
+     */
+    function formatNumber(value, decimals = 3) {
+      if (value === null || value === undefined || isNaN(value)) return '0,000';
+      
+      const num = Number(value);
+      const fixed = num.toFixed(decimals);
+      
+      // Séparer partie entière et décimale
+      const [integerPart, decimalPart] = fixed.split('.');
+      
+      // Ajouter espaces pour les milliers
+      const withSpaces = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      
+      // Remplacer le point par une virgule pour les décimales
+      return decimalPart ? `${withSpaces},${decimalPart}` : withSpaces;
+    }
+    
+    /**
+     * Formate un pourcentage avec virgule au lieu de point
+     * @param {number} value - Valeur du pourcentage
+     * @param {number} decimals - Nombre de décimales (défaut 3)
+     * @returns {string} - Pourcentage formaté (ex: "9,290%")
+     */
+    function formatPercentage(value, decimals = 3) {
+      if (value === null || value === undefined || isNaN(value)) return '0,000%';
+      return formatNumber(value, decimals) + '%';
+    }
+    
     function getServiceIcon(serviceType) {
       const icons = {
         'SUBSCRIPTION': '📱',
@@ -5066,13 +5360,24 @@
       });
     }
 
-    // Load dashboard data with simple loading
+    // Variable pour éviter les chargements multiples simultanés
+    let isLoadingDashboard = false;
+    
+    // Load dashboard data with progressive loading
     async function loadDashboardData() {
+      // Empêcher les chargements multiples simultanés
+      if (isLoadingDashboard) {
+        console.log('⏸️ Chargement déjà en cours, ignoré');
+        return;
+      }
+      
+      isLoadingDashboard = true;
       let timeoutId = null;
       
       try {
         // Show simple loading
         showLoading();
+        showProgressiveLoading();
         
         // Get date values for both periods
         const startDate = document.getElementById('start-date').value;
@@ -5086,6 +5391,11 @@
           : selectedOperators.length === 1 
             ? selectedOperators[0] 
             : selectedOperators.join(',');
+        
+        // Calculer la période en jours
+        const startDateObj = new Date(startDate);
+        const endDateObj = new Date(endDate);
+        const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24));
         
         // Build API URL with date parameters
         let apiUrl = '/api/dashboard/data';
@@ -5105,22 +5415,30 @@
           params.append('operator', selectedOperator);
         }
         
-        if (params.toString()) {
-          apiUrl += '?' + params.toString();
+        // Mode light automatique pour périodes > 90 jours
+        const shouldUseLightMode = periodDays > 90;
+        if (shouldUseLightMode) {
+          params.append('light', 'true');
+          console.log(`⚡ Mode light activé automatiquement pour période de ${periodDays} jours`);
         }
         
         const startTime = performance.now();
         
-        // Add timeout to prevent hanging
-        const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout pour longues périodes
+        // OPTIMISATION: Charger directement les données complètes (avec cache Redis, c'est rapide)
+        updateProgressiveLoading('Chargement des données...', 30);
         
-        const response = await fetch(apiUrl, {
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 150000); // 2.5 minutes timeout (augmenté pour périodes jusqu'à 2 ans)
+        
+        // Charger les données complètes (le cache Redis devrait rendre ça rapide)
+        const response = await fetch(apiUrl + '?' + params.toString(), {
           signal: controller.signal,
           headers: {
             'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'same-origin'
         });
         
         clearTimeout(timeoutId);
@@ -5137,41 +5455,95 @@
           hasKPIs: !!data.kpis,
           hasCharts: !!data.subscriptions,
           loadTime: `${loadTime.toFixed(0)}ms`,
-          optimizationMode: data.optimization_mode || 'normal'
+          lightMode: data.light_mode || false
         });
-
+        
+        // Si c'est en mode light, charger les sections manquantes
+        if (data.light_mode) {
+          updateProgressiveLoading('Chargement des sections avancées...', 60);
+          
+          const baseParams = params.toString();
+          const heavyEndpoints = [
+            { name: 'subscriptions-details', url: `/api/dashboard/subscriptions-details?${baseParams}`, key: 'subscriptions' },
+            { name: 'cohorts', url: `/api/dashboard/cohorts?${baseParams}`, key: 'cohorts' },
+            { name: 'transactions', url: `/api/dashboard/transactions-separate?${baseParams}`, key: 'transactions' }
+          ];
+          
+          // Charger en parallèle avec gestion d'erreur individuelle
+          const heavyPromises = heavyEndpoints.map(async (endpoint, index) => {
+            try {
+              updateProgressiveLoading(`Chargement ${endpoint.name}...`, 60 + (index + 1) * 10);
+              
+              const heavyResponse = await fetch(endpoint.url, {
+                headers: {
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+              });
+              
+              if (!heavyResponse.ok) {
+                throw new Error(`HTTP ${heavyResponse.status} pour ${endpoint.name}`);
+              }
+              
+              const result = await heavyResponse.json();
+              
+              return { key: endpoint.key, data: result.data || result, success: true };
+            } catch (error) {
+              console.warn(`⚠️ Erreur chargement ${endpoint.name}:`, error);
+              return { key: endpoint.key, data: null, success: false, error: error.message };
+            }
+          });
+          
+          const heavyResults = await Promise.all(heavyPromises);
+          
+          // Fusionner les résultats
+          heavyResults.forEach(result => {
+            if (result.success && result.data) {
+              if (result.key === 'subscriptions') {
+                data.subscriptions = {
+                  ...(data.subscriptions || {}),
+                  details: result.data,
+                  ...result.data
+                };
+              } else if (result.key === 'cohorts') {
+                if (!data.subscriptions) data.subscriptions = {};
+                data.subscriptions.cohorts = result.data;
+              } else if (result.key === 'transactions') {
+                data.transactions = result.data;
+              }
+            }
+          });
+        }
+        
         // Masquer le message d'optimisation
         hideOptimizationMessage();
         
-        // Show performance indicator if fast load (likely from cache)
-        updatePerformanceIndicator(loadTime);
-        
-        // Show immediate notification
-        const operatorLabel = selectedOperator === 'ALL' ? 'globales' : selectedOperator;
+        // Show performance indicator avec métadonnées
+        updatePerformanceIndicator(loadTime, data);
         
         // Update dashboard and hide loading simultaneously
+        updateProgressiveLoading('Finalisation...', 95);
         updateDashboard(data);
         hideLoading();
+        hideProgressiveLoading();
         
-        // Progress bar now working correctly
+        // Show success notification
+        const operatorLabel = selectedOperator === 'ALL' ? 'globales' : selectedOperator;
         
-        // Show success notification after everything is updated
         setTimeout(() => {
-        showNotification(`✅ Données ${operatorLabel} mises à jour!`, 'success');
+          showNotification(`✅ Données ${operatorLabel} mises à jour! (${loadTime.toFixed(0)}ms)`, 'success');
         }, 100);
 
-        // Émettre un événement global pour que les modules (ex: Eklektik) se resynchronisent
-        try {
-          const evt = new CustomEvent('dashboard:refreshed');
-          window.dispatchEvent(evt);
-        } catch (e) {
-          console.warn('CustomEvent not supported, Eklektik may not auto-refresh');
-        }
+        // NE PAS émettre l'événement dashboard:refreshed pour éviter les rechargements en cascade
+        // Les modules Eklektik se chargeront indépendamment
         
       } catch (error) {
-        clearTimeout(timeoutId); // Clean up timeout
+        clearTimeout(timeoutId);
         console.error('Error loading dashboard data:', error);
         hideLoading();
+        hideProgressiveLoading();
         
         // Try to show fallback data instead of complete failure
         if (error.name === 'AbortError') {
@@ -5180,10 +5552,49 @@
           updateDashboard(dashboardData);
         } else {
           showNotification('❌ Erreur de connexion: ' + error.message, 'error');
-          // Still try fallback
           loadFallbackData();
           updateDashboard(dashboardData);
         }
+      } finally {
+        // Toujours réinitialiser le flag à la fin
+        isLoadingDashboard = false;
+      }
+    }
+    
+    // Gestion du chargement progressif
+    let progressiveLoadingElement = null;
+    
+    function showProgressiveLoading() {
+      // Créer l'élément de progression s'il n'existe pas
+      if (!progressiveLoadingElement) {
+        progressiveLoadingElement = document.createElement('div');
+        progressiveLoadingElement.id = 'progressive-loading';
+        progressiveLoadingElement.innerHTML = `
+          <div style="position: fixed; top: 80px; right: 20px; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10000; min-width: 250px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: #1f2937;">Chargement progressif</div>
+            <div id="progressive-loading-text" style="font-size: 13px; color: #6b7280; margin-bottom: 8px;">Initialisation...</div>
+            <div style="background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden;">
+              <div id="progressive-loading-bar" style="background: linear-gradient(90deg, #3b82f6, #8b5cf6); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(progressiveLoadingElement);
+      }
+      progressiveLoadingElement.style.display = 'block';
+    }
+    
+    function updateProgressiveLoading(text, percent) {
+      if (progressiveLoadingElement) {
+        const textEl = progressiveLoadingElement.querySelector('#progressive-loading-text');
+        const barEl = progressiveLoadingElement.querySelector('#progressive-loading-bar');
+        if (textEl) textEl.textContent = text;
+        if (barEl) barEl.style.width = Math.min(100, Math.max(0, percent)) + '%';
+      }
+    }
+    
+    function hideProgressiveLoading() {
+      if (progressiveLoadingElement) {
+        progressiveLoadingElement.style.display = 'none';
       }
     }
     
@@ -5333,67 +5744,93 @@
       });
     }
 
-    function updatePerformanceIndicator(loadTime) {
+    function updatePerformanceIndicator(loadTime, data = null) {
       const indicator = document.getElementById('performance-indicator');
       if (!indicator) return;
       
+      // Calculer la période pour l'affichage
+      const startDate = document.getElementById('start-date')?.value;
+      const endDate = document.getElementById('end-date')?.value;
+      let periodDays = 0;
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      }
+      
+      // Déterminer la source des données
+      const isFromCache = data?._cache_meta || loadTime < 500;
+      const isStale = data?._cache_meta?.is_stale === true;
+      const dataType = data?._cache_meta?.data_type || 'standard';
+      
       if (loadTime < 500) {
-        // Fast load - likely from cache
+        // Excellent - Cache
         indicator.style.display = 'flex';
-        indicator.querySelector('.performance-text').textContent = 'Cache ⚡';
+        const cacheText = isStale ? '📦 Cache (stale)' : periodDays > 0 ? `📦 Cache (${periodDays}j)` : '📦 Cache';
+        indicator.querySelector('.performance-text').textContent = cacheText;
         indicator.style.background = 'rgba(16, 185, 129, 0.1)';
         indicator.style.borderColor = 'rgba(16, 185, 129, 0.3)';
         indicator.style.color = '#059669';
         
-        // Hide after 3 seconds
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 3000);
-      } else if (loadTime < 2000) {
-        // Medium load
+        }, 5000);
+      } else if (loadTime < 3000) {
+        // Bon - Optimisé
         indicator.style.display = 'flex';
-        indicator.querySelector('.performance-text').textContent = `${Math.round(loadTime)}ms`;
+        const optimizedText = periodDays > 0 
+          ? `${Math.round(loadTime)}ms (${periodDays}j)` 
+          : `${Math.round(loadTime)}ms (optimisé)`;
+        indicator.querySelector('.performance-text').textContent = optimizedText;
         indicator.style.background = 'rgba(245, 158, 11, 0.1)';
         indicator.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         indicator.style.color = '#d97706';
         
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 2000);
+        }, 4000);
       } else {
-        // Slow load
+        // Lent - Longue période
         indicator.style.display = 'flex';
-        indicator.querySelector('.performance-text').textContent = 'Lent';
+        const slowText = periodDays > 0 
+          ? `${Math.round(loadTime / 1000)}s (${periodDays}j)` 
+          : `${Math.round(loadTime / 1000)}s`;
+        indicator.querySelector('.performance-text').textContent = slowText;
         indicator.style.background = 'rgba(239, 68, 68, 0.1)';
         indicator.style.borderColor = 'rgba(239, 68, 68, 0.3)';
         indicator.style.color = '#dc2626';
         
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 4000);
+        }, 6000);
       }
     }
     
-    // Load available operators with timeout and fallback
+    // Load available operators with improved error handling
     async function loadOperators() {
       let timeoutId = null;
       
       const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+      // Timeout augmenté à 60s pour SuperAdmin (beaucoup d'opérateurs)
+      // Le timeout est silencieux si les opérateurs sont déjà chargés
+      timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
       
       try {
         const response = await fetch('/api/operators', {
           signal: controller.signal,
           headers: {
             'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'same-origin'
         });
         
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`HTTP ${response.status}: ${errorData.error || response.statusText}`);
         }
         
         const data = await response.json();
@@ -5404,7 +5841,7 @@
           user_role: data.user_role
         });
         
-        if (data.operators && data.operators.length > 0) {
+        if (data.operators && Array.isArray(data.operators) && data.operators.length > 0) {
           const operatorsList = document.getElementById('operators-list');
           const operatorInfo = document.getElementById('operator-info');
           
@@ -5413,6 +5850,28 @@
           
           // Clear existing operators
           operatorsList.innerHTML = '';
+          
+          // Vérifier si "ALL" est disponible (seulement pour SuperAdmin et Admin)
+          hasAllOption = data.operators.some(op => op.value === 'ALL');
+          const selectAllCheckbox = document.getElementById('select-all-operators');
+          const selectAllOption = selectAllCheckbox ? selectAllCheckbox.closest('.select-all-option') : null;
+          
+          // Masquer "Tous les opérateurs" pour les collaborateurs
+          if (!hasAllOption) {
+            if (selectAllOption) {
+              selectAllOption.style.display = 'none';
+            }
+            if (selectAllCheckbox) {
+              selectAllCheckbox.checked = false;
+            }
+          } else {
+            if (selectAllOption) {
+              selectAllOption.style.display = 'block';
+            }
+          }
+          
+          // Stocker les opérateurs disponibles globalement
+          availableOperators = data.operators;
           
           // Add operators to multi-select
           data.operators.forEach(operator => {
@@ -5444,25 +5903,61 @@
             console.log(`🔍 Opérateur ajouté: ${operator.label} (${operator.value})`);
           });
           
-          // Set default selection
+          // Set default selection - s'assurer qu'un opérateur est toujours sélectionné
+          let defaultOperatorSelected = false;
+          
           if (data.default_operator && data.default_operator !== 'ALL') {
-            selectedOperators = [data.default_operator];
-            const selectAllCheckbox = document.getElementById('select-all-operators');
-            selectAllCheckbox.checked = false;
+            // Vérifier que l'opérateur par défaut existe dans la liste
+            const defaultOpExists = data.operators.some(op => op.value === data.default_operator);
+            if (defaultOpExists) {
+              selectedOperators = [data.default_operator];
+              selectAllCheckbox.checked = false;
+              
+              // Check the default operator
+              const defaultCheckbox = operatorsList.querySelector(`input[value="${data.default_operator}"]`);
+              if (defaultCheckbox) {
+                defaultCheckbox.checked = true;
+                defaultOperatorSelected = true;
+              }
+            }
+          } else if (data.default_operator === 'ALL' && hasAllOption) {
+            // Si "ALL" est le défaut et disponible, le sélectionner
+            selectedOperators = ['ALL'];
+            selectAllCheckbox.checked = true;
+            defaultOperatorSelected = true;
+          }
+          
+          // Si aucun opérateur par défaut n'a été sélectionné, sélectionner le premier disponible
+          if (!defaultOperatorSelected && data.operators.length > 0) {
+            const firstOperator = hasAllOption && data.operators.some(op => op.value === 'ALL') 
+              ? 'ALL' 
+              : data.operators[0].value;
             
-            // Check the default operator
-            const defaultCheckbox = operatorsList.querySelector(`input[value="${data.default_operator}"]`);
-            if (defaultCheckbox) {
-              defaultCheckbox.checked = true;
+            selectedOperators = [firstOperator];
+            
+            if (firstOperator === 'ALL' && selectAllCheckbox) {
+              selectAllCheckbox.checked = true;
+            } else {
+              const firstCheckbox = operatorsList.querySelector(`input[value="${firstOperator}"]`);
+              if (firstCheckbox) {
+                firstCheckbox.checked = true;
+              }
             }
           }
           
           updateSelectedOperatorsDisplay();
           updateOperatorInfo();
           
+          // Déclencher le chargement des données avec l'opérateur sélectionné
+          if (selectedOperators.length > 0) {
+            loadDashboardData();
+          }
+          
           // Update info text based on user role
           if (data.user_role === 'super_admin') {
             operatorInfo.textContent = `Vue globale disponible (${data.operators.length} opérateurs)`;
+          } else if (data.user_role === 'collaborator') {
+            operatorInfo.textContent = `${data.operators.length} opérateur(s) assigné(s)`;
           } else {
             operatorInfo.textContent = `${data.operators.length} opérateur(s) assigné(s)`;
           }
@@ -5475,8 +5970,45 @@
         
       } catch (error) {
         clearTimeout(timeoutId);
-        console.warn('⚠️ Operators loading failed:', error.message);
-        throw error;
+        
+        // Ne pas afficher d'erreur si c'est juste une annulation (timeout)
+        // Vérifier si les opérateurs ont déjà été chargés (cas où le timeout arrive après chargement)
+        if (error.name === 'AbortError') {
+          // Vérifier de manière robuste si les opérateurs sont déjà chargés
+          const operatorsList = document.getElementById('operators-list');
+          const hasOperatorsInList = operatorsList && operatorsList.children.length > 0;
+          const operatorInfo = document.getElementById('operator-info');
+          const hasOperatorInfo = operatorInfo && operatorInfo.textContent && (
+            operatorInfo.textContent.includes('opérateur') || 
+            operatorInfo.textContent.includes('Vue globale') ||
+            operatorInfo.textContent.includes('assigné')
+          );
+          
+          // Vérifier aussi si availableOperators est défini et non vide
+          const hasAvailableOperators = availableOperators && Array.isArray(availableOperators) && availableOperators.length > 0;
+          
+          // Vérifier si les opérateurs sont réellement chargés
+          // Si au moins un indicateur montre que les opérateurs sont chargés, ignorer le timeout complètement
+          if (hasOperatorsInList || hasOperatorInfo || hasAvailableOperators) {
+            // Les opérateurs sont déjà chargés - ignorer silencieusement le timeout
+            // Ne rien afficher, ne rien logger
+            return;
+          }
+          
+          // Seulement afficher le warning si les opérateurs ne sont vraiment pas chargés
+          console.warn('⚠️ Chargement des opérateurs annulé (timeout) - réessayez si les opérateurs ne sont pas visibles');
+          if (operatorInfo) {
+            operatorInfo.textContent = 'Erreur: Impossible de charger les opérateurs. Veuillez rafraîchir la page.';
+            operatorInfo.style.color = '#ef4444';
+          }
+        } else {
+          console.error('❌ Erreur lors du chargement des opérateurs:', error.message);
+          const operatorInfo = document.getElementById('operator-info');
+          if (operatorInfo) {
+            operatorInfo.textContent = 'Erreur: Impossible de charger les opérateurs. Veuillez rafraîchir la page.';
+            operatorInfo.style.color = '#ef4444';
+          }
+        }
       }
     }
     
@@ -5536,10 +6068,17 @@
         selectedOperators = selectedOperators.filter(op => op !== operatorValue);
         selectAllCheckbox.checked = false;
         
-        // Si aucun opérateur sélectionné, revenir à "Tous"
-        if (selectedOperators.length === 0) {
+        // Si aucun opérateur sélectionné, revenir à "Tous" seulement si disponible
+        if (selectedOperators.length === 0 && hasAllOption) {
           selectedOperators = ['ALL'];
           selectAllCheckbox.checked = true;
+        } else if (selectedOperators.length === 0 && !hasAllOption && availableOperators.length > 0) {
+          // Pour les collaborateurs, sélectionner le premier opérateur disponible
+          selectedOperators = [availableOperators[0].value];
+          const firstCheckbox = document.querySelector(`input[value="${availableOperators[0].value}"]`);
+          if (firstCheckbox) {
+            firstCheckbox.checked = true;
+          }
         }
       }
       
@@ -5620,14 +6159,34 @@
         document.getElementById('comparison-end-date').value = comparisonEndDate.toISOString().split('T')[0];
         
         updateDateRange();
-        loadDashboardData();
+        // Ne pas charger automatiquement - l'utilisateur doit cliquer sur "Actualiser"
       }
     }
 
-    // Update date range display
+    // Debounce timer pour les changements de dates
+    let dateChangeDebounceTimer = null;
+    
+    // Update date range display avec debouncing
     function updateDateRange() {
       const startDate = document.getElementById('start-date').value;
       const endDate = document.getElementById('end-date').value;
+      
+      // Calculer la période
+      let periodDays = 0;
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      }
+      
+      // Debounce de 800ms sur les changements de dates
+      // L'utilisateur doit cliquer sur "Actualiser" pour charger
+      clearTimeout(dateChangeDebounceTimer);
+      dateChangeDebounceTimer = setTimeout(() => {
+        if (periodDays > 0) {
+          console.log(`✅ Dates mises à jour (${periodDays}j) - Cliquez sur "Actualiser" pour charger`);
+        }
+      }, 800);
       
       if (startDate && endDate) {
         const start = new Date(startDate);
@@ -5784,6 +6343,32 @@
 
     // Update dashboard with data - optimized for performance
     function updateDashboard(data) {
+      // Normaliser les données pour compatibilité mode light/complet
+      // En mode light, timwe_stats et ooredoo_stats sont au niveau racine
+      // En mode complet, elles sont dans subscriptions
+      if (data.light_mode) {
+        // Mode light : normaliser la structure
+        if (data.timwe_stats && !data.subscriptions) {
+          data.subscriptions = {};
+        }
+        if (data.timwe_stats) {
+          data.subscriptions.timwe_monthly_stats = data.timwe_stats.timwe_monthly_stats || [];
+          data.subscriptions.timwe_monthly_stats_comparison = data.timwe_stats.timwe_monthly_stats_comparison || [];
+          data.subscriptions.daily_statistics = data.timwe_stats.daily_statistics || [];
+        }
+        if (data.ooredoo_stats) {
+          // ooredoo_stats est déjà au bon endroit
+        }
+      } else {
+        // Mode complet : s'assurer que les données sont bien structurées
+        if (!data.subscriptions) {
+          data.subscriptions = {};
+        }
+        if (!data.ooredoo_stats) {
+          data.ooredoo_stats = {};
+        }
+      }
+      
       // Store globally FIRST so dependent functions can safely read it
       dashboardData = data;
 
@@ -5814,7 +6399,18 @@
 
     // Update KPI values
     function updateKPIs(kpis) {
-      const normalizeKPI = (obj) => (obj && typeof obj.current !== 'undefined') ? obj : { current: 0, previous: 0, change: 0 };
+      const normalizeKPI = (obj) => {
+        // Si c'est un objet avec current, l'utiliser tel quel
+        if (obj && typeof obj.current !== 'undefined') {
+          return obj;
+        }
+        // Si c'est un nombre simple, le convertir en objet
+        if (typeof obj === 'number') {
+          return { current: obj, previous: 0, change: 0 };
+        }
+        // Sinon retourner 0
+        return { current: 0, previous: 0, change: 0 };
+      };
       
       // Overview KPIs
       updateKPI('activatedSubscriptions', normalizeKPI(kpis?.activatedSubscriptions));
@@ -5841,6 +6437,142 @@
       updateKPI('sub-lostSubscriptions', normalizeKPI(kpis?.cohortDeactivated));
       // Taux de churn doit utiliser la valeur churnRate
       updateKPI('sub-retentionRateTrue', normalizeKPI(kpis?.churnRate), '%');
+      
+      // Timwe Tab KPIs (super admin uniquement)
+      if (kpis?.billingRateTimwe) {
+        updateKPI('timwe-billing-rate', normalizeKPI(kpis?.billingRateTimwe), '%');
+        updateKPI('timwe-total-billings', normalizeKPI(kpis?.totalTimweBillings));
+        
+        // Récupérer les statistiques mensuelles groupées Timwe depuis les données du dashboard
+        // Support mode light (timwe_stats au niveau racine) et mode complet (subscriptions.timwe_monthly_stats)
+        const timweStats = dashboardData?.timwe_stats?.timwe_monthly_stats || dashboardData?.subscriptions?.timwe_monthly_stats;
+        if (timweStats) {
+          updateTimweStatisticsTable(timweStats);
+          
+          // DÉSACTIVÉ POUR OPTIMISATION: Tableau des transactions Timwe par utilisateur
+          // if (dashboardData.subscriptions.timwe_transactions_by_user) {
+          //   updateTimweTransactionsTable(dashboardData.subscriptions.timwe_transactions_by_user);
+          // } else {
+          //   updateTimweTransactionsTable([]);
+          // }
+          
+          // Calculer les KPIs agrégés avec comparaison (depuis les données mensuelles)
+          const monthlyStats = timweStats || [];
+          const monthlyStatsComparison = dashboardData?.timwe_stats?.timwe_monthly_stats_comparison || dashboardData?.subscriptions?.timwe_monthly_stats_comparison || [];
+          
+          const totals = calculateTimweTotals(monthlyStats);
+          const comparisonTotals = monthlyStatsComparison.length > 0 
+            ? calculateTimweComparisonTotals(monthlyStatsComparison) 
+            : null;
+          
+          console.log('🔍 [TIMWE] Statistiques:', {
+            current: monthlyStats.length,
+            comparison: monthlyStatsComparison.length,
+            hasSeparateComparison: !!dashboardData.subscriptions.timwe_monthly_stats_comparison
+          });
+          
+          // Helper pour créer un objet KPI avec ou sans comparaison
+          const makeKPI = (current, previous) => {
+            if (previous === null || previous === undefined || !comparisonTotals) {
+              return { current, previous: 0, change: 0 };
+            }
+            return {
+              current,
+              previous,
+              change: calculateChange(current, previous)
+            };
+          };
+          
+          // Mise à jour des KPIs avec comparaison (si disponible)
+          const newSubsKPI = makeKPI(totals.newSubs, comparisonTotals?.newSubs);
+          console.log('🔍 [TIMWE KPI] Nouveaux Abonnements:', newSubsKPI);
+          
+          updateKPI('timwe-active-subs', makeKPI(
+            totals.activeSubsEndOfPeriod,
+            comparisonTotals?.activeSubsEndOfPeriod
+          ));
+          
+          updateKPI('timwe-new-subscriptions', newSubsKPI);
+          
+          updateKPI('timwe-unsubscriptions', makeKPI(
+            totals.unsubs,
+            comparisonTotals?.unsubs
+          ));
+          
+          updateKPI('timwe-simchurn', makeKPI(
+            totals.simchurn,
+            comparisonTotals?.simchurn
+          ));
+          
+          updateKPI('timwe-simchurn-revenue', {
+            current: formatNumber(totals.simchurnRevenue, 3),
+            previous: comparisonTotals ? formatNumber(comparisonTotals.simchurnRevenue, 3) : 0,
+            change: comparisonTotals ? calculateChange(totals.simchurnRevenue, comparisonTotals.simchurnRevenue) : 0
+          }, ' TND');
+          
+          updateKPI('timwe-revenue-tnd', {
+            current: formatNumber(totals.revenueTnd, 3),
+            previous: comparisonTotals ? formatNumber(comparisonTotals.revenueTnd, 3) : 0,
+            change: comparisonTotals ? calculateChange(totals.revenueTnd, comparisonTotals.revenueTnd) : 0
+          }, ' TND');
+          
+          updateKPI('timwe-revenue-usd', {
+            current: formatNumber(totals.caBigdealHt, 3),
+            previous: comparisonTotals ? formatNumber(comparisonTotals.caBigdealHt, 3) : 0,
+            change: comparisonTotals ? calculateChange(totals.caBigdealHt, comparisonTotals.caBigdealHt) : 0
+          }, ' TND');
+          
+          // Calculer le nombre de jours de la période pour normaliser l'ARPU
+          const startDate = document.getElementById('start-date')?.value;
+          const endDate = document.getElementById('end-date')?.value;
+          let periodDays = 30; // Défaut
+          if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 30;
+          }
+          
+          // Taux de Croissance Nette = ((New Subs - Unsubs - Simchurn) / Active Subs) * 100
+          const netGrowth = totals.newSubs - totals.unsubs - totals.simchurn;
+          const netGrowthRate = totals.activeSubsEndOfPeriod > 0 
+            ? (netGrowth / totals.activeSubsEndOfPeriod) * 100 
+            : 0;
+          
+          const netGrowthRateComparison = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
+            ? ((comparisonTotals.newSubs - comparisonTotals.unsubs - comparisonTotals.simchurn) / comparisonTotals.activeSubsEndOfPeriod) * 100
+            : null;
+          
+          // Formater le taux de croissance avec 2 décimales
+          const netGrowthFormatted = formatNumber(netGrowthRate, 2);
+          const netGrowthComparisonFormatted = netGrowthRateComparison !== null ? formatNumber(netGrowthRateComparison, 2) : 0;
+          
+          updateKPI('timwe-net-growth-rate', {
+            current: netGrowthFormatted,
+            previous: netGrowthComparisonFormatted,
+            change: netGrowthRateComparison !== null ? calculateChange(netGrowthRate, netGrowthRateComparison) : 0
+          }, '%');
+          
+          // ARPU mensuel normalisé (30 jours)
+          // Formule : (Revenu Total / Active Subs) * (30 / Nombre de jours)
+          const arpuValue = totals.activeSubsEndOfPeriod > 0 
+            ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays)
+            : 0;
+          const arpuFormatted = formatNumber(arpuValue, 3);
+          
+          updateKPI('timwe-arpu', { current: arpuFormatted, previous: 0, change: 0 }, ' TND');
+          
+          const avgBillingValue = kpis?.totalTimweBillings?.current > 0 
+            ? totals.revenueTnd / kpis.totalTimweBillings.current
+            : 0;
+          const avgBillingFormatted = formatNumber(avgBillingValue, 3);
+          updateKPI('timwe-avg-billing-revenue', { current: avgBillingFormatted, previous: 0, change: 0 }, ' TND');
+        }
+      }
+
+      // Ooredoo/DGV KPIs
+      if (dashboardData && dashboardData.ooredoo_stats) {
+        updateOoredooKPIs(dashboardData);
+      }
       
       // Nouveaux KPIs Avancés - Activations par Canal (avec comparaison)
       if (dashboardData && dashboardData.subscriptions && dashboardData.subscriptions.activations_by_channel) {
@@ -5944,15 +6676,19 @@
     // Update individual KPI
     function updateKPI(elementId, data, suffix = '') {
       const valueElement = document.getElementById(elementId);
-      const deltaElement = document.getElementById(elementId + 'Delta');
+      // Pour les KPIs Timwe et Ooredoo, utiliser '-delta' au lieu de 'Delta'
+      const deltaId = (elementId.startsWith('timwe-') || elementId.startsWith('ooredoo-')) 
+        ? elementId + '-delta' 
+        : elementId + 'Delta';
+      const deltaElement = document.getElementById(deltaId);
       
       // Normalisation: éviter les erreurs si data est undefined/null
       const safe = (data && typeof data.current !== 'undefined')
         ? data
         : { current: 0, previous: 0, change: 0 };
 
-      // DEBUG: tracer tous les KPI subscription problématiques
-      if (elementId.startsWith('sub-')) {
+      // DEBUG: tracer tous les KPI subscription ET timwe ET ooredoo problématiques
+      if (elementId.startsWith('sub-') || elementId.startsWith('timwe-') || elementId.startsWith('ooredoo-')) {
         console.log('[KPI DEBUG]', elementId, JSON.parse(JSON.stringify(safe)));
       }
       
@@ -5961,26 +6697,53 @@
         valueElement.innerHTML = ''; // Clear any existing content including loading states
         // Force un nouveau rendu pour éviter les résidus
         valueElement.className = valueElement.className; // Trigger reflow
-        valueElement.textContent = formatNumber(safe.current) + suffix;
+        // Utiliser formatNumber avec 0 décimales pour les entiers, sauf si c'est un pourcentage ou déjà formaté
+        const formattedValue = (typeof safe.current === 'string') ? safe.current : formatNumber(safe.current, 0);
+        valueElement.textContent = formattedValue + suffix;
       }
       
       if (deltaElement) {
-        // Force la mise à jour du delta aussi
-        deltaElement.innerHTML = ''; // Clear any existing content including loading states
-        // Force un nouveau rendu pour éviter les résidus
-        deltaElement.className = deltaElement.className; // Trigger reflow
-        
         const change = Number.isFinite(safe.change) ? safe.change : 0;
         const isPositive = change > 0;
         const isNegative = change < 0;
 
-        // Inverser la couleur pour les KPI où une baisse est positive (ex: deactivated, churn, durée entre transactions)
-        const inverse = elementId.includes('deactivated') || elementId.includes('churn') || elementId.includes('lostSubscriptions') || elementId.includes('retentionRateTrue') || elementId.includes('avgInterTxDays');
-        const positiveClass = inverse ? 'delta-negative' : 'delta-positive';
-        const negativeClass = inverse ? 'delta-positive' : 'delta-negative';
-        
-        deltaElement.textContent = `${isPositive ? '↗' : isNegative ? '↘' : '→'} ${isPositive ? '+' : ''}${change.toFixed(1)}%`;
-        deltaElement.className = `kpi-delta ${isPositive ? positiveClass : isNegative ? negativeClass : 'delta-neutral'}`;
+        // DEBUG pour Timwe
+        if (elementId.startsWith('timwe-')) {
+          console.log(`🔍 [DELTA] ${elementId}:`, {
+            exists: !!deltaElement,
+            change,
+            previous: safe.previous,
+            willShow: !(change === 0 && safe.previous === 0)
+          });
+        }
+
+        // Masquer le delta si pas de données de comparaison (change = 0 ET previous = 0)
+        if (change === 0 && safe.previous === 0) {
+          // Nettoyer complètement le contenu et masquer
+          deltaElement.innerHTML = '';
+          deltaElement.textContent = '';
+          deltaElement.style.display = 'none';
+          deltaElement.className = 'kpi-delta';
+        } else {
+          // Afficher le delta avec les bonnes classes
+          deltaElement.style.display = '';
+          deltaElement.innerHTML = ''; // Nettoyer d'abord
+          
+          // Inverser la couleur pour les KPI où une baisse est positive (ex: deactivated, churn, durée entre transactions)
+          const inverse = elementId.includes('deactivated') || elementId.includes('churn') || elementId.includes('lostSubscriptions') || elementId.includes('retentionRateTrue') || elementId.includes('avgInterTxDays');
+          const positiveClass = inverse ? 'delta-negative' : 'delta-positive';
+          const negativeClass = inverse ? 'delta-positive' : 'delta-negative';
+          
+          deltaElement.textContent = `${isPositive ? '↗' : isNegative ? '↘' : '→'} ${isPositive ? '+' : ''}${change.toFixed(1)}%`;
+          deltaElement.className = `kpi-delta ${isPositive ? positiveClass : isNegative ? negativeClass : 'delta-neutral'}`;
+          
+          // DEBUG pour Timwe
+          if (elementId.startsWith('timwe-')) {
+            console.log(`✅ [DELTA SET] ${elementId}:`, deltaElement.textContent);
+          }
+        }
+      } else if (elementId.startsWith('timwe-')) {
+        console.log(`❌ [DELTA] ${elementId}: deltaElement NOT FOUND`);
       }
     }
 
@@ -5988,17 +6751,14 @@
     function updateKPIValue(id, value, suffix = '') {
       const element = document.getElementById(id);
       if (element && value !== undefined && value !== null) {
-        element.textContent = formatNumber(value) + suffix;
+        // Utiliser formatNumber avec 0 décimales pour les entiers
+        const formattedValue = (typeof value === 'string') ? value : formatNumber(value, 0);
+        element.textContent = formattedValue + suffix;
       }
     }
 
-    // Format numbers for display
-    function formatNumber(num) {
-      if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
-      }
-      return num.toLocaleString();
-    }
+    // SUPPRIMÉ - Utiliser la nouvelle fonction formatNumber() avec espaces et virgules définie plus haut
+    // Ancienne fonction qui arrondissait en "K" - remplacée par formatNumber(value, decimals)
 
     // Update charts
     function updateCharts(data) {
@@ -6019,8 +6779,11 @@
       createTransactingUsersChart(data);
       
       // Nouveaux graphiques d'analyse des transactions
+      // Ne pas afficher ces graphiques pour les collaborateurs
+      @if(!Auth::user()->isCollaborator())
       createTransactionsByOperatorChart(data);
       createTransactionsByPlanChart(data);
+      @endif
 
       // Merchants Charts (réactivés)
       createTopMerchantsChart(data);
@@ -6040,6 +6803,16 @@
     }
 
     const points = (data.subscriptions && data.subscriptions.quarterly_active_locations) ? data.subscriptions.quarterly_active_locations : [];
+    
+    if (!points || points.length === 0) {
+      // Afficher un message si pas de données
+      const parent = ctx.parentElement;
+      if (parent) {
+        parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
+      }
+      return;
+    }
+    
     const labels = points.map(p => p.quarter);
     const values = points.map(p => p.locations);
 
@@ -6110,6 +6883,9 @@
     function createTransactionsByPlanChart(data) {
       const ctx = document.getElementById('transactionsByPlanChart');
       if (!ctx) return;
+      
+      // Ne pas créer le graphique si l'élément n'existe pas (masqué pour collaborateur)
+      if (!ctx.parentElement || ctx.parentElement.style.display === 'none') return;
 
       if (charts.transactionsByPlan) {
         charts.transactionsByPlan.destroy();
@@ -6221,26 +6997,21 @@
       
       // Use real daily activations data from backend
       const dailyActivations = data.subscriptions?.daily_activations || [];
-      // Build a continuous date range (align X axis with other charts)
-      const dateToValue = new Map();
-      const parseISO = (s) => new Date(s + 'T00:00:00');
-      dailyActivations.forEach(it => {
-        if (it && it.date) {
-          dateToValue.set(it.date, Number(it.activations || 0));
+      
+      console.log('📊 Daily Activations data:', dailyActivations.length, 'entries', dailyActivations.slice(0, 3));
+      
+      if (!dailyActivations || dailyActivations.length === 0) {
+        // Afficher un message si pas de données
+        const parent = ctx.parentElement;
+        if (parent) {
+          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
         }
-      });
-
-      const sortedDates = Array.from(dateToValue.keys()).sort();
-      if (sortedDates.length === 0) return;
-      const start = parseISO(sortedDates[0]);
-      const end = parseISO(sortedDates[sortedDates.length - 1]);
-      const days = [];
-      const dailyData = [];
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const iso = d.toISOString().slice(0, 10);
-        days.push(iso);
-        dailyData.push(dateToValue.has(iso) ? dateToValue.get(iso) : 0);
+        return;
       }
+      
+      // Pour les longues périodes (données mensuelles), utiliser directement les données sans interpolation
+      const days = dailyActivations.map(it => it.date);
+      const dailyData = dailyActivations.map(it => Number(it.activations || 0));
       
       charts.subscriptionTrend = new Chart(ctx, {
         type: 'line',
@@ -6285,22 +7056,18 @@
       
       // Use real retention trend data from backend
       const retentionTrend = data.subscriptions?.retention_trend || [];
-      // Aligner les dates avec le graphe Daily Activated Subscriptions
-      const mapDateToValue = new Map();
-      retentionTrend.forEach(it => {
-        if (it && it.date) mapDateToValue.set(it.date, Number((it.value ?? it.rate) || 0));
-      });
-      const sorted = Array.from(mapDateToValue.keys()).sort();
-      if (sorted.length === 0) return;
-      const start = new Date(sorted[0] + 'T00:00:00');
-      const end = new Date(sorted[sorted.length - 1] + 'T00:00:00');
-      const days = [];
-      const retentionData = [];
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const iso = d.toISOString().slice(0, 10);
-        days.push(iso);
-        retentionData.push(mapDateToValue.has(iso) ? mapDateToValue.get(iso) : 0);
+      
+      console.log('📊 Retention Trend data:', retentionTrend?.length, 'entries', retentionTrend?.slice(0, 3));
+      
+      if (!retentionTrend || retentionTrend.length === 0) {
+        // Afficher un message si pas de données
+        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
+        return;
       }
+      
+      // Utiliser directement les données sans transformation complexe
+      const days = retentionTrend.map(it => it.date || it.period);
+      const retentionData = retentionTrend.map(it => Number((it.value ?? it.rate ?? 0) || 0));
       
       charts.retention = new Chart(ctx, {
         type: 'line',
@@ -6355,8 +7122,17 @@
       
       // Use real daily transactions data from backend
       const dailyTransactions = data.transactions?.daily_volume || [];
+      
+      console.log('📊 Daily Volume data:', dailyTransactions?.length, 'entries', dailyTransactions?.slice(0, 3));
+      
+      if (!dailyTransactions || dailyTransactions.length === 0) {
+        // Afficher un message si pas de données
+        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de transaction disponible</div>';
+        return;
+      }
+      
       const days = dailyTransactions.map((item) => item.date || '');
-      const transactionData = dailyTransactions.map(item => item.transactions || 0);
+      const transactionData = dailyTransactions.map(item => Number(item.transactions || item.count || 0));
       
       // Build cumulative series
       const cumulativeTransactions = transactionData.reduce((acc, val, idx) => {
@@ -6410,8 +7186,17 @@
       
       // Use real daily transactions data from backend to extract users
       const dailyTransactions = data.transactions?.daily_volume || [];
+      
+      console.log('📊 Transacting Users data:', dailyTransactions?.length, 'entries');
+      
+      if (!dailyTransactions || dailyTransactions.length === 0) {
+        // Afficher un message si pas de données
+        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée d\'utilisateurs disponible</div>';
+        return;
+      }
+      
       const days = dailyTransactions.map((item) => item.date || '');
-      const userData = dailyTransactions.map(item => item.users || 0);
+      const userData = dailyTransactions.map(item => Number(item.users || item.unique_users || 0));
       
       const cumulativeUsers = userData.reduce((acc, val, idx) => {
         acc.push((acc[idx - 1] || 0) + val);
@@ -6463,9 +7248,17 @@
         charts.topMerchants.destroy();
       }
       
-      const top10 = (data.merchants || []).slice(0, 10);
-      const merchantNames = top10.map(m => m.name);
-      const merchantValues = top10.map(m => m.current);
+      const merchants = data.merchants || [];
+      
+      if (!merchants || merchants.length === 0) {
+        // Afficher un message si pas de données
+        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucun marchand disponible</div>';
+        return;
+      }
+      
+      const top10 = merchants.slice(0, 10);
+      const merchantNames = top10.map(m => m.name || m.merchant_name || 'Sans nom');
+      const merchantValues = top10.map(m => Number(m.current || m.transactions || 0));
       
       charts.topMerchants = new Chart(ctx, {
         type: 'doughnut',
@@ -6504,18 +7297,28 @@
         charts.category.destroy();
       }
       
-      const dist = (data.categoryDistribution || []).slice(0, 10);
-      const labels = dist.map(d => `${d.category} (${d.merchants ?? d.merchants_count ?? 0})`);
-      const values = dist.map(d => (typeof d.merchants !== 'undefined') ? d.merchants : (d.merchants_count ?? 0));
-      const colors = ['#E30613','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#f97316','#64748b'];
+      const dist = data.categoryDistribution || [];
+      
+      if (!dist || dist.length === 0) {
+        // Afficher un message si pas de données
+        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune catégorie disponible</div>';
+        return;
+      }
+      
+      const top10 = dist.slice(0, 10);
+      // Utiliser transactions pour le volume, mais afficher aussi le nombre de marchands dans le label
+      const labels = top10.map(d => `${d.category || 'Sans catégorie'} (${d.merchants ?? d.merchants_count ?? 0} marchands)`);
+      // Utiliser transactions pour représenter le volume par catégorie
+      const values = top10.map(d => Number(d.transactions ?? d.transaction_count ?? d.count ?? 0));
+      const colors = ['#E30613','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#f97316','#64748b','#ec4899','#14b8a6'];
       
       charts.category = new Chart(ctx, {
         type: 'pie',
         data: {
-          labels: labels.length ? labels : ['Aucune catégorie'],
+          labels: labels,
           datasets: [{
-            data: values.length ? values : [100],
-            backgroundColor: colors.slice(0, Math.max(1, labels.length)),
+            data: values,
+            backgroundColor: colors.slice(0, labels.length),
             borderWidth: 2,
             borderColor: '#ffffff'
           }]
@@ -6634,6 +7437,18 @@
       const phoneVal = (activations.phone_balance && typeof activations.phone_balance === 'object') ? (activations.phone_balance.current ?? 0) : (activations.phone_balance ?? 0);
       const otherVal = (activations.other && typeof activations.other === 'object') ? (activations.other.current ?? 0) : (activations.other ?? 0);
 
+      const total = cbVal + rechargeVal + phoneVal + otherVal;
+      if (total === 0) {
+        // Afficher un message si pas de données
+        const parent = ctx.parentElement;
+        if (parent) {
+          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
+        }
+        return;
+      }
+
+      console.log('📊 Activations By Channel Chart:', { activations, cbVal, rechargeVal, phoneVal, otherVal });
+
       charts.activationsByChannel = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -6676,6 +7491,18 @@
       const monthlyVal = (plans.monthly && typeof plans.monthly === 'object') ? (plans.monthly.current ?? 0) : (plans.monthly ?? 0);
       const annualVal = (plans.annual && typeof plans.annual === 'object') ? (plans.annual.current ?? 0) : (plans.annual ?? 0);
       const otherPlanVal = (plans.other && typeof plans.other === 'object') ? (plans.other.current ?? 0) : (plans.other ?? 0);
+      
+      const total = dailyVal + monthlyVal + annualVal + otherPlanVal;
+      if (total === 0) {
+        // Afficher un message si pas de données
+        const parent = ctx.parentElement;
+        if (parent) {
+          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
+        }
+        return;
+      }
+      
+      console.log('📊 Plan Distribution Chart:', { plans, dailyVal, monthlyVal, annualVal, otherPlanVal });
       
       charts.planDistribution = new Chart(ctx, {
         type: 'bar',
@@ -6720,9 +7547,19 @@
       }
       
       const cohorts = data.subscriptions?.cohorts || [];
-      const months = cohorts.map(c => c.month);
-      const survivalD30 = cohorts.map(c => c.survival_d30 || 0);
-      const survivalD60 = cohorts.map(c => c.survival_d60 || 0);
+      
+      // Si pas de données, créer un graphique vide avec des labels par défaut
+      const months = cohorts.length > 0 
+        ? cohorts.map(c => c.month)
+        : ['Aucune donnée'];
+      const survivalD30 = cohorts.length > 0
+        ? cohorts.map(c => c.survival_d30 || 0)
+        : [0];
+      const survivalD60 = cohorts.length > 0
+        ? cohorts.map(c => c.survival_d60 || 0)
+        : [0];
+      
+      console.log('📊 Cohorts Analysis Chart:', { cohorts_count: cohorts.length, months, survivalD30, survivalD60 });
       
       charts.cohortsAnalysis = new Chart(ctx, {
         type: 'line',
@@ -6777,13 +7614,1396 @@
       // Chargement paresseux du tableau des abonnements
       setTimeout(() => {
         updateSubscriptionsTable(data.subscriptions);
+        updateDailyStatisticsTable(data.subscriptions);
       }, 200);
+    }
+    
+    // Variables pour le tableau des statistiques quotidiennes
+    let allDailyStatistics = [];
+    let currentDailyStatsSortColumn = -1;
+    let dailyStatsSortDirection = 'asc';
+    
+    // Fonction pour mettre à jour le tableau des statistiques quotidiennes
+    function updateDailyStatisticsTable(subscriptions) {
+      const tbody = document.getElementById('daily-statistics-body');
+      if (!tbody) return;
+      
+      // Récupérer les statistiques quotidiennes
+      let dailyStats = [];
+      if (subscriptions && subscriptions.daily_statistics && Array.isArray(subscriptions.daily_statistics)) {
+        dailyStats = subscriptions.daily_statistics;
+      }
+      
+      allDailyStatistics = dailyStats;
+      
+      if (!dailyStats || dailyStats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+        return;
+      }
+      
+      renderDailyStatisticsTable();
+    }
+    
+    // Fonction pour afficher le tableau des statistiques quotidiennes
+    function renderDailyStatisticsTable() {
+      const tbody = document.getElementById('daily-statistics-body');
+      if (!tbody) return;
+      
+      if (!allDailyStatistics || allDailyStatistics.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = allDailyStatistics.map(row => {
+        const dimension = row.dimension || '-';
+        const offre = row.offre || 'N/A';
+        const newSub = row.new_sub || 0;
+        const unsub = row.unsub || 0;
+        const simchurn = row.simchurn || 0;
+        const revSimchurn = row.rev_simchurn || 0;
+        const activeSub = row.active_sub || 0;
+        const nbFacturation = row.nb_facturation || 0;
+        const tauxFacturation = row.taux_facturation || 0;
+        const revenuTTC = row.revenu_ttc_tnd || row.revenu_ttc_local || 0;
+        const revenuUSD = row.revenu_ttc_usd || 0;
+        const revenuTND = row.revenu_ttc_tnd || row.revenu_ttc_local || 0;
+        
+        return `
+          <tr>
+            <td>${dimension}</td>
+            <td>${offre}</td>
+            <td>${newSub}</td>
+            <td>${unsub}</td>
+            <td>${simchurn}</td>
+            <td>${revSimchurn}</td>
+            <td>${activeSub.toLocaleString()}</td>
+            <td>${nbFacturation.toLocaleString()}</td>
+            <td>${tauxFacturation.toFixed(2)}%</td>
+            <td>${revenuTTC.toFixed(2)}</td>
+            <td>${revenuUSD.toFixed(2)}</td>
+            <td>${revenuTND.toFixed(2)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    // Fonction pour trier le tableau des statistiques quotidiennes
+    function sortDailyStatistics(columnIndex) {
+      if (currentDailyStatsSortColumn === columnIndex) {
+        dailyStatsSortDirection = dailyStatsSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentDailyStatsSortColumn = columnIndex;
+        dailyStatsSortDirection = 'asc';
+      }
+      
+      allDailyStatistics.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(columnIndex) {
+          case 0: aVal = a.dimension; bVal = b.dimension; break;
+          case 1: aVal = a.offre; bVal = b.offre; break;
+          case 2: aVal = a.new_sub || 0; bVal = b.new_sub || 0; break;
+          case 3: aVal = a.unsub || 0; bVal = b.unsub || 0; break;
+          case 4: aVal = a.simchurn || 0; bVal = b.simchurn || 0; break;
+          case 5: aVal = a.rev_simchurn || 0; bVal = b.rev_simchurn || 0; break;
+          case 6: aVal = a.active_sub || 0; bVal = b.active_sub || 0; break;
+          case 7: aVal = a.nb_facturation || 0; bVal = b.nb_facturation || 0; break;
+          case 8: aVal = a.taux_facturation || 0; bVal = b.taux_facturation || 0; break;
+          case 9: aVal = a.revenu_ttc_local || 0; bVal = b.revenu_ttc_local || 0; break;
+          case 10: aVal = a.revenu_ttc_usd || 0; bVal = b.revenu_ttc_usd || 0; break;
+          case 11: aVal = a.revenu_ttc_tnd || 0; bVal = b.revenu_ttc_tnd || 0; break;
+          default: return 0;
+        }
+        
+        if (typeof aVal === 'string') {
+          return dailyStatsSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        } else {
+          return dailyStatsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+      });
+      
+      renderDailyStatisticsTable();
+    }
+    
+    // Fonction pour filtrer le tableau des statistiques quotidiennes
+    function filterDailyStatistics() {
+      const searchInput = document.getElementById('daily-stats-search');
+      if (!searchInput) return;
+      
+      const searchTerm = searchInput.value.toLowerCase();
+      
+      if (!searchTerm) {
+        renderDailyStatisticsTable();
+        return;
+      }
+      
+      const filtered = allDailyStatistics.filter(row => {
+        return (
+          (row.dimension && row.dimension.toLowerCase().includes(searchTerm)) ||
+          (row.offre && row.offre.toLowerCase().includes(searchTerm)) ||
+          String(row.new_sub || '').includes(searchTerm) ||
+          String(row.unsub || '').includes(searchTerm) ||
+          String(row.active_sub || '').includes(searchTerm)
+        );
+      });
+      
+      const tbody = document.getElementById('daily-statistics-body');
+      if (!tbody) return;
+      
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucun résultat trouvé</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = filtered.map(row => {
+        const dimension = row.dimension || '-';
+        const offre = row.offre || 'N/A';
+        const newSub = row.new_sub || 0;
+        const unsub = row.unsub || 0;
+        const simchurn = row.simchurn || 0;
+        const revSimchurn = row.rev_simchurn || 0;
+        const activeSub = row.active_sub || 0;
+        const nbFacturation = row.nb_facturation || 0;
+        const tauxFacturation = row.taux_facturation || 0;
+        const revenuTTC = row.revenu_ttc_tnd || row.revenu_ttc_local || 0;
+        const revenuUSD = row.revenu_ttc_usd || 0;
+        const revenuTND = row.revenu_ttc_tnd || row.revenu_ttc_local || 0;
+        
+        return `
+          <tr>
+            <td>${dimension}</td>
+            <td>${offre}</td>
+            <td>${newSub}</td>
+            <td>${unsub}</td>
+            <td>${simchurn}</td>
+            <td>${revSimchurn}</td>
+            <td>${activeSub.toLocaleString()}</td>
+            <td>${nbFacturation.toLocaleString()}</td>
+            <td>${tauxFacturation.toFixed(2)}%</td>
+            <td>${revenuTTC.toFixed(2)}</td>
+            <td>${revenuUSD.toFixed(2)}</td>
+            <td>${revenuTND.toFixed(2)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    // Fonction pour exporter en Excel (simplifiée - copie dans le presse-papier)
+    function exportDailyStatistics() {
+      if (!allDailyStatistics || allDailyStatistics.length === 0) {
+        alert('Aucune donnée à exporter');
+        return;
+      }
+      
+      // Créer le CSV
+      let csv = 'Dimension,Offre,New sub,Unsub,Simchurn,Rev Simchurn,Active Sub,NB facturation,Taux Facturation,Revenu TTC local,Revenu TTC USD,Revenu TTC TND\n';
+      
+      allDailyStatistics.forEach(row => {
+        csv += `${row.dimension || ''},${row.offre || 'N/A'},${row.new_sub || 0},${row.unsub || 0},${row.simchurn || 0},${row.rev_simchurn || 0},${row.active_sub || 0},${row.nb_facturation || 0},${row.taux_facturation || 0},${row.revenu_ttc_local || 0},${row.revenu_ttc_usd || 0},${row.revenu_ttc_tnd || 0}\n`;
+      });
+      
+      // Créer un blob et télécharger
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `statistiques_quotidiennes_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    // Fonction pour copier les données
+    function copyDailyStatistics() {
+      if (!allDailyStatistics || allDailyStatistics.length === 0) {
+        alert('Aucune donnée à copier');
+        return;
+      }
+      
+      // Créer le texte tabulé
+      let text = 'Dimension\tOffre\tNew sub\tUnsub\tSimchurn\tRev Simchurn\tActive Sub\tNB facturation\tTaux Facturation\tRevenu TTC local\tRevenu TTC USD\tRevenu TTC TND\n';
+      
+      allDailyStatistics.forEach(row => {
+        text += `${row.dimension || ''}\t${row.offre || 'N/A'}\t${row.new_sub || 0}\t${row.unsub || 0}\t${row.simchurn || 0}\t${row.rev_simchurn || 0}\t${row.active_sub || 0}\t${row.nb_facturation || 0}\t${row.taux_facturation || 0}\t${row.revenu_ttc_local || 0}\t${row.revenu_ttc_usd || 0}\t${row.revenu_ttc_tnd || 0}\n`;
+      });
+      
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Données copiées dans le presse-papier !');
+      }).catch(err => {
+        console.error('Erreur lors de la copie:', err);
+        alert('Erreur lors de la copie');
+      });
+    }
+    
+    // ===== FONCTIONS TIMWE =====
+    let allTimweStatistics = [];
+    let currentTimweStatsSortColumn = 0;
+    let timweStatsSortDirection = 'asc';
+    
+    function calculateTimweTotals(monthlyStats) {
+      if (!monthlyStats || monthlyStats.length === 0) {
+        return {
+          newSubs: 0,
+          unsubs: 0,
+          simchurn: 0,
+          simchurnRevenue: 0,
+          activeSubsEndOfPeriod: 0,
+          revenueTnd: 0,
+          caBigdealHt: 0
+        };
+      }
+      
+      const totals = {
+        newSubs: 0,
+        unsubs: 0,
+        simchurn: 0,
+        simchurnRevenue: 0,
+        activeSubsEndOfPeriod: 0,
+        revenueTnd: 0,
+        caBigdealHt: 0
+      };
+      
+      // Sommer les totaux mensuels
+      monthlyStats.forEach(month => {
+        totals.newSubs += Number(month.total_new_sub) || 0;
+        totals.unsubs += Number(month.total_unsub) || 0;
+        totals.simchurn += Number(month.total_simchurn) || 0;
+        totals.simchurnRevenue += Number(month.total_rev_simchurn) || 0;
+        totals.revenueTnd += Number(month.total_revenu_ttc_tnd) || 0;
+        totals.caBigdealHt += Number(month.ca_bigdeal_ht) || 0;
+      });
+      
+      // Active Subs = valeur du DERNIER mois de la période
+      const lastMonth = monthlyStats[0]; // Le premier dans l'ordre décroissant
+      totals.activeSubsEndOfPeriod = lastMonth ? (Number(lastMonth.total_active_sub) || 0) : 0;
+      
+      return totals;
+    }
+    
+    function calculateTimweComparisonTotals(monthlyStatsComparison) {
+      // Utiliser directement les données mensuelles de comparaison du backend
+      if (!monthlyStatsComparison || monthlyStatsComparison.length === 0) {
+        console.log('🔍 [TIMWE COMPARISON] Pas de données de comparaison');
+        return null;
+      }
+      
+      return calculateTimweTotals(monthlyStatsComparison);
+    }
+    
+    // Stockage des mois Timwe et leur état d'expansion
+    let allTimweMonthlyStats = [];
+    let expandedMonths = new Set();
+    
+    function updateTimweStatisticsTable(monthlyStats) {
+      const tbody = document.getElementById('timweStatsTableBody');
+      if (!tbody) return;
+      
+      if (!monthlyStats || monthlyStats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+        return;
+      }
+      
+      allTimweMonthlyStats = monthlyStats;
+      renderTimweStatisticsTable();
+    }
+    
+    function renderTimweStatisticsTable() {
+      const tbody = document.getElementById('timweStatsTableBody');
+      if (!tbody) return;
+      
+      if (!allTimweMonthlyStats || allTimweMonthlyStats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+        return;
+      }
+      
+      let html = '';
+      
+      allTimweMonthlyStats.forEach((month, idx) => {
+        const isExpanded = expandedMonths.has(month.month_key);
+        const expandIcon = isExpanded ? '▼' : '▶';
+        
+        // Ligne du mois (cliquable)
+        html += `
+          <tr style="background: var(--card); border-bottom: 2px solid var(--border); cursor: pointer; font-weight: 600;" 
+              onclick="toggleTimweMonth('${month.month_key}')">
+            <td style="padding: 12px; text-align: center;">${expandIcon}</td>
+            <td style="padding: 12px;">${month.display_label}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_new_sub, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_unsub, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_simchurn, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_active_sub, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_nb_facturation, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatPercentage(month.total_taux_facturation, 3)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_revenu_ttc_tnd, 3)} TND</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.ca_bigdeal_ht, 3)} TND</td>
+          </tr>
+        `;
+        
+        // Lignes des détails quotidiens (affichées seulement si le mois est expandé)
+        if (isExpanded && month.daily_details && month.daily_details.length > 0) {
+          month.daily_details.forEach(day => {
+            html += `
+              <tr style="background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px;"></td>
+                <td style="padding: 8px; padding-left: 30px; font-size: 13px;">${day.dimension}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.new_sub || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.unsub || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.simchurn || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.active_sub || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.nb_facturation || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatPercentage(day.taux_facturation || 0, 3)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px; color: var(--muted);">-</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px; color: var(--muted);">-</td>
+              </tr>
+            `;
+          });
+        }
+      });
+      
+      tbody.innerHTML = html;
+    }
+    
+    function toggleTimweMonth(monthKey) {
+      if (expandedMonths.has(monthKey)) {
+        expandedMonths.delete(monthKey);
+      } else {
+        expandedMonths.add(monthKey);
+      }
+      renderTimweStatisticsTable();
+    }
+    
+    function sortTimweStatistics(columnIndex) {
+      if (currentTimweStatsSortColumn === columnIndex) {
+        timweStatsSortDirection = timweStatsSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentTimweStatsSortColumn = columnIndex;
+        timweStatsSortDirection = 'asc';
+      }
+      
+      allTimweStatistics.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(columnIndex) {
+          case 0: aVal = a.dimension; bVal = b.dimension; break;
+          case 1: aVal = a.offre; bVal = b.offre; break;
+          case 2: aVal = a.new_sub || 0; bVal = b.new_sub || 0; break;
+          case 3: aVal = a.unsub || 0; bVal = b.unsub || 0; break;
+          case 4: aVal = a.simchurn || 0; bVal = b.simchurn || 0; break;
+          case 5: aVal = a.rev_simchurn || 0; bVal = b.rev_simchurn || 0; break;
+          case 6: aVal = a.active_sub || 0; bVal = b.active_sub || 0; break;
+          case 7: aVal = a.nb_facturation || 0; bVal = b.nb_facturation || 0; break;
+          case 8: aVal = a.taux_facturation || 0; bVal = b.taux_facturation || 0; break;
+          case 9: aVal = a.revenu_ttc_tnd || a.revenu_ttc_local || 0; bVal = b.revenu_ttc_tnd || b.revenu_ttc_local || 0; break;
+          case 10: aVal = a.revenu_ttc_usd || 0; bVal = b.revenu_ttc_usd || 0; break;
+          default: return 0;
+        }
+        
+        if (typeof aVal === 'string') {
+          return timweStatsSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        } else {
+          return timweStatsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+      });
+      
+      renderTimweStatisticsTable();
+    }
+    
+    function filterTimweStats() {
+      // Fonction simplifiée : on filtre simplement par le nom du mois
+      renderTimweStatisticsTable();
+    }
+    
+    function exportTimweStatsToExcel() {
+      if (!allTimweMonthlyStats || allTimweMonthlyStats.length === 0) {
+        alert('Aucune donnée à exporter');
+        return;
+      }
+      
+      let csv = 'Période,New Sub,Unsub,Simchurn,Active Sub,NB Facturation,Taux Facturation %,Revenu TTC (TND),CA BigDeal HT (TND)\n';
+      
+      allTimweMonthlyStats.forEach(month => {
+        // Ligne du mois (avec formatage français)
+        csv += `${month.display_label},${formatNumber(month.total_new_sub, 0)},${formatNumber(month.total_unsub, 0)},${formatNumber(month.total_simchurn, 0)},${formatNumber(month.total_active_sub, 0)},${formatNumber(month.total_nb_facturation, 0)},${formatPercentage(month.total_taux_facturation, 3)},${formatNumber(month.total_revenu_ttc_tnd, 3)},${formatNumber(month.ca_bigdeal_ht, 3)}\n`;
+        
+        // Lignes des détails quotidiens
+        if (month.daily_details && month.daily_details.length > 0) {
+          month.daily_details.forEach(day => {
+            csv += `  ${day.dimension},${formatNumber(day.new_sub || 0, 0)},${formatNumber(day.unsub || 0, 0)},${formatNumber(day.simchurn || 0, 0)},${formatNumber(day.active_sub || 0, 0)},${formatNumber(day.nb_facturation || 0, 0)},${formatPercentage(day.taux_facturation || 0, 3)},-,-\n`;
+          });
+        }
+      });
+      
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `timwe_statistiques_mensuelles_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    function copyTimweStatsToClipboard() {
+      if (!allTimweMonthlyStats || allTimweMonthlyStats.length === 0) {
+        alert('Aucune donnée à copier');
+        return;
+      }
+      
+      let text = 'Période\tNew Sub\tUnsub\tSimchurn\tActive Sub\tNB Facturation\tTaux Facturation %\tRevenu TTC (TND)\tCA BigDeal HT (TND)\n';
+      
+      allTimweMonthlyStats.forEach(month => {
+        // Ligne du mois (avec formatage français)
+        text += `${month.display_label}\t${formatNumber(month.total_new_sub, 0)}\t${formatNumber(month.total_unsub, 0)}\t${formatNumber(month.total_simchurn, 0)}\t${formatNumber(month.total_active_sub, 0)}\t${formatNumber(month.total_nb_facturation, 0)}\t${formatPercentage(month.total_taux_facturation, 3)}\t${formatNumber(month.total_revenu_ttc_tnd, 3)}\t${formatNumber(month.ca_bigdeal_ht, 3)}\n`;
+        
+        // Lignes des détails quotidiens
+        if (month.daily_details && month.daily_details.length > 0) {
+          month.daily_details.forEach(day => {
+            text += `  ${day.dimension}\t${formatNumber(day.new_sub || 0, 0)}\t${formatNumber(day.unsub || 0, 0)}\t${formatNumber(day.simchurn || 0, 0)}\t${formatNumber(day.active_sub || 0, 0)}\t${formatNumber(day.nb_facturation || 0, 0)}\t${formatPercentage(day.taux_facturation || 0, 3)}\t-\t-\n`;
+          });
+        }
+      });
+      
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Données copiées dans le presse-papier !');
+      }).catch(err => {
+        console.error('Erreur lors de la copie:', err);
+        alert('Erreur lors de la copie');
+      });
+    }
+
+    // ========== TIMWE TRANSACTIONS BY USER FUNCTIONS ==========
+    // DÉSACTIVÉ POUR OPTIMISATION - TOUTES LES FONCTIONS CI-DESSOUS SONT COMMENTÉES
+    /*
+    let allTimweTransactions = [];
+    let currentTimweTransactionsPage = 1;
+    let timweTransactionsPerPage = 25;
+    let currentTimweTransactionsSortColumn = 1; // Default: sort by nb_transactions
+    let timweTransactionsSortDirection = 'desc';
+    let filteredTimweTransactions = [];
+
+    function updateTimweTransactionsTable(transactions) {
+      const tbody = document.getElementById('timweTransactionsTableBody');
+      if (!tbody) return;
+      
+      if (!transactions || transactions.length === 0) {
+        // Vérifier si c'est une longue période
+        const startDate = document.getElementById('start-date')?.value;
+        const endDate = document.getElementById('end-date')?.value;
+        let message = 'Aucune transaction disponible';
+        
+        if (startDate && endDate) {
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays > 90) {
+            message = '⚠️ Tableau désactivé pour les périodes > 90 jours (optimisation des performances). Veuillez sélectionner une période plus courte.';
+          }
+        }
+        
+        tbody.innerHTML = `<tr><td colspan="6" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">${message}</td></tr>`;
+        return;
+      }
+      
+      allTimweTransactions = transactions;
+      filteredTimweTransactions = transactions;
+      renderTimweTransactionsTable();
+    }
+
+    function renderTimweTransactionsTable() {
+      const tbody = document.getElementById('timweTransactionsTableBody');
+      if (!tbody) return;
+      
+      if (!filteredTimweTransactions || filteredTimweTransactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune transaction trouvée</td></tr>';
+        return;
+      }
+      
+      // Pagination
+      const start = (currentTimweTransactionsPage - 1) * timweTransactionsPerPage;
+      const end = start + timweTransactionsPerPage;
+      const pageData = filteredTimweTransactions.slice(start, end);
+      
+      tbody.innerHTML = pageData.map(row => {
+        const clientId = row.client_id || '-';
+        const nbTransactions = row.nb_transactions || 0;
+        const derniereTransactionId = row.derniere_transaction_id || '-';
+        const derniereDate = row.derniere_date ? new Date(row.derniere_date).toLocaleString('fr-FR') : '-';
+        const lastStatus = row.last_status || '-';
+        
+        // Badge de statut basé sur la facturation
+        let statusBadge = '';
+        if (lastStatus === 'RENOUVELÉ') {
+          statusBadge = '<span style="padding: 4px 12px; background: #d1fae5; color: #065f46; border-radius: 12px; font-size: 11px; font-weight: 600;">✅ RENOUVELÉ</span>';
+        } else if (lastStatus === 'NON RENOUVELÉ') {
+          statusBadge = '<span style="padding: 4px 12px; background: #fee2e2; color: #991b1b; border-radius: 12px; font-size: 11px; font-weight: 600;">❌ NON RENOUVELÉ</span>';
+        } else {
+          statusBadge = '<span style="padding: 4px 12px; background: #f3f4f6; color: #374151; border-radius: 12px; font-size: 11px; font-weight: 600;">' + lastStatus + '</span>';
+        }
+        
+        return `
+          <tr>
+            <td><strong>${clientId}</strong></td>
+            <td><span style="font-weight: 600; color: var(--primary);">${nbTransactions}</span></td>
+            <td>${derniereTransactionId}</td>
+            <td>${derniereDate}</td>
+            <td>${statusBadge}</td>
+            <td>
+              <button onclick="viewClientTimweTransactions(${clientId})" 
+                      style="padding: 4px 8px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                📊 Détails
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      
+      updateTimweTransactionsPagination();
+    }
+
+    function updateTimweTransactionsPagination() {
+      const paginationDiv = document.getElementById('timweTransactionsPagination');
+      if (!paginationDiv) return;
+      
+      const totalPages = Math.ceil(filteredTimweTransactions.length / timweTransactionsPerPage);
+      
+      if (totalPages <= 1) {
+        paginationDiv.innerHTML = '';
+        return;
+      }
+      
+      let html = '';
+      
+      // Previous button
+      if (currentTimweTransactionsPage > 1) {
+        html += `<button onclick="changeTimweTransactionsPage(${currentTimweTransactionsPage - 1})" style="padding: 8px 12px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">‹ Précédent</button>`;
+      }
+      
+      // Page numbers
+      for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+        const isActive = i === currentTimweTransactionsPage;
+        html += `<button onclick="changeTimweTransactionsPage(${i})" style="padding: 8px 12px; border: 1px solid var(--border); background: ${isActive ? 'var(--primary)' : 'white'}; color: ${isActive ? 'white' : 'black'}; border-radius: 4px; cursor: pointer;">${i}</button>`;
+      }
+      
+      if (totalPages > 5) {
+        html += '<span style="padding: 8px;">...</span>';
+        html += `<button onclick="changeTimweTransactionsPage(${totalPages})" style="padding: 8px 12px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">${totalPages}</button>`;
+      }
+      
+      // Next button
+      if (currentTimweTransactionsPage < totalPages) {
+        html += `<button onclick="changeTimweTransactionsPage(${currentTimweTransactionsPage + 1})" style="padding: 8px 12px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">Suivant ›</button>`;
+      }
+      
+      paginationDiv.innerHTML = html;
+    }
+
+    function changeTimweTransactionsPage(page) {
+      currentTimweTransactionsPage = page;
+      renderTimweTransactionsTable();
+    }
+
+    function changeTimweTransactionsPerPage(perPage) {
+      timweTransactionsPerPage = parseInt(perPage);
+      currentTimweTransactionsPage = 1;
+      renderTimweTransactionsTable();
+    }
+
+    function sortTimweTransactions(columnIndex) {
+      if (currentTimweTransactionsSortColumn === columnIndex) {
+        timweTransactionsSortDirection = timweTransactionsSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentTimweTransactionsSortColumn = columnIndex;
+        timweTransactionsSortDirection = 'desc'; // Default to desc for numbers
+      }
+      
+      filteredTimweTransactions.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(columnIndex) {
+          case 0: aVal = a.client_id || 0; bVal = b.client_id || 0; break;
+          case 1: aVal = a.nb_transactions || 0; bVal = b.nb_transactions || 0; break;
+          case 2: aVal = a.derniere_transaction_id || 0; bVal = b.derniere_transaction_id || 0; break;
+          case 3: aVal = a.derniere_date || ''; bVal = b.derniere_date || ''; break;
+          case 4: aVal = a.last_status || ''; bVal = b.last_status || ''; break;
+          default: return 0;
+        }
+        
+        if (typeof aVal === 'string') {
+          return timweTransactionsSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        } else {
+          return timweTransactionsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+      });
+      
+      currentTimweTransactionsPage = 1;
+      renderTimweTransactionsTable();
+    }
+
+    function filterTimweTransactions() {
+      const searchInput = document.getElementById('timweTransactionsSearch');
+      if (!searchInput) return;
+      
+      const searchTerm = searchInput.value.toLowerCase();
+      
+      if (!searchTerm) {
+        filteredTimweTransactions = allTimweTransactions;
+      } else {
+        filteredTimweTransactions = allTimweTransactions.filter(row => {
+          return (
+            String(row.client_id || '').toLowerCase().includes(searchTerm) ||
+            String(row.derniere_transaction_id || '').toLowerCase().includes(searchTerm) ||
+            String(row.last_status || '').toLowerCase().includes(searchTerm) ||
+            String(row.derniere_date || '').toLowerCase().includes(searchTerm)
+          );
+        });
+      }
+      
+      currentTimweTransactionsPage = 1;
+      renderTimweTransactionsTable();
+    }
+
+    function exportTimweTransactionsToExcel() {
+      if (!allTimweTransactions || allTimweTransactions.length === 0) {
+        alert('Aucune donnée à exporter');
+        return;
+      }
+      
+      let csv = 'Client ID,Nb Transactions,Dernière Transaction,Dernière Date,Statut\n';
+      
+      allTimweTransactions.forEach(row => {
+        csv += `${row.client_id || ''},${row.nb_transactions || 0},${row.derniere_transaction_id || ''},${row.derniere_date || ''},${row.last_status || ''}\n`;
+      });
+      
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `timwe_transactions_par_utilisateur_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function copyTimweTransactionsToClipboard() {
+      if (!allTimweTransactions || allTimweTransactions.length === 0) {
+        alert('Aucune donnée à copier');
+        return;
+      }
+      
+      let text = 'Client ID\tNb Transactions\tDernière Transaction\tDernière Date\tStatut\n';
+      
+      allTimweTransactions.forEach(row => {
+        text += `${row.client_id || ''}\t${row.nb_transactions || 0}\t${row.derniere_transaction_id || ''}\t${row.derniere_date || ''}\t${row.last_status || ''}\n`;
+      });
+      
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Données copiées dans le presse-papier !');
+      }).catch(err => {
+        console.error('Erreur lors de la copie:', err);
+        alert('Erreur lors de la copie');
+      });
+    }
+
+    // Variables globales pour le modal
+    let currentClientTransactions = [];
+    let currentModalClientId = null;
+    let filteredModalTransactions = [];
+    let modalSortColumn = 3; // Default: sort by date
+    let modalSortDirection = 'desc';
+
+    async function viewClientTimweTransactions(clientId) {
+      currentModalClientId = clientId;
+      
+      // Afficher le modal
+      const modal = document.getElementById('clientTransactionsModal');
+      modal.style.display = 'block';
+      
+      // Mettre à jour le client ID
+      document.getElementById('modalClientId').textContent = clientId;
+      
+      // Réinitialiser la table
+      document.getElementById('modalTransactionsTableBody').innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 40px;">
+            <i class="fas fa-spinner fa-spin"></i> Chargement des transactions...
+          </td>
+        </tr>
+      `;
+      
+      try {
+        // Récupérer les dates de la période sélectionnée
+        const startDate = document.getElementById('start-date')?.value || '';
+        const endDate = document.getElementById('end-date')?.value || '';
+        
+        // Appeler l'API pour récupérer les transactions du client
+        const response = await fetch(`/api/timwe-client-transactions/${clientId}?start_date=${startDate}&end_date=${endDate}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Erreur API:', errorText);
+          throw new Error(`Erreur ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          currentClientTransactions = data.transactions || [];
+          filteredModalTransactions = currentClientTransactions;
+          
+          // Mettre à jour les stats
+          updateModalClientStats(data.stats);
+          
+          // Afficher les transactions
+          renderModalTransactions();
+        } else {
+          throw new Error(data.message || 'Erreur inconnue');
+        }
+        
+      } catch (error) {
+        console.error('Erreur:', error);
+        document.getElementById('modalTransactionsTableBody').innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; padding: 40px; color: #ef4444;">
+              <i class="fas fa-exclamation-triangle"></i> Erreur lors du chargement des transactions: ${error.message}
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    function updateModalClientStats(stats) {
+      const statsDiv = document.getElementById('modalClientStats');
+      
+      const totalTransactions = stats.total_transactions || 0;
+      const renewals = stats.renewals || 0;
+      const unsubscriptions = stats.unsubscriptions || 0;
+      const facture = stats.facture || 0;
+      const tentativeNB = stats.tentative_nb || 0;
+      const tentative = stats.tentative || 0;
+      const firstTransaction = stats.first_transaction_date ? new Date(stats.first_transaction_date).toLocaleDateString('fr-FR') : '-';
+      const lastTransaction = stats.last_transaction_date ? new Date(stats.last_transaction_date).toLocaleDateString('fr-FR') : '-';
+      
+      statsDiv.innerHTML = `
+        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #667eea;">
+          <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">Total Transactions</div>
+          <div style="font-size: 24px; font-weight: 600; color: #111827;">${totalTransactions}</div>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #10b981;">
+          <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">✅ Facturé</div>
+          <div style="font-size: 24px; font-weight: 600; color: #059669;">${facture}</div>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #f59e0b;">
+          <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">⚠️ Tentative NB</div>
+          <div style="font-size: 24px; font-weight: 600; color: #d97706;">${tentativeNB}</div>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #6b7280;">
+          <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">🔄 Tentative</div>
+          <div style="font-size: 24px; font-weight: 600; color: #4b5563;">${tentative}</div>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+          <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">🔄 Renouvellements</div>
+          <div style="font-size: 18px; font-weight: 600; color: #2563eb;">${renewals}</div>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
+          <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">❌ Désabonnements</div>
+          <div style="font-size: 18px; font-weight: 600; color: #dc2626;">${unsubscriptions}</div>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #8b5cf6;">
+          <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">📅 Première</div>
+          <div style="font-size: 13px; font-weight: 600; color: #7c3aed;">${firstTransaction}</div>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #ec4899;">
+          <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">📅 Dernière</div>
+          <div style="font-size: 13px; font-weight: 600; color: #db2777;">${lastTransaction}</div>
+        </div>
+      `;
+    }
+
+    function renderModalTransactions() {
+      const tbody = document.getElementById('modalTransactionsTableBody');
+      
+      if (!filteredModalTransactions || filteredModalTransactions.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align: center; padding: 40px; color: #6b7280;">
+              <i class="fas fa-inbox"></i> Aucune transaction trouvée
+            </td>
+          </tr>
+        `;
+        return;
+      }
+      
+      tbody.innerHTML = filteredModalTransactions.map(tx => {
+        const transactionId = tx.transaction_history_id || '-';
+        const reference = tx.reference || '-';
+        const status = tx.status || '-';
+        const date = tx.created_at ? new Date(tx.created_at).toLocaleString('fr-FR') : '-';
+        
+        // Badge de statut original
+        let statusBadge = '';
+        if (status.includes('RENEWED')) {
+          statusBadge = '<span style="padding: 4px 12px; background: #dbeafe; color: #1e40af; border-radius: 12px; font-size: 11px; font-weight: 600;">🔄 RENOUVELÉ</span>';
+        } else if (status.includes('UNSUBSCRIPTION')) {
+          statusBadge = '<span style="padding: 4px 12px; background: #fee2e2; color: #991b1b; border-radius: 12px; font-size: 11px; font-weight: 600;">❌ DÉSABONNÉ</span>';
+        } else {
+          statusBadge = '<span style="padding: 4px 12px; background: #f3f4f6; color: #374151; border-radius: 12px; font-size: 11px; font-weight: 600;">' + status + '</span>';
+        }
+        
+        // Badge de statut de facturation
+        let billingStatusBadge = '';
+        const billingStatus = tx.billing_status || 'tentative';
+        const billingLabel = tx.billing_status_label || 'Tentative';
+        
+        if (billingStatus === 'facture') {
+          billingStatusBadge = '<span style="padding: 4px 12px; background: #d1fae5; color: #065f46; border-radius: 12px; font-size: 11px; font-weight: 600;">✅ FACTURÉ</span>';
+        } else if (billingStatus === 'tentative_nb') {
+          billingStatusBadge = '<span style="padding: 4px 12px; background: #fef3c7; color: #92400e; border-radius: 12px; font-size: 11px; font-weight: 600;">⚠️ TENTATIVE NB</span>';
+        } else {
+          billingStatusBadge = '<span style="padding: 4px 12px; background: #e5e7eb; color: #374151; border-radius: 12px; font-size: 11px; font-weight: 600;">🔄 TENTATIVE</span>';
+        }
+        
+        // Delivery Code
+        const deliveryCode = tx.mno_delivery_code || '-';
+        let deliveryCodeBadge = '';
+        if (deliveryCode === 'DELIVERED') {
+          deliveryCodeBadge = '<span style="padding: 4px 8px; background: #d1fae5; color: #065f46; border-radius: 8px; font-size: 10px; font-weight: 600;">DELIVERED</span>';
+        } else if (deliveryCode === 'NO_BALANCE') {
+          deliveryCodeBadge = '<span style="padding: 4px 8px; background: #fef3c7; color: #92400e; border-radius: 8px; font-size: 10px; font-weight: 600;">NO_BALANCE</span>';
+        } else if (deliveryCode === '-') {
+          deliveryCodeBadge = '<span style="padding: 4px 8px; background: #f3f4f6; color: #6b7280; border-radius: 8px; font-size: 10px;">-</span>';
+        } else {
+          deliveryCodeBadge = '<span style="padding: 4px 8px; background: #e0e7ff; color: #3730a3; border-radius: 8px; font-size: 10px; font-weight: 600;">' + deliveryCode + '</span>';
+        }
+        
+        // Montant
+        const amount = tx.total_charged || 0;
+        const amountDisplay = amount > 0 
+          ? '<span style="color: #059669; font-weight: 600;">' + amount.toFixed(3) + ' TND</span>'
+          : '<span style="color: #6b7280;">0.000 TND</span>';
+        
+        return `
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+              <strong style="color: #111827;">#${transactionId}</strong>
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+              <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${reference}</code>
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+              ${statusBadge}
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+              ${billingStatusBadge}
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+              ${deliveryCodeBadge}
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">
+              ${amountDisplay}
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">
+              <i class="fas fa-clock" style="margin-right: 5px;"></i>${date}
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+              <button onclick="viewTransactionDetails(${transactionId}, '${encodeURIComponent(JSON.stringify(tx.result_details || {}))}' )" style="padding: 6px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                <i class="fas fa-eye"></i> Voir
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterModalTransactions() {
+      const searchTerm = document.getElementById('modalTransactionsSearch')?.value.toLowerCase() || '';
+      const statusFilter = document.getElementById('modalStatusFilter')?.value || '';
+      const billingFilter = document.getElementById('modalBillingFilter')?.value || '';
+      
+      filteredModalTransactions = currentClientTransactions.filter(tx => {
+        const matchesSearch = !searchTerm || 
+          (tx.reference && tx.reference.toLowerCase().includes(searchTerm)) ||
+          (tx.status && tx.status.toLowerCase().includes(searchTerm)) ||
+          (tx.transaction_history_id && String(tx.transaction_history_id).includes(searchTerm)) ||
+          (tx.mno_delivery_code && tx.mno_delivery_code.toLowerCase().includes(searchTerm));
+        
+        const matchesStatus = !statusFilter || 
+          (statusFilter === 'RENEWED' && tx.status.includes('RENEWED')) ||
+          (statusFilter === 'UNSUBSCRIPTION' && tx.status.includes('UNSUBSCRIPTION'));
+        
+        const matchesBilling = !billingFilter || tx.billing_status === billingFilter;
+        
+        return matchesSearch && matchesStatus && matchesBilling;
+      });
+      
+      renderModalTransactions();
+    }
+
+    function sortModalTransactions(columnIndex) {
+      if (modalSortColumn === columnIndex) {
+        modalSortDirection = modalSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        modalSortColumn = columnIndex;
+        modalSortDirection = 'asc';
+      }
+      
+      filteredModalTransactions.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(columnIndex) {
+          case 0: aVal = a.transaction_history_id || 0; bVal = b.transaction_history_id || 0; break;
+          case 1: aVal = a.reference || ''; bVal = b.reference || ''; break;
+          case 2: aVal = a.status || ''; bVal = b.status || ''; break;
+          case 3: aVal = a.billing_status || ''; bVal = b.billing_status || ''; break;
+          case 4: aVal = a.mno_delivery_code || ''; bVal = b.mno_delivery_code || ''; break;
+          case 5: aVal = a.total_charged || 0; bVal = b.total_charged || 0; break;
+          case 6: aVal = a.created_at || ''; bVal = b.created_at || ''; break;
+          default: return 0;
+        }
+        
+        if (typeof aVal === 'string') {
+          return modalSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        } else {
+          return modalSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+      });
+      
+      renderModalTransactions();
+    }
+
+    function exportClientTransactions() {
+      if (!currentClientTransactions || currentClientTransactions.length === 0) {
+        alert('Aucune transaction à exporter');
+        return;
+      }
+      
+      let csv = 'Transaction ID,Référence,Statut Original,Statut Facturation,Delivery Code,Montant (TND),Date\n';
+      
+      currentClientTransactions.forEach(tx => {
+        const transactionId = tx.transaction_history_id || '';
+        const reference = tx.reference || '';
+        const status = tx.status || '';
+        const billingStatus = tx.billing_status_label || '';
+        const deliveryCode = tx.mno_delivery_code || '';
+        const amount = tx.total_charged || 0;
+        const date = tx.created_at || '';
+        
+        csv += `${transactionId},"${reference}","${status}","${billingStatus}","${deliveryCode}",${amount},"${date}"\n`;
+      });
+      
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `timwe_client_${currentModalClientId}_transactions_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function closeClientTransactionsModal() {
+      document.getElementById('clientTransactionsModal').style.display = 'none';
+      currentClientTransactions = [];
+      currentModalClientId = null;
+      filteredModalTransactions = [];
+    }
+
+    function viewTransactionDetails(transactionId, resultDetailsEncoded) {
+      try {
+        const resultDetails = JSON.parse(decodeURIComponent(resultDetailsEncoded));
+        
+        // Formater le JSON pour affichage
+        const jsonFormatted = JSON.stringify(resultDetails, null, 2);
+        
+        // Créer le contenu HTML
+        let htmlContent = '<div style="padding: 20px;">';
+        htmlContent += '<h3 style="margin-top: 0; color: #111827;">Détails de la Transaction #' + transactionId + '</h3>';
+        
+        if (resultDetails && Object.keys(resultDetails).length > 0) {
+          htmlContent += '<div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-top: 15px;">';
+          htmlContent += '<h4 style="margin: 0 0 10px 0; color: #374151;">Détails Result (JSON)</h4>';
+          htmlContent += '<pre style="background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.6;">' + jsonFormatted + '</pre>';
+          htmlContent += '</div>';
+          
+          // Afficher les champs importants
+          if (resultDetails.mnoDeliveryCode || resultDetails.totalCharged !== undefined) {
+            htmlContent += '<div style="margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">';
+            
+            if (resultDetails.mnoDeliveryCode) {
+              htmlContent += '<div style="background: white; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px;">';
+              htmlContent += '<div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">Delivery Code</div>';
+              htmlContent += '<div style="font-size: 18px; font-weight: 600; color: #111827;">' + resultDetails.mnoDeliveryCode + '</div>';
+              htmlContent += '</div>';
+            }
+            
+            if (resultDetails.totalCharged !== undefined) {
+              htmlContent += '<div style="background: white; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px;">';
+              htmlContent += '<div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">Montant Chargé</div>';
+              htmlContent += '<div style="font-size: 18px; font-weight: 600; color: ' + (resultDetails.totalCharged > 0 ? '#059669' : '#6b7280') + ';">' + resultDetails.totalCharged + ' TND</div>';
+              htmlContent += '</div>';
+            }
+            
+            htmlContent += '</div>';
+          }
+        } else {
+          htmlContent += '<div style="padding: 40px; text-align: center; color: #6b7280; background: #f9fafb; border-radius: 8px; margin-top: 15px;">';
+          htmlContent += '<i class="fas fa-info-circle" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i><br>';
+          htmlContent += 'Aucun détail result disponible pour cette transaction';
+          htmlContent += '</div>';
+        }
+        
+        htmlContent += '</div>';
+        
+        // Utiliser SweetAlert si disponible, sinon alert simple
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            html: htmlContent,
+            width: '800px',
+            showCloseButton: true,
+            showConfirmButton: true,
+            confirmButtonText: 'Fermer',
+            confirmButtonColor: '#667eea'
+          });
+        } else {
+          // Fallback: créer un modal simple
+          const modalHtml = `
+            <div id="detailsModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001; display: flex; align-items: center; justify-content: center;">
+              <div style="background: white; max-width: 800px; max-height: 80vh; overflow-y: auto; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                ${htmlContent}
+                <div style="padding: 0 20px 20px;">
+                  <button onclick="document.getElementById('detailsModal').remove()" style="width: 100%; padding: 12px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+          document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+        
+      } catch (error) {
+        console.error('Erreur lors du parsing des détails:', error);
+        alert('Erreur lors de l\'affichage des détails de la transaction');
+      }
+    }
+
+    // Fermer le modal en cliquant en dehors
+    document.addEventListener('click', function(event) {
+      const modal = document.getElementById('clientTransactionsModal');
+      if (event.target === modal) {
+        closeClientTransactionsModal();
+      }
+    });
+    */
+    // FIN DÉSACTIVATION - Toutes les fonctions Timwe Transactions sont commentées ci-dessus
+
+    // ========== OOREDOO/DGV FUNCTIONS ==========
+    let allOoredooMonthlyStats = [];
+    let expandedOoredooMonths = new Set();
+    let currentOoredooStatsSortColumn = 0;
+    let ooredooStatsSortDirection = 'asc';
+
+    function calculateOoredooTotals(monthlyStats) {
+      if (!monthlyStats || monthlyStats.length === 0) {
+        return {
+          newSubs: 0,
+          unsubs: 0,
+          billings: 0,
+          activeSubsEndOfPeriod: 0,
+          revenueTnd: 0
+        };
+      }
+      
+      const totals = {
+        newSubs: 0,
+        unsubs: 0,
+        billings: 0,
+        activeSubsEndOfPeriod: 0,
+        revenueTnd: 0
+      };
+      
+      // Sommer les totaux mensuels
+      monthlyStats.forEach(month => {
+        totals.newSubs += Number(month.total_new_sub) || 0;
+        totals.unsubs += Number(month.total_unsub) || 0;
+        totals.billings += Number(month.total_nb_facturation) || 0;
+        totals.revenueTnd += Number(month.total_revenu_tnd) || 0;
+      });
+      
+      // Active Subs = valeur du DERNIER mois de la période
+      const lastMonth = monthlyStats[0]; // Le premier dans l'ordre décroissant
+      totals.activeSubsEndOfPeriod = lastMonth ? (Number(lastMonth.total_active_sub) || 0) : 0;
+      
+      return totals;
+    }
+
+    function updateOoredooKPIs(data) {
+      console.log('🔍 [OOREDOO] Mise à jour des KPIs:', data);
+      console.log('🔍 [OOREDOO] ooredoo_stats:', data?.ooredoo_stats);
+      console.log('🔍 [OOREDOO] monthly_stats:', data?.ooredoo_stats?.ooredoo_monthly_stats);
+      console.log('🔍 [OOREDOO] monthly_stats_comparison:', data?.ooredoo_stats?.ooredoo_monthly_stats_comparison);
+      
+      if (!data || !data.ooredoo_stats) {
+        console.warn('⚠️ [OOREDOO] Données manquantes');
+        return;
+      }
+      
+      // Récupérer les statistiques mensuelles groupées Ooredoo
+      if (data.ooredoo_stats.ooredoo_monthly_stats) {
+        updateOoredooStatisticsTable(data.ooredoo_stats.ooredoo_monthly_stats);
+        
+        // Calculer les KPIs agrégés avec comparaison
+        const monthlyStats = data.ooredoo_stats.ooredoo_monthly_stats || [];
+        const monthlyStatsComparison = data.ooredoo_stats.ooredoo_monthly_stats_comparison || [];
+        
+        const totals = calculateOoredooTotals(monthlyStats);
+        const comparisonTotals = monthlyStatsComparison.length > 0 
+          ? calculateOoredooTotals(monthlyStatsComparison) 
+          : null;
+        
+        console.log('🔍 [OOREDOO] Statistiques:', {
+          current_months: monthlyStats.length,
+          comparison_months: monthlyStatsComparison.length,
+          totals: totals,
+          comparisonTotals: comparisonTotals
+        });
+        
+        // Helper pour créer un objet KPI avec ou sans comparaison
+        const makeKPI = (current, previous, decimals = 0) => {
+          const currentNum = Number(current) || 0;
+          const previousNum = Number(previous) || 0;
+          
+          if (previous === null || previous === undefined || previousNum === 0) {
+            return { 
+              current: formatNumber(currentNum, decimals), 
+              previous: 0, 
+              change: 0 
+            };
+          }
+          return {
+            current: formatNumber(currentNum, decimals),
+            previous: formatNumber(previousNum, decimals),
+            change: calculateChange(currentNum, previousNum)
+          };
+        };
+        
+        // Taux de Facturation
+        const billingRateCurrent = totals.activeSubsEndOfPeriod > 0 
+          ? (totals.billings / totals.activeSubsEndOfPeriod * 100) 
+          : 0;
+        const billingRatePrevious = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
+          ? (comparisonTotals.billings / comparisonTotals.activeSubsEndOfPeriod * 100)
+          : null;
+        updateKPI('ooredoo-billing-rate', makeKPI(billingRateCurrent, billingRatePrevious, 2), '%');
+        
+        // Total Facturations
+        updateKPI('ooredoo-total-billings', makeKPI(totals.billings, comparisonTotals?.billings, 0));
+        
+        // Active Subs: pas de delta (valeur à la fin de période)
+        updateKPI('ooredoo-active-subs', {
+          current: formatNumber(totals.activeSubsEndOfPeriod, 0),
+          previous: 0,
+          change: 0
+        });
+        
+        // Nouveaux Abonnements
+        updateKPI('ooredoo-new-subscriptions', makeKPI(totals.newSubs, comparisonTotals?.newSubs, 0));
+        
+        // Désabonnements
+        updateKPI('ooredoo-unsubscriptions', makeKPI(totals.unsubs, comparisonTotals?.unsubs, 0));
+        
+        // Revenu Total TND
+        updateKPI('ooredoo-revenue-tnd', makeKPI(totals.revenueTnd, comparisonTotals?.revenueTnd, 3), ' TND');
+        
+        // ARPU: pas de delta (calcul global)
+        // Calculer le nombre de jours de la période pour normaliser l'ARPU
+        const startDate = document.getElementById('start-date')?.value;
+        const endDate = document.getElementById('end-date')?.value;
+        let periodDays = 30; // Défaut
+        if (startDate && endDate) {
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 30;
+        }
+        const arpuValue = totals.activeSubsEndOfPeriod > 0 
+          ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays)
+          : 0;
+        updateKPI('ooredoo-arpu', {
+          current: formatNumber(arpuValue, 3),
+          previous: 0,
+          change: 0
+        }, ' TND');
+        
+        // Revenu Moyen/Facturation: pas de delta (calcul global)
+        const avgBillingValue = totals.billings > 0 
+          ? totals.revenueTnd / totals.billings
+          : 0;
+        updateKPI('ooredoo-avg-billing-revenue', {
+          current: formatNumber(avgBillingValue, 3),
+          previous: 0,
+          change: 0
+        }, ' TND');
+      } else {
+        console.warn('⚠️ [OOREDOO] Pas de ooredoo_monthly_stats dans les données');
+      }
+    }
+
+    function updateOoredooStatisticsTable(monthlyStats) {
+      const tbody = document.getElementById('ooredooStatsTableBody');
+      if (!tbody) return;
+      
+      if (!monthlyStats || monthlyStats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+        return;
+      }
+      
+      allOoredooMonthlyStats = monthlyStats;
+      renderOoredooStatisticsTable();
+    }
+
+    function renderOoredooStatisticsTable() {
+      const tbody = document.getElementById('ooredooStatsTableBody');
+      if (!tbody) return;
+      
+      if (!allOoredooMonthlyStats || allOoredooMonthlyStats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+        return;
+      }
+      
+      let html = '';
+      
+      allOoredooMonthlyStats.forEach((month, idx) => {
+        const isExpanded = expandedOoredooMonths.has(month.month_key);
+        const expandIcon = isExpanded ? '▼' : '▶';
+        
+        // Ligne du mois (cliquable)
+        html += `
+          <tr style="background: var(--card); border-bottom: 2px solid var(--border); cursor: pointer; font-weight: 600;" 
+              onclick="toggleOoredooMonth('${month.month_key}')">
+            <td style="padding: 12px; text-align: center;">${expandIcon}</td>
+            <td style="padding: 12px;">${month.display_label}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_new_sub, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_unsub, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_active_sub, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_nb_facturation, 0)}</td>
+            <td style="padding: 12px; text-align: center;">${formatPercentage(month.total_taux_facturation, 3)}</td>
+            <td style="padding: 12px; text-align: center;">${formatNumber(month.total_revenu_tnd, 3)} TND</td>
+          </tr>
+        `;
+        
+        // Lignes des détails quotidiens (affichées seulement si le mois est expandé)
+        if (isExpanded && month.daily_details && month.daily_details.length > 0) {
+          month.daily_details.forEach(day => {
+            html += `
+              <tr style="background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px;"></td>
+                <td style="padding: 8px; padding-left: 30px; font-size: 13px;">${day.stat_date}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.new_subscriptions || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.unsubscriptions || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.active_subscriptions || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.total_billings || 0, 0)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatPercentage(day.billing_rate || 0, 3)}</td>
+                <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.revenue_tnd || 0, 3)} TND</td>
+              </tr>
+            `;
+          });
+        }
+      });
+      
+      tbody.innerHTML = html;
+    }
+    
+    function toggleOoredooMonth(monthKey) {
+      if (expandedOoredooMonths.has(monthKey)) {
+        expandedOoredooMonths.delete(monthKey);
+      } else {
+        expandedOoredooMonths.add(monthKey);
+      }
+      renderOoredooStatisticsTable();
+    }
+
+    function sortOoredooStatistics(columnIndex) {
+      // TODO: Implement sorting for monthly stats if needed
+      console.log('Sort Ooredoo column:', columnIndex);
+    }
+
+    function filterOoredooStats() {
+      // TODO: Implement filtering for monthly stats if needed
+      console.log('Filter Ooredoo stats');
+    }
+
+    function exportOoredooStatsToExcel() {
+      if (!allOoredooMonthlyStats || allOoredooMonthlyStats.length === 0) {
+        alert('Aucune donnée à exporter');
+        return;
+      }
+      
+      let csv = 'Période,New Sub,Unsub,Active Sub,NB Facturation,Taux Facturation %,Revenu TND\n';
+      
+      allOoredooMonthlyStats.forEach(month => {
+        csv += `${month.display_label},${month.total_new_sub || 0},${month.total_unsub || 0},${month.total_active_sub || 0},${month.total_nb_facturation || 0},${month.total_taux_facturation || 0},${month.total_revenu_tnd || 0}\n`;
+      });
+      
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `ooredoo_statistiques_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function copyOoredooStatsToClipboard() {
+      if (!allOoredooMonthlyStats || allOoredooMonthlyStats.length === 0) {
+        alert('Aucune donnée à copier');
+        return;
+      }
+      
+      let text = 'Période\tNew Sub\tUnsub\tActive Sub\tNB Facturation\tTaux Facturation %\tRevenu TND\n';
+      
+      allOoredooMonthlyStats.forEach(month => {
+        text += `${month.display_label}\t${month.total_new_sub || 0}\t${month.total_unsub || 0}\t${month.total_active_sub || 0}\t${month.total_nb_facturation || 0}\t${month.total_taux_facturation || 0}\t${month.total_revenu_tnd || 0}\n`;
+      });
+      
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Données copiées dans le presse-papier !');
+      }).catch(err => {
+        console.error('Erreur lors de la copie:', err);
+        alert('Erreur lors de la copie');
+      });
     }
 
     // Update merchants table with enhanced data and pagination
     function updateMerchantsTable(merchants) {
       allMerchants = merchants || [];
       currentMerchantsPage = 1;
+      
+      if (!allMerchants || allMerchants.length === 0) {
+        const tbody = document.getElementById('merchantsTableBody');
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucun marchand disponible</td></tr>';
+        }
+        // Mettre à jour la pagination
+        document.getElementById('merchantsPaginationInfo').textContent = 'Affichage de 0-0 sur 0 marchands';
+        document.getElementById('merchantsPrevBtn').disabled = true;
+        document.getElementById('merchantsNextBtn').disabled = true;
+        return;
+      }
+      
       renderMerchantsPage();
     }
 
@@ -6812,24 +9032,32 @@
           // Nouvelle structure avec meta
           detailsData = subscriptions.details.data;
           meta = subscriptions.details.meta;
+        } else if (subscriptions.details.data === undefined && Object.keys(subscriptions.details).length > 0) {
+          // Si c'est un objet avec des propriétés mais pas de .data, peut-être que c'est déjà un tableau d'objets
+          const testItem = subscriptions.details[0] || subscriptions.details;
+          if (testItem && (testItem.first_name !== undefined || testItem.client_prenom !== undefined)) {
+            detailsData = Array.isArray(subscriptions.details) ? subscriptions.details : [subscriptions.details];
+          }
         }
       }
       
-      if (detailsData.length > 0) {
-        // Simule un petit délai pour montrer le chargement
-        setTimeout(() => {
-          allSubscriptionDetails = detailsData;
-          currentSubscriptionPage = 1;
-          renderSubscriptionsPage();
-          
-          // Afficher les informations de performance
-          if (meta) {
-            updateSubscriptionTableInfo(meta);
-          }
-        }, 100);
-      } else {
-        tbody.innerHTML = '<tr><td colspan="6" class="no-data">Aucune donnée disponible</td></tr>';
+      // Si pas de données, afficher le message
+      if (!detailsData || detailsData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+        return;
       }
+      
+      // Simule un petit délai pour montrer le chargement
+      setTimeout(() => {
+        allSubscriptionDetails = detailsData;
+        currentSubscriptionPage = 1;
+        renderSubscriptionsPage();
+        
+        // Afficher les informations de performance
+        if (meta) {
+          updateSubscriptionTableInfo(meta);
+        }
+      }, 100);
     }
 
     function updateSubscriptionTableInfo(meta) {
@@ -6853,22 +9081,48 @@
       const endIndex = startIndex + subscriptionsPerPage;
       const pageData = allSubscriptionDetails.slice(startIndex, endIndex);
       
+      if (!pageData || pageData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+        return;
+      }
+      
       tbody.innerHTML = pageData.map(row => {
-        const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim();
+        // Gérer différents formats de données (objets Laravel ou tableaux associatifs)
+        const firstName = row.first_name || row.client_prenom || '';
+        const lastName = row.last_name || row.client_nom || '';
+        const fullName = `${firstName} ${lastName}`.trim() || '-';
+        const phone = row.phone || row.client_telephone || '-';
+        const operator = row.operator || row.country_payments_methods_name || '-';
         const plan = row.plan || '-';
+        const clientId = row.client_id || null;
         const planBadgeClass = 
+          plan === 'Trial' ? 'badge-primary' :
           plan === 'Journalier' ? 'badge-warning' :
           plan === 'Mensuel' ? 'badge-info' :
           plan === 'Annuel' ? 'badge-success' : 'badge-secondary';
         
+        // Formater les dates
+        const activationDate = row.activation_date || row.client_abonnement_creation || null;
+        const endDate = row.end_date || row.client_abonnement_expiration || null;
+        const formattedActivation = activationDate ? (typeof activationDate === 'string' ? activationDate.substring(0, 10) : activationDate) : '-';
+        const formattedEnd = endDate ? (typeof endDate === 'string' ? endDate.substring(0, 10) : endDate) : '-';
+        
+        // Bouton détails (seulement si client_id est disponible)
+        // Échapper les apostrophes dans le nom pour éviter les erreurs JavaScript
+        const escapedName = fullName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const detailsButton = clientId ? 
+          `<button onclick="showUserSubscriptionsDetails(${clientId}, '${escapedName}')" class="btn-details" style="padding: 6px 12px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; font-weight: 500;" onmouseover="this.style.background='var(--brand-primary)'" onmouseout="this.style.background='var(--accent)'">Détails</button>` :
+          `<span style="color: var(--muted); font-size: 12px;">-</span>`;
+        
         return `
           <tr>
-            <td>${fullName || '-'}</td>
-            <td>${row.phone || '-'}</td>
-            <td>${row.operator || '-'}</td>
+            <td>${fullName}</td>
+            <td>${phone}</td>
+            <td>${operator}</td>
             <td><span class="badge ${planBadgeClass}">${plan}</span></td>
-            <td>${row.activation_date ? row.activation_date.substring(0,10) : '-'}</td>
-            <td>${row.end_date ? row.end_date.substring(0,10) : '-'}</td>
+            <td>${formattedActivation}</td>
+            <td>${formattedEnd}</td>
+            <td>${detailsButton}</td>
           </tr>
         `;
       }).join('');
@@ -6916,6 +9170,131 @@
       subscriptionsPerPage = parseInt(perPage);
       currentSubscriptionPage = 1;
       renderSubscriptionsPage();
+    }
+
+    // Fonction pour afficher les détails des abonnements d'un utilisateur
+    async function showUserSubscriptionsDetails(clientId, clientName) {
+      // Supprimer la modale existante si elle existe
+      const existing = document.getElementById('user-subscriptions-modal');
+      if (existing) existing.remove();
+      
+      // Créer la modale avec indicateur de chargement
+      const modal = document.createElement('div');
+      modal.id = 'user-subscriptions-modal';
+      modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10001; display: flex; align-items: center; justify-content: center;">
+          <div style="background: white; border-radius: 12px; padding: 30px; max-width: 900px; max-height: 80vh; overflow-y: auto; width: 90%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+              <h3 style="margin: 0; color: var(--brand-primary); font-size: 20px;">📋 Abonnements de ${clientName}</h3>
+              <button onclick="document.getElementById('user-subscriptions-modal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted); padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">×</button>
+            </div>
+            <div id="user-subscriptions-content" style="min-height: 200px;">
+              <div style="text-align: center; padding: 40px; color: var(--muted);">
+                <div style="margin-bottom: 10px;">🔄 Chargement des abonnements...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      try {
+        // Appeler l'API
+        const response = await fetch(`/api/dashboard/subscriptions/${clientId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+          }
+        });
+        
+        const data = await response.json();
+        const contentDiv = document.getElementById('user-subscriptions-content');
+        
+        if (!data.success || !data.subscriptions || data.subscriptions.length === 0) {
+          contentDiv.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--muted);">
+              <div style="font-size: 48px; margin-bottom: 10px;">📭</div>
+              <div>Aucun abonnement trouvé pour cet utilisateur</div>
+            </div>
+          `;
+          return;
+        }
+        
+        // Afficher les abonnements dans un tableau
+        const subscriptions = data.subscriptions;
+        const totalSubscriptions = data.total_subscriptions || subscriptions.length;
+        
+        let tableHTML = `
+          <div style="margin-bottom: 15px; color: var(--muted); font-size: 14px;">
+            Total: <strong>${totalSubscriptions}</strong> abonnement(s)
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="background: var(--bg); border-bottom: 2px solid var(--border);">
+                <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Opérateur</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Plan</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Type</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Date Activation</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Date Fin</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Statut</th>
+                <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Prix</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        subscriptions.forEach(sub => {
+          const operator = sub.operator || '-';
+          const plan = sub.plan || '-';
+          const subscriptionType = sub.subscription_type || '-';
+          const subscriptionName = sub.subscription_name || '-';
+          const activationDate = sub.activation_date ? (typeof sub.activation_date === 'string' ? sub.activation_date.substring(0, 10) : sub.activation_date) : '-';
+          const endDate = sub.end_date ? (typeof sub.end_date === 'string' ? sub.end_date.substring(0, 10) : sub.end_date) : '-';
+          const status = sub.status || 'Inconnu';
+          const price = sub.price ? parseFloat(sub.price).toFixed(2) + ' TND' : '-';
+          
+          const statusBadge = status === 'Actif' ? 
+            '<span style="background: var(--success); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Actif</span>' :
+            '<span style="background: var(--muted); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Expiré</span>';
+          
+          const planBadgeClass = 
+            plan === 'Trial' ? 'var(--brand-primary)' :
+            plan === 'Journalier' ? 'var(--warning)' :
+            plan === 'Mensuel' ? 'var(--accent)' :
+            plan === 'Annuel' ? 'var(--success)' : 'var(--muted)';
+          
+          tableHTML += `
+            <tr style="border-bottom: 1px solid var(--border);">
+              <td style="padding: 12px;">${operator}</td>
+              <td style="padding: 12px;"><span style="background: ${planBadgeClass}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${plan}</span></td>
+              <td style="padding: 12px;">${subscriptionName}</td>
+              <td style="padding: 12px;">${activationDate}</td>
+              <td style="padding: 12px;">${endDate}</td>
+              <td style="padding: 12px;">${statusBadge}</td>
+              <td style="padding: 12px;">${price}</td>
+            </tr>
+          `;
+        });
+        
+        tableHTML += `
+            </tbody>
+          </table>
+        `;
+        
+        contentDiv.innerHTML = tableHTML;
+        
+      } catch (error) {
+        console.error('Erreur lors de la récupération des abonnements:', error);
+        const contentDiv = document.getElementById('user-subscriptions-content');
+        contentDiv.innerHTML = `
+          <div style="text-align: center; padding: 40px; color: var(--danger);">
+            <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
+            <div>Erreur lors du chargement des abonnements</div>
+            <div style="font-size: 12px; margin-top: 10px; color: var(--muted);">${error.message}</div>
+          </div>
+        `;
+      }
     }
     
     function renderMerchantsPage() {
@@ -7225,6 +9604,34 @@
       list.innerHTML = items.map(item => `<li>${item}</li>`).join('');
     }
   </script>
+
+  <!-- DÉSACTIVÉ POUR OPTIMISATION: Modal pour afficher les détails des transactions d'un client -->
+  <!-- Ce modal a été désactivé définitivement pour améliorer les performances du dashboard -->
+  <!--
+  <div id="clientTransactionsModal" style="display: none;">Modal désactivé</div>
+  -->
+
+  <style>
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-50px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    #clientTransactionsModal table tbody tr:hover {
+      background-color: #f9fafb;
+    }
+    
+    #clientTransactionsModal table tbody tr {
+      transition: background-color 0.2s;
+    }
+  </style>
+
 </body>
 </html>
 

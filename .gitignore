@@ -17,7 +17,9 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
-/storage/logs/*.log
+storage/logs/*.log
+storage/logs/laravel.log
+storage/logs/**/*.log
  
 # Ignorer sauvegardes et artefacts volumineux
 /backups/

@@ -74,7 +74,13 @@ class EklektikController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Erreur récupération données dashboard Eklektik', ['error' => $e->getMessage()]);
-            return $this->getFallbackData();
+            // Ne jamais retourner de fallback - retourner une erreur claire
+            return response()->json([
+                'success' => false,
+                'error' => 'Erreur lors du chargement des données Eklektik',
+                'message' => $e->getMessage(),
+                'data_source' => 'error'
+            ], 500);
         }
     }
 
@@ -479,46 +485,6 @@ class EklektikController extends Controller
         }
 
         return $timeline;
-    }
-
-    /**
-     * Données de fallback
-     */
-    private function getFallbackData()
-    {
-        return response()->json([
-            'success' => true,
-            'source' => 'FALLBACK_LOCAL_DATA',
-            'numbers' => [],
-            'kpis' => [
-                'totalNumbers' => 0,
-                'totalNumbersDelta' => 0,
-                'activeNumbers' => 0,
-                'activeNumbersDelta' => 0,
-                'linkedServices' => 0,
-                'linkedServicesDelta' => 0,
-                'successRate' => 0,
-                'successRateDelta' => 0
-            ],
-            'charts' => [
-                'serviceUsage' => [],
-                'timeline' => []
-            ],
-            'apiStatus' => [
-                'connected' => false,
-                'responseTime' => 0,
-                'lastSync' => now()->toISOString(),
-                'syncStatus' => 'fallback'
-            ],
-            'debug' => [
-                'source' => 'FALLBACK_LOCAL_DATA',
-                'timestamp' => now()->toISOString(),
-                'api_url' => 'https://payment.eklectic.tn/API',
-                'filters' => 'none',
-                'cached' => false,
-                'offer_ids' => $this->getOfferIds()
-            ]
-        ]);
     }
 
     /**

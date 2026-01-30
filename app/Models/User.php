@@ -514,6 +514,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Vérifier si l'utilisateur peut voir la rubrique Timwe dans le dashboard
+     * Seuls les Super Admin peuvent voir la rubrique Timwe
+     */
+    public function canViewTimweSection(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    /**
      * Vérifier si l'utilisateur peut inviter des collaborateurs
      * Seuls les admins (tous types) peuvent inviter des collaborateurs
      */

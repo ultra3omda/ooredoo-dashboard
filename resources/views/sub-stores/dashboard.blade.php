@@ -2008,12 +2008,18 @@
     @endif
 
     <script>
+    // Helper pour désactiver les logs en production (DOIT être défini en premier)
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const debugLog = isProduction ? () => {} : console.log.bind(console);
+    const debugWarn = isProduction ? () => {} : console.warn.bind(console);
+    const debugError = console.error.bind(console); // Toujours activer les erreurs
+    
     // ===== FONCTIONS USERS - DÉFINIES EN PREMIER =====
-    console.log('🔧 Chargement des fonctions Users...');
+    debugLog('🔧 Chargement des fonctions Users...');
     
     // Fonction helper globale pour normaliser les objets KPI
     function normalizeKPI(obj) {
-      console.log('🔧 normalizeKPI appelé avec:', obj);
+      debugLog('🔧 normalizeKPI appelé avec:', obj);
       if (obj && typeof obj.current !== 'undefined') {
         return obj; // Retourner l'objet tel quel pour préserver les propriétés supplémentaires
       }
@@ -2022,7 +2028,7 @@
 
     // Fonction helper globale pour mettre à jour un KPI individuel
     function updateSingleKPI(id, kpiData, suffix = '') {
-      console.log(`🔧 updateSingleKPI: ${id} = ${kpiData.current}${suffix}`);
+      debugLog(`🔧 updateSingleKPI: ${id} = ${kpiData.current}${suffix}`);
       const valueElement = document.getElementById(id);
       const deltaElement = document.getElementById(id + 'Delta');
       
@@ -2049,22 +2055,22 @@
           deltaElement.style.display = 'none';
         }
       } else {
-        console.warn(`⚠️ Élément KPI non trouvé: ${id}`);
+        debugWarn(`⚠️ Élément KPI non trouvé: ${id}`);
       }
     }
 
     function updateUsersKPIs(usersData) {
-      console.log('👥 Mise à jour des KPIs Users:', usersData);
-      console.log('🔧 normalizeKPI disponible:', typeof normalizeKPI);
-      console.log('🔧 updateSingleKPI disponible:', typeof updateSingleKPI);
+      debugLog('👥 Mise à jour des KPIs Users:', usersData);
+      debugLog('🔧 normalizeKPI disponible:', typeof normalizeKPI);
+      debugLog('🔧 updateSingleKPI disponible:', typeof updateSingleKPI);
       
       if (!usersData) {
-        console.log('❌ Pas de données Users');
+        debugLog('❌ Pas de données Users');
         return;
       }
       
       // Mettre à jour les KPIs Users
-      console.log('🔧 Appel de normalizeKPI pour totalUsers...');
+      debugLog('🔧 Appel de normalizeKPI pour totalUsers...');
       updateSingleKPI('users-totalUsers', normalizeKPI(usersData.totalUsers));
       updateSingleKPI('users-activeUsers', normalizeKPI(usersData.activeUsers));
       updateSingleKPI('users-totalTransactions', normalizeKPI(usersData.totalTransactions));
@@ -2074,7 +2080,7 @@
       updateSingleKPI('users-transactionsCohorte', normalizeKPI(usersData.transactionsCohorte));
       updateSingleKPI('users-retentionRate', normalizeKPI(usersData.retentionRate), '%');
       
-      console.log('✅ Tous les KPIs Users ont été mis à jour');
+      debugLog('✅ Tous les KPIs Users ont été mis à jour');
     }
 
     // Variables globales pour la pagination et le tri des utilisateurs
@@ -2085,10 +2091,10 @@
     let usersSortDirection = 'desc';
 
     function updateUsersTable(users) {
-      console.log('👥 Mise à jour du tableau Users:', users);
+      debugLog('👥 Mise à jour du tableau Users');
       
       if (!users || !Array.isArray(users)) {
-        console.log('❌ Pas de données users valides');
+        debugLog('❌ Pas de données users valides');
         return;
       }
       
@@ -2183,7 +2189,7 @@
     }
 
     function sortUsersTable(column) {
-      console.log('🔄 Tri des utilisateurs par:', column);
+      debugLog('🔄 Tri des utilisateurs par:', column);
       
       // Déterminer la direction du tri
       if (usersSortColumn === column) {
@@ -2259,11 +2265,11 @@
     }
 
     function createUsersLoadingKPIs() {
-      console.log('⏳ Création des KPIs Users de chargement');
+      debugLog('⏳ Création des KPIs Users de chargement');
       
       const kpisContainer = document.querySelector('.users-kpis-row');
       if (!kpisContainer) {
-        console.warn('⚠️ Container KPIs Users non trouvé');
+        debugWarn('⚠️ Container KPIs Users non trouvé');
         return;
       }
       
@@ -2290,19 +2296,19 @@
         </div>
       `).join('');
       
-      console.log('✅ KPIs Users créés avec succès');
+      debugLog('✅ KPIs Users créés avec succès');
     }
 
     async function loadUsersData() {
       try {
-        console.log('👥 Chargement des données utilisateurs...');
+        debugLog('👥 Chargement des données utilisateurs...');
         
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         const subStore = document.getElementById('subStoreSelect').value;
         
         if (!startDate || !endDate) {
-          console.error('❌ Dates manquantes pour le chargement des utilisateurs');
+          debugError('❌ Dates manquantes pour le chargement des utilisateurs');
           showNotification('Veuillez sélectionner une période', 'error');
           return;
         }
@@ -2314,7 +2320,7 @@
         const comparisonStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
         const comparisonEndDate = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
         
-        console.log('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
+        debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
         
         const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
           headers: {
@@ -2328,7 +2334,7 @@
         }
         
         const data = await response.json();
-        console.log('✅ Données utilisateurs reçues:', data);
+        debugLog('✅ Données utilisateurs reçues:', data);
         
         // Sauvegarder les données en cache
         window.usersKPIsData = data;
@@ -2346,7 +2352,7 @@
         showNotification(`Données utilisateurs ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
         
       } catch (error) {
-        console.error('❌ Erreur lors du chargement des données utilisateurs:', error);
+        debugError('❌ Erreur lors du chargement des données utilisateurs:', error);
         showNotification('Erreur lors du chargement des données utilisateurs', 'error');
       }
     }
@@ -2377,15 +2383,15 @@
         });
 
     function initializeDashboard() {
-      console.log('🚀 Initialisation du dashboard sub-stores');
+      debugLog('🚀 Initialisation du dashboard sub-stores');
       
       // Initialiser les dates par défaut : 3 derniers mois
       const today = new Date();
       const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
       
       // Vérifier que les dates sont valides avant de les assigner
-      if (isNaN(today.getTime()) || isNaN(threeMonthsAgo.getTime())) {
-        console.error('❌ Erreur lors de la création des dates par défaut');
+      if (isNaN(today.getTime()) || isNaN(thirtyDaysAgo.getTime())) {
+        debugError('❌ Erreur lors de la création des dates par défaut');
         // Utiliser des dates de fallback
         document.getElementById('startDate').value = '2025-01-01';
         document.getElementById('endDate').value = '2025-01-31';
@@ -2416,7 +2422,7 @@
     
     // Fonction pour masquer les deltas des KPIs globaux
     function hideGlobalKPIsDeltas() {
-      console.log('🚫 Masquage des deltas des KPIs globaux');
+      debugLog('🚫 Masquage des deltas des KPIs globaux');
       
       // Deltas des KPIs globaux de la vue Merchant
       const merchantGlobalDeltas = [
@@ -2430,14 +2436,14 @@
         const deltaElement = document.getElementById(deltaId);
         if (deltaElement) {
           deltaElement.style.display = 'none';
-          console.log(`🚫 Delta masqué: ${deltaId}`);
+          debugLog(`🚫 Delta masqué: ${deltaId}`);
         }
       });
     }
     
     // Fonction pour forcer le masquage des deltas globaux (appelée après mise à jour)
     function forceHideGlobalDeltas() {
-      console.log('🔒 Forçage du masquage des deltas globaux');
+      debugLog('🔒 Forçage du masquage des deltas globaux');
       
       const merchantGlobalDeltas = [
         'merch-totalPartnersDelta',
@@ -2452,28 +2458,28 @@
           deltaElement.style.display = 'none';
           deltaElement.innerHTML = '';
           deltaElement.style.visibility = 'hidden';
-          console.log(`🔒 Delta forcé masqué: ${deltaId}`);
+          debugLog(`🔒 Delta forcé masqué: ${deltaId}`);
         }
       });
     }
     
     // Fonction pour créer des KPIs de chargement par défaut
     function createLoadingKPIs() {
-      console.log('⏳ Création des KPIs de chargement par défaut');
+      debugLog('⏳ Création des KPIs de chargement par défaut');
       
       const kpisGrid = document.getElementById('kpisGrid');
       if (!kpisGrid) {
-        console.log('❌ kpisGrid non trouvé');
+        debugLog('❌ kpisGrid non trouvé');
         return;
       }
       
       // Créer aussi les KPIs Merchant s'ils n'existent pas
       const merchantKPIsContainer = document.querySelector('.merchants-kpis-row');
       if (!merchantKPIsContainer || merchantKPIsContainer.children.length === 0) {
-        console.log('⏳ Création des KPIs Merchant de chargement (initialisation)');
+        debugLog('⏳ Création des KPIs Merchant de chargement (initialisation)');
         createMerchantLoadingKPIs();
       } else {
-        console.log('✅ KPIs Merchant existent déjà lors de l\'initialisation');
+        debugLog('✅ KPIs Merchant existent déjà lors de l\'initialisation');
       }
       
       // Liste des KPIs de la vue d'ensemble avec leurs configurations
@@ -2516,12 +2522,12 @@
         kpisGrid.appendChild(kpiCard);
       });
       
-      console.log('✅ KPIs de chargement créés');
+      debugLog('✅ KPIs de chargement créés');
     }
     
     // Fonction pour créer des KPIs Merchant de chargement
     function createMerchantLoadingKPIs() {
-      console.log('⏳ Création des KPIs Merchant de chargement');
+      debugLog('⏳ Création des KPIs Merchant de chargement');
       
       const merchantKPIs = [
         { id: 'merch-totalPartners', title: 'Total Merchants', icon: '🏪' },
@@ -2538,16 +2544,16 @@
         const element = document.getElementById(kpi.id);
         if (element) {
           element.innerHTML = '<span style="color: #8B5CF6;">⏳ Chargement...</span>';
-          console.log(`✅ KPI Merchant ${kpi.id} mis en chargement`);
+          debugLog(`✅ KPI Merchant ${kpi.id} mis en chargement`);
         } else {
-          console.log(`❌ KPI Merchant ${kpi.id} non trouvé`);
+          debugLog(`❌ KPI Merchant ${kpi.id} non trouvé`);
         }
       });
     }
     
     // Fonction pour mettre à jour les KPIs de la vue d'ensemble
     function updateOverviewKPIs(kpis) {
-      console.log('📊 Mise à jour des KPIs de la vue d\'ensemble:', kpis);
+      debugLog('📊 Mise à jour des KPIs de la vue d\'ensemble:', kpis);
       
       // Liste des KPIs de la vue d'ensemble
       const overviewKPIs = [
@@ -2569,13 +2575,13 @@
         if (valueElement) {
           const formattedValue = new Intl.NumberFormat('fr-FR').format(kpi.value);
           valueElement.textContent = formattedValue + kpi.suffix;
-          console.log(`✅ ${kpi.id} mis à jour: ${formattedValue}${kpi.suffix}`);
+          debugLog(`✅ ${kpi.id} mis à jour: ${formattedValue}${kpi.suffix}`);
         } else {
-          console.log(`❌ Element ${kpi.id} non trouvé`);
+          debugLog(`❌ Element ${kpi.id} non trouvé`);
         }
       });
       
-      console.log('✅ KPIs de la vue d\'ensemble mis à jour');
+      debugLog('✅ KPIs de la vue d\'ensemble mis à jour');
     }
 
         function showTab(tabName) {
@@ -2606,17 +2612,17 @@
             
     // Si on active l'onglet Merchant, utiliser les données en cache si disponibles
     if (tabName === 'merchant') {
-      console.log('🏪 Activation onglet Merchant');
+      debugLog('🏪 Activation onglet Merchant');
       
       // Attendre que l'onglet soit visible dans le DOM
       setTimeout(() => {
         // Vérifier si on a des données Merchant en cache
         if (window.merchantKPIsData) {
-          console.log('💾 Utilisation des données en cache pour Merchant');
+          debugLog('💾 Utilisation des données en cache pour Merchant');
           // Forcer la mise à jour même si les données sont en cache
           updateMerchantKPIs(window.merchantKPIsData);
         } else {
-          console.log('🔄 Pas de données Merchant en cache, rechargement nécessaire');
+          debugLog('🔄 Pas de données Merchant en cache, rechargement nécessaire');
           loadDashboardData();
         }
       }, 300); // Attendre que l'onglet soit visible
@@ -2624,18 +2630,18 @@
     
     // Si on active l'onglet Users, utiliser les données en cache si disponibles
     if (tabName === 'users') {
-      console.log('👥 Activation onglet Users');
+      debugLog('👥 Activation onglet Users');
       
       // Attendre que l'onglet soit visible dans le DOM
       setTimeout(() => {
         // Vérifier si on a des données Users en cache
         if (window.usersKPIsData) {
-          console.log('💾 Utilisation des données en cache pour Users');
+          debugLog('💾 Utilisation des données en cache pour Users');
           // Forcer la mise à jour même si les données sont en cache
           updateUsersKPIs(window.usersKPIsData.kpis);
           updateUsersTable(window.usersKPIsData.users);
         } else {
-          console.log('🔄 Pas de données Users en cache, rechargement nécessaire');
+          debugLog('🔄 Pas de données Users en cache, rechargement nécessaire');
           // Créer les KPIs de chargement s'ils n'existent pas
           createUsersLoadingKPIs();
           // Charger les données utilisateurs
@@ -2663,7 +2669,7 @@
         
         // Validation des dates
         if (!startDate || !endDate || startDate.trim() === '' || endDate.trim() === '') {
-          console.error('❌ Dates manquantes ou vides:', { startDate, endDate });
+          debugError('❌ Dates manquantes ou vides:', { startDate, endDate });
           showNotification('Veuillez sélectionner des dates valides', 'error');
           return;
         }
@@ -2674,14 +2680,14 @@
         
         // Vérifier que les dates sont valides
         if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
-          console.error('❌ Dates invalides:', { startDate, endDate, startDateObj, endDateObj });
+          debugError('❌ Dates invalides:', { startDate, endDate, startDateObj, endDateObj });
           showNotification('Format de date invalide. Utilisez le format YYYY-MM-DD', 'error');
           return;
         }
         
         // Vérifier que la date de début est antérieure à la date de fin
         if (startDateObj >= endDateObj) {
-          console.error('❌ Date de début >= date de fin:', { startDate, endDate });
+          debugError('❌ Date de début >= date de fin:', { startDate, endDate });
           showNotification('La date de début doit être antérieure à la date de fin', 'error');
           return;
         }
@@ -2693,24 +2699,20 @@
         
         // Vérifier que les dates de comparaison sont valides
         if (isNaN(comparisonStartDate.getTime()) || isNaN(comparisonEndDate.getTime())) {
-          console.error('❌ Dates de comparaison invalides:', { comparisonStartDate, comparisonEndDate });
+          debugError('❌ Dates de comparaison invalides:', { comparisonStartDate, comparisonEndDate });
           showNotification('Erreur dans le calcul des dates de comparaison', 'error');
           return;
         }
         
-        // Mettre à jour les champs de dates de comparaison dans l'interface
-        document.getElementById('comparisonStartDate').value = comparisonStartDate.toISOString().split('T')[0];
-        document.getElementById('comparisonEndDate').value = comparisonEndDate.toISOString().split('T')[0];
+        debugLog('📅 Période principale:', startDate, '→', endDate);
+        debugLog('📅 Période comparaison:', comparisonStartDate.toISOString().split('T')[0], '→', comparisonEndDate.toISOString().split('T')[0]);
         
-        console.log('📅 Période principale:', startDate, '→', endDate);
-        console.log('📅 Période comparaison:', comparisonStartDate.toISOString().split('T')[0], '→', comparisonEndDate.toISOString().split('T')[0]);
-        
-        console.log('📊 Chargement des données:', { startDate, endDate, subStore });
+        debugLog('📊 Chargement des données:', { startDate, endDate, subStore });
         
         // Timeout fixe pour toutes les périodes (mode optimisé gère les longues périodes)
         const timeoutMs = 120000; // 2 minutes pour toutes les périodes
         
-        console.log(`🕐 Période: ${periodDays} jours, Timeout: ${timeoutMs/1000}s`);
+        debugLog(`🕐 Période: ${periodDays} jours, Timeout: ${timeoutMs/1000}s`);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
@@ -2740,18 +2742,18 @@
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
             const text = await response.text();
-            console.error('❌ Réponse non-JSON reçue:', text.substring(0, 200));
+            debugError('❌ Réponse non-JSON reçue:', text.substring(0, 200));
             throw new Error('Le serveur a renvoyé du HTML au lieu de JSON. Vérifiez les logs du serveur.');
         }
         
         const data = await response.json();
                 
-        console.log('✅ Données reçues:', data);
+        debugLog('✅ Données reçues:', data);
         
-        console.log('✅ Réponse API reçue:', data);
-        console.log('🔍 Structure des KPIs:', Object.keys(data.kpis || {}));
-        console.log('🔍 totalPartners dans kpis:', data.kpis?.totalPartners);
-        console.log('🔍 merchants array:', data.merchants);
+        debugLog('✅ Réponse API reçue:', data);
+        debugLog('🔍 Structure des KPIs:', Object.keys(data.kpis || {}));
+        debugLog('🔍 totalPartners dans kpis:', data.kpis?.totalPartners);
+        debugLog('🔍 merchants array:', data.merchants);
         currentData = data;
         updateDashboard(data);
         
@@ -2760,7 +2762,7 @@
         showNotification(`Données ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
                 
             } catch (error) {
-        console.error('❌ Erreur lors du chargement des données:', error);
+        debugError('❌ Erreur lors du chargement des données:', error);
         
         let errorMessage = 'Erreur de connexion';
         if (error.name === 'AbortError') {
@@ -2778,25 +2780,33 @@
     }
 
     async function updateDashboard(data) {
-      console.log('🔄 Mise à jour du dashboard avec:', data);
+      debugLog('🔄 Mise à jour du dashboard avec:', data);
+      
+      // Vérifier si les données sont des données de fallback (structure différente)
+      if (data.data_source === 'fallback' || (data.kpis && Object.keys(data.kpis).includes('newSubStores'))) {
+        debugError('❌ Données de fallback détectées - erreur serveur');
+        showNotification('Erreur lors du chargement des données. Veuillez réessayer.', 'error');
+        showKPIsError();
+        return;
+      }
       
       if (data.kpis) {
         updateKPIs(data.kpis);
       } else {
-        console.warn('⚠️ Pas de KPIs dans les données');
+        debugWarn('⚠️ Pas de KPIs dans les données');
         showKPIsError();
       }
       
       if (data.sub_stores) {
         updateSubStoresRankingTable(data.sub_stores);
       } else {
-        console.warn('⚠️ Pas de sub-stores dans les données');
+        debugWarn('⚠️ Pas de sub-stores dans les données');
       }
       
       // Charger les données Users si l'onglet Users est actif
       const activeTab = document.querySelector('.nav-tab.active');
       if (activeTab && activeTab.textContent.includes('Users')) {
-        console.log('👥 Onglet Users actif, chargement des données utilisateurs');
+        debugLog('👥 Onglet Users actif, chargement des données utilisateurs');
         loadUsersData();
       }
       
@@ -2823,19 +2833,19 @@
           }
           hideExpirationsSkeleton();
         } catch (e) {
-          console.warn('Expirations async échouées', e);
+          debugWarn('Expirations async échouées', e);
           hideExpirationsSkeleton();
         }
       }
     }
 
     function updateKPIs(kpis) {
-      console.log('🔄 Mise à jour des KPIs:', kpis);
+      debugLog('🔄 Mise à jour des KPIs:', kpis);
       
       // Mettre à jour les KPIs Merchant si disponibles
       if (kpis.totalPartners) {
-        console.log('🏪 Données Merchant détectées');
-        console.log('🔍 Valeurs KPIs Merchant:', {
+        debugLog('🏪 Données Merchant détectées');
+        debugLog('🔍 Valeurs KPIs Merchant:', {
           totalPartners: kpis.totalPartners,
           activeMerchants: kpis.activeMerchants,
           totalLocationsActive: kpis.totalLocationsActive,
@@ -2848,25 +2858,25 @@
         
         // Toujours sauvegarder les données pour l'onglet Merchant
         window.merchantKPIsData = kpis;
-        console.log('💾 Données sauvegardées dans window.merchantKPIsData:', window.merchantKPIsData);
+        debugLog('💾 Données sauvegardées dans window.merchantKPIsData:', window.merchantKPIsData);
         
         // Vérifier si l'onglet Merchant est actif
         const activeTab = document.querySelector('.nav-link.active');
         const isMerchantActive = activeTab && activeTab.textContent.includes('Merchant');
-        console.log('🔍 Onglet actif:', activeTab?.textContent, 'Merchant actif:', isMerchantActive);
+        debugLog('🔍 Onglet actif:', activeTab?.textContent, 'Merchant actif:', isMerchantActive);
         
         if (isMerchantActive) {
-          console.log('🔧 MISE À JOUR IMMÉDIATE: KPIs Merchant (onglet actif)');
+          debugLog('🔧 MISE À JOUR IMMÉDIATE: KPIs Merchant (onglet actif)');
           // Attendre un peu pour s'assurer que l'onglet est visible
           setTimeout(() => {
-            console.log('🔄 Appel de updateMerchantKPIs...');
+            debugLog('🔄 Appel de updateMerchantKPIs...');
             updateMerchantKPIs(kpis);
           }, 100);
         } else {
-          console.log('💾 Données Merchant sauvegardées, mise à jour différée');
+          debugLog('💾 Données Merchant sauvegardées, mise à jour différée');
         }
       } else {
-        console.log('⚠️ Pas de données Merchant totalPartners dans:', kpis);
+        debugLog('⚠️ Pas de données Merchant totalPartners dans:', kpis);
       }
       
       const kpiCards = [
@@ -3007,7 +3017,7 @@
           }
         }
         
-        console.log(`🔍 KPI ${kpi.id}: valeur = ${kpiValue}, formatée = ${formattedValue}`);
+        debugLog(`🔍 KPI ${kpi.id}: valeur = ${kpiValue}, formatée = ${formattedValue}`);
         
         kpiCard.innerHTML = `
           <div class="kpi-icon">${kpi.icon || '📊'}</div>
@@ -3071,33 +3081,33 @@
     }
 
     function updateMerchantKPIs(kpis) {
-      console.log('📊 Mise à jour des KPIs Merchant:', kpis);
-      console.log('🔍 Vérification: kpis.totalPartners =', kpis.totalPartners);
-      console.log('🔍 Vérification: type de kpis =', typeof kpis);
-      console.log('🔍 Vérification: clés de kpis =', Object.keys(kpis));
-      console.log('🔍 État de l\'onglet Merchant:', document.getElementById('merchant')?.classList.contains('active'));
+      debugLog('📊 Mise à jour des KPIs Merchant:', kpis);
+      debugLog('🔍 Vérification: kpis.totalPartners =', kpis.totalPartners);
+      debugLog('🔍 Vérification: type de kpis =', typeof kpis);
+      debugLog('🔍 Vérification: clés de kpis =', Object.keys(kpis));
+      debugLog('🔍 État de l\'onglet Merchant:', document.getElementById('merchant')?.classList.contains('active'));
       
       // Vérifier que nous avons les bonnes données
       if (!kpis.totalPartners) {
-        console.log('❌ ERREUR: Pas de données totalPartners dans kpis');
+        debugLog('❌ ERREUR: Pas de données totalPartners dans kpis');
         return;
       }
       
-      console.log('✅ Données totalPartners trouvées, procédure normale');
+      debugLog('✅ Données totalPartners trouvées, procédure normale');
       
       // VÉRIFICATION CRITIQUE: Les éléments HTML existent-ils ?
-      console.log('🔍 Test: Recherche éléments HTML Merchant...');
+      debugLog('🔍 Test: Recherche éléments HTML Merchant...');
       const testElement = document.getElementById('merch-totalPartners');
-      console.log('🔍 Élément merch-totalPartners:', testElement ? 'TROUVÉ' : 'INTROUVABLE');
+      debugLog('🔍 Élément merch-totalPartners:', testElement ? 'TROUVÉ' : 'INTROUVABLE');
       
       if (!testElement) {
-        console.log('❌ PROBLÈME: Les éléments Merchant ne sont pas dans le DOM !');
-        console.log('🔍 Onglet merchant existe-t-il?', document.getElementById('merchant') ? 'OUI' : 'NON');
-        console.log('🔍 Contenu de l\'onglet merchant:', document.getElementById('merchant')?.innerHTML?.substring(0, 200) + '...');
+        debugLog('❌ PROBLÈME: Les éléments Merchant ne sont pas dans le DOM !');
+        debugLog('🔍 Onglet merchant existe-t-il?', document.getElementById('merchant') ? 'OUI' : 'NON');
+        debugLog('🔍 Contenu de l\'onglet merchant:', document.getElementById('merchant')?.innerHTML?.substring(0, 200) + '...');
         
         // Attendre un peu plus et réessayer
         setTimeout(() => {
-          console.log('🔄 Nouvelle tentative de mise à jour Merchant...');
+          debugLog('🔄 Nouvelle tentative de mise à jour Merchant...');
           updateMerchantKPIs(kpis);
         }, 500);
         return;
@@ -3106,35 +3116,35 @@
       // Vérifier que l'onglet Merchant est visible
       const merchantTab = document.getElementById('merchant');
       if (merchantTab && !merchantTab.classList.contains('active')) {
-        console.log('⚠️ Onglet Merchant non visible, attente...');
+        debugLog('⚠️ Onglet Merchant non visible, attente...');
         setTimeout(() => {
           updateMerchantKPIs(kpis);
         }, 200);
         return;
       }
       
-      console.log('✅ Éléments HTML trouvés, procédure de mise à jour...');
+      debugLog('✅ Éléments HTML trouvés, procédure de mise à jour...');
       
       
       
       // Vérifier si les KPIs Merchant existent, sinon les créer
       const merchantKPIsContainer = document.querySelector('.merchants-kpis-row');
       if (!merchantKPIsContainer || merchantKPIsContainer.children.length === 0) {
-        console.log('🔧 Création des KPIs Merchant...');
+        debugLog('🔧 Création des KPIs Merchant...');
         createMerchantLoadingKPIs();
       } else {
-        console.log('✅ KPIs Merchant existent déjà, pas de recréation');
+        debugLog('✅ KPIs Merchant existent déjà, pas de recréation');
       }
       
       // KPIs Merchant
-      console.log('🔄 Mise à jour des KPIs individuels...');
+      debugLog('🔄 Mise à jour des KPIs individuels...');
       updateSingleKPI('merch-totalPartners', normalizeKPI(kpis.totalPartners));
       updateSingleKPI('merch-activeMerchants', normalizeKPI(kpis.activeMerchants));
       updateSingleKPI('merch-totalLocationsActive', normalizeKPI(kpis.totalLocationsActive));
       updateSingleKPI('merch-activeMerchantRatio', normalizeKPI(kpis.activeMerchantRatio), '%');
       updateSingleKPI('merch-totalTransactions', normalizeKPI(kpis.totalTransactions));
       updateSingleKPI('merch-transactionsPerMerchant', normalizeKPI(kpis.transactionsPerMerchant));
-      console.log('✅ KPIs individuels mis à jour');
+      debugLog('✅ KPIs individuels mis à jour');
       
       // Top Merchant et Diversity avec gestion spéciale
       const topMerchantShare = normalizeKPI(kpis.topMerchantShare);
@@ -3149,7 +3159,7 @@
         const valueElement = document.getElementById('merch-topMerchantShare');
         if (valueElement) {
           valueElement.innerHTML = formattedValue;
-          console.log(`✅ merch-topMerchantShare mis à jour: ${formattedValue}`);
+          debugLog(`✅ merch-topMerchantShare mis à jour: ${formattedValue}`);
         }
       } else {
         updateSingleKPI('merch-topMerchantShare', topMerchantShare, '%');
@@ -3177,10 +3187,10 @@
     let merchantPageSize = 10;
 
     function updateMerchantTable(merchants) {
-      console.log('📊 updateMerchantTable called with', merchants?.length, 'merchants');
+      debugLog('📊 updateMerchantTable called with', merchants?.length, 'merchants');
       
       if (!merchants || !Array.isArray(merchants)) {
-        console.log('❌ Pas de données merchants valides');
+        debugLog('❌ Pas de données merchants valides');
         return;
       }
       
@@ -3320,7 +3330,7 @@
     }
 
     function exportMerchantTable() {
-      console.log('📤 Export table merchant');
+      debugLog('📤 Export table merchant');
       // Fonction d'export simple
       if (!currentData || !currentData.merchants) {
         showNotification('Aucune donnée merchant à exporter', 'warning');
@@ -3345,34 +3355,22 @@
     }
 
     function updateCharts(data) {
-      console.log('🔄 Mise à jour des graphiques:', data);
+      debugLog('🔄 Mise à jour des graphiques:', data);
       
       if (typeof Chart === 'undefined') {
-        console.error('❌ Chart.js non chargé');
+        debugError('❌ Chart.js non chargé');
         return;
       }
 
       // Inscriptions Chart (maintenant en barres par mois)
-      console.log('🔍 DEBUG inscriptionsTrend:', data.inscriptionsTrend);
+      debugLog('🔍 DEBUG inscriptionsTrend:', data.inscriptionsTrend);
       
       if (data.inscriptionsTrend && data.inscriptionsTrend.length > 0) {
-        console.log('✅ Création du graphique inscriptions avec données:', data.inscriptionsTrend);
+        debugLog('✅ Création du graphique inscriptions avec données:', data.inscriptionsTrend);
         createInscriptionsBarChart(data.inscriptionsTrend);
       } else {
-        console.log('❌ Pas de données inscriptionsTrend, création avec données par défaut');
-        
-        // Créer des données mensuelles par défaut
-        const testData = [
-          { date: 'Jan 2025', value: 120 },
-          { date: 'Feb 2025', value: 150 },
-          { date: 'Mar 2025', value: 200 },
-          { date: 'Apr 2025', value: 180 },
-          { date: 'May 2025', value: 160 },
-          { date: 'Jun 2025', value: 190 },
-          { date: 'Jul 2025', value: 220 },
-          { date: 'Aug 2025', value: 250 }
-        ];
-        createInscriptionsBarChart(testData);
+        debugLog('❌ Pas de données inscriptionsTrend disponibles');
+        // Ne pas créer de données par défaut - laisser le graphique vide
       }
 
       // Expirations Chart
@@ -3437,7 +3435,7 @@
           }
         });
       } catch (error) {
-        console.error('❌ Erreur création graphique inscriptions:', error);
+        debugError('❌ Erreur création graphique inscriptions:', error);
       }
     }
 
@@ -3533,11 +3531,11 @@
           }
         }
         
-        console.log('✅ Sub-stores chargés:', data.sub_stores.length, 'Super Admin:', isSuperAdmin);
+        debugLog('✅ Sub-stores chargés:', data.sub_stores.length, 'Super Admin:', isSuperAdmin);
         return data;
         
       } catch (error) {
-        console.error('❌ Erreur lors du chargement des sub-stores:', error);
+        debugError('❌ Erreur lors du chargement des sub-stores:', error);
         return { sub_stores: [] };
       }
     }
@@ -3680,14 +3678,14 @@
     }
 
     function refreshData() {
-      console.log('🔄 Actualisation complète du dashboard');
+      debugLog('🔄 Actualisation complète du dashboard');
       // Forcer l'actualisation de toutes les rubriques
       loadDashboardData();
     }
     
     // Fonction pour actualiser toutes les rubriques
     function refreshAllSections() {
-      console.log('🔄 Actualisation de toutes les rubriques');
+      debugLog('🔄 Actualisation de toutes les rubriques');
       
       // Marquer que les dates ont changé pour forcer le rechargement
       window.datesChanged = true;
@@ -3705,7 +3703,7 @@
         const activeTab = document.querySelector('.nav-link.active');
         if (activeTab) {
           const tabName = activeTab.getAttribute('onclick').match(/showTab\('([^']+)'\)/)[1];
-          console.log('🔄 Actualisation de l\'onglet actif:', tabName);
+          debugLog('🔄 Actualisation de l\'onglet actif:', tabName);
           showTab(tabName);
         }
       }, 1500); // Attendre 1.5 seconde pour que les données soient chargées
@@ -3713,7 +3711,7 @@
     
     // Fonction pour afficher un indicateur de chargement dans les KPIs
     function showKPIsLoading() {
-      console.log('⏳ Affichage du chargement dans les KPIs');
+      debugLog('⏳ Affichage du chargement dans les KPIs');
       
       // Indicateur de chargement pour la vue d'ensemble
       const overviewKPIs = ['distributed', 'inscriptions', 'totalSubscriptions', 'transactions', 'activeUsers', 
@@ -3729,10 +3727,10 @@
       // Indicateur de chargement pour la vue Merchant (seulement si les KPIs n'existent pas)
       const merchantKPIsContainer = document.querySelector('.merchants-kpis-row');
       if (!merchantKPIsContainer || merchantKPIsContainer.children.length === 0) {
-        console.log('⏳ Création des KPIs Merchant de chargement (première fois)');
+        debugLog('⏳ Création des KPIs Merchant de chargement (première fois)');
         createMerchantLoadingKPIs();
       } else {
-        console.log('✅ KPIs Merchant existent, vérification des données...');
+        debugLog('✅ KPIs Merchant existent, vérification des données...');
         // Mettre à jour seulement les valeurs qui sont en chargement, pas celles qui ont des données
         const merchantKPIs = ['merch-totalPartners', 'merch-activeMerchants', 'merch-totalLocationsActive', 
                               'merch-activeMerchantRatio', 'merch-totalTransactions', 'merch-transactionsPerMerchant', 
@@ -3745,9 +3743,9 @@
             // Ne mettre en chargement que si la valeur est "Loading..." ou "Chargement..." ou vide
             if (currentValue.includes('Loading') || currentValue.includes('Chargement') || currentValue.trim() === '') {
               valueElement.innerHTML = '<span style="color: #8B5CF6;">⏳ Chargement...</span>';
-              console.log(`⏳ ${kpiId} mis en chargement (valeur actuelle: ${currentValue})`);
+              debugLog(`⏳ ${kpiId} mis en chargement (valeur actuelle: ${currentValue})`);
             } else {
-              console.log(`✅ ${kpiId} garde sa valeur: ${currentValue}`);
+              debugLog(`✅ ${kpiId} garde sa valeur: ${currentValue}`);
             }
           }
         });
@@ -3755,7 +3753,7 @@
     }
 
     function autoComparison() {
-      console.log('🔄 Activation de la comparaison automatique');
+      debugLog('🔄 Activation de la comparaison automatique');
       
       try {
         // Récupérer les dates de la période principale
@@ -3763,7 +3761,7 @@
         const endDateInput = document.getElementById('endDate');
         
         if (!startDateInput || !endDateInput) {
-          console.error('❌ Champs de date non trouvés');
+          debugError('❌ Champs de date non trouvés');
           showNotification('Erreur: Champs de date non trouvés', 'error');
           return;
         }
@@ -3772,7 +3770,7 @@
         const endDate = endDateInput.value;
         
         if (!startDate || !endDate) {
-          console.error('❌ Dates manquantes');
+          debugError('❌ Dates manquantes');
           showNotification('Veuillez d\'abord sélectionner une période principale', 'error');
           return;
         }
@@ -3782,14 +3780,14 @@
         const endDateObj = new Date(endDate);
         
         if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
-          console.error('❌ Dates invalides');
+          debugError('❌ Dates invalides');
           showNotification('Dates invalides', 'error');
           return;
         }
         
         // Calculer la durée de la période principale
         const periodDuration = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24)) + 1;
-        console.log(`📅 Durée de la période principale: ${periodDuration} jours`);
+        debugLog(`📅 Durée de la période principale: ${periodDuration} jours`);
         
         // Calculer la période de comparaison (même durée, période précédente)
         const comparisonEndDate = new Date(startDateObj);
@@ -3809,7 +3807,7 @@
         const comparisonStartFormatted = formatDate(comparisonStartDate);
         const comparisonEndFormatted = formatDate(comparisonEndDate);
         
-        console.log(`📅 Période de comparaison calculée: ${comparisonStartFormatted} → ${comparisonEndFormatted}`);
+        debugLog(`📅 Période de comparaison calculée: ${comparisonStartFormatted} → ${comparisonEndFormatted}`);
         
         // Mettre à jour les champs de comparaison
         const comparisonStartInput = document.getElementById('comparisonStartDate');
@@ -3819,19 +3817,19 @@
           comparisonStartInput.value = comparisonStartFormatted;
           comparisonEndInput.value = comparisonEndFormatted;
           
-          console.log('✅ Période de comparaison mise à jour');
+          debugLog('✅ Période de comparaison mise à jour');
           showNotification(`Comparaison automatique activée: ${periodDuration} jours précédents`, 'success');
           
           // Optionnel: Recharger automatiquement les données
-          console.log('🔄 Rechargement automatique des données...');
+          debugLog('🔄 Rechargement automatique des données...');
           loadDashboardData();
         } else {
-          console.error('❌ Champs de comparaison non trouvés');
+          debugError('❌ Champs de comparaison non trouvés');
           showNotification('Erreur: Champs de comparaison non trouvés', 'error');
         }
         
       } catch (error) {
-        console.error('❌ Erreur lors de la comparaison automatique:', error);
+        debugError('❌ Erreur lors de la comparaison automatique:', error);
         showNotification('Erreur lors de la comparaison automatique', 'error');
       }
     }
@@ -3842,11 +3840,11 @@
     }
 
     // Users Section Functions - Version 2.0
-    console.log('🔧 Chargement des fonctions Users...');
+    debugLog('🔧 Chargement des fonctions Users...');
     
     // Fonction helper globale pour normaliser les objets KPI
     function normalizeKPI(obj) {
-      console.log('🔧 normalizeKPI appelé avec:', obj);
+      debugLog('🔧 normalizeKPI appelé avec:', obj);
       if (obj && typeof obj.current !== 'undefined') {
         return obj; // Retourner l'objet tel quel pour préserver les propriétés supplémentaires
       }
@@ -3855,7 +3853,7 @@
 
     // Fonction helper globale pour mettre à jour un KPI individuel
     function updateSingleKPI(id, kpiData, suffix = '') {
-      console.log(`🔧 updateSingleKPI: ${id} = ${kpiData.current}${suffix}`);
+      debugLog(`🔧 updateSingleKPI: ${id} = ${kpiData.current}${suffix}`);
       const valueElement = document.getElementById(id);
       const deltaElement = document.getElementById(id + 'Delta');
       
@@ -3882,22 +3880,22 @@
           deltaElement.style.display = 'none';
         }
       } else {
-        console.warn(`⚠️ Élément KPI non trouvé: ${id}`);
+        debugWarn(`⚠️ Élément KPI non trouvé: ${id}`);
       }
     }
 
     function updateUsersKPIs(usersData) {
-      console.log('👥 Mise à jour des KPIs Users:', usersData);
-      console.log('🔧 normalizeKPI disponible:', typeof normalizeKPI);
-      console.log('🔧 updateSingleKPI disponible:', typeof updateSingleKPI);
+      debugLog('👥 Mise à jour des KPIs Users:', usersData);
+      debugLog('🔧 normalizeKPI disponible:', typeof normalizeKPI);
+      debugLog('🔧 updateSingleKPI disponible:', typeof updateSingleKPI);
       
       if (!usersData) {
-        console.log('❌ Pas de données Users');
+        debugLog('❌ Pas de données Users');
         return;
       }
       
       // Mettre à jour les KPIs Users
-      console.log('🔧 Appel de normalizeKPI pour totalUsers...');
+      debugLog('🔧 Appel de normalizeKPI pour totalUsers...');
       updateSingleKPI('users-totalUsers', normalizeKPI(usersData.totalUsers));
       updateSingleKPI('users-activeUsers', normalizeKPI(usersData.activeUsers));
       updateSingleKPI('users-totalTransactions', normalizeKPI(usersData.totalTransactions));
@@ -3907,18 +3905,18 @@
       updateSingleKPI('users-transactionsCohorte', normalizeKPI(usersData.transactionsCohorte));
       updateSingleKPI('users-retentionRate', normalizeKPI(usersData.retentionRate), '%');
       
-      console.log('✅ Tous les KPIs Users ont été mis à jour');
+      debugLog('✅ Tous les KPIs Users ont été mis à jour');
     }
 
 
     function exportUsersTable() {
-      console.log('📤 Export du tableau Users');
+      debugLog('📤 Export du tableau Users');
       showNotification('Export des données utilisateurs en cours...', 'success');
       // TODO: Implémenter l'export CSV/Excel
     }
 
     function createUsersLoadingKPIs() {
-      console.log('⏳ Création des KPIs Users de chargement');
+      debugLog('⏳ Création des KPIs Users de chargement');
       
       const usersKPIs = [
         'users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 
@@ -3930,21 +3928,21 @@
         const valueElement = document.getElementById(kpiId);
         if (valueElement) {
           valueElement.innerHTML = '<span style="color: rgba(255,255,255,0.8);">⏳ Chargement...</span>';
-          console.log(`✅ KPI User ${kpiId} mis en chargement`);
+          debugLog(`✅ KPI User ${kpiId} mis en chargement`);
         }
       });
     }
 
     async function loadUsersData() {
       try {
-        console.log('👥 Chargement des données utilisateurs...');
+        debugLog('👥 Chargement des données utilisateurs...');
         
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         const subStore = document.getElementById('subStoreSelect').value;
         
         if (!startDate || !endDate) {
-          console.error('❌ Dates manquantes pour le chargement des utilisateurs');
+          debugError('❌ Dates manquantes pour le chargement des utilisateurs');
           showNotification('Veuillez sélectionner une période', 'error');
           return;
         }
@@ -3956,7 +3954,7 @@
         const comparisonStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
         const comparisonEndDate = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
         
-        console.log('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
+        debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
         
         const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
           headers: {
@@ -3970,7 +3968,7 @@
         }
         
         const data = await response.json();
-        console.log('✅ Données utilisateurs reçues:', data);
+        debugLog('✅ Données utilisateurs reçues:', data);
         
         // Sauvegarder les données en cache
         window.usersKPIsData = data;
@@ -3988,7 +3986,7 @@
         showNotification(`Données utilisateurs ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
         
       } catch (error) {
-        console.error('❌ Erreur lors du chargement des données utilisateurs:', error);
+        debugError('❌ Erreur lors du chargement des données utilisateurs:', error);
         showNotification('Erreur lors du chargement des données utilisateurs', 'error');
       }
     }
@@ -4006,7 +4004,7 @@
     // Event listeners
     // Seul le sub-store déclenche un rechargement automatique
     document.getElementById('subStoreSelect').addEventListener('change', function() {
-        console.log('🏪 Sub-Store modifié, rechargement de toutes les données');
+        debugLog('🏪 Sub-Store modifié, rechargement de toutes les données');
         // Effacer tous les caches
         window.merchantKPIsData = null;
         window.usersKPIsData = null;
@@ -4018,12 +4016,12 @@
     // Les changements de dates ne déclenchent plus d'actualisation automatique
     // L'utilisateur doit cliquer sur "Actualiser" pour appliquer les nouvelles dates
     document.getElementById('startDate').addEventListener('change', function() {
-        console.log('📅 Date de début modifiée - cliquez sur "Actualiser" pour appliquer');
+        debugLog('📅 Date de début modifiée - cliquez sur "Actualiser" pour appliquer');
         // Marquer que les dates ont changé pour forcer le rechargement
         window.datesChanged = true;
     });
     document.getElementById('endDate').addEventListener('change', function() {
-        console.log('📅 Date de fin modifiée - cliquez sur "Actualiser" pour appliquer');
+        debugLog('📅 Date de fin modifiée - cliquez sur "Actualiser" pour appliquer');
         // Marquer que les dates ont changé pour forcer le rechargement
         window.datesChanged = true;
     });

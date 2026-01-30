@@ -33,6 +33,20 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/cp-sync.log'));
+
+            // Calcul des statistiques Timwe quotidiennes - Chaque jour à 2h30 du matin
+            $schedule->command('timwe:calculate-daily')
+                ->dailyAt('02:30')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/timwe-stats.log'));
+            
+            // Calcul des statistiques Ooredoo/DGV quotidiennes - Chaque jour à 2h45 du matin
+            $schedule->command('ooredoo:update-daily-stats')
+                ->dailyAt('02:45')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ooredoo-stats.log'));
     }
 
     /**

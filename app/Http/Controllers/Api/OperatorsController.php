@@ -7,6 +7,7 @@ use App\Services\SubStoreService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class OperatorsController extends Controller
 {
@@ -23,33 +24,77 @@ class OperatorsController extends Controller
     public function getOperators(Request $request)
     {
         try {
+            $startTime = microtime(true);
             $user = auth()->user();
             
-            Log::info("=== DÉBUT API Operators getOperators ===");
-            Log::info("Utilisateur: {$user->email} (Rôle: {$user->role->name})");
+            if (!$user) {
+                return response()->json([
+                    'operators' => [],
+                    'default_operator' => 'ALL',
+                    'user_role' => 'guest',
+                    'error' => 'Utilisateur non authentifié'
+                ], 401);
+            }
             
-            // Récupérer les opérateurs selon le rôle de l'utilisateur
-            $operators = $this->getAvailableOperatorsForUser($user);
-            $defaultOperator = $this->getDefaultOperatorForUser($user);
+            // Utiliser le cache pour éviter les requêtes répétées
+            // Cache plus long pour SuperAdmin (beaucoup d'opérateurs)
+            $cacheTTL = $user->isSuperAdmin() ? 1800 : 600; // 30 min pour SuperAdmin, 10 min pour autres
+            $cacheKey = 'operators:user:' . $user->id . ':v4';
             
-            Log::info("Opérateurs récupérés: " . count($operators));
-            Log::info("Opérateur par défaut: " . $defaultOperator);
+            $result = Cache::remember($cacheKey, $cacheTTL, function () use ($user) {
+                // Récupérer les opérateurs selon le rôle de l'utilisateur
+                // Ces méthodes utilisent déjà leur propre cache interne
+                $operatorsArray = $this->getAvailableOperatorsForUser($user);
+                $defaultOperator = $this->getDefaultOperatorForUser($user);
+                
+                // Convertir le tableau associatif en format attendu par le frontend
+                // Conversion optimisée - traitement direct
+                $operators = [];
+                foreach ($operatorsArray as $value => $label) {
+                    if ($label !== '') { // Ignorer les labels vides
+                        $operators[] = [
+                            'value' => (string)$value,
+                            'label' => $label
+                        ];
+                    }
+                }
+                
+                return [
+                    'operators' => $operators,
+                    'default_operator' => (string)$defaultOperator,
+                    'user_role' => $user->role->name ?? 'collaborator',
+                    'hasAllOption' => isset($operatorsArray['ALL'])
+                ];
+            });
             
-            return response()->json([
-                'operators' => $operators,
-                'default_operator' => $defaultOperator,
-                'user_role' => $user->role->name ?? 'collaborator'
-            ]);
+            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+            
+            // Log uniquement si la requête prend plus de 1 seconde (pour debug)
+            if ($executionTime > 1000) {
+                Log::info("Operators API lente", [
+                    'user_id' => $user->id,
+                    'role' => $user->role->name ?? 'unknown',
+                    'execution_time_ms' => $executionTime,
+                    'operators_count' => count($result['operators']),
+                    'cached' => Cache::has($cacheKey)
+                ]);
+            }
+            
+            return response()->json($result);
             
         } catch (\Exception $e) {
             Log::error("Erreur dans Operators getOperators: " . $e->getMessage());
             Log::error("Stack trace: " . $e->getTraceAsString());
             
+            // Ne jamais retourner de fallback - retourner une erreur claire
             return response()->json([
-                'operators' => $this->getFallbackOperators(),
+                'success' => false,
+                'operators' => [],
                 'default_operator' => 'ALL',
-                'user_role' => 'collaborator',
-                'error' => 'Erreur lors du chargement des opérateurs'
+                'user_role' => 'guest',
+                'error' => 'Erreur lors du chargement des opérateurs',
+                'message' => $e->getMessage(),
+                'data_source' => 'error'
             ], 500);
         }
     }
@@ -79,51 +124,91 @@ class OperatorsController extends Controller
     }
     
     /**
-     * Récupérer tous les opérateurs
+     * Récupérer tous les opérateurs (avec IDs) - avec cache optimisé
      */
     private function getAllOperators()
     {
-        // Utiliser le service centralisé
-        $allOperators = $this->subStoreService->getAllOperators();
+        $cacheKey = 'operators:all:v4';
+        $cacheTTL = 1800; // 30 minutes - cache très long pour SuperAdmin
         
-        // Ajouter "Tous les opérateurs" en premier
-        return array_merge(['ALL' => 'Tous les opérateurs'], $allOperators);
+        return Cache::remember($cacheKey, $cacheTTL, function () {
+            $operators = ['ALL' => 'Tous les opérateurs'];
+            
+            // Récupérer tous les opérateurs depuis country_payments_methods avec leurs IDs
+            // Optimisé : sélectionner seulement les colonnes nécessaires, pas de WHERE complexes
+            // Limiter à 1000 pour éviter les problèmes de performance
+            // Utiliser chunk si nécessaire pour de très grandes tables
+            $allOperators = DB::table('country_payments_methods')
+                ->whereNotNull('country_payments_methods_name')
+                ->where('country_payments_methods_name', '!=', '')
+                ->select('country_payments_methods_id', 'country_payments_methods_name')
+                ->orderBy('country_payments_methods_name')
+                ->limit(1000)
+                ->get();
+            
+            // Conversion optimisée - traitement direct sans vérifications supplémentaires
+            foreach ($allOperators as $operator) {
+                $name = trim($operator->country_payments_methods_name);
+                if ($name !== '') {
+                    $operators[$operator->country_payments_methods_id] = $name;
+                }
+            }
+            
+            return $operators;
+        });
     }
     
     /**
-     * Récupérer les opérateurs assignés à un utilisateur
+     * Récupérer les opérateurs assignés à un utilisateur (avec IDs) - optimisé avec cache
+     * Pour les collaborateurs, ne pas inclure "Tous les opérateurs"
      */
     private function getUserAssignedOperators($user)
     {
-        $operators = ['ALL' => 'Tous les opérateurs'];
+        // Cache par utilisateur pour éviter les requêtes répétées
+        $cacheKey = 'operators:user:' . $user->id . ':assigned:v2';
+        $cacheTTL = 600; // 10 minutes
         
-        // Récupérer les opérateurs assignés via user_operators
-        $assignedOperators = DB::table('user_operators')
-            ->join('operators', 'user_operators.operator_id', '=', 'operators.operator_id')
-            ->where('user_operators.user_id', $user->id)
-            ->pluck('operators.operator_name', 'operators.operator_name')
-            ->toArray();
-        
-        // Récupérer les sub-stores assignés
-        $assignedSubStores = DB::table('user_operators')
-            ->join('stores', 'user_operators.operator_id', '=', 'stores.store_id')
-            ->where('user_operators.user_id', $user->id)
-            ->where('stores.is_sub_store', 1)
-            ->where('stores.store_active', 1)
-            ->pluck('stores.store_name', 'stores.store_name')
-            ->toArray();
-        
-        // Combiner les opérateurs assignés
-        $userOperators = array_merge($assignedOperators, $assignedSubStores);
-        
-        if (!empty($userOperators)) {
-            $operators = array_merge($operators, $userOperators);
-        } else {
-            // Fallback : opérateurs de base si aucun assigné
-            $operators = array_merge($operators, $this->getBasicOperators());
-        }
-        
-        return $operators;
+        return Cache::remember($cacheKey, $cacheTTL, function () use ($user) {
+            $operators = [];
+            
+            // Pour les admins, ajouter "Tous les opérateurs", mais pas pour les collaborateurs
+            if ($user->isAdmin()) {
+                $operators = ['ALL' => 'Tous les opérateurs'];
+            }
+            
+            // Récupérer les noms d'opérateurs assignés - optimisé avec une seule requête
+            $assignedOperatorNames = DB::table('user_operators')
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->pluck('operator_name')
+                ->map(function($name) { return trim($name); })
+                ->filter()
+                ->unique()
+                ->values()
+                ->toArray();
+            
+            if (empty($assignedOperatorNames)) {
+                return $operators;
+            }
+            
+            // Récupérer les opérateurs depuis country_payments_methods avec leurs IDs
+            // Optimisé : utiliser whereIn avec TRIM dans une sous-requête ou utiliser une approche plus simple
+            // Pour de meilleures performances, on utilise une requête avec plusieurs OR mais limitée
+            $operatorsFromDB = DB::table('country_payments_methods')
+                ->where(function($query) use ($assignedOperatorNames) {
+                    foreach ($assignedOperatorNames as $name) {
+                        $query->orWhereRaw("TRIM(country_payments_methods_name) = ?", [trim($name)]);
+                    }
+                })
+                ->select('country_payments_methods_id', 'country_payments_methods_name')
+                ->get();
+            
+            foreach ($operatorsFromDB as $operator) {
+                $operators[$operator->country_payments_methods_id] = trim($operator->country_payments_methods_name);
+            }
+            
+            return $operators;
+        });
     }
     
     /**
@@ -135,7 +220,7 @@ class OperatorsController extends Controller
     }
     
     /**
-     * Obtenir l'opérateur par défaut pour un utilisateur
+     * Obtenir l'opérateur par défaut pour un utilisateur (retourne l'ID) - optimisé avec une seule requête
      */
     private function getDefaultOperatorForUser($user)
     {
@@ -144,21 +229,40 @@ class OperatorsController extends Controller
             return 'ALL';
         }
         
-        // Admin/Collaborateur : premier opérateur assigné
-        $primaryOperator = $user->primaryOperator();
-        if ($primaryOperator) {
-            return $primaryOperator->operator_name;
+        // Admin/Collaborateur : récupérer l'ID de l'opérateur principal ou le premier assigné avec une seule requête JOIN
+        $operatorResult = DB::table('user_operators as uo')
+            ->join('country_payments_methods as cpm', function($join) {
+                $join->on(DB::raw('TRIM(cpm.country_payments_methods_name)'), '=', DB::raw('TRIM(uo.operator_name)'));
+            })
+            ->where('uo.user_id', $user->id)
+            ->where('uo.is_active', true)
+            ->orderBy('uo.is_primary', 'desc')
+            ->orderBy('uo.id', 'asc')
+            ->select('cpm.country_payments_methods_id')
+            ->first();
+        
+        if ($operatorResult && $operatorResult->country_payments_methods_id) {
+            return (string)$operatorResult->country_payments_methods_id;
         }
         
+        // Si aucun opérateur trouvé, récupérer les opérateurs disponibles et retourner le premier
+        $availableOperators = $this->getAvailableOperatorsForUser($user);
+        if (!empty($availableOperators)) {
+            // Exclure 'ALL' pour les non-SuperAdmin
+            $operatorsWithoutAll = array_filter($availableOperators, function($key) {
+                return $key !== 'ALL';
+            }, ARRAY_FILTER_USE_KEY);
+            
+            if (!empty($operatorsWithoutAll)) {
+                return (string)array_key_first($operatorsWithoutAll);
+            }
+            
+            // Si seulement 'ALL' est disponible (ne devrait pas arriver pour non-SuperAdmin)
+            return 'ALL';
+        }
+        
+        // Dernier fallback
         return 'ALL';
     }
     
-    /**
-     * Opérateurs de fallback en cas d'erreur
-     */
-    private function getFallbackOperators()
-    {
-        $classicOperators = $this->subStoreService->getClassicOperators();
-        return array_merge(['ALL' => 'Tous les opérateurs'], $classicOperators);
-    }
 }

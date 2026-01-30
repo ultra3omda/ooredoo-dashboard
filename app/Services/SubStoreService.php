@@ -27,6 +27,7 @@ class SubStoreService
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
             try {
                 // Récupérer les sub-stores depuis la table stores
+                // NOTE: "IZI Privilèges" est un OPÉRATEUR (country_payments_methods), pas un sub-store
                 $subStores = DB::table('stores')
                     ->where(function($query) {
                         $query->where('is_sub_store', 1)
@@ -112,14 +113,18 @@ class SubStoreService
             try {
                 // Récupérer les opérateurs classiques
                 $operators = DB::table('country_payments_methods')
-                    ->whereIn('country_payments_methods_name', [
+                    ->where(function($query) {
+                        $query->whereIn('country_payments_methods_name', [
                         "S'abonner via TT",
                         "S'abonner via Orange", 
                         "S'abonner via Taraji",
                         "S'abonner via Timwe",
+                            "S'abonner via IZI",
                         "Solde téléphonique",
                         "Solde Taraji mobile"
                     ])
+                        ->orWhere('country_payments_methods_name', 'LIKE', '%IZI%');
+                    })
                     ->distinct()
                     ->pluck('country_payments_methods_name', 'country_payments_methods_name')
                     ->toArray();
@@ -157,14 +162,18 @@ class SubStoreService
         return Cache::remember('classic_operators', self::CACHE_TTL, function () {
             try {
                 return DB::table('country_payments_methods')
-                    ->whereIn('country_payments_methods_name', [
+                    ->where(function($query) {
+                        $query->whereIn('country_payments_methods_name', [
                         "S'abonner via TT",
                         "S'abonner via Orange", 
                         "S'abonner via Taraji",
                         "S'abonner via Timwe",
+                            "S'abonner via IZI",
                         "Solde téléphonique",
                         "Solde Taraji mobile"
                     ])
+                        ->orWhere('country_payments_methods_name', 'LIKE', '%IZI%');
+                    })
                     ->distinct()
                     ->pluck('country_payments_methods_name', 'country_payments_methods_name')
                     ->toArray();

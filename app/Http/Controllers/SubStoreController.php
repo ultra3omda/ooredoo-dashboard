@@ -19,6 +19,20 @@ class SubStoreController extends Controller
     }
 
     /**
+     * Helper method pour appliquer le filtre sub-store avec exception pour le store ID 54
+     * Le store 54 doit être inclus même si is_sub_store != 1
+     * NOTE: "IZI Privilèges" est un OPÉRATEUR (country_payments_methods), pas un sub-store
+     */
+    private function applySubStoreFilter($query, $tableAlias = 'stores')
+    {
+        return $query->where(function($q) use ($tableAlias) {
+            $q->where("$tableAlias.is_sub_store", 1)
+              // Exception: inclure le store ID 54 même si is_sub_store != 1
+              ->orWhere("$tableAlias.store_id", 54);
+        });
+    }
+
+    /**
      * Afficher le dashboard sub-stores
      */
     public function index()
@@ -75,8 +89,6 @@ class SubStoreController extends Controller
     public function getDashboardData(Request $request)
     {
         try {
-            Log::info("=== DÉBUT API SubStore getDashboardData ===");
-            
             // Période dynamique : 30 derniers jours par défaut
             $startDate = $request->input("start_date", Carbon::now()->subDays(29)->format('Y-m-d'));
             $endDate = $request->input("end_date", Carbon::now()->format('Y-m-d'));
@@ -87,22 +99,17 @@ class SubStoreController extends Controller
             // Vérification des permissions
             $user = auth()->user();
             $selectedSubStore = $this->validateSubStoreAccess($user, $selectedSubStore);
-            
-            Log::info("Sub-Store sélectionné: $selectedSubStore");
-            Log::info("Utilisateur: {$user->email} (Rôle: {$user->role->name})");
 
             // Générer la clé de cache
             $cacheKey = $this->generateCacheKey($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $user->id);
             
             // Cache intelligent selon la longueur de période avec protection contre les requêtes trop longues
             $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
-            Log::info("🔢 CALCUL JOURS: $startDate → $endDate = $periodDays jours");
             
-            // Protection temporairement désactivée pour test
+            // Protection contre les périodes trop longues
             if ($periodDays > 400) {
-                Log::info("🛡️ PROTECTION ACTIVÉE: $periodDays jours > 400 - REJET");
                 return response()->json([
-                    'error' => 'Période trop longue. Maximum autorisé: 400 jours pour test',
+                    'error' => 'Période trop longue. Maximum autorisé: 400 jours',
                     'requested_days' => $periodDays,
                     'max_days' => 400,
                     'kpis' => [],
@@ -112,45 +119,37 @@ class SubStoreController extends Controller
                 ], 400);
             }
             
-            Log::info("✅ PÉRIODE AUTORISÉE: $periodDays jours ≤ 400");
-            
             $ttl = $periodDays > 180 ? 300 : ($periodDays > 90 ? 180 : ($periodDays > 30 ? 120 : 60)); // 5min/3min/2min/1min
             
-            // Mise en cache avec TTL adapté (éviter 0 qui peut persister indéfiniment selon le driver)
+            // Mise en cache avec TTL adapté
+            try {
             $data = Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $periodDays) {
-                Log::info("Cache MISS - Récupération des données sub-stores depuis la base");
-                Log::info("Période demandée: $periodDays jours");
-                
                 // Mode optimisé pour les périodes moyennes et longues avec vraies données
                 if ($periodDays > 90) {
-                    Log::info("PÉRIODE LONGUE DÉTECTÉE ($periodDays jours) - Mode optimisé avec vraies données");
                     return $this->getOptimizedSubStoreDashboardData($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore);
                 }
                 
-                Log::info("Mode normal pour période courte ($periodDays jours)");
                 return $this->fetchSubStoreDashboardData($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore);
             });
-            
-            if (Cache::has($cacheKey)) {
-                Log::info("Cache HIT - Données sub-stores servies depuis le cache (TTL: {$ttl}s)");
+            } catch (\Exception $cacheException) {
+                Log::error("Erreur dans le cache closure: " . $cacheException->getMessage());
+                throw $cacheException;
             }
             
             return response()->json($data);
             
         } catch (\Exception $e) {
-            Log::error("Erreur dans SubStore getDashboardData: " . $e->getMessage());
-            Log::error("Stack trace: " . $e->getTraceAsString());
-            Log::error("File: " . $e->getFile() . " Line: " . $e->getLine());
+            Log::error("Erreur SubStore getDashboardData: " . $e->getMessage() . " | File: " . basename($e->getFile()) . ":" . $e->getLine());
             
-            // S'assurer de toujours renvoyer du JSON valide
+            // Ne jamais retourner de fallback - retourner une erreur claire
             return response()->json([
                 'success' => false,
                 'error' => 'Erreur lors du chargement des données',
                 'message' => $e->getMessage(),
-                'kpis' => $this->getFallbackSubStoreKpis(),
+                'kpis' => [],
                 'sub_stores' => [],
                 'insights' => ['positive' => [], 'negative' => [], 'recommendations' => []],
-                'data_source' => 'fallback',
+                'data_source' => 'error',
                 'timestamp' => now()->toISOString()
             ], 500, [
                 'Content-Type' => 'application/json',
@@ -165,11 +164,7 @@ class SubStoreController extends Controller
     private function getOptimizedSubStoreDashboardData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore): array
     {
         try {
-            $startTime = microtime(true);
-            Log::info("=== MODE OPTIMISÉ AVEC VRAIES DONNÉES ===");
-
             $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
-            Log::info("Période optimisée: $periodDays jours");
             
             // Cache adaptatif selon la durée de période
             $cacheTTL = $periodDays > 365 ? 3600 : ($periodDays > 180 ? 1800 : 900); // 1h/30min/15min
@@ -185,19 +180,14 @@ class SubStoreController extends Controller
                 $activeUsers = $this->getUsersWithCardsCount($selectedSubStore);
                 $transactions = $this->getTransactionsWithCards($selectedSubStore);
                 
-                Log::info("KPIs de base - Distribué: $distributed, Inscriptions: $inscriptions, Actifs: $activeUsers");
-                
                 // KPIs avec dates - requêtes OPTIMISÉES pour longues périodes
                 $activeUsersCohorte = $this->getUsersWithCardsCohorteCount($selectedSubStore, $startDate, $endDate);
                 $transactionsCohorte = $this->getOptimizedTransactionsCohorte($selectedSubStore, $startDate, $endDate);
                 $inscriptionsCohorte = $this->getOptimizedInscriptionsCohorte($selectedSubStore, $startDate, $endDate);
                 $transactionsCohorteComparison = $this->getOptimizedTransactionsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
                 
-                Log::info("KPIs cohorte - Actifs: $activeUsersCohorte, Transactions: $transactionsCohorte, Inscriptions: $inscriptionsCohorte");
-                
                 // TOTAL ABONNEMENTS (toutes périodes) - comme le mode normal
                 $totalSubscriptions = $this->getTotalSubscriptions($selectedSubStore);
-                Log::info("Total abonnements: $totalSubscriptions");
                 
                 $conversionRate = $inscriptions > 0 ? round(($activeUsers / $inscriptions) * 100, 1) : 0;
                 
@@ -250,14 +240,6 @@ class SubStoreController extends Controller
 
                 // === DONNÉES MERCHANT OPTIMISÉES ===
                 $merchantData = $this->getMerchantData($selectedSubStore, $startDate, $endDate, $comparisonStartDate, $comparisonEndDate);
-                Log::info("Structure merchantData optimisée:", ['keys' => array_keys($merchantData)]);
-                Log::info("Structure merchantData kpis:", ['keys' => array_keys($merchantData['kpis'] ?? [])]);
-                Log::info("Nombre de merchants optimisés:", ['count' => count($merchantData['merchants'] ?? [])]);
-
-                // === RETOUR AVEC VRAIES DONNÉES ===
-
-                $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-                Log::info("Mode optimisé terminé en {$executionTime}ms");
 
                 return [
                     'kpis' => [
@@ -341,8 +323,8 @@ class SubStoreController extends Controller
                 ];
             });
         } catch (\Exception $e) {
-            Log::error("Erreur mode optimisé sub-store: " . $e->getMessage());
-            return $this->getFallbackSubStoreData();
+            Log::error("Erreur mode optimisé: " . $e->getMessage() . " | File: " . basename($e->getFile()) . ":" . $e->getLine());
+            throw $e;
         }
     }
 
@@ -352,28 +334,23 @@ class SubStoreController extends Controller
     private function getOptimizedActiveUsersCohorte(string $selectedSubStore, string $startDate, string $endDate): int
     {
         try {
-            // Utiliser la MÊME logique que le mode normal
-            Log::info("ActiveUsersCohorte: Utilisation de la logique normale optimisée");
-            
             $query = DB::table('carte_recharge_client')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
-                ->where('stores.is_sub_store', 1)
+                ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id');
+            $this->applySubStoreFilter($query)
                 ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now())
                 ->whereBetween('client_abonnement.client_abonnement_creation', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
                 ])
-                ->distinct(); // Éviter les doublons
+                ->distinct();
             
             if ($selectedSubStore !== 'ALL') {
                 $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
             }
 
-            $result = $query->distinct('client.client_id')->count();
-            Log::info("Optimized ActiveUsersCohorte (avec cartes): $result");
-            return $result;
+            return $query->distinct('client.client_id')->count();
 
         } catch (\Exception $e) {
             Log::error("Erreur getOptimizedActiveUsersCohorte: " . $e->getMessage());
@@ -384,15 +361,12 @@ class SubStoreController extends Controller
     private function getOptimizedTransactionsCohorte(string $selectedSubStore, string $startDate, string $endDate): int
     {
         try {
-            // Utiliser la MÊME logique que le mode normal
-            Log::info("TransactionsCohorte: Utilisation de la logique normale optimisée");
-            
             $query = DB::table('history')
                 ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id')
-                ->where('stores.is_sub_store', 1)
+                ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id');
+            $this->applySubStoreFilter($query)
                 ->whereBetween('history.time', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
@@ -402,9 +376,7 @@ class SubStoreController extends Controller
                 $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
             }
 
-            $result = $query->distinct('history.history_id')->count();
-            Log::info("Optimized TransactionsCohorte (avec cartes): $result");
-            return $result;
+            return $query->distinct('history.history_id')->count();
 
         } catch (\Exception $e) {
             Log::error("Erreur getOptimizedTransactionsCohorte: " . $e->getMessage());
@@ -415,26 +387,21 @@ class SubStoreController extends Controller
     private function getOptimizedInscriptionsCohorte(string $selectedSubStore, string $startDate, string $endDate): int
     {
         try {
-            // Utiliser la MÊME logique que le mode normal
-            Log::info("InscriptionsCohorte: Utilisation de la logique normale optimisée");
-            
             $query = DB::table('carte_recharge_client')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
-                ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->where('stores.is_sub_store', 1)
+                ->join('stores', 'client.sub_store', '=', 'stores.store_id');
+            $this->applySubStoreFilter($query)
                 ->whereBetween('client.created_at', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
                 ])
-                ->distinct(); // Éviter les doublons
+                ->distinct();
             
             if ($selectedSubStore !== 'ALL') {
                 $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
             }
 
-            $result = $query->distinct('client.client_id')->count();
-            Log::info("Optimized InscriptionsCohorte (avec cartes): $result");
-            return $result;
+            return $query->distinct('client.client_id')->count();
 
         } catch (\Exception $e) {
             Log::error("Erreur getOptimizedInscriptionsCohorte: " . $e->getMessage());
@@ -464,7 +431,8 @@ class SubStoreController extends Controller
             $query = DB::table('client')
                 ->select('stores.store_name', DB::raw('COUNT(client.client_id) as client_count'))
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->where('stores.is_sub_store', 1)
+                ;
+            $this->applySubStoreFilter($query)
                 ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id')
                 ->groupBy('stores.store_id', 'stores.store_name')
                 ->orderBy('client_count', 'desc')
@@ -508,7 +476,8 @@ class SubStoreController extends Controller
             $query = DB::table('client')
                 ->select(DB::raw($groupBy . ' as period'), DB::raw('COUNT(client.client_id) as count'))
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->where('stores.is_sub_store', 1)
+                ;
+            $this->applySubStoreFilter($query)
                 ->whereBetween('client.created_at', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
@@ -550,63 +519,42 @@ class SubStoreController extends Controller
     private function fetchSubStoreDashboardData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore = "ALL"): array
     {
         try {
-            Log::info("=== DÉBUT fetchSubStoreDashboardData ===");
-            Log::info("Période principale: $startDate à $endDate");
-            Log::info("Période comparaison: $comparisonStartDate à $comparisonEndDate");
-            Log::info("Sub-Store filtré: $selectedSubStore");
-            
-            // Détection des longues périodes pour optimisation (cohérent avec le seuil principal)
-            $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
-            $isLongPeriod = $periodDays > 90; // Cohérent avec le seuil principal
-            
-            // Mode normal pour toutes les périodes dans fetchSubStoreDashboardData
-            // L'optimisation se fait au niveau supérieur via getOptimizedSubStoreDashboardData
-            
             // === KPIs BASÉS SUR LES CARTES DE RECHARGE ===
             
             // 1. DISTRIBUÉ : Total des cartes de recharge pour le sub-store (sans filtre de date)
             $distributed = $this->getDistributedCards($selectedSubStore);
-            Log::info("Distribué (cartes totales): $distributed");
             
             // 2. INSCRIPTIONS : Clients inscrits avec cartes de recharge (sans filtre de date)
             $inscriptions = $this->getInscriptionsWithCards($selectedSubStore);
-            Log::info("Inscriptions (avec cartes): $inscriptions");
             
-            // 3. ACTIVE USERS : Clients avec cartes de recharge (cohérent avec le tableau)
-            $activeUsers = $this->getUsersWithCardsCount($selectedSubStore);
-            Log::info("Active users (avec cartes): $activeUsers");
+            // 3. ACTIVE USERS : Clients avec abonnements actifs + cartes de recharge (sans filtre de date)
+            $activeUsers = $this->getActiveUsersWithCards($selectedSubStore);
             
-            // 4. ACTIVE USERS COHORTE : Clients avec cartes de recharge dans la période (cohérent avec le tableau)
-            $activeUsersCohorte = $this->getUsersWithCardsCohorteCount($selectedSubStore, $startDate, $endDate);
-            Log::info("Active users cohorte (avec cartes): $activeUsersCohorte");
+            // 4. ACTIVE USERS COHORTE : Clients avec abonnements actifs + cartes de recharge (avec filtre de date)
+            $activeUsersCohorte = $this->getActiveUsersWithCardsCohorte($selectedSubStore, $startDate, $endDate);
 
             // 4bis. TOTAL ABONNEMENTS (toutes périodes)
             $totalSubscriptions = Cache::remember("total_subscriptions_{$selectedSubStore}", 600, function() use ($selectedSubStore) {
                 return $this->getTotalSubscriptions($selectedSubStore);
             });
-            Log::info("Total abonnements: $totalSubscriptions");
 
             // 4ter. CARTES ACTIVÉES (sur la période sélectionnée)
             $renewalRate = Cache::remember("cards_activated_{$selectedSubStore}_{$startDate}_{$endDate}", 600, function() use ($selectedSubStore, $startDate, $endDate) {
                 return $this->getCardsActivated($selectedSubStore, $startDate, $endDate);
             });
-            Log::info("Cartes activées: {$renewalRate}");
+            $renewalRate = $renewal['renewal_rate'];
             
             // 5. TRANSACTIONS : Abonnements activés avec cartes de recharge (sans filtre de date)
             $transactions = $this->getTransactionsWithCards($selectedSubStore);
-            Log::info("Transactions (avec cartes): $transactions");
             
             // 6. TRANSACTIONS COHORTE : Abonnements activés avec cartes de recharge (avec filtre de date)
             $transactionsCohorte = $this->getTransactionsWithCardsCohorte($selectedSubStore, $startDate, $endDate);
-            Log::info("Transactions cohorte (avec cartes): $transactionsCohorte");
             
             // 7. INSCRIPTIONS COHORTE : Clients inscrits avec cartes de recharge (avec filtre de date)
             $inscriptionsCohorte = $this->getInscriptionsWithCardsCohorte($selectedSubStore, $startDate, $endDate);
-            Log::info("Inscriptions cohorte (avec cartes): $inscriptionsCohorte");
             
-            // 8. TAUX DE CONVERSION : (Active Users / Total Inscrits) * 100
-            $conversionRate = $inscriptions > 0 ? round(($activeUsers / $inscriptions) * 100, 1) : 0;
-            Log::info("Taux de conversion (Active Users / Total Inscrits): $conversionRate%");
+            // 8. TAUX DE CONVERSION : (Inscriptions TOTAL / Distribué) * 100
+            $conversionRate = $distributed > 0 ? round(($inscriptions / $distributed) * 100, 1) : 0;
             
             // === KPIs PÉRIODE DE COMPARAISON (même logique mais pour la période de comparaison) ===
             
@@ -662,8 +610,8 @@ class SubStoreController extends Controller
             $revenueComparisonQuery = DB::table("client_abonnement")
                 ->join("client", "client_abonnement.client_id", "=", "client.client_id")
                 ->join("stores", "client.sub_store", "=", "stores.store_id")
-                ->join("abonnement_tarifs", "client_abonnement.tarif_id", "=", "abonnement_tarifs.abonnement_tarifs_id")
-                ->where("stores.is_sub_store", 1)
+                ->join("abonnement_tarifs", "client_abonnement.tarif_id", "=", "abonnement_tarifs.abonnement_tarifs_id");
+            $this->applySubStoreFilter($revenueComparisonQuery)
                 ->whereBetween("client_abonnement.client_abonnement_creation", [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()])
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
@@ -677,21 +625,22 @@ class SubStoreController extends Controller
             $topSubStores = [];
             
             // === RÉPARTITION PAR TYPES DE SUB-STORES ===
-            $subStoreTypeDistribution = DB::table("stores")
+            $subStoreTypeQuery = DB::table("stores")
                 ->leftJoin("client", "stores.store_id", "=", "client.sub_store")
                 ->select(
                     "stores.store_type",
                     DB::raw("COUNT(DISTINCT stores.store_id) as store_count"),
                     DB::raw("COUNT(DISTINCT client.client_id) as client_count")
-                )
-                ->where("stores.is_sub_store", 1)
+                );
+            $this->applySubStoreFilter($subStoreTypeQuery)
                 ->where("stores.store_active", 1)
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
                 })
                 ->groupBy("stores.store_type")
-                ->orderBy("client_count", "desc")
-                ->get()
+                ->orderBy("client_count", "desc");
+            
+            $subStoreTypeDistribution = $subStoreTypeQuery->get()
                 ->map(function($cat) {
                     return [
                         'category' => ucfirst($cat->store_type),
@@ -710,9 +659,6 @@ class SubStoreController extends Controller
             
             // === DONNÉES MERCHANT ===
             $merchantData = $this->getMerchantData($selectedSubStore, $startDate, $endDate, $comparisonStartDate, $comparisonEndDate);
-            Log::info("Structure merchantData:", ['keys' => array_keys($merchantData)]);
-            Log::info("Structure merchantData kpis:", ['keys' => array_keys($merchantData['kpis'] ?? [])]);
-            Log::info("Nombre de merchants:", ['count' => count($merchantData['merchants'] ?? [])]);
             
             $user = auth()->user();
             $isAdmin = $user->isSuperAdmin() || $user->isAdmin();
@@ -795,7 +741,9 @@ class SubStoreController extends Controller
             Log::error("File: " . $e->getFile() . " Line: " . $e->getLine());
             Log::error("Trace: " . $e->getTraceAsString());
             
-            return $this->getFallbackSubStoreData($startDate, $endDate);
+            // Propager l'exception au lieu de retourner des données de fallback
+            // Cela permettra au catch externe de gérer l'erreur correctement
+            throw $e;
         }
     }
 
@@ -888,9 +836,9 @@ class SubStoreController extends Controller
             $query = DB::table('carte_recharge_client')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
-                ->where('stores.is_sub_store', 1);
-            
+                ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id')
+                ;
+            $this->applySubStoreFilter($query);
             if ($selectedSubStore !== 'ALL') {
                 $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
             }
@@ -911,21 +859,21 @@ class SubStoreController extends Controller
     {
         try {
             // Expirations dans la période
-            $expirations = DB::table('client_abonnement')
+            $expirationsQuery = DB::table('client_abonnement')
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
-                ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->where('stores.is_sub_store', 1)
+                ->join('stores', 'client.sub_store', '=', 'stores.store_id');
+            $this->applySubStoreFilter($expirationsQuery)
                 ->when($selectedSubStore !== 'ALL', function($q) use ($selectedSubStore) {
                     $q->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
                 })
-                ->whereBetween('client_abonnement.client_abonnement_expiration', [$startDate, Carbon::parse($endDate)->endOfDay()])
-                ->count();
+                ->whereBetween('client_abonnement.client_abonnement_expiration', [$startDate, Carbon::parse($endDate)->endOfDay()]);
+            $expirations = $expirationsQuery->count();
 
             // Renouvellements: existence d'un autre abonnement créé après l'expiration dans la période
-            $renewals = DB::table('client_abonnement as ca1')
+            $renewalsQuery = DB::table('client_abonnement as ca1')
                 ->join('client', 'ca1.client_id', '=', 'client.client_id')
-                ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->where('stores.is_sub_store', 1)
+                ->join('stores', 'client.sub_store', '=', 'stores.store_id');
+            $this->applySubStoreFilter($renewalsQuery)
                 ->when($selectedSubStore !== 'ALL', function($q) use ($selectedSubStore) {
                     $q->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
                 })
@@ -935,8 +883,8 @@ class SubStoreController extends Controller
                         ->from('client_abonnement as ca2')
                         ->whereRaw('ca2.client_id = ca1.client_id')
                         ->whereRaw('ca2.client_abonnement_creation > ca1.client_abonnement_expiration');
-                })
-                ->count();
+                });
+            $renewals = $renewalsQuery->count();
 
             $rate = $expirations > 0 ? round(($renewals / $expirations) * 100, 1) : 0.0;
             return [
@@ -945,7 +893,7 @@ class SubStoreController extends Controller
                 'renewal_rate' => $rate,
             ];
         } catch (\Exception $e) {
-            Log::warning('Erreur renewal stats: '.$e->getMessage());
+            // Erreur non critique, ignorer silencieusement
             return ['expirations' => 0, 'renewals' => 0, 'renewal_rate' => 0.0];
         }
     }
@@ -958,21 +906,21 @@ class SubStoreController extends Controller
         try {
             $start = Carbon::now()->subMonths($months)->startOfMonth();
             $end = Carbon::now()->endOfMonth();
-            $rows = DB::table('client_abonnement')
+            $rowsQuery = DB::table('client_abonnement')
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->select(
                     DB::raw("DATE_FORMAT(client_abonnement.client_abonnement_expiration, '%Y-%m') as ym"),
                     DB::raw('COUNT(*) as total')
-                )
-                ->where('stores.is_sub_store', 1)
+                );
+            $this->applySubStoreFilter($rowsQuery)
                 ->when($selectedSubStore !== 'ALL', function($q) use ($selectedSubStore) {
                     $q->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
                 })
                 ->whereBetween('client_abonnement.client_abonnement_expiration', [$start, $end])
                 ->groupBy(DB::raw("DATE_FORMAT(client_abonnement.client_abonnement_expiration, '%Y-%m')"))
-                ->orderBy('ym')
-                ->get();
+                ->orderBy('ym');
+            $rows = $rowsQuery->get();
 
             return $rows->map(function($r) {
                 return [
@@ -981,7 +929,7 @@ class SubStoreController extends Controller
                 ];
             })->toArray();
         } catch (\Exception $e) {
-            Log::warning('Erreur expirations by month: '.$e->getMessage());
+            // Erreur non critique, ignorer silencieusement
             return [];
         }
     }
@@ -1007,41 +955,6 @@ class SubStoreController extends Controller
     /**
      * Données de fallback en cas d'erreur
      */
-    private function getFallbackSubStoreKpis(): array
-    {
-        return [
-            "newSubStores" => ["current" => 0, "previous" => 0, "change" => 0],
-            "activeSubStores" => ["current" => 0, "previous" => 0, "change" => 0],
-            "totalClients" => ["current" => 0, "previous" => 0, "change" => 0],
-            "estimatedRevenue" => ["current" => 0, "previous" => 0, "change" => 0]
-        ];
-    }
-
-    /**
-     * Données de fallback complètes
-     */
-    private function getFallbackSubStoreData($startDate = null, $endDate = null): array
-    {
-        $isOptimized = $startDate === null && $endDate === null;
-        
-        return [
-            "periods" => [
-                "primary" => "Période sélectionnée",
-                "comparison" => "Période de comparaison"
-            ],
-            "kpis" => $this->getFallbackSubStoreKpis(),
-            "sub_stores" => [],
-            "categoryDistribution" => [],
-            "insights" => [
-                "positive" => [$isOptimized ? "Mode optimisé activé" : "Données en cours de chargement"],
-                "negative" => [],
-                "recommendations" => ["Vérifier la connexion à la base de données"]
-            ],
-            "last_updated" => now()->toISOString(),
-            "data_source" => $isOptimized ? "fallback_optimized" : "fallback",
-            "optimization_mode" => $isOptimized ? "fallback" : "normal"
-        ];
-    }
 
     /**
      * Récupérer la distribution des catégories basée sur les marchands utilisés par les utilisateurs actifs
@@ -1049,25 +962,27 @@ class SubStoreController extends Controller
     private function getCategoryDistribution(string $startDate, string $endDate, string $selectedSubStore): array
     {
         try {
-            // Récupérer les catégories des marchands où les utilisateurs ont effectué des transactions (cohérent avec les KPIs)
-            $categories = DB::table("history")
-                ->join("client", "history.client_id", "=", "client.client_id")
-                ->join("stores", "client.sub_store", "=", "stores.store_id")
+            // Récupérer les catégories des marchands où les utilisateurs ont effectué des transactions
+            // Utiliser promotion au lieu de partner_location car partner_location_id est NULL
+            $categoriesQuery = DB::table("history")
+                ->join("client_abonnement", "history.client_abonnement_id", "=", "client_abonnement.client_abonnement_id")
+                ->join("client", "client_abonnement.client_id", "=", "client.client_id")
                 ->join("promotion", "history.promotion_id", "=", "promotion.promotion_id")
                 ->join("partner", "promotion.partner_id", "=", "partner.partner_id")
                 ->join("partner_category", "partner.partner_category_id", "=", "partner_category.partner_category_id")
                 ->select(
                     "partner_category.partner_category_name",
-                    DB::raw("COUNT(history.history_id) as utilizations")
-                )
-                ->where("stores.is_sub_store", 1)
+                    DB::raw("COUNT(DISTINCT history.history_id) as utilizations")
+                );
+            $this->applySubStoreFilter($categoriesQuery)
+                ->where("stores.store_active", 1)
                 ->whereBetween("history.time", [$startDate, Carbon::parse($endDate)->endOfDay()])
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
                 })
                 ->groupBy("partner_category.partner_category_name")
-                ->orderBy("utilizations", "desc")
-                ->get();
+                ->orderBy("utilizations", "desc");
+            $categories = $categoriesQuery->get();
 
             $total = $categories->sum('utilizations');
             
@@ -1096,21 +1011,21 @@ class SubStoreController extends Controller
             $extendedStartDate = Carbon::parse($startDate)->subMonths(11)->startOfMonth()->format('Y-m-d');
             $extendedEndDate = Carbon::parse($endDate)->endOfMonth()->format('Y-m-d');
             
-            $trend = DB::table("carte_recharge_client")
+            $trendQuery = DB::table("carte_recharge_client")
                 ->join("client", "carte_recharge_client.client_id", "=", "client.client_id")
                 ->join("stores", "client.sub_store", "=", "stores.store_id")
                 ->select(
                     DB::raw("DATE_FORMAT(client.created_at, '%Y-%m') as month"),
                     DB::raw("COUNT(DISTINCT client.client_id) as value")
-                )
-                ->where("stores.is_sub_store", 1)
+                );
+            $this->applySubStoreFilter($trendQuery)
                 ->whereBetween("client.created_at", [$extendedStartDate, Carbon::parse($extendedEndDate)->endOfDay()])
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
                 })
                 ->groupBy(DB::raw("DATE_FORMAT(client.created_at, '%Y-%m')"))
-                ->orderBy("month")
-                ->get();
+                ->orderBy("month");
+            $trend = $trendQuery->get();
 
             return $trend->map(function($item) {
                 return [
@@ -1130,8 +1045,6 @@ class SubStoreController extends Controller
     private function fetchOptimizedSubStoreData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore): array
     {
         try {
-            $startTime = microtime(true);
-            Log::info("=== MODE OPTIMISÉ SUB-STORE POUR LONGUE PÉRIODE ===");
 
             // Cache plus long pour les longues périodes (10 minutes)
             $cacheKey = 'substore_optimized_v1:' . md5($startDate . $endDate . $comparisonStartDate . $comparisonEndDate . $selectedSubStore);
@@ -1141,7 +1054,6 @@ class SubStoreController extends Controller
                 $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
                 $granularity = $periodDays > 365 ? 'month' : ($periodDays > 120 ? 'week' : 'day');
                 
-                Log::info("Granularité optimisée: $granularity pour $periodDays jours");
                 
                 // === KPIs OPTIMISÉS BASÉS SUR LES CARTES DE RECHARGE ===
                 
@@ -1306,7 +1218,8 @@ class SubStoreController extends Controller
             });
         } catch (\Throwable $th) {
             Log::error("Erreur mode optimisé sub-store: " . $th->getMessage());
-            return $this->getFallbackSubStoreData();
+            // Ne jamais retourner de fallback - propager l'erreur
+            throw $th;
         }
     }
 
@@ -1319,21 +1232,21 @@ class SubStoreController extends Controller
         try {
             $dateFormat = $granularity === 'month' ? '%Y-%m' : ($granularity === 'week' ? '%Y-%u' : '%Y-%m-%d');
             
-            $trend = DB::table("carte_recharge_client")
+            $trendQuery = DB::table("carte_recharge_client")
                 ->join("client", "carte_recharge_client.client_id", "=", "client.client_id")
                 ->join("stores", "client.sub_store", "=", "stores.store_id")
                 ->select(
                     DB::raw("DATE_FORMAT(client.created_at, '$dateFormat') as period"),
                     DB::raw("COUNT(DISTINCT client.client_id) as value")
-                )
-                ->where("stores.is_sub_store", 1)
+                );
+            $this->applySubStoreFilter($trendQuery)
                 ->whereBetween("client.created_at", [$startDate, Carbon::parse($endDate)->endOfDay()])
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
                 })
                 ->groupBy(DB::raw("DATE_FORMAT(client.created_at, '$dateFormat')"))
-                ->orderBy("period")
-                ->get();
+                ->orderBy("period");
+            $trend = $trendQuery->get();
 
             return $trend->map(function($item) use ($granularity) {
                 try {
@@ -1361,7 +1274,7 @@ class SubStoreController extends Controller
                         ];
                     }
                 } catch (\Exception $e) {
-                    Log::warning("Erreur formatage date: " . $e->getMessage() . " - Période: " . $item->period);
+                    // Erreur non critique, ignorer silencieusement
                     return [
                         'date' => $item->period,
                         'value' => $item->value
@@ -1369,7 +1282,7 @@ class SubStoreController extends Controller
                 }
             })->toArray();
         } catch (\Throwable $th) {
-            Log::warning("Erreur calcul tendance optimisée: " . $th->getMessage());
+            Log::error("Erreur calcul tendance: " . $th->getMessage());
             return [];
         }
     }
@@ -1438,7 +1351,8 @@ class SubStoreController extends Controller
                 $query = DB::table('carte_recharge_client')
                     ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                     ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                    ->where('stores.is_sub_store', 1);
+                    ;
+            $this->applySubStoreFilter($query);
                 
                 if ($selectedSubStore !== 'ALL') {
                     $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
@@ -1465,7 +1379,8 @@ class SubStoreController extends Controller
                     ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                     ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                     ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
-                    ->where('stores.is_sub_store', 1)
+                    ;
+            $this->applySubStoreFilter($query)
                     ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now());
                 
                 if ($selectedSubStore !== 'ALL') {
@@ -1490,7 +1405,8 @@ class SubStoreController extends Controller
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
-                ->where('stores.is_sub_store', 1)
+                ;
+            $this->applySubStoreFilter($query)
                 ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now())
                 ->whereBetween('client_abonnement.client_abonnement_creation', [$startDate, Carbon::parse($endDate)->endOfDay()]);
             
@@ -1525,7 +1441,8 @@ class SubStoreController extends Controller
                             ->from('carte_recharge_client')
                             ->whereRaw('carte_recharge_client.client_id = client.client_id');
                     })
-                    ->where('stores.is_sub_store', 1);
+                    ;
+            $this->applySubStoreFilter($query);
                 
                 if ($selectedSubStore !== 'ALL') {
                     $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
@@ -1549,7 +1466,9 @@ class SubStoreController extends Controller
             $query = DB::table('history')
                 ->join('client', 'history.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->where('stores.is_sub_store', 1)
+                ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id')
+                ;
+            $this->applySubStoreFilter($query)
                 ->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()]);
             
             if ($selectedSubStore !== 'ALL') {
@@ -1572,7 +1491,8 @@ class SubStoreController extends Controller
             $query = DB::table('carte_recharge_client')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->where('stores.is_sub_store', 1)
+                ;
+            $this->applySubStoreFilter($query)
                 ->whereBetween('client.created_at', [$startDate, Carbon::parse($endDate)->endOfDay()]);
             
             if ($selectedSubStore !== 'ALL') {
@@ -1592,26 +1512,10 @@ class SubStoreController extends Controller
     private function getStoreIdByName(string $storeName): ?int
     {
         try {
-            // Mapping direct pour les sub-stores connus
-            $storeMapping = [
-                'Sofrecom' => 24,
-                'Vistaprint' => 13,
-                'Enda Tamweel' => 18,
-                'ACTIA Engineering Services' => 19,
-                'Club22' => 20,
-                'OTH/OTBS_byonetech' => 21,
-                'ELEONETECH' => 22,
-            ];
-            
-            if (isset($storeMapping[$storeName])) {
-                return $storeMapping[$storeName];
-            }
-            
-            // Fallback sur la base de données
-            $store = DB::table('stores')
-                ->where('store_name', 'LIKE', "%" . $storeName . "%")
-                ->where('is_sub_store', 1)
-                ->first();
+            $query = DB::table('stores')
+                ->where('store_name', 'LIKE', "%" . $storeName . "%");
+            $this->applySubStoreFilter($query, 'stores');
+            $store = $query->first();
             
             return $store ? $store->store_id : null;
         } catch (\Exception $e) {
@@ -1642,7 +1546,8 @@ class SubStoreController extends Controller
                     DB::raw("COUNT(DISTINCT client.client_id) as total_customers"),
                     DB::raw("COUNT(DISTINCT carte_recharge.carte_recharge_id) as distributed_cards")
                 )
-                ->where("stores.is_sub_store", 1)
+                ;
+            $this->applySubStoreFilter($query)
                 ->where("stores.store_active", 1)
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
@@ -1663,7 +1568,7 @@ class SubStoreController extends Controller
                 ];
             })->toArray();
         } catch (\Throwable $th) {
-            Log::warning("Erreur calcul top sub-stores optimisé: " . $th->getMessage());
+            Log::error("Erreur calcul top sub-stores: " . $th->getMessage());
             return [];
         }
     }
@@ -1674,7 +1579,12 @@ class SubStoreController extends Controller
     private function getMerchantData(string $selectedSubStore, string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate): array
     {
         try {
-            Log::info("=== DÉBUT getMerchantData ===");
+            // Augmenter le timeout pour les requêtes complexes
+            set_time_limit(120);
+            
+            // Détecter si c'est une longue période pour optimiser
+            $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
+            $isLongPeriod = $periodDays > 90;
             
             // 1. Total Partners (actifs uniquement)
             $totalPartners = DB::table('partner')
@@ -1682,34 +1592,34 @@ class SubStoreController extends Controller
                 ->count();
             
             // 2. Active Merchants (période principale)
-            $activeMerchants = DB::table('history')
+            $activeMerchantsQuery = DB::table('history')
                 ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('promotion', 'history.promotion_id', '=', 'promotion.promotion_id')
-                ->join('partner', 'promotion.partner_id', '=', 'partner.partner_id')
-                ->where('stores.is_sub_store', 1)
+                ->join('partner', 'promotion.partner_id', '=', 'partner.partner_id');
+            $this->applySubStoreFilter($activeMerchantsQuery)
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
                 })
                 ->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()])
-                ->distinct()
-                ->count('partner.partner_id');
+                ->distinct();
+            $activeMerchants = $activeMerchantsQuery->count('partner.partner_id');
             
             // 3. Active Merchants (période comparaison)
-            $activeMerchantsComparison = DB::table('history')
+            $activeMerchantsComparisonQuery = DB::table('history')
                 ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('promotion', 'history.promotion_id', '=', 'promotion.promotion_id')
-                ->join('partner', 'promotion.partner_id', '=', 'partner.partner_id')
-                ->where('stores.is_sub_store', 1)
+                ->join('partner', 'promotion.partner_id', '=', 'partner.partner_id');
+            $this->applySubStoreFilter($activeMerchantsComparisonQuery)
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
                 })
                 ->whereBetween('history.time', [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()])
-                ->distinct()
-                ->count('partner.partner_id');
+                ->distinct();
+            $activeMerchantsComparison = $activeMerchantsComparisonQuery->count('partner.partner_id');
             
             // 4. Total Locations
             $totalLocationsActive = DB::table('partner_location')
@@ -1723,9 +1633,10 @@ class SubStoreController extends Controller
             // 6. Total Transactions (période comparaison) = Transactions Cohorte comparaison
             $totalTransactionsComparison = $this->getTransactionsWithCardsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
             
-            // 7. All Merchants avec données de comparaison (cohérent avec les KPIs)
-            $allMerchants = DB::table('history')
-                ->join('client', 'history.client_id', '=', 'client.client_id')
+            // 7. All Merchants avec données de comparaison
+            $allMerchantsQuery = DB::table('history')
+                ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
+                ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('promotion', 'history.promotion_id', '=', 'promotion.promotion_id')
                 ->join('partner', 'promotion.partner_id', '=', 'partner.partner_id')
@@ -1735,33 +1646,47 @@ class SubStoreController extends Controller
                     'partner.partner_name',
                     'partner_category.partner_category_name',
                     DB::raw('COUNT(history.history_id) as transactions_count')
-                )
-                ->where('stores.is_sub_store', 1)
+                );
+            $this->applySubStoreFilter($allMerchantsQuery)
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
                 })
                 ->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()])
                 ->groupBy('partner.partner_id', 'partner.partner_name', 'partner_category.partner_category_name')
-                ->orderByDesc('transactions_count')
-                ->get();
+                ->orderByDesc('transactions_count');
+            
+            // Limiter le nombre de résultats pour les longues périodes
+            if ($isLongPeriod) {
+                $allMerchantsQuery->limit(100); // Limiter à 100 merchants pour les longues périodes
+            }
+            
+            $allMerchants = $allMerchantsQuery->get();
 
-            // 8. Merchants période de comparaison (cohérent avec les KPIs)
-            $merchantsComparison = DB::table('history')
-                ->join('client', 'history.client_id', '=', 'client.client_id')
+            // 8. Merchants période de comparaison (optimisé pour longues périodes)
+            $merchantsComparisonQuery = DB::table('history')
+                ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
+                ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('promotion', 'history.promotion_id', '=', 'promotion.promotion_id')
                 ->join('partner', 'promotion.partner_id', '=', 'partner.partner_id')
                 ->select(
                     'partner.partner_id',
                     DB::raw('COUNT(history.history_id) as transactions_count')
-                )
-                ->where('stores.is_sub_store', 1)
+                );
+            $this->applySubStoreFilter($merchantsComparisonQuery)
                 ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
                     return $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
                 })
                 ->whereBetween('history.time', [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()])
                 ->groupBy('partner.partner_id')
-                ->pluck('transactions_count', 'partner.partner_id');
+                ->orderByDesc('transactions_count');
+            
+            // Limiter le nombre de résultats pour les longues périodes
+            if ($isLongPeriod) {
+                $merchantsComparisonQuery->limit(100); // Limiter à 100 merchants pour les longues périodes
+            }
+            
+            $merchantsComparison = $merchantsComparisonQuery->pluck('transactions_count', 'partner.partner_id');
             
             // Calculs dérivés
             $transactionsPerMerchant = $activeMerchants > 0 ? round($totalTransactions / $activeMerchants, 1) : 0;
@@ -1783,10 +1708,6 @@ class SubStoreController extends Controller
             
             // Diversity (basé sur le nombre de marchands actifs)
             $diversity = $this->calculateDiversityLevel($activeMerchants);
-            
-            Log::info("Total Partners: $totalPartners");
-            Log::info("Active Merchants: $activeMerchants");
-            Log::info("Total Transactions: $totalTransactions");
             
             return [
                 'kpis' => [
@@ -1851,7 +1772,13 @@ class SubStoreController extends Controller
             ];
             
         } catch (\Exception $e) {
-            Log::error("Erreur getMerchantData: " . $e->getMessage());
+            $errorMsg = $e->getMessage();
+            if (strpos($errorMsg, 'Maximum execution time') !== false || strpos($errorMsg, 'timeout') !== false) {
+                Log::error("TIMEOUT getMerchantData: période $startDate → $endDate ($periodDays jours)");
+            } else {
+                Log::error("Erreur getMerchantData: " . $errorMsg . " | File: " . basename($e->getFile()) . ":" . $e->getLine());
+            }
+            
             return [
                 'kpis' => [
                     'totalPartners' => ['current' => 0, 'previous' => 0, 'change' => 0],
@@ -1925,7 +1852,12 @@ class SubStoreController extends Controller
             
         } catch (\Exception $e) {
             Log::error('Erreur getUsersData: ' . $e->getMessage());
-            return response()->json(['error' => 'Erreur serveur'], 500);
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('File: ' . $e->getFile() . ' Line: ' . $e->getLine());
+            return response()->json([
+                'error' => 'Erreur serveur',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -2021,17 +1953,19 @@ class SubStoreController extends Controller
     {
         Log::info("=== DÉBUT getUsersList pour subStore: $subStore ===");
         // Requête optimisée pour éviter les blocages
-        $users = DB::table('carte_recharge_client')
+        $query = DB::table('carte_recharge_client')
             ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
             ->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->leftJoin('history', function ($join) use ($startDate, $endDate) {
                 $join->on('carte_recharge_client.client_id', '=', 'history.client_id')
                      ->whereBetween('history.time', [$startDate, $endDate]);
             })
-            ->leftJoin('client_abonnement', 'carte_recharge_client.client_id', '=', 'client_abonnement.client_id')
-            ->where('stores.is_sub_store', 1)
-            ->when($subStore !== 'ALL', function ($query) use ($subStore) {
-                return $query->where('stores.store_name', 'LIKE', "%$subStore%");
+            ->leftJoin('client_abonnement', 'carte_recharge_client.client_id', '=', 'client_abonnement.client_id');
+        
+        $this->applySubStoreFilter($query);
+        
+        $query->when($subStore !== 'ALL', function ($q) use ($subStore) {
+                return $q->where('stores.store_name', 'LIKE', "%$subStore%");
             })
             ->select([
                 'carte_recharge_client.client_id as id',
@@ -2044,9 +1978,9 @@ class SubStoreController extends Controller
                 DB::raw('CASE WHEN COUNT(DISTINCT history.history_id) > 0 THEN "active" ELSE "inactive" END as status')
             ])
             ->groupBy('carte_recharge_client.client_id', 'client.client_prenom', 'client.client_nom', 'client.client_email', 'client.created_at', 'stores.store_name')
-            ->orderBy('total_transactions', 'desc')
-            // Pas de limite pour récupérer tous les utilisateurs comme les merchants
-            ->get();
+            ->orderBy('total_transactions', 'desc');
+        
+        $users = $query->get();
 
         return $users->map(function ($user) use ($subStore) {
             // Récupérer le tarif_id du sub-store actuel pour filtrer les cartes aussi
