@@ -25,20 +25,27 @@ class TimweDiagnosticController extends Controller
      */
     public function getDiagnosticData(Request $request)
     {
-        set_time_limit(120);
-        ini_set('memory_limit', '512M');
+        set_time_limit(180);
+        ini_set('memory_limit', '1024M');
         
         try {
-            $startDate = $request->input('start_date', Carbon::now()->subDays(30)->format('Y-m-d'));
+            // Période par défaut : 7 derniers jours (au lieu de 30)
+            $startDate = $request->input('start_date', Carbon::now()->subDays(7)->format('Y-m-d'));
             $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
             $searchPhone = $request->input('search_phone');
             $deliveryCodeFilter = $request->input('delivery_code');
+            $page = $request->input('page', 1);
+            $perPage = $request->input('per_page', 50); // 50 résultats par page
             
-            Log::info("Diagnostic Timwe - Période: {$startDate} à {$endDate}");
+            Log::info("Diagnostic Timwe - Période: {$startDate} à {$endDate}, Page: {$page}");
             
             // Query de base pour les transactions Timwe
             $query = TransactionHistory::query()
                 ->join('client as c', 'transactions_history.client_id', '=', 'c.client_id')
+                ->leftJoin('client_abonnement as ca', function($join) {
+                    $join->on('c.client_id', '=', 'ca.client_id')
+                         ->whereRaw('ca.client_abonnement_id = (SELECT MIN(client_abonnement_id) FROM client_abonnement WHERE client_id = c.client_id)');
+                })
                 ->where(function($q) {
                     $q->where('transactions_history.status', 'LIKE', '%TIMWE_RENEWED%')
                       ->orWhere('transactions_history.status', 'LIKE', '%TIMWE_CHARGE%');
@@ -52,7 +59,8 @@ class TimweDiagnosticController extends Controller
                     'transactions_history.created_at',
                     'c.client_telephone',
                     'c.client_nom',
-                    'c.client_prenom'
+                    'c.client_prenom',
+                    'ca.client_abonnement_creation as subscription_date'
                 );
             
             // Filtrer par numéro si recherche (historique complet sans contrainte de date)
@@ -67,11 +75,13 @@ class TimweDiagnosticController extends Controller
                 ]);
             }
             
+            // Charger TOUTES les transactions de la période (pas de limite)
+            // La pagination sera gérée côté client pour de meilleures performances
             $transactions = $query->orderBy('transactions_history.created_at', 'DESC')
-                ->limit(10000) // Limite de sécurité
                 ->get();
             
-            Log::info("Transactions trouvées: " . $transactions->count());
+            $totalCount = $transactions->count();
+            Log::info("Transactions chargées: {$totalCount} pour la période");
             
             // Analyser les transactions
             $diagnosticData = $this->analyzeTransactions($transactions, $deliveryCodeFilter);
@@ -82,6 +92,7 @@ class TimweDiagnosticController extends Controller
                     'start' => $searchPhone ? 'Historique complet' : $startDate,
                     'end' => $searchPhone ? '' : $endDate
                 ],
+                'total_count' => $totalCount,
                 'summary' => $diagnosticData['summary'],
                 'by_phone' => $diagnosticData['by_phone'],
                 'by_delivery_code' => $diagnosticData['by_delivery_code'],
@@ -148,6 +159,7 @@ class TimweDiagnosticController extends Controller
                     'phone' => $phone,
                     'client_id' => $transaction->client_id,
                     'client_name' => trim(($transaction->client_nom ?? '') . ' ' . ($transaction->client_prenom ?? '')),
+                    'subscription_date' => $transaction->subscription_date ?? null,
                     'total_attempts' => 0,
                     'delivered' => 0,
                     'no_balance' => 0,
@@ -205,9 +217,8 @@ class TimweDiagnosticController extends Controller
                 $deliveryCodeStats[$mnoDeliveryCode]['unique_phones'][] = $phone;
             }
             
-            // Garder les 100 dernières transactions pour affichage détaillé
-            if (count($recentTransactions) < 100) {
-                $recentTransactions[] = [
+            // Garder toutes les transactions pour affichage détaillé (pagination côté client)
+            $recentTransactions[] = [
                     'transaction_id' => $transaction->transaction_history_id,
                     'date' => $transaction->created_at,
                     'phone' => $phone,
@@ -220,7 +231,6 @@ class TimweDiagnosticController extends Controller
                     'subscription_id' => $subscriptionId,
                     'is_billed' => $isBilled
                 ];
-            }
         }
         
         // Formatter les stats par delivery code
@@ -251,7 +261,7 @@ class TimweDiagnosticController extends Controller
                 'total_transactions' => $totalTransactions,
                 'unique_phones' => count($phoneStats),
                 'total_billed' => $totalBilled,
-                'billing_rate' => $totalTransactions > 0 ? round(($totalBilled / $totalTransactions) * 100, 2) : 0,
+                'billing_rate' => count($phoneStats) > 0 ? round(($totalBilled / count($phoneStats)) * 100, 2) : 0,
                 'total_revenue_tnd' => round($totalRevenue, 3),
                 'delivery_codes_count' => count($deliveryCodeStats)
             ],

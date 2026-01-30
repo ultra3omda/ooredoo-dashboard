@@ -4,25 +4,65 @@
         <table id="phoneTable">
             <thead>
                 <tr>
-                    <th>Téléphone</th>
-                    <th>Client</th>
-                    <th>Total Tentatives</th>
-                    <th>DELIVERED</th>
-                    <th>NO_BALANCE</th>
-                    <th>NOT_DELIVERED</th>
-                    <th>Autres</th>
-                    <th>Facturé (TND)</th>
-                    <th>Dernière Tentative</th>
+                    <th class="sortable" data-sort="phone" data-type="string">
+                        Téléphone <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="client_name" data-type="string">
+                        Client <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="total_attempts" data-type="number">
+                        Total Tentatives <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="delivered" data-type="number">
+                        DELIVERED <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="no_balance" data-type="number">
+                        NO_BALANCE <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="not_delivered" data-type="number">
+                        NOT_DELIVERED <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="other" data-type="number">
+                        Autres <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="total_charged_tnd" data-type="number">
+                        Facturé (TND) <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="subscription_date" data-type="date">
+                        Date Inscription <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="last_attempt" data-type="date">
+                        Dernière Tentative <span class="sort-icon">⇅</span>
+                    </th>
+                    <th style="width: 100px;">Actions</th>
                 </tr>
             </thead>
             <tbody id="phoneTableBody">
                 <tr>
-                    <td colspan="9" style="text-align: center; color: var(--muted); padding: 40px;">
+                    <td colspan="11" style="text-align: center; color: var(--muted); padding: 40px;">
                         Aucune donnée disponible
                     </td>
                 </tr>
             </tbody>
         </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div id="paginationByPhone" class="pagination-container" style="display: none;"></div>
+</div>
+
+<!-- Modal Détails Transactions -->
+<div id="phoneDetailsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📋 Détails des Transactions</h3>
+            <button class="modal-close" onclick="diagnosticApp.closePhoneDetails()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="phoneDetailsContent">
+                <p style="text-align: center; color: var(--muted); padding: 40px;">Chargement...</p>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -48,6 +88,9 @@
             </tbody>
         </table>
     </div>
+    
+    <!-- Pagination -->
+    <div id="paginationByDeliveryCode" class="pagination-container" style="display: none;"></div>
 </div>
 
 <!-- Tab: Transactions Récentes -->
@@ -73,4 +116,7 @@
             </tbody>
         </table>
     </div>
+    
+    <!-- Pagination -->
+    <div id="paginationRecentTransactions" class="pagination-container" style="display: none;"></div>
 </div>

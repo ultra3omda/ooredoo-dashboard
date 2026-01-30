@@ -373,6 +373,245 @@
                 border-bottom-color: transparent;
             }
         }
+        
+        /* Pagination */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            border-radius: 0 0 12px 12px;
+            margin-top: -12px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .pagination-info {
+            color: var(--muted);
+            font-size: 14px;
+        }
+        
+        .pagination-info strong {
+            color: var(--brand-dark);
+            font-weight: 600;
+        }
+        
+        .pagination-buttons {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .pagination-btn {
+            padding: 8px 14px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--brand-dark);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            min-width: 40px;
+            text-align: center;
+        }
+        
+        .pagination-btn:hover:not(:disabled):not(.active) {
+            background: var(--bg);
+            border-color: var(--brand-primary);
+            color: var(--brand-primary);
+        }
+        
+        .pagination-btn.active {
+            background: var(--brand-primary);
+            color: white;
+            border-color: var(--brand-primary);
+        }
+        
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: var(--bg);
+        }
+        
+        .pagination-ellipsis {
+            padding: 8px 4px;
+            color: var(--muted);
+        }
+        
+        @media (max-width: 768px) {
+            .pagination-container {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .pagination-buttons {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .pagination-btn {
+                padding: 6px 10px;
+                font-size: 12px;
+                min-width: 32px;
+            }
+        }
+        
+        /* Tri des colonnes */
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: background 0.2s;
+        }
+        
+        .sortable:hover {
+            background: var(--bg) !important;
+        }
+        
+        .sort-icon {
+            margin-left: 6px;
+            opacity: 0.3;
+            font-size: 12px;
+            transition: opacity 0.2s;
+        }
+        
+        .sortable:hover .sort-icon {
+            opacity: 0.6;
+        }
+        
+        .sortable.sorted-asc .sort-icon::before {
+            content: '↑';
+            opacity: 1;
+            color: var(--brand-primary);
+            font-weight: bold;
+        }
+        
+        .sortable.sorted-desc .sort-icon::before {
+            content: '↓';
+            opacity: 1;
+            color: var(--brand-primary);
+            font-weight: bold;
+        }
+        
+        .sortable.sorted-asc .sort-icon,
+        .sortable.sorted-desc .sort-icon {
+            opacity: 1;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s;
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: var(--card);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+            color: white;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .modal-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .btn-details {
+            background: var(--brand-primary);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .btn-details:hover {
+            background: var(--brand-secondary);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
 <body>
@@ -395,7 +634,7 @@
             <div class="filters-grid">
                 <div class="filter-group">
                     <label class="filter-label">Date Début</label>
-                    <input type="date" id="start_date" class="filter-input" value="{{ \Carbon\Carbon::now()->subDays(30)->format('Y-m-d') }}">
+                    <input type="date" id="start_date" class="filter-input" value="{{ \Carbon\Carbon::now()->subDays(7)->format('Y-m-d') }}">
                 </div>
                 <div class="filter-group">
                     <label class="filter-label">Date Fin</label>
