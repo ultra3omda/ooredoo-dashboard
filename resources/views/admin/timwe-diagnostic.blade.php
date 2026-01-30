@@ -457,13 +457,25 @@
                 <div class="summary-value" id="deliveryCodesCount">-</div>
             </div>
         </div>
-                    
-                    @include('admin.timwe-diagnostic-tabs')
-                </div>
+        
+        <!-- Tabs Container -->
+        <div id="diagnosticTabs" class="tabs-container">
+            <div class="tabs-nav">
+                <button class="tab-button active" data-tab="byPhone">
+                    📱 Par Numéro
+                </button>
+                <button class="tab-button" data-tab="byDeliveryCode">
+                    📊 Par Delivery Code
+                </button>
+                <button class="tab-button" data-tab="recentTransactions">
+                    🕐 Transactions Récentes
+                </button>
             </div>
+            
+            @include('admin.timwe-diagnostic-tabs')
         </div>
     </div>
-</div>
-
-@include('admin.timwe-diagnostic-scripts')
-@endsection
+    
+    @include('admin.timwe-diagnostic-scripts')
+</body>
+</html>
