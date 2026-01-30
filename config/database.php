@@ -60,6 +60,9 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                PDO::ATTR_TIMEOUT => 60,
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET SESSION wait_timeout=300",
             ]) : [],
         ],
 
