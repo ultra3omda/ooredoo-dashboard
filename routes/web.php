@@ -141,6 +141,11 @@ Route::middleware('auth')->group(function () {
             Route::post('/eklektik-cron/reset', [EklektikCronController::class, 'resetToDefault'])->name('eklektik-cron.reset');
         });
         
+        // Diagnostic Timwe (Super Admin et Admin)
+        Route::get('/timwe-diagnostic', [App\Http\Controllers\Admin\TimweDiagnosticController::class, 'index'])->name('timwe-diagnostic');
+        Route::get('/timwe-diagnostic/data', [App\Http\Controllers\Admin\TimweDiagnosticController::class, 'getDiagnosticData'])->name('timwe-diagnostic.data');
+        Route::get('/timwe-diagnostic/export', [App\Http\Controllers\Admin\TimweDiagnosticController::class, 'exportCsv'])->name('timwe-diagnostic.export');
+        
         // Gestion des Synchronisations Eklektik (Super Admin seulement)
         Route::middleware('check.dashboard:eklektik-config')->group(function () {
             Route::get('/eklektik-sync', [EklektikSyncController::class, 'index'])->name('eklektik.sync');
