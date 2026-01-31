@@ -1596,7 +1596,7 @@
                   @if(Auth::user()->canAccessEklektikConfig())
                   <a href="{{ route('admin.eklektik-cron') }}" class="admin-btn" style="display:block; margin:8px;">⚙️ Configuration Eklektik</a>
                   @endif
-                  <form action="{{ route('auth.logout') }}" method="POST" style="display:block; margin:8px;">
+                  <form action="{{ route('logout') }}" method="POST" style="display:block; margin:8px;">
                     @csrf
                     <button type="submit" class="logout-btn" style="width:100%;" onclick="return confirm('Êtes-vous sûr de vouloir vous déconnecter ?')">Déconnexion</button>
                   </form>
@@ -2322,7 +2322,7 @@
         
         debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
         
-        const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -2385,26 +2385,24 @@
     function initializeDashboard() {
       debugLog('🚀 Initialisation du dashboard sub-stores');
       
-      // Initialiser les dates par défaut : 3 derniers mois
+      // Période par défaut : 30 derniers jours (évite timeout sur l'onglet Users)
       const today = new Date();
-      const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 29);
       
-      // Vérifier que les dates sont valides avant de les assigner
       if (isNaN(today.getTime()) || isNaN(thirtyDaysAgo.getTime())) {
         debugError('❌ Erreur lors de la création des dates par défaut');
-        // Utiliser des dates de fallback
         document.getElementById('startDate').value = '2025-01-01';
         document.getElementById('endDate').value = '2025-01-31';
-        document.getElementById('comparisonStartDate').value = '2024-10-02';
+        document.getElementById('comparisonStartDate').value = '2024-12-01';
         document.getElementById('comparisonEndDate').value = '2024-12-31';
       } else {
-        document.getElementById('startDate').value = threeMonthsAgo.toISOString().split('T')[0];
+        document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
         document.getElementById('endDate').value = today.toISOString().split('T')[0];
-        
-        // Calculer la période de comparaison (3 mois précédents)
-        const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
-        const comparisonEnd = new Date(threeMonthsAgo.getTime() - 24 * 60 * 60 * 1000); // Veille du début de période principale
-        document.getElementById('comparisonStartDate').value = sixMonthsAgo.toISOString().split('T')[0];
+        // Période de comparaison : 30 jours précédents
+        const comparisonEnd = new Date(thirtyDaysAgo.getTime() - 24 * 60 * 60 * 1000);
+        const comparisonStart = new Date(comparisonEnd.getTime() - 29 * 24 * 60 * 60 * 1000);
+        document.getElementById('comparisonStartDate').value = comparisonStart.toISOString().split('T')[0];
         document.getElementById('comparisonEndDate').value = comparisonEnd.toISOString().split('T')[0];
       }
       
@@ -2719,7 +2717,7 @@
             controller.abort();
         }, timeoutMs);
         
-        const response = await fetch(`/sub-stores/api/dashboard/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/api/sub-store/dashboard/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
@@ -2803,11 +2801,14 @@
         debugWarn('⚠️ Pas de sub-stores dans les données');
       }
       
-      // Charger les données Users si l'onglet Users est actif
-      const activeTab = document.querySelector('.nav-tab.active');
-      if (activeTab && activeTab.textContent.includes('Users')) {
-        debugLog('👥 Onglet Users actif, chargement des données utilisateurs');
-        loadUsersData();
+      // Synchroniser la rubrique Users comme les autres : KPIs et liste depuis la réponse principale
+      if (data.users_kpis) {
+        window.usersKPIsData = { kpis: data.users_kpis, users: data.users || [] };
+        updateUsersKPIs(data.users_kpis);
+        if (data.users && Array.isArray(data.users)) {
+          updateUsersTable(data.users);
+        }
+        debugLog('✅ Données Users synchronisées depuis la réponse principale');
       }
       
       if (data.categoryDistribution) {
@@ -2826,7 +2827,7 @@
         try {
           showExpirationsSkeleton();
           const subStore = document.getElementById('subStoreSelect')?.value || 'ALL';
-          const resp = await fetch(`/sub-stores/api/expirations?sub_store=${encodeURIComponent(subStore)}`);
+          const resp = await fetch(`/api/expirations?sub_store=${encodeURIComponent(subStore)}`);
           const aux = await resp.json();
           if (aux.expirationsByMonth && aux.expirationsByMonth.length > 0) {
             createExpirationsChart(aux.expirationsByMonth);
@@ -3493,7 +3494,7 @@
     // Load available sub-stores
     async function loadSubStores() {
       try {
-        const response = await fetch('/sub-stores/api/sub-stores');
+        const response = await fetch('/api/sub-stores');
         const data = await response.json();
         
         const select = document.getElementById('subStoreSelect');
@@ -3956,7 +3957,7 @@
         
         debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
         
-        const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'

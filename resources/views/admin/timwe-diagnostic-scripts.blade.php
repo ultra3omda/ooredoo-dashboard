@@ -7,7 +7,7 @@ const diagnosticApp = {
         recentTransactions: 1
     },
     perPage: 50,
-    sortColumn: 'total_attempts',
+    sortColumn: 'lifetime_attempts',
     sortDirection: 'desc',
     
     init() {
@@ -265,6 +265,19 @@ const diagnosticApp = {
         document.getElementById('summarySection').classList.add('active');
         document.getElementById('diagnosticTabs').classList.add('active');
         
+        // Indicateur cache (comme Timwe/Ooredoo)
+        const cacheBadge = document.getElementById('cacheBadge');
+        if (cacheBadge) {
+            if (data.cached && data.cached_at) {
+                cacheBadge.style.display = 'inline-flex';
+                const d = new Date(data.cached_at);
+                cacheBadge.textContent = '📦 Données en cache (actualisé à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ')';
+                cacheBadge.title = 'Données servies depuis le cache Redis - ' + d.toLocaleString('fr-FR');
+            } else {
+                cacheBadge.style.display = 'none';
+            }
+        }
+        
         // Résumé
         document.getElementById('totalTransactions').textContent = data.summary.total_transactions.toLocaleString();
         document.getElementById('uniquePhones').textContent = data.summary.unique_phones.toLocaleString();
@@ -283,7 +296,7 @@ const diagnosticApp = {
         const tbody = document.getElementById('phoneTableBody');
         
         if (phones.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted); padding: 40px;">Aucune donnée trouvée</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; color: var(--muted); padding: 40px;">Aucune donnée trouvée</td></tr>';
             this.renderPagination('byPhone', 0, 'paginationByPhone');
             return;
         }
@@ -294,25 +307,37 @@ const diagnosticApp = {
         const endIndex = startIndex + this.perPage;
         const paginatedPhones = phones.slice(startIndex, endIndex);
         
-        tbody.innerHTML = paginatedPhones.map(phone => `
+        tbody.innerHTML = paginatedPhones.map(phone => {
+            const lifetime = phone.lifetime_attempts ?? 0;
+            const lifetimeDelivered = phone.lifetime_delivered ?? 0;
+            const lifetimeNoBalance = phone.lifetime_no_balance ?? 0;
+            const lifetimeNotDelivered = phone.lifetime_not_delivered ?? 0;
+            const lifetimeOther = phone.lifetime_other ?? 0;
+            const lifetimeCharged = (phone.lifetime_total_charged_tnd ?? 0).toFixed(3);
+            const daysLabel = (phone.days_inscription_to_last !== undefined && phone.days_inscription_to_last !== null)
+                ? String(phone.days_inscription_to_last) : '—';
+            return `
             <tr>
                 <td><strong>${phone.phone}</strong></td>
                 <td>${phone.client_name || 'N/A'}</td>
                 <td><span class="badge badge-primary">${phone.total_attempts}</span></td>
-                <td><span class="badge badge-success">${phone.delivered}</span></td>
-                <td><span class="badge badge-warning">${phone.no_balance}</span></td>
-                <td><span class="badge badge-danger">${phone.not_delivered}</span></td>
-                <td><span class="badge badge-secondary">${phone.other}</span></td>
-                <td><strong>${phone.total_charged_tnd.toFixed(3)} TND</strong></td>
+                <td><span class="badge badge-info" title="Toutes périodes">${lifetime}</span></td>
+                <td><strong>${daysLabel}</strong></td>
+                <td><span class="badge badge-success">${lifetimeDelivered}</span></td>
+                <td><span class="badge badge-warning">${lifetimeNoBalance}</span></td>
+                <td><span class="badge badge-danger">${lifetimeNotDelivered}</span></td>
+                <td><span class="badge badge-secondary">${lifetimeOther}</span></td>
+                <td><strong>${lifetimeCharged} TND</strong></td>
                 <td><small>${phone.subscription_date ? new Date(phone.subscription_date).toLocaleString('fr-FR') : '<span style="color: var(--muted);">N/A</span>'}</small></td>
-                <td><small>${new Date(phone.last_attempt).toLocaleString('fr-FR')}</small></td>
+                <td><small>${phone.last_attempt ? new Date(phone.last_attempt).toLocaleString('fr-FR') : '—'}</small></td>
                 <td>
-                    <button class="btn-details" onclick="diagnosticApp.showPhoneDetails('${phone.phone}')">
+                    <button class="btn-details" onclick="diagnosticApp.showPhoneDetails('${phone.phone.replace(/'/g, "\\'")}')">
                         👁 Détails
                     </button>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
         
         // Render pagination
         this.renderPagination('byPhone', phones.length, 'paginationByPhone');
@@ -421,24 +446,62 @@ const diagnosticApp = {
     },
     
     showPhoneDetails(phone) {
-        if (!this.data || !this.data.recent_transactions) return;
+        if (!this.data || !this.data.by_phone) return;
         
-        // Filtrer les transactions pour ce numéro
-        const phoneTransactions = this.data.recent_transactions.filter(tx => tx.phone === phone);
-        
-        if (phoneTransactions.length === 0) {
-            alert('Aucune transaction trouvée pour ce numéro');
+        const phoneEntry = this.data.by_phone.find(p => p.phone === phone);
+        if (!phoneEntry) {
+            alert('Numéro non trouvé');
             return;
         }
         
-        // Construire le contenu HTML
+        const l = phoneEntry;
+        const lifetimeAttempts = l.lifetime_attempts ?? 0;
+        const lifetimeDelivered = l.lifetime_delivered ?? 0;
+        const lifetimeNoBalance = l.lifetime_no_balance ?? 0;
+        const lifetimeNotDelivered = l.lifetime_not_delivered ?? 0;
+        const lifetimeOther = l.lifetime_other ?? 0;
+        const lifetimeCharged = (l.lifetime_total_charged_tnd ?? 0).toFixed(3);
+        const daysInscriptionToLast = (l.days_inscription_to_last !== undefined && l.days_inscription_to_last !== null)
+            ? l.days_inscription_to_last : (() => {
+                const sub = l.subscription_date ? new Date(l.subscription_date) : null;
+                const last = (l.lifetime_last_attempt || l.last_attempt) ? new Date(l.lifetime_last_attempt || l.last_attempt) : null;
+                if (sub && last && !isNaN(sub.getTime()) && !isNaN(last.getTime())) {
+                    const d = Math.floor((last - sub) / (1000 * 60 * 60 * 24));
+                    return d >= 0 ? d : null;
+                }
+                return null;
+            })();
+        const daysLabel = daysInscriptionToLast !== null ? daysInscriptionToLast + ' jour(s)' : '—';
+        
         let html = `
             <div style="margin-bottom: 20px;">
-                <h4 style="color: var(--brand-primary); margin-bottom: 8px;">📱 ${phone}</h4>
-                <p style="color: var(--muted);">Total : <strong>${phoneTransactions.length}</strong> transaction(s)</p>
+                <h4 style="color: var(--brand-primary); margin-bottom: 12px;">📱 ${phone}</h4>
+                ${phoneEntry.client_name ? `<p style="color: var(--muted); margin-bottom: 12px;">${phoneEntry.client_name}</p>` : ''}
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                    <div class="card" style="padding: 12px; border: 1px solid var(--border); border-radius: 8px;">
+                        <strong style="color: var(--muted); font-size: 12px;">Tentatives lifetime</strong>
+                        <p style="font-size: 20px; font-weight: bold; margin: 4px 0;">${lifetimeAttempts}</p>
+                        <div style="font-size: 12px; color: var(--muted);">
+                            DELIVERED: <strong>${lifetimeDelivered}</strong> · NO_BALANCE: <strong>${lifetimeNoBalance}</strong> · NOT_DELIVERED: <strong>${lifetimeNotDelivered}</strong> · Autres: <strong>${lifetimeOther}</strong>
+                        </div>
+                        <div style="font-size: 12px; margin-top: 4px;">Facturé lifetime: <strong>${lifetimeCharged} TND</strong></div>
+                        <div style="font-size: 12px; margin-top: 4px;">Nb jours (inscription → dernière tentative): <strong>${daysLabel}</strong></div>
+                    </div>
+                    <div class="card" style="padding: 12px; border: 1px solid var(--border); border-radius: 8px;">
+                        <strong style="color: var(--muted); font-size: 12px;">Tentatives (période)</strong>
+                        <p style="font-size: 20px; font-weight: bold; margin: 4px 0;">${l.total_attempts}</p>
+                        <div style="font-size: 12px; color: var(--muted);">
+                            DELIVERED: <strong>${l.delivered}</strong> · NO_BALANCE: <strong>${l.no_balance}</strong> · NOT_DELIVERED: <strong>${l.not_delivered}</strong> · Autres: <strong>${l.other}</strong>
+                        </div>
+                        <div style="font-size: 12px; margin-top: 4px;">Facturé (période): <strong>${(l.total_charged_tnd || 0).toFixed(3)} TND</strong></div>
+                    </div>
+                </div>
+                
+                <p style="color: var(--muted); margin-bottom: 8px;">Détail des transactions <strong>lifetime</strong> :</p>
             </div>
             
-            <div class="table-container" style="max-height: 60vh; overflow-y: auto;">
+            <div class="table-container" style="max-height: 50vh; overflow-y: auto;">
                 <table style="font-size: 13px;">
                     <thead>
                         <tr>
@@ -449,30 +512,8 @@ const diagnosticApp = {
                             <th>Transaction ID</th>
                         </tr>
                     </thead>
-                    <tbody>
-        `;
-        
-        phoneTransactions.forEach(tx => {
-            const badgeClass = tx.delivery_code === 'DELIVERED' ? 'badge-success' : 
-                              tx.delivery_code === 'NO_BALANCE' ? 'badge-warning' : 
-                              tx.delivery_code === 'NOT_DELIVERED' ? 'badge-danger' : 'badge-secondary';
-            
-            html += `
-                <tr>
-                    <td><small>${new Date(tx.date).toLocaleString('fr-FR')}</small></td>
-                    <td><span class="badge ${badgeClass}">${tx.delivery_code}</span></td>
-                    <td><strong>${tx.total_charged_tnd.toFixed(3)} TND</strong></td>
-                    <td>
-                        <span class="badge ${tx.is_billed ? 'badge-success' : 'badge-secondary'}">
-                            ${tx.is_billed ? '✓ Facturé' : '✗ Non facturé'}
-                        </span>
-                    </td>
-                    <td><code style="font-size: 11px;">#${tx.transaction_id}</code></td>
-                </tr>
-            `;
-        });
-        
-        html += `
+                    <tbody id="phoneDetailsLifetimeBody">
+                        <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">Chargement des transactions lifetime...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -480,6 +521,47 @@ const diagnosticApp = {
         
         document.getElementById('phoneDetailsContent').innerHTML = html;
         document.getElementById('phoneDetailsModal').classList.add('active');
+        
+        const encodedPhone = encodeURIComponent(phone);
+        fetch(`/admin/timwe-diagnostic/phone/${encodedPhone}/transactions`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('phoneDetailsLifetimeBody');
+                if (!tbody) return;
+                if (!data.success || !data.transactions) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger); padding: 24px;">Erreur lors du chargement</td></tr>';
+                    return;
+                }
+                const transactions = data.transactions;
+                if (transactions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">Aucune transaction lifetime</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = transactions.map(tx => {
+                    const badgeClass = tx.delivery_code === 'DELIVERED' ? 'badge-success' : 
+                                      tx.delivery_code === 'NO_BALANCE' ? 'badge-warning' : 
+                                      tx.delivery_code === 'NOT_DELIVERED' ? 'badge-danger' : 'badge-secondary';
+                    return `
+                    <tr>
+                        <td><small>${new Date(tx.date).toLocaleString('fr-FR')}</small></td>
+                        <td><span class="badge ${badgeClass}">${tx.delivery_code}</span></td>
+                        <td><strong>${(tx.total_charged_tnd || 0).toFixed(3)} TND</strong></td>
+                        <td>
+                            <span class="badge ${tx.is_billed ? 'badge-success' : 'badge-secondary'}">
+                                ${tx.is_billed ? '✓ Facturé' : '✗ Non facturé'}
+                            </span>
+                        </td>
+                        <td><code style="font-size: 11px;">#${tx.transaction_id}</code></td>
+                    </tr>
+                `;
+                }).join('');
+                const periodLabel = document.querySelector('#phoneDetailsContent p[style*="Détail des transactions"]');
+                if (periodLabel) periodLabel.innerHTML = 'Détail des transactions <strong>lifetime</strong> : <strong>' + transactions.length + '</strong> transaction(s)';
+            })
+            .catch(err => {
+                const tbody = document.getElementById('phoneDetailsLifetimeBody');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger); padding: 24px;">Erreur réseau</td></tr>';
+            });
     },
     
     closePhoneDetails() {

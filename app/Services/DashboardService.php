@@ -338,6 +338,14 @@ class DashboardService
         $ooredooStats['ooredoo_monthly_stats'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics']);
         $ooredooStats['ooredoo_monthly_stats_comparison'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics_comparison']);
         
+        // Timwe : au niveau racine pour que les onglets Timwe/Ooredoo affichent les données
+        $timweStats = [
+            'timwe_monthly_stats' => $subscriptions['timwe_monthly_stats'] ?? [],
+            'timwe_monthly_stats_comparison' => $subscriptions['timwe_monthly_stats_comparison'] ?? [],
+            'daily_statistics' => $subscriptions['daily_statistics'] ?? [],
+            'daily_statistics_comparison' => $subscriptions['daily_statistics_comparison'] ?? []
+        ];
+        
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
         
         // Log pour déboguer les KPIs Timwe/Ooredoo et Analyses Avancées
@@ -366,6 +374,7 @@ class DashboardService
             "transactions" => $transactions,
             "subscriptions" => $subscriptions,
             "ooredoo_stats" => $ooredooStats,
+            "timwe_stats" => $timweStats,
             "insights" => $this->generateInsights($kpis, $merchants['data']),
             "last_updated" => now()->toISOString(),
             "data_source" => "optimized_database",
@@ -827,17 +836,28 @@ class DashboardService
         // Récupérer les données d'abonnements avec activations quotidiennes
         $subscriptions = $this->getSubscriptionsData($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive);
         
+        // Ooredoo/DGV et Timwe : nécessaires pour les onglets (période longue)
+        $ooredooStats = [
+            'daily_statistics' => $this->getOoredooDailyStatistics($startBound, $endExclusive),
+            'daily_statistics_comparison' => $this->getOoredooDailyStatistics($compStartBound, $compEndExclusive)
+        ];
+        $ooredooStats['ooredoo_monthly_stats'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics']);
+        $ooredooStats['ooredoo_monthly_stats_comparison'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics_comparison']);
+        
+        $timweStats = [
+            'timwe_monthly_stats' => $subscriptions['timwe_monthly_stats'] ?? [],
+            'timwe_monthly_stats_comparison' => $subscriptions['timwe_monthly_stats_comparison'] ?? [],
+            'daily_statistics' => $subscriptions['daily_statistics'] ?? [],
+            'daily_statistics_comparison' => $subscriptions['daily_statistics_comparison'] ?? []
+        ];
+        
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
         
         // Log pour déboguer les KPIs Timwe et Analyses Avancées
-        Log::info("getStandardDashboardData - KPIs retournés", [
+        Log::info("getOptimizedDashboardData - KPIs retournés", [
             'billingRateTimwe' => $kpis['billingRateTimwe'] ?? 'missing',
-            'totalTimweClients' => $kpis['totalTimweClients'] ?? 'missing',
             'totalTimweBillings' => $kpis['totalTimweBillings'] ?? 'missing',
             'has_activations_by_channel' => isset($subscriptions['activations_by_channel']),
-            'has_plan_distribution' => isset($subscriptions['plan_distribution']),
-            'has_renewal_rate' => isset($subscriptions['renewal_rate']),
-            'has_average_lifespan' => isset($subscriptions['average_lifespan']),
             'cohorts_count' => isset($subscriptions['cohorts']) ? count($subscriptions['cohorts']) : 0
         ]);
         
@@ -851,6 +871,8 @@ class DashboardService
             "categoryDistribution" => $merchants['categories'],
             "transactions" => $transactions,
             "subscriptions" => $subscriptions,
+            "ooredoo_stats" => $ooredooStats,
+            "timwe_stats" => $timweStats,
             "insights" => [
                 "positive" => ["Mode optimisé activé pour période étendue"],
                 "challenges" => ["Analyse détaillée limitée pour optimiser les performances"],

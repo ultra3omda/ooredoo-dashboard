@@ -24,8 +24,8 @@
                            href="{{ route('admin.eklektik.sync') }}" role="tab">
                             🔄 Gestion des Synchronisations
                         </a>
-                        <a class="nav-item nav-link {{ request()->routeIs('admin.eklektik.sync-tracking') ? 'active' : '' }}" 
-                           href="{{ route('admin.eklektik.sync-tracking') }}" role="tab">
+                        <a class="nav-item nav-link {{ request()->routeIs('admin.eklektik.sync.tracking') ? 'active' : '' }}" 
+                           href="{{ route('admin.eklektik.sync.tracking') }}" role="tab">
                             📈 Suivi des Synchronisations
                         </a>
                         <a class="nav-item nav-link" 

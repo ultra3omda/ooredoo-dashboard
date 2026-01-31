@@ -11,21 +11,27 @@
                         Client <span class="sort-icon">⇅</span>
                     </th>
                     <th class="sortable" data-sort="total_attempts" data-type="number">
-                        Total Tentatives <span class="sort-icon">⇅</span>
+                        Tentatives (période) <span class="sort-icon">⇅</span>
                     </th>
-                    <th class="sortable" data-sort="delivered" data-type="number">
+                    <th class="sortable" data-sort="lifetime_attempts" data-type="number">
+                        Tentatives lifetime <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="days_inscription_to_last" data-type="number" title="Jours entre date d'inscription et dernière tentative">
+                        Nb jours <span class="sort-icon">⇅</span>
+                    </th>
+                    <th class="sortable" data-sort="lifetime_delivered" data-type="number" title="Lifetime">
                         DELIVERED <span class="sort-icon">⇅</span>
                     </th>
-                    <th class="sortable" data-sort="no_balance" data-type="number">
+                    <th class="sortable" data-sort="lifetime_no_balance" data-type="number" title="Lifetime">
                         NO_BALANCE <span class="sort-icon">⇅</span>
                     </th>
-                    <th class="sortable" data-sort="not_delivered" data-type="number">
+                    <th class="sortable" data-sort="lifetime_not_delivered" data-type="number" title="Lifetime">
                         NOT_DELIVERED <span class="sort-icon">⇅</span>
                     </th>
-                    <th class="sortable" data-sort="other" data-type="number">
+                    <th class="sortable" data-sort="lifetime_other" data-type="number" title="Lifetime">
                         Autres <span class="sort-icon">⇅</span>
                     </th>
-                    <th class="sortable" data-sort="total_charged_tnd" data-type="number">
+                    <th class="sortable" data-sort="lifetime_total_charged_tnd" data-type="number" title="Lifetime">
                         Facturé (TND) <span class="sort-icon">⇅</span>
                     </th>
                     <th class="sortable" data-sort="subscription_date" data-type="date">
@@ -39,7 +45,7 @@
             </thead>
             <tbody id="phoneTableBody">
                 <tr>
-                    <td colspan="11" style="text-align: center; color: var(--muted); padding: 40px;">
+                    <td colspan="13" style="text-align: center; color: var(--muted); padding: 40px;">
                         Aucune donnée disponible
                     </td>
                 </tr>

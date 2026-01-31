@@ -2014,14 +2014,18 @@
             @endif
             <a href="{{ route('password.change') }}" class="admin-btn" style="display:block; margin:8px;">🔒 Mot de passe</a>
             @if(Auth::user()->canAccessSubStoresDashboard())
-            <a href="{{ route('sub-stores.dashboard') }}" class="admin-btn" style="display:block; margin:8px;">🏪 Sub-Stores</a>
+            <a href="{{ route('sub-stores.dashboard', ['storeType' => 'eklektik']) }}" class="admin-btn" style="display:block; margin:8px;">🏪 Sub-Stores</a>
             @endif
             @if(Auth::user()->canAccessEklektikConfig())
             <a href="{{ route('admin.eklektik-cron') }}" class="admin-btn" style="display:block; margin:8px;">⚙️ Configuration Eklektik</a>
-            <a href="{{ route('admin.eklektik.sync') }}" class="admin-btn" style="display:block; margin:8px;">🔄 Gestion des Synchronisations</a>
-            <a href="{{ route('admin.eklektik.sync-tracking') }}" class="admin-btn" style="display:block; margin:8px;">📈 Suivi des Synchronisations</a>
+            <a href="{{ route('admin.eklektik.sync.tracking') }}" class="admin-btn" style="display:block; margin:8px;">🔄 Gestion des Synchronisations</a>
+            <a href="{{ route('admin.eklektik.sync.tracking') }}" class="admin-btn" style="display:block; margin:8px;">📈 Suivi des Synchronisations</a>
             @endif
-            <form action="{{ route('auth.logout') }}" method="POST" style="display:block; margin:8px;">
+            @if(Auth::user()->isSuperAdmin())
+            <a href="{{ route('admin.ml.dashboard') }}" class="admin-btn" style="display:block; margin:8px; background: linear-gradient(45deg, #667eea 0%, #764ba2 100%); color: white; font-weight: bold;">🤖 ML Dashboard</a>
+            @endif
+            
+            <form action="{{ route('logout') }}" method="POST" style="display:block; margin:8px;">
               @csrf
               <button type="submit" class="logout-btn" style="width:100%;" onclick="return confirm('Êtes-vous sûr de vouloir vous déconnecter ?')">Déconnexion</button>
             </form>
@@ -2079,10 +2083,13 @@
         centerActiveTab(event.target);
       }
       
-      // Ne pas recharger les données Eklektik à chaque visite d'onglet
-      // (les données se chargent en une seule fois au démarrage ou via le bouton d'actualisation)
+      // Charger les données Eklektik et les graphiques à l'ouverture de l'onglet
       if (tabName === 'eklektik') {
-        console.log('📞 Onglet Eklektik activé (sans rechargement des données)');
+        if (typeof loadEklektikData === 'function') loadEklektikData();
+        // Charger les graphiques Eklektik après que l'onglet soit visible (canvas avec dimensions)
+        if (typeof window.loadEklektikCharts === 'function') {
+          setTimeout(function() { window.loadEklektikCharts(); }, 400);
+        }
       }
       
       // Resize charts when tab becomes visible
@@ -2724,86 +2731,84 @@
       </div>
     </div>
 
-    <!-- Tab 5: Eklektik Integration -->
+    <!-- Tab Eklektik (même structure que Timwe / Ooredoo) -->
     @if(Auth::user()->canViewEklektikSection())
     <div id="eklektik" class="tab-content">
 
-
-      <!-- Statistiques Eklektik KPIs - 8 KPIs sur 2 lignes -->
+      <!-- KPIs Eklektik - 2 lignes comme Timwe/Ooredoo -->
       <div class="grid">
-        <!-- Première ligne - 4 KPIs -->
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Revenus TTC <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus totaux TTC générés via Eklektik">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-revenue-ttc">Loading...</div>
-          <div class="kpi-delta" id="eklektik-revenue-ttc-delta">Loading...</div>
+          <div class="kpi-value" id="eklektik-revenue-ttc">—</div>
+          <div class="kpi-delta" id="eklektik-revenue-ttc-delta">—</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Revenus HT <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus hors taxes calculés selon les formules par opérateur">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-revenue-ht">Loading...</div>
-          <div class="kpi-delta" id="eklektik-revenue-ht-delta">Loading...</div>
+          <div class="kpi-value" id="eklektik-revenue-ht">—</div>
+          <div class="kpi-delta" id="eklektik-revenue-ht-delta">—</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">CA BigDeal <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Chiffre d'affaires BigDeal (part des revenus)">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-ca-bigdeal">Loading...</div>
-          <div class="kpi-delta" id="eklektik-ca-bigdeal-delta">Loading...</div>
+          <div class="kpi-value" id="eklektik-ca-bigdeal">—</div>
+          <div class="kpi-delta" id="eklektik-ca-bigdeal-delta">—</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Active Subs <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre d'abonnés actifs">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-active-subs">Loading...</div>
-          <div class="kpi-delta" id="eklektik-active-subs-delta">Loading...</div>
+          <div class="kpi-value" id="eklektik-active-subs">—</div>
+          <div class="kpi-delta" id="eklektik-active-subs-delta">—</div>
         </div>
       </div>
 
       <div class="grid">
-        <!-- Deuxième ligne - 4 KPIs -->
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Nouveaux Abonnements <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nouveaux abonnements créés">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-new-subscriptions">Loading...</div>
-          <div class="kpi-delta" id="eklektik-new-subscriptions-delta">Loading...</div>
+          <div class="kpi-value" id="eklektik-new-subscriptions">—</div>
+          <div class="kpi-delta" id="eklektik-new-subscriptions-delta">—</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Désabonnements <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de désabonnements">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-unsubscriptions">Loading...</div>
-          <div class="kpi-delta" id="eklektik-unsubscriptions-delta">Loading...</div>
+          <div class="kpi-value" id="eklektik-unsubscriptions">—</div>
+          <div class="kpi-delta" id="eklektik-unsubscriptions-delta">—</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Simchurn <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Perte d'abonnés (Simchurn)">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-simchurn">Loading...</div>
-          <div class="kpi-delta" id="eklektik-simchurn-delta">Loading...</div>
+          <div class="kpi-value" id="eklektik-simchurn">—</div>
+          <div class="kpi-delta" id="eklektik-simchurn-delta">—</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Abonnements Facturés <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total d'abonnements facturés">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-facturation">Loading...</div>
-          <div class="kpi-delta" id="eklektik-facturation-delta">Loading...</div>
+          <div class="kpi-value" id="eklektik-facturation">—</div>
+          <div class="kpi-delta" id="eklektik-facturation-delta">—</div>
         </div>
       </div>
 
-      <!-- Graphiques Eklektik - Utilisation du composant optimisé -->
+      <!-- Statistiques Eklektik (graphiques) - même style que "Statistiques Quotidiennes Timwe" -->
       <div class="grid">
         <div class="card" style="grid-column: span 12;">
           <div class="chart-title">
-            📊 Graphiques Eklektik Optimisés
-            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Graphiques Eklektik optimisés pour éliminer le sautillement">ⓘ</span>
+            📊 Statistiques Eklektik
+            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Graphiques et indicateurs Eklektik sur la période sélectionnée">ⓘ</span>
           </div>
-          {{-- Utiliser le composant graphiques Eklektik --}}
           <x-eklektik-charts />
         </div>
       </div>
 
+      <!-- Répartition par Opérateur - même style carte que Timwe/Ooredoo -->
       <div class="grid">
-        <div class="card" style="grid-column: span 6;">
+        <div class="card" style="grid-column: span 12;">
           <div class="chart-title">
-            📊 Statistiques par Opérateur
-            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Détails des statistiques par opérateur">ⓘ</span>
+            📊 Répartition par Opérateur
+            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Détails des statistiques par opérateur Eklektik">ⓘ</span>
           </div>
-          <div id="eklektik-operators-stats" style="max-height: 200px; overflow-y: auto;">
-            <div class="text-center" style="padding: 20px;">
-              <i class="fas fa-spinner fa-spin"></i> Chargement...
+          <div class="table-container" style="max-height: 320px; overflow-y: auto;">
+            <div id="eklektik-operators-stats" style="padding: 0;">
+              <div class="text-center" style="padding: 24px; color: var(--muted);">
+                <span class="loading-spinner">Chargement...</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
 
     </div>
     @endif
@@ -3223,50 +3228,44 @@
       }
     });
 
-    // Fonction pour afficher les états de chargement des KPIs
+    // Fonction pour afficher les états de chargement des KPIs Eklektik (ids = eklektik-*)
     function showEklektikStatsLoading() {
       const elements = [
-        'kpi-revenue-ttc',
-        'kpi-revenue-ht',
-        'kpi-ca-bigdeal',
-        'kpi-bigdeal-percentage'
+        'eklektik-revenue-ttc', 'eklektik-revenue-ht', 'eklektik-ca-bigdeal', 'eklektik-active-subs',
+        'eklektik-new-subscriptions', 'eklektik-unsubscriptions', 'eklektik-simchurn', 'eklektik-facturation'
       ];
-
       elements.forEach(id => {
-        const element = document.getElementById(id);
-        if (element) {
-          element.innerHTML = '<div class="loading-spinner">🔄</div>';
-        }
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<span class="loading-spinner">🔄</span>';
       });
     }
 
-    // Fonction pour afficher les erreurs des KPIs
+    // Fonction pour afficher les erreurs des KPIs Eklektik
     function showEklektikStatsError() {
       const elements = [
-        'kpi-revenue-ttc',
-        'kpi-revenue-ht',
-        'kpi-ca-bigdeal',
-        'kpi-bigdeal-percentage'
+        'eklektik-revenue-ttc', 'eklektik-revenue-ht', 'eklektik-ca-bigdeal', 'eklektik-active-subs',
+        'eklektik-new-subscriptions', 'eklektik-unsubscriptions', 'eklektik-simchurn', 'eklektik-facturation'
       ];
-
       elements.forEach(id => {
-        const element = document.getElementById(id);
-        if (element) {
-          element.innerHTML = '<span class="error-text">❌ Erreur</span>';
-        }
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<span class="error-text">—</span>';
       });
     }
 
-    // Charger les données Eklektik (sera définie plus tard)
+    // Charger les données Eklektik (utilise la période principale du dashboard si disponible)
     async function loadEklektikData() {
       console.log('🔄 Chargement des données Eklektik...');
-
-      // Afficher l'état de chargement
       showEklektikStatsLoading();
 
+      const startEl = document.getElementById('start-date');
+      const endEl = document.getElementById('end-date');
+      let kpisUrl = '/api/eklektik-dashboard/kpis';
+      if (startEl?.value && endEl?.value) {
+        kpisUrl += '?start_date=' + encodeURIComponent(startEl.value) + '&end_date=' + encodeURIComponent(endEl.value);
+      }
+
       try {
-        // Charger les KPIs
-        const kpisResponse = await fetch('/api/eklektik-dashboard/kpis');
+        const kpisResponse = await fetch(kpisUrl, { credentials: 'same-origin' });
         const kpisData = await kpisResponse.json();
 
         if (kpisData.success) {
@@ -3276,8 +3275,12 @@
           showEklektikStatsError();
         }
 
-        // Charger les statistiques par opérateur
-        const operatorsResponse = await fetch('/api/eklektik-dashboard/revenue-distribution');
+        // Charger les statistiques par opérateur (même période)
+        let distUrl = '/api/eklektik-dashboard/revenue-distribution';
+        if (startEl?.value && endEl?.value) {
+          distUrl += '?start_date=' + encodeURIComponent(startEl.value) + '&end_date=' + encodeURIComponent(endEl.value);
+        }
+        const operatorsResponse = await fetch(distUrl, { credentials: 'same-origin' });
         const operatorsData = await operatorsResponse.json();
 
         if (operatorsData.success) {
@@ -3292,36 +3295,36 @@
       }
     }
 
-    // Mettre à jour l'affichage des statistiques Eklektik
+    // Mettre à jour l'affichage des statistiques Eklektik (API retourne un objet plat : total_revenue_ttc, etc.)
     function updateEklektikStatsDisplay(data) {
       console.log('📊 Mise à jour des KPIs Eklektik:', data);
+      if (!data) return;
 
-      // Mettre à jour les éléments KPI avec les données
-      if (data && data.kpis) {
-        // Revenue TTC
-        const revenueTtcElement = document.getElementById('kpi-revenue-ttc');
-        if (revenueTtcElement && data.kpis.total_revenue_ttc !== undefined) {
-          revenueTtcElement.innerHTML = formatNumber(data.kpis.total_revenue_ttc) + ' €';
-        }
+      const fmt = (v) => (v !== undefined && v !== null ? formatNumber(v) : '0');
+      const set = (id, value, suffix = ' TND') => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = (value !== undefined && value !== null ? formatNumber(value) : '0') + suffix;
+      };
+      const setInt = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = (value !== undefined && value !== null ? formatNumber(Math.round(value)) : '0');
+      };
 
-        // Revenue HT
-        const revenueHtElement = document.getElementById('kpi-revenue-ht');
-        if (revenueHtElement && data.kpis.total_revenue_ht !== undefined) {
-          revenueHtElement.innerHTML = formatNumber(data.kpis.total_revenue_ht) + ' €';
-        }
+      set('eklektik-revenue-ttc', data.total_revenue_ttc, ' TND');
+      set('eklektik-revenue-ht', data.total_revenue_ht, ' TND');
+      set('eklektik-ca-bigdeal', data.total_ca_bigdeal, ' TND');
+      setInt('eklektik-active-subs', data.total_active_subscribers);
+      setInt('eklektik-new-subscriptions', data.total_new_subscriptions);
+      setInt('eklektik-unsubscriptions', data.total_unsubscriptions);
+      setInt('eklektik-simchurn', data.total_simchurn);
+      setInt('eklektik-facturation', data.total_facturation);
 
-        // CA BigDeal
-        const caBigdealElement = document.getElementById('kpi-ca-bigdeal');
-        if (caBigdealElement && data.kpis.total_facturation !== undefined) {
-          caBigdealElement.innerHTML = formatNumber(data.kpis.total_facturation) + ' €';
-        }
-
-        // Pourcentage BigDeal
-        const bigdealPercentageElement = document.getElementById('kpi-bigdeal-percentage');
-        if (bigdealPercentageElement && data.kpis.bigdeal_percentage !== undefined) {
-          bigdealPercentageElement.innerHTML = data.kpis.bigdeal_percentage.toFixed(1) + '%';
-        }
-      }
+      // Deltas (comparaison) : afficher "—" si non fournis par l'API
+      ['eklektik-revenue-ttc-delta', 'eklektik-revenue-ht-delta', 'eklektik-ca-bigdeal-delta', 'eklektik-active-subs-delta',
+       'eklektik-new-subscriptions-delta', 'eklektik-unsubscriptions-delta', 'eklektik-simchurn-delta', 'eklektik-facturation-delta'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !data.delta_period) el.textContent = '—';
+      });
     }
 
     // Mobile-optimized chart options with enhanced 5-breakpoint system
@@ -5400,7 +5403,7 @@
         const endDateObj = new Date(endDate);
         const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24));
         
-        // Build API URL with date parameters
+        // Build API URL (route /api/dashboard/data - api.php avec session via EnsureFrontendRequestsAreStateful)
         let apiUrl = '/api/dashboard/data';
         const params = new URLSearchParams();
         
@@ -6183,11 +6186,15 @@
       }
       
       // Debounce de 800ms sur les changements de dates
-      // L'utilisateur doit cliquer sur "Actualiser" pour charger
       clearTimeout(dateChangeDebounceTimer);
       dateChangeDebounceTimer = setTimeout(() => {
         if (periodDays > 0) {
           console.log(`✅ Dates mises à jour (${periodDays}j) - Cliquez sur "Actualiser" pour charger`);
+          // Si l'onglet Eklektik est actif, recharger ses données (KPIs + répartition opérateurs)
+          if (document.getElementById('eklektik')?.classList.contains('active') && typeof loadEklektikData === 'function') {
+            loadEklektikData();
+            if (typeof window.loadEklektikCharts === 'function') setTimeout(window.loadEklektikCharts, 500);
+          }
         }
       }, 800);
       
@@ -6441,14 +6448,14 @@
       // Taux de churn doit utiliser la valeur churnRate
       updateKPI('sub-retentionRateTrue', normalizeKPI(kpis?.churnRate), '%');
       
-      // Timwe Tab KPIs (super admin uniquement)
-      if (kpis?.billingRateTimwe) {
+      // Timwe Tab KPIs (super admin uniquement) - afficher dès qu'on a des stats ou des KPIs
+      const timweStats = dashboardData?.timwe_stats?.timwe_monthly_stats || dashboardData?.subscriptions?.timwe_monthly_stats;
+      if (kpis?.billingRateTimwe || timweStats) {
         updateKPI('timwe-billing-rate', normalizeKPI(kpis?.billingRateTimwe), '%');
         updateKPI('timwe-total-billings', normalizeKPI(kpis?.totalTimweBillings));
         
         // Récupérer les statistiques mensuelles groupées Timwe depuis les données du dashboard
         // Support mode light (timwe_stats au niveau racine) et mode complet (subscriptions.timwe_monthly_stats)
-        const timweStats = dashboardData?.timwe_stats?.timwe_monthly_stats || dashboardData?.subscriptions?.timwe_monthly_stats;
         if (timweStats) {
           updateTimweStatisticsTable(timweStats);
           

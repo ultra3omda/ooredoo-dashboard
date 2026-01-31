@@ -166,6 +166,16 @@
             cursor: not-allowed;
         }
         
+        .cache-badge {
+            font-size: 12px;
+            color: var(--muted);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
         /* Loading */
         .loading {
             display: none;
@@ -656,7 +666,7 @@
                 </div>
             </div>
             
-            <div style="display: flex; gap: 12px; align-items: center;">
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                 <button id="btnSearch" class="btn btn-primary">
                     🔍 Rechercher
                 </button>
@@ -665,6 +675,9 @@
                 </button>
                 <span id="loadingIndicator" class="loading">
                     ⏳ Chargement...
+                </span>
+                <span id="cacheBadge" class="cache-badge" style="display: none;" title="Données servies depuis le cache Redis">
+                    📦 Données en cache
                 </span>
             </div>
         </div>

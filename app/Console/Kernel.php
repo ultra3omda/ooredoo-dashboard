@@ -47,6 +47,10 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/ooredoo-stats.log'));
+
+            // Métriques ML (ml_model_performance) - Chaque jour à 3h
+            // Décommenter pour alimenter ml_model_performance automatiquement
+            // $schedule->command('ml:log-performance')->dailyAt('03:00')->withoutOverlapping();
     }
 
     /**

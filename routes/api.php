@@ -23,12 +23,15 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-// API pour récupérer les opérateurs
+// Opérateurs (session via EnsureFrontendRequestsAreStateful pour appels same-origin)
 Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
 
 // Dashboard API routes
 Route::prefix('dashboard')->name('api.dashboard.')->group(function () {
     Route::get('/data', [DataControllerOptimized::class, 'getDashboardData'])->name('data');
+    Route::get('/subscriptions-details', [DataControllerOptimized::class, 'getSubscriptionsDetails'])->name('subscriptions-details');
+    Route::get('/cohorts', [DataControllerOptimized::class, 'getCohorts'])->name('cohorts');
+    Route::get('/transactions-separate', [DataControllerOptimized::class, 'getTransactions'])->name('transactions-separate');
     Route::get('/subscriptions/{clientId}', [DataControllerOptimized::class, 'getUserSubscriptions'])->name('user.subscriptions');
     Route::get('/operators', [DataController::class, 'getUserOperators'])->name('operators');
     Route::get('/partners', [DataController::class, 'getPartnersList'])->name('partners');

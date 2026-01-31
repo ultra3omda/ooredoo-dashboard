@@ -170,8 +170,8 @@ class SubStoreController extends Controller
             $cacheTTL = $periodDays > 365 ? 3600 : ($periodDays > 180 ? 1800 : 900); // 1h/30min/15min
             $cacheKey = 'substore_optimized_real_v1:' . md5($startDate . $endDate . $selectedSubStore);
             
-            return Cache::remember($cacheKey, $cacheTTL, function() use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $startTime, $periodDays) {
-                
+            return Cache::remember($cacheKey, $cacheTTL, function() use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $periodDays) {
+                $closureStart = microtime(true);
                 // === VRAIES DONNÉES OPTIMISÉES ===
                 
                 // KPIs de base (rapides, sans filtres de dates) - avec vraies requêtes
@@ -307,6 +307,8 @@ class SubStoreController extends Controller
                 'categoryDistribution' => $categoryDistribution,
                 'inscriptionsTrend' => $inscriptionTrends,
                 'merchants' => $merchantData['merchants'],
+                'users_kpis' => $this->getUsersKPIs(Carbon::parse($startDate), Carbon::parse($endDate), Carbon::parse($comparisonStartDate), Carbon::parse($comparisonEndDate), $selectedSubStore),
+                'users' => $this->getUsersList(Carbon::parse($startDate), Carbon::parse($endDate)->endOfDay(), $selectedSubStore, 150),
                 'insights' => [
                         'positive' => ['Performance stable sur période longue', 'Conversion optimisée'],
                         'negative' => ['Données estimées pour période longue'],
@@ -319,7 +321,7 @@ class SubStoreController extends Controller
                     'last_updated' => now()->toISOString(),
                     'data_source' => 'optimized_database',
                     'cache_mode' => 'optimized_queries',
-                    'execution_time_ms' => $executionTime
+                    'execution_time_ms' => round((microtime(true) - $closureStart) * 1000, 2)
                 ];
             });
         } catch (\Exception $e) {
@@ -427,27 +429,38 @@ class SubStoreController extends Controller
     private function getOptimizedTopSubStores(string $selectedSubStore, string $startDate, string $endDate): array
     {
         try {
-            // Requête optimisée pour top sub-stores
-            $query = DB::table('client')
-                ->select('stores.store_name', DB::raw('COUNT(client.client_id) as client_count'))
-                ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ;
-            $this->applySubStoreFilter($query)
-                ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id')
-                ->groupBy('stores.store_id', 'stores.store_name')
-                ->orderBy('client_count', 'desc')
-                ->limit(5);
-
+            // Requête alignée sur le front : name, type, customers, transactions, manager
+            $query = DB::table('stores')
+                ->leftJoin('client', 'client.sub_store', '=', 'stores.store_id')
+                ->leftJoin('carte_recharge_client', 'carte_recharge_client.client_id', '=', 'client.client_id')
+                ->leftJoin('client_abonnement', 'client_abonnement.client_id', '=', 'client.client_id')
+                ->leftJoin('history', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
+                ->select(
+                    'stores.store_id',
+                    'stores.store_name',
+                    'stores.store_type',
+                    'stores.store_manager_name',
+                    DB::raw('COUNT(DISTINCT CASE WHEN carte_recharge_client.client_id IS NOT NULL THEN client.client_id END) as customers'),
+                    DB::raw('COUNT(DISTINCT history.history_id) as transactions')
+                )
+                ->groupBy('stores.store_id', 'stores.store_name', 'stores.store_type', 'stores.store_manager_name')
+                ->orderByDesc('customers')
+                ->limit(15);
+            $this->applySubStoreFilter($query);
+            if ($selectedSubStore !== 'ALL') {
+                $query->where('stores.store_name', 'LIKE', '%' . $selectedSubStore . '%');
+            }
             $results = $query->get();
-            
-            return $results->map(function($item, $index) {
+
+            return $results->map(function ($item, $index) {
                 return [
-                    'name' => $item->store_name,
-                    'value' => $item->client_count,
-                    'change' => $index < 2 ? '+' . rand(3, 15) . '%' : ($index > 3 ? '-' . rand(1, 8) . '%' : '+' . rand(1, 5) . '%')
+                    'name' => $item->store_name ?? 'Non spécifié',
+                    'type' => $item->store_type ?? 'Non spécifié',
+                    'customers' => (int) $item->customers,
+                    'transactions' => (int) $item->transactions,
+                    'manager' => $item->store_manager_name ?? 'Non spécifié',
                 ];
             })->toArray();
-
         } catch (\Exception $e) {
             Log::error("Erreur getOptimizedTopSubStores: " . $e->getMessage());
             return [];
@@ -538,11 +551,10 @@ class SubStoreController extends Controller
                 return $this->getTotalSubscriptions($selectedSubStore);
             });
 
-            // 4ter. CARTES ACTIVÉES (sur la période sélectionnée)
+            // 4ter. CARTES ACTIVÉES (sur la période sélectionnée) — getCardsActivated retourne un entier (nombre)
             $renewalRate = Cache::remember("cards_activated_{$selectedSubStore}_{$startDate}_{$endDate}", 600, function() use ($selectedSubStore, $startDate, $endDate) {
                 return $this->getCardsActivated($selectedSubStore, $startDate, $endDate);
             });
-            $renewalRate = $renewal['renewal_rate'];
             
             // 5. TRANSACTIONS : Abonnements activés avec cartes de recharge (sans filtre de date)
             $transactions = $this->getTransactionsWithCards($selectedSubStore);
@@ -726,6 +738,8 @@ class SubStoreController extends Controller
                 "merchants" => $merchantData['merchants'],
                 "sub_stores" => $this->getOptimizedTopSubStores($selectedSubStore, $startDate, $endDate),
                 "insights" => $this->generateSubStoreInsights($inscriptions, $activeUsers, $transactions, $selectedSubStore),
+                "users_kpis" => $this->getUsersKPIs(Carbon::parse($startDate), Carbon::parse($endDate), Carbon::parse($comparisonStartDate), Carbon::parse($comparisonEndDate), $selectedSubStore),
+                "users" => $this->getUsersList(Carbon::parse($startDate), Carbon::parse($endDate)->endOfDay(), $selectedSubStore, 150),
                 "last_updated" => now()->toISOString(),
                 "data_source" => "database"
             ];
@@ -835,9 +849,7 @@ class SubStoreController extends Controller
         try {
             $query = DB::table('carte_recharge_client')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
-                ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id')
-                ;
+                ->join('stores', 'client.sub_store', '=', 'stores.store_id');
             $this->applySubStoreFilter($query);
             if ($selectedSubStore !== 'ALL') {
                 $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
@@ -967,6 +979,7 @@ class SubStoreController extends Controller
             $categoriesQuery = DB::table("history")
                 ->join("client_abonnement", "history.client_abonnement_id", "=", "client_abonnement.client_abonnement_id")
                 ->join("client", "client_abonnement.client_id", "=", "client.client_id")
+                ->join("stores", "client.sub_store", "=", "stores.store_id")
                 ->join("promotion", "history.promotion_id", "=", "promotion.promotion_id")
                 ->join("partner", "promotion.partner_id", "=", "partner.partner_id")
                 ->join("partner_category", "partner.partner_category_id", "=", "partner_category.partner_category_id")
@@ -1045,7 +1058,7 @@ class SubStoreController extends Controller
     private function fetchOptimizedSubStoreData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore): array
     {
         try {
-
+            $startTime = microtime(true);
             // Cache plus long pour les longues périodes (10 minutes)
             $cacheKey = 'substore_optimized_v1:' . md5($startDate . $endDate . $comparisonStartDate . $comparisonEndDate . $selectedSubStore);
             
@@ -1207,6 +1220,8 @@ class SubStoreController extends Controller
                     "categoryDistribution" => $categoryDistribution,
                     "inscriptionsTrend" => $inscriptionsTrend,
                     "sub_stores" => $topSubStores,
+                    "users_kpis" => $this->getUsersKPIs(Carbon::parse($startDate), Carbon::parse($endDate), Carbon::parse($comparisonStartDate), Carbon::parse($comparisonEndDate), $selectedSubStore),
+                    "users" => $this->getUsersList(Carbon::parse($startDate), Carbon::parse($endDate)->endOfDay(), $selectedSubStore, 150),
                     "insights" => $insights,
                     "last_updated" => now()->toISOString(),
                     "data_source" => "optimized_database",
@@ -1816,6 +1831,7 @@ class SubStoreController extends Controller
      */
     public function getUsersData(Request $request)
     {
+        set_time_limit(90); // éviter timeout 30s sur getUsersList
         try {
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
@@ -1833,22 +1849,33 @@ class SubStoreController extends Controller
             $comparisonStartDateObj = $comparisonStartDate ? Carbon::parse($comparisonStartDate) : null;
             $comparisonEndDateObj = $comparisonEndDate ? Carbon::parse($comparisonEndDate) : null;
 
-        // Cache key basé sur les paramètres
-        $cacheKey = "users_data_{$subStore}_{$startDate}_{$endDate}";
+            // Limiter à 30 jours max pour éviter timeout (getUsersList lourd)
+            $periodDays = $startDateObj->diffInDays($endDateObj) + 1;
+            $periodCapped = false;
+            if ($periodDays > 30) {
+                $startDateObj = $endDateObj->copy()->subDays(29);
+                $periodCapped = true;
+            }
+
+        // Cache key basé sur les paramètres (après éventuel plafonnement)
+        $cacheKey = "users_data_{$subStore}_{$startDateObj->format('Y-m-d')}_{$endDateObj->format('Y-m-d')}";
         
-        // Mise en cache raisonnable des données Users (5 minutes)
-        return Cache::remember($cacheKey, 300, function () use ($startDateObj, $endDateObj, $comparisonStartDateObj, $comparisonEndDateObj, $subStore) {
-                // Récupérer les données utilisateurs
-                $usersData = $this->getUsersKPIs($startDateObj, $endDateObj, $comparisonStartDateObj, $comparisonEndDateObj, $subStore);
-                $usersList = $this->getUsersList($startDateObj, $endDateObj, $subStore);
-                
-                return response()->json([
-                    'kpis' => $usersData,
-                    'users' => $usersList,
-                    'data_source' => 'users_api',
-                    'cache_ttl' => 600
-                ]);
-            });
+        // Mise en cache des données (tableau uniquement), pas de Response
+        $payload = Cache::remember($cacheKey, 300, function () use ($startDateObj, $endDateObj, $comparisonStartDateObj, $comparisonEndDateObj, $subStore) {
+            $usersData = $this->getUsersKPIs($startDateObj, $endDateObj, $comparisonStartDateObj, $comparisonEndDateObj, $subStore);
+            $usersList = $this->getUsersList($startDateObj, $endDateObj, $subStore);
+            return [
+                'kpis' => $usersData,
+                'users' => $usersList,
+                'data_source' => 'users_api',
+                'cache_ttl' => 600
+            ];
+        });
+        if ($periodCapped) {
+            $payload['period_capped'] = true;
+            $payload['period_capped_message'] = 'Données limitées aux 30 derniers jours pour éviter le timeout.';
+        }
+        return response()->json($payload);
             
         } catch (\Exception $e) {
             Log::error('Erreur getUsersData: ' . $e->getMessage());
@@ -1947,12 +1974,12 @@ class SubStoreController extends Controller
     }
 
     /**
-     * Récupérer la liste des utilisateurs
+     * Récupérer la liste des utilisateurs (Top Users Performance).
+     * @param int|null $limit Si défini, limite le nombre de lignes et n'exécute pas les requêtes cartes par utilisateur (évite N+1 et timeout).
      */
-    private function getUsersList($startDate, $endDate, $subStore)
+    private function getUsersList($startDate, $endDate, $subStore, $limit = null)
     {
-        Log::info("=== DÉBUT getUsersList pour subStore: $subStore ===");
-        // Requête optimisée pour éviter les blocages
+        Log::info("=== DÉBUT getUsersList pour subStore: $subStore" . ($limit ? " (limit $limit)" : '') . " ===");
         $query = DB::table('carte_recharge_client')
             ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
             ->join('stores', 'client.sub_store', '=', 'stores.store_id')
@@ -1961,9 +1988,9 @@ class SubStoreController extends Controller
                      ->whereBetween('history.time', [$startDate, $endDate]);
             })
             ->leftJoin('client_abonnement', 'carte_recharge_client.client_id', '=', 'client_abonnement.client_id');
-        
+
         $this->applySubStoreFilter($query);
-        
+
         $query->when($subStore !== 'ALL', function ($q) use ($subStore) {
                 return $q->where('stores.store_name', 'LIKE', "%$subStore%");
             })
@@ -1979,54 +2006,46 @@ class SubStoreController extends Controller
             ])
             ->groupBy('carte_recharge_client.client_id', 'client.client_prenom', 'client.client_nom', 'client.client_email', 'client.created_at', 'stores.store_name')
             ->orderBy('total_transactions', 'desc');
-        
+
+        if ($limit !== null) {
+            $query->limit((int) $limit);
+        }
+
         $users = $query->get();
 
-        return $users->map(function ($user) use ($subStore) {
-            // Récupérer le tarif_id du sub-store actuel pour filtrer les cartes aussi
-            $storeId = $this->getStoreIdByName($subStore);
-            $tarifId = null;
-            if ($storeId && $subStore !== 'ALL') {
-                $tarifId = $this->getTarifIdBySubStore($subStore);
-            }
-            
-            // Récupérer les codes des cartes de recharge pour cet utilisateur, liées au store spécifique
+        return $users->map(function ($user) use ($subStore, $limit) {
+            $cardsUsed = (int) $user->total_subscriptions;
             $cards = [];
-            if ($subStore !== 'ALL') {
-                // Récupérer les cartes liées au store spécifique (ex: Sofrecom = store 24)
-                $cards = DB::table('carte_recharge_client')
-                    ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
-                    ->where('carte_recharge_client.client_id', $user->id)
-                    ->where('carte_recharge.stores', 'LIKE', "%$storeId%")
-                    ->select('carte_recharge.carte_recharge_code')
-                    ->distinct()
-                    ->pluck('carte_recharge.carte_recharge_code')
-                    ->toArray();
-                
-                // Log pour débugger
-                if ($user->id == 98420) {
-                    Log::info("DEBUG User 98420 - StoreId: $storeId, Cards: " . json_encode($cards));
+
+            if ($limit === null) {
+                $storeId = $this->getStoreIdByName($subStore);
+                if ($subStore !== 'ALL' && $storeId) {
+                    $cards = DB::table('carte_recharge_client')
+                        ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+                        ->where('carte_recharge_client.client_id', $user->id)
+                        ->where('carte_recharge.stores', 'LIKE', "%$storeId%")
+                        ->select('carte_recharge.carte_recharge_code')
+                        ->distinct()
+                        ->pluck('carte_recharge.carte_recharge_code')
+                        ->toArray();
+                } else {
+                    $cards = DB::table('carte_recharge_client')
+                        ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+                        ->where('carte_recharge_client.client_id', $user->id)
+                        ->select('carte_recharge.carte_recharge_code')
+                        ->distinct()
+                        ->pluck('carte_recharge.carte_recharge_code')
+                        ->toArray();
                 }
-            } else {
-                // Si pas de sub-store spécifique, récupérer toutes les cartes
-                $cards = DB::table('carte_recharge_client')
-                    ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
-                    ->where('carte_recharge_client.client_id', $user->id)
-                    ->select('carte_recharge.carte_recharge_code')
-                    ->distinct()
-                    ->pluck('carte_recharge.carte_recharge_code')
-                    ->toArray();
+                $cardsUsed = count($cards);
             }
-            
-            // Le nombre de cartes utilisées = le nombre de cartes de recharge
-            $cardsUsed = count($cards);
 
             return [
                 'id' => $user->id,
-                'name' => $user->name,
+                'name' => trim($user->name ?? ''),
                 'sub_store_name' => $user->sub_store_name,
                 'registration_date' => $user->registration_date ? Carbon::parse($user->registration_date)->format('Y-m-d') : 'N/A',
-                'total_transactions' => $user->total_transactions,
+                'total_transactions' => (int) $user->total_transactions,
                 'total_subscriptions' => $cardsUsed,
                 'recharge_cards' => $cards,
                 'last_activity' => $user->last_activity ? Carbon::parse($user->last_activity)->format('Y-m-d H:i') : 'N/A',

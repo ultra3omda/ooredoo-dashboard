@@ -9,8 +9,9 @@ use Carbon\Carbon;
 
 class DashboardCacheService
 {
-    private const CACHE_PREFIX = 'dashboard_v3';
-    private const REDIS_PREFIX = 'dashboard_v3:';
+    // v4: invalidation pour inclure timwe_stats/ooredoo_stats au chargement (session + routes)
+    private const CACHE_PREFIX = 'dashboard_v4';
+    private const REDIS_PREFIX = 'dashboard_v4:';
     
     /**
      * Cache intelligent avec TTL adaptatif selon la période

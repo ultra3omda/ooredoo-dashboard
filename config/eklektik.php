@@ -27,6 +27,8 @@ return [
     'stats' => [
         'base_url' => env('EKLEKTIK_STATS_URL', 'https://stats.eklectic.tn/getelements.php'),
         'timeout' => env('EKLEKTIK_STATS_TIMEOUT', 30),
+        // Désactiver la vérification SSL si cURL erre 60 (certificat) en local / Windows
+        'verify_ssl' => env('EKLEKTIK_VERIFY_SSL', true),
         
         // Accès par opérateur
         'credentials' => [
