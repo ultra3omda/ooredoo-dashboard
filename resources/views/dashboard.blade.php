@@ -3095,9 +3095,56 @@
       </div>
     </div>
 
-    <!-- Tab 6: Agent IA (Style ChatGPT) -->
+    <!-- Tab 6: Agent IA (Style ChatGPT avec Sidebar) -->
     <div id="ai-agent" class="tab-content">
-      <div class="ai-chat-container" style="background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); height: 650px; display: flex; flex-direction: column;">
+      <div style="display: flex; gap: 16px; height: 650px;">
+        
+        <!-- Sidebar Historique (Style ChatGPT) -->
+        <div class="ai-sidebar" style="width: 280px; background: #f7f7f8; border-radius: 12px; border: 1px solid #e5e7eb; display: flex; flex-direction: column;">
+          
+          <!-- Header Sidebar -->
+          <div style="padding: 16px; border-bottom: 1px solid #e5e7eb; background: white; border-radius: 12px 12px 0 0;">
+            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px;">
+              <h6 style="margin: 0; font-weight: 600; color: #374151;">💬 Conversations</h6>
+              <button onclick="newAIConversationNow()" style="background: #6366f1; border: none; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
+                ➕ Nouveau Chat
+              </button>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button onclick="saveCurrentConversation()" style="background: #10b981; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+                💾 Sauver
+              </button>
+              <button onclick="loadConversationDialog()" style="background: #f59e0b; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+                📂 Charger
+              </button>
+              <button onclick="clearAllConversations()" style="background: #ef4444; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+                🗑️ Vider
+              </button>
+            </div>
+          </div>
+          
+          <!-- Liste des Conversations -->
+          <div id="aiConversationsList" style="flex: 1; overflow-y: auto; padding: 8px;">
+            <div class="ai-conversation-item active" data-session="current" style="padding: 12px; margin: 4px 0; background: white; border-radius: 8px; border-left: 3px solid #6366f1; cursor: pointer;">
+              <div style="font-size: 0.85rem; font-weight: 500; color: #374151;">💬 Conversation Actuelle</div>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Juste maintenant</div>
+            </div>
+            
+            <!-- Les conversations sauvegardées apparaîtront ici -->
+          </div>
+          
+          <!-- Info Sidebar -->
+          <div style="padding: 12px; border-top: 1px solid #e5e7eb; background: #f9fafb; border-radius: 0 0 12px 0;">
+            <div style="font-size: 0.75rem; color: #6b7280; text-align: center;">
+              Session : <code id="aiSessionSidebar" style="font-size: 0.7rem;">nouvelle</code><br>
+              Expert ML • 85k clients • 36 features
+            </div>
+          </div>
+          
+        </div>
+
+        <!-- Zone de Chat Principale -->
+        <div class="ai-chat-container" style="flex: 1; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column;">
         
         <!-- Header minimaliste -->
         <div class="ai-header" style="padding: 16px 24px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border-radius: 12px 12px 0 0;">
@@ -3188,6 +3235,7 @@
           </div>
         </div>
 
+      </div>
       </div>
     </div>
 
@@ -9738,7 +9786,26 @@
       transition: background-color 0.2s;
     }
 
-    /* Agent IA Styles (ChatGPT-like) */
+    /* Agent IA Styles (ChatGPT-like avec Sidebar) */
+    .ai-conversation-item {
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .ai-conversation-item:hover {
+      background: #f3f4f6 !important;
+      border-color: #d1d5db;
+    }
+
+    .ai-conversation-item.active {
+      border-left-color: #6366f1 !important;
+      background: white !important;
+    }
+
+    .ai-sidebar button:hover {
+      opacity: 0.8;
+      transform: translateY(-1px);
+    }
     .ai-message-user {
       padding: 16px 24px;
       background: white;
@@ -9801,9 +9868,17 @@
       
       aiSessionDashboard = generateAIUUID();
       const sessionEl = document.getElementById('aiCurrentSession');
+      const sidebarSessionEl = document.getElementById('aiSessionSidebar');
       if (sessionEl) {
         sessionEl.textContent = aiSessionDashboard.substr(0, 8);
       }
+      if (sidebarSessionEl) {
+        sidebarSessionEl.textContent = aiSessionDashboard.substr(0, 8);
+      }
+      
+      // Charger les conversations sauvegardées (localStorage + BDD)
+      loadConversationsFromDatabase();
+      updateConversationsSidebar();
       
       // Auto-resize textarea seulement
       const aiInput = document.getElementById('aiQuestionInput');
@@ -9813,6 +9888,11 @@
           this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
       }
+      
+      // Sauvegarder automatiquement avant fermeture de page
+      window.addEventListener('beforeunload', function() {
+        saveCurrentConversationAuto();
+      });
       
       console.log('✅ Agent IA initialisé');
     }
@@ -9827,10 +9907,211 @@
     
     function newAIConversationNow() {
       console.log('🔄 Nouvelle conversation directe');
+      
+      // Sauvegarder la conversation actuelle si elle a des messages
+      saveCurrentConversationAuto();
+      
+      // Nouvelle session
       aiSessionDashboard = generateAIUUID();
       document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
+      document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8);
       document.getElementById('aiMessagesContainer').innerHTML = '';
+      
+      // Mettre à jour la sidebar
+      updateConversationsSidebar();
+      
       showNotification('🤖 Nouvelle conversation', 'success');
+    }
+
+    // === GESTION HISTORIQUE CONVERSATIONS ===
+    
+    function saveCurrentConversation() {
+      const messages = document.getElementById('aiMessagesContainer').children;
+      if (messages.length === 0) {
+        showNotification('❌ Aucune conversation à sauvegarder', 'error');
+        return;
+      }
+      
+      const title = prompt('Nom de la conversation :', 'Conversation ML ' + new Date().toLocaleString('fr-FR', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}));
+      if (!title) return;
+      
+      const conversation = {
+        id: aiSessionDashboard,
+        title: title,
+        messages: Array.from(messages).map(msg => ({
+          type: msg.classList.contains('ai-message-user') ? 'user' : 'assistant',
+          content: msg.querySelector('.ai-message-content').innerHTML
+        })),
+        created_at: new Date().toISOString(),
+        session_id: aiSessionDashboard
+      };
+      
+      // Sauvegarder dans localStorage
+      let savedConversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      savedConversations.unshift(conversation);
+      
+      // Garder max 20 conversations
+      if (savedConversations.length > 20) {
+        savedConversations = savedConversations.slice(0, 20);
+      }
+      
+      localStorage.setItem('aiConversations', JSON.stringify(savedConversations));
+      
+      updateConversationsSidebar();
+      showNotification(`💾 Conversation "${title}" sauvegardée`, 'success');
+    }
+
+    function saveCurrentConversationAuto() {
+      const messages = document.getElementById('aiMessagesContainer').children;
+      if (messages.length > 0) {
+        const autoTitle = 'Auto - ' + new Date().toLocaleString('fr-FR', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+        
+        const conversation = {
+          id: aiSessionDashboard + '_auto',
+          title: autoTitle,
+          messages: Array.from(messages).map(msg => ({
+            type: msg.classList.contains('ai-message-user') ? 'user' : 'assistant',
+            content: msg.querySelector('.ai-message-content').innerHTML
+          })),
+          created_at: new Date().toISOString(),
+          session_id: aiSessionDashboard,
+          auto_saved: true
+        };
+        
+        let savedConversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+        savedConversations.unshift(conversation);
+        localStorage.setItem('aiConversations', JSON.stringify(savedConversations.slice(0, 20)));
+      }
+    }
+
+    function loadConversation(conversationId) {
+      const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      const conversation = conversations.find(c => c.id === conversationId);
+      
+      if (!conversation) {
+        showNotification('❌ Conversation non trouvée', 'error');
+        return;
+      }
+      
+      // Charger la conversation
+      document.getElementById('aiMessagesContainer').innerHTML = '';
+      
+      conversation.messages.forEach(msg => {
+        appendAIMessageFromHistory(msg.type, msg.content);
+      });
+      
+      // Mettre à jour session
+      aiSessionDashboard = conversation.session_id;
+      document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
+      document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8);
+      
+      // Mettre à jour sidebar
+      updateConversationsSidebar(conversationId);
+      
+      showNotification(`📂 Conversation "${conversation.title}" chargée`, 'success');
+    }
+
+    function appendAIMessageFromHistory(type, content) {
+      const container = document.getElementById('aiMessagesContainer');
+      if (!container) return;
+      
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `ai-message-${type}`;
+      messageDiv.innerHTML = content.includes('ai-message-content') ? content : `
+        <div style="display: flex; gap: 12px; align-items: flex-start;">
+          <div style="width: 30px; height: 30px; background: ${type === 'user' ? '#6366f1' : '#10b981'}; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">
+            ${type === 'user' ? 'U' : '🤖'}
+          </div>
+          <div class="ai-message-content" style="flex: 1; padding-top: 4px;">
+            ${content}
+          </div>
+        </div>
+      `;
+      
+      container.appendChild(messageDiv);
+      scrollAIToBottom();
+    }
+
+    function updateConversationsSidebar(activeId = null) {
+      const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      const container = document.getElementById('aiConversationsList');
+      
+      // Garder la conversation actuelle
+      container.innerHTML = `
+        <div class="ai-conversation-item ${!activeId ? 'active' : ''}" data-session="current" onclick="selectCurrentConversation()" style="padding: 12px; margin: 4px 0; background: ${!activeId ? 'white' : '#f9fafb'}; border-radius: 8px; border-left: 3px solid ${!activeId ? '#6366f1' : 'transparent'}; cursor: pointer;">
+          <div style="font-size: 0.85rem; font-weight: 500; color: #374151;">💬 Conversation Actuelle</div>
+          <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Session active</div>
+        </div>
+      `;
+      
+      // Ajouter les conversations sauvegardées
+      conversations.forEach(conv => {
+        const isActive = activeId === conv.id;
+        const timeAgo = new Date(conv.created_at).toLocaleString('fr-FR', {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        
+        const firstMessage = conv.messages.find(m => m.type === 'user')?.content || 'Conversation';
+        const preview = firstMessage.replace(/<[^>]*>/g, '').substring(0, 50) + '...';
+        
+        container.innerHTML += `
+          <div class="ai-conversation-item ${isActive ? 'active' : ''}" 
+               data-session="${conv.id}" 
+               onclick="loadConversation('${conv.id}')"
+               style="padding: 12px; margin: 4px 0; background: ${isActive ? 'white' : '#f9fafb'}; border-radius: 8px; border-left: 3px solid ${isActive ? '#6366f1' : 'transparent'}; cursor: pointer;">
+            <div style="display: flex; justify-content: between; align-items: start;">
+              <div style="flex: 1;">
+                <div style="font-size: 0.8rem; font-weight: 500; color: #374151; margin-bottom: 4px;">${conv.title}</div>
+                <div style="font-size: 0.75rem; color: #6b7280; line-height: 1.3;">${preview}</div>
+                <div style="font-size: 0.7rem; color: #9ca3af; margin-top: 4px;">${timeAgo}</div>
+              </div>
+              <button onclick="event.stopPropagation(); deleteConversation('${conv.id}')" style="background: transparent; border: none; color: #ef4444; font-size: 0.8rem; cursor: pointer; padding: 2px;">
+                🗑️
+              </button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function selectCurrentConversation() {
+      // Retourner à la conversation actuelle
+      updateConversationsSidebar();
+    }
+
+    function loadConversationDialog() {
+      const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      
+      if (conversations.length === 0) {
+        showNotification('❌ Aucune conversation sauvegardée', 'error');
+        return;
+      }
+      
+      const options = conversations.map((c, i) => `${i + 1}. ${c.title} (${new Date(c.created_at).toLocaleDateString('fr-FR')})`).join('\n');
+      const choice = prompt(`Choisissez une conversation à charger :\n\n${options}\n\nEntrez le numéro :`);
+      
+      if (choice && !isNaN(choice) && choice > 0 && choice <= conversations.length) {
+        loadConversation(conversations[choice - 1].id);
+      }
+    }
+
+    function deleteConversation(conversationId) {
+      if (!confirm('Supprimer cette conversation ?')) return;
+      
+      let conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      conversations = conversations.filter(c => c.id !== conversationId);
+      localStorage.setItem('aiConversations', JSON.stringify(conversations));
+      
+      updateConversationsSidebar();
+      showNotification('🗑️ Conversation supprimée', 'success');
+    }
+
+    function clearAllConversations() {
+      if (!confirm('Supprimer toutes les conversations sauvegardées ?')) return;
+      
+      localStorage.removeItem('aiConversations');
+      updateConversationsSidebar();
+      showNotification('🗑️ Toutes les conversations supprimées', 'success');
     }
 
     function sendAIQuestionNow() {

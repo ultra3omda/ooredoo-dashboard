@@ -147,6 +147,7 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'deleteConversation'])->name('conversation.delete');
             
             // Utilitaires
+            Route::get('/conversations', [\App\Http\Controllers\Admin\AIAgentController::class, 'getRecentConversations'])->name('conversations');
             Route::get('/sessions', [\App\Http\Controllers\Admin\AIAgentController::class, 'getRecentSessions'])->name('sessions');
             Route::get('/test', [\App\Http\Controllers\Admin\AIAgentController::class, 'test'])->name('test');
             Route::get('/stats', [\App\Http\Controllers\Admin\AIAgentController::class, 'getStats'])->name('stats');

@@ -90,6 +90,35 @@ class AIAgentController extends Controller
     }
     
     /**
+     * NOUVEAU: Récupère les conversations récentes pour la sidebar
+     */
+    public function getRecentConversations(): JsonResponse
+    {
+        $conversations = AIConversation::where('user_id', auth()->id())
+            ->where('created_at', '>=', now()->subDays(7))
+            ->select('session_id', 'message', 'created_at')
+            ->where('message_type', 'user') // Première question de chaque conversation
+            ->groupBy('session_id')
+            ->orderBy('created_at', 'desc')
+            ->limit(15)
+            ->get()
+            ->map(function($conv) {
+                $firstMessage = substr(strip_tags($conv->message), 0, 50) . '...';
+                return [
+                    'session_id' => $conv->session_id,
+                    'title' => $firstMessage,
+                    'created_at' => $conv->created_at->diffForHumans(),
+                    'timestamp' => $conv->created_at->toISOString()
+                ];
+            });
+        
+        return response()->json([
+            'success' => true,
+            'conversations' => $conversations
+        ]);
+    }
+    
+    /**
      * Récupère l'historique d'une conversation
      */
     public function getConversation(Request $request, string $sessionId): JsonResponse
