@@ -50,6 +50,35 @@ class MLClientFeature extends Model
         'engagement_score',
         'lifetime_value_score',
         'client_segment',
+        // Nouvelles features v2.0
+        'morning_success_rate',
+        'afternoon_success_rate', 
+        'evening_success_rate',
+        'recovery_after_failure_rate',
+        'max_consecutive_successes',
+        'payment_amount_std',
+        'amount_flexibility',
+        'no_balance_failure_rate',
+        'not_delivered_failure_rate',
+        // Features multi-opérateur v2.1
+        'timwe_success_rate',
+        'timwe_total_attempts',
+        'timwe_has_activity',
+        'eklektik_success_rate', 
+        'eklektik_daily_consistency',
+        'eklektik_has_activity',
+        'ooredoo_success_rate',
+        'ooredoo_monthly_consistency',
+        'ooredoo_has_activity',
+        'total_operators_used',
+        'operator_diversity_score',
+        'price_preference',
+        'prefers_low_price',
+        'prefers_high_price',
+        'preferred_frequency',
+        'prefers_daily_offers',
+        'prefers_monthly_offers',
+        'best_performing_operator',
     ];
 
     protected $casts = [
@@ -85,6 +114,16 @@ class MLClientFeature extends Model
         'payment_reliability_score' => 'decimal:4',
         'engagement_score' => 'decimal:4',
         'lifetime_value_score' => 'decimal:4',
+        // Nouvelles features v2.0
+        'morning_success_rate' => 'decimal:4',
+        'afternoon_success_rate' => 'decimal:4',
+        'evening_success_rate' => 'decimal:4',
+        'recovery_after_failure_rate' => 'decimal:4',
+        'max_consecutive_successes' => 'integer',
+        'payment_amount_std' => 'decimal:4',
+        'amount_flexibility' => 'decimal:4',
+        'no_balance_failure_rate' => 'decimal:4',
+        'not_delivered_failure_rate' => 'decimal:4',
     ];
 
     /**

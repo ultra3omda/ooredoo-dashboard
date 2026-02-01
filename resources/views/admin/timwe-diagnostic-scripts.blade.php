@@ -508,12 +508,13 @@ const diagnosticApp = {
                             <th>Date</th>
                             <th>Delivery Code</th>
                             <th>Montant (TND)</th>
+                            <th>Offre (Pricepoint)</th>
                             <th>Statut</th>
                             <th>Transaction ID</th>
                         </tr>
                     </thead>
                     <tbody id="phoneDetailsLifetimeBody">
-                        <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">Chargement des transactions lifetime...</td></tr>
+                        <tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">Chargement des transactions lifetime...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -529,23 +530,25 @@ const diagnosticApp = {
                 const tbody = document.getElementById('phoneDetailsLifetimeBody');
                 if (!tbody) return;
                 if (!data.success || !data.transactions) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger); padding: 24px;">Erreur lors du chargement</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 24px;">Erreur lors du chargement</td></tr>';
                     return;
                 }
                 const transactions = data.transactions;
                 if (transactions.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">Aucune transaction lifetime</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">Aucune transaction lifetime</td></tr>';
                     return;
                 }
                 tbody.innerHTML = transactions.map(tx => {
                     const badgeClass = tx.delivery_code === 'DELIVERED' ? 'badge-success' : 
                                       tx.delivery_code === 'NO_BALANCE' ? 'badge-warning' : 
                                       tx.delivery_code === 'NOT_DELIVERED' ? 'badge-danger' : 'badge-secondary';
+                    const offerLabel = (tx.pricepoint_id != null && tx.pricepoint_id !== '') ? String(tx.pricepoint_id) : (tx.product_id != null && tx.product_id !== '') ? 'prod.' + tx.product_id : '–';
                     return `
                     <tr>
                         <td><small>${new Date(tx.date).toLocaleString('fr-FR')}</small></td>
                         <td><span class="badge ${badgeClass}">${tx.delivery_code}</span></td>
                         <td><strong>${(tx.total_charged_tnd || 0).toFixed(3)} TND</strong></td>
+                        <td><code style="font-size: 11px;" title="ID offre (différencie 0.3 TND vs 3.0 TND)">${offerLabel}</code></td>
                         <td>
                             <span class="badge ${tx.is_billed ? 'badge-success' : 'badge-secondary'}">
                                 ${tx.is_billed ? '✓ Facturé' : '✗ Non facturé'}
@@ -560,7 +563,7 @@ const diagnosticApp = {
             })
             .catch(err => {
                 const tbody = document.getElementById('phoneDetailsLifetimeBody');
-                if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger); padding: 24px;">Erreur réseau</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 24px;">Erreur réseau</td></tr>';
             });
     },
     

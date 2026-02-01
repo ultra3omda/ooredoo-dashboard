@@ -428,6 +428,21 @@ class TimweDiagnosticController extends Controller
                     $mnoDeliveryCode = $result['mnoDeliveryCode'] ?? 'UNKNOWN';
                     $totalCharged = isset($result['totalCharged']) ? (int) $result['totalCharged'] : 0;
                     $isBilled = ($mnoDeliveryCode === 'DELIVERED' && $totalCharged > 0);
+                    // pricepointId = identifiant de l'offre (différencie ex. 0.3 TND vs 3.0 TND)
+                    $pricepointId = $result['pricepointId'] ?? $result['pricePointId'] ?? $result['pricepoint_id'] ?? null;
+                    if ($pricepointId === null && isset($result['response']['pricepointId'])) {
+                        $pricepointId = $result['response']['pricepointId'];
+                    }
+                    if ($pricepointId === null && isset($result['user']['pricepointId'])) {
+                        $pricepointId = $result['user']['pricepointId'];
+                    }
+                    if ($pricepointId === null && isset($result['data']['pricepointId'])) {
+                        $pricepointId = $result['data']['pricepointId'];
+                    }
+                    $productId = $result['productId'] ?? $result['product_id'] ?? null;
+                    if ($productId === null && isset($result['response']['productId'])) {
+                        $productId = $result['response']['productId'];
+                    }
                     $list[] = [
                         'transaction_id' => $transaction->transaction_history_id,
                         'date' => $transaction->created_at,
@@ -436,6 +451,8 @@ class TimweDiagnosticController extends Controller
                         'total_charged' => $totalCharged,
                         'total_charged_tnd' => round($totalCharged / 1000, 3),
                         'is_billed' => $isBilled,
+                        'pricepoint_id' => $pricepointId,
+                        'product_id' => $productId,
                     ];
                 }
                 return [

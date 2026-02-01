@@ -52,6 +52,10 @@ class MLFeatureExtractionService
             $computedScores = $this->calculateComputedScores($features);
             $features = array_merge($features, $computedScores);
 
+            // === 8. Advanced Features (NOUVEAU v2.0) ===
+            $advancedFeatures = $this->calculateAdvancedFeatures($clientId, $startDate, $calculationDate);
+            $features = array_merge($features, $advancedFeatures);
+
         } catch (\Exception $e) {
             Log::error("MLFeatureExtractionService - Erreur extraction features client $clientId", [
                 'error' => $e->getMessage(),
@@ -471,38 +475,20 @@ class MLFeatureExtractionService
     }
 
     /**
-     * Calcule les scores composés
+     * Calcule les scores composés (VERSION CORRIGÉE v2.0)
      */
     private function calculateComputedScores(array $features): array
     {
         $paymentReliabilityScore = $features['payment_success_rate'] ?? 0;
         
-        // Score d'engagement basé sur la fréquence d'usage
-        $engagementScore = 0;
-        if (($features['avg_transactions_per_day'] ?? 0) > 0) {
-            $engagementScore = min(($features['avg_transactions_per_day'] ?? 0) / 5, 1.0); // Normalisé sur 5 transactions/jour
-        }
+        // FIX: Score d'engagement amélioré (multi-factoriel)
+        $engagementScore = $this->calculateEngagementScore($features);
         
-        // Score de valeur client
-        $lifetimeValueScore = 0;
-        if (($features['total_payments'] ?? 0) > 0 && ($features['avg_payment_amount'] ?? 0) > 0) {
-            $totalValue = ($features['total_payments'] ?? 0) * ($features['avg_payment_amount'] ?? 0);
-            $lifetimeValueScore = min($totalValue / 100, 1.0); // Normalisé sur 100 TND
-        }
+        // FIX: Score de valeur client amélioré
+        $lifetimeValueScore = $this->calculateLifetimeValueScore($features);
 
-        // Segmentation basique
-        $segment = 'unknown';
-        if ($paymentReliabilityScore >= 0.8) {
-            $segment = 'premium_payers';
-        } elseif ($paymentReliabilityScore >= 0.4) {
-            $segment = 'regular_payers';
-        } elseif ($paymentReliabilityScore >= 0.1) {
-            $segment = 'struggling_payers';
-        } elseif (($features['churn_probability'] ?? 0) > 0.5) {
-            $segment = 'churn_risk';
-        } else {
-            $segment = 'high_risk';
-        }
+        // Segmentation améliorée avec seuils optimisés
+        $segment = $this->determineClientSegment($paymentReliabilityScore, $engagementScore, $lifetimeValueScore, $features);
 
         return [
             'payment_reliability_score' => round($paymentReliabilityScore, 4),
@@ -510,6 +496,96 @@ class MLFeatureExtractionService
             'lifetime_value_score' => round($lifetimeValueScore, 4),
             'client_segment' => $segment,
         ];
+    }
+
+    /**
+     * Calcule un score d'engagement multi-factoriel (FIX variance = 0)
+     */
+    private function calculateEngagementScore(array $features): float
+    {
+        $score = 0;
+        
+        // Facteur 1: Fréquence d'usage (40%)
+        $transactionFrequency = ($features['avg_transactions_per_day'] ?? 0);
+        $freqScore = min($transactionFrequency / 2, 1.0); // Normalisation sur 2 trans/jour
+        
+        // Facteur 2: Consistance des paiements (30%)
+        $consecutiveFailures = ($features['consecutive_failures'] ?? 0);
+        $consistencyScore = max(0, 1 - $consecutiveFailures / 10); // Max 10 échecs
+        
+        // Facteur 3: Activité récente (30%)
+        $daysSinceLastPayment = ($features['days_since_last_payment'] ?? 999);
+        $recencyScore = 0;
+        if ($daysSinceLastPayment <= 7) {
+            $recencyScore = 1.0;
+        } elseif ($daysSinceLastPayment <= 30) {
+            $recencyScore = 0.7;
+        } elseif ($daysSinceLastPayment <= 90) {
+            $recencyScore = 0.3;
+        }
+        
+        $score = $freqScore * 0.4 + $consistencyScore * 0.3 + $recencyScore * 0.3;
+        
+        return max(0, min(1, $score));
+    }
+
+    /**
+     * Calcule un score de valeur client amélioré (FIX variance faible)
+     */
+    private function calculateLifetimeValueScore(array $features): float
+    {
+        $score = 0;
+        
+        // Facteur 1: Revenus totaux (50%)
+        $totalPayments = ($features['total_payments'] ?? 0);
+        $avgAmount = ($features['avg_payment_amount'] ?? 0);
+        $totalRevenue = $totalPayments * $avgAmount;
+        $revenueScore = min($totalRevenue / 500, 1.0); // Normalisation sur 500 TND
+        
+        // Facteur 2: Fréquence de paiement (30%)
+        $frequency = ($features['payment_frequency'] ?? 0);
+        $frequencyScore = min($frequency * 30, 1.0); // Normalisation sur 1 paiement/mois
+        
+        // Facteur 3: Stabilité (20%)
+        $subscriptionAge = ($features['subscription_age_days'] ?? 0);
+        $stabilityScore = min($subscriptionAge / 365, 1.0); // Normalisation sur 1 an
+        
+        $score = $revenueScore * 0.5 + $frequencyScore * 0.3 + $stabilityScore * 0.2;
+        
+        return max(0, min(1, $score));
+    }
+
+    /**
+     * Détermine le segment client avec logique améliorée
+     */
+    private function determineClientSegment(float $reliability, float $engagement, float $lifetime, array $features): string
+    {
+        $totalPayments = ($features['total_payments'] ?? 0);
+        $avgAmount = ($features['avg_payment_amount'] ?? 0);
+        $churnProba = ($features['churn_probability'] ?? 0);
+        
+        // Premium: haute fiabilité + haute valeur
+        if ($reliability >= 0.7 && $lifetime >= 0.6 && $totalPayments >= 5) {
+            return 'premium_payers';
+        }
+        
+        // Regular: fiabilité correcte + engagement ok
+        if ($reliability >= 0.3 && $engagement >= 0.4 && $totalPayments >= 2) {
+            return 'regular_payers';
+        }
+        
+        // Struggling: quelques paiements mais difficultés
+        if ($reliability >= 0.05 && $totalPayments >= 1) {
+            return 'struggling_payers';
+        }
+        
+        // Churn risk: engagé mais performance dégradée
+        if ($churnProba > 0.6 || ($engagement >= 0.3 && $reliability < 0.1)) {
+            return 'churn_risk';
+        }
+        
+        // High risk: très peu ou pas de succès
+        return 'high_risk';
     }
 
     /**
@@ -645,5 +721,159 @@ class MLFeatureExtractionService
         ]);
 
         return $deletedCount;
+    }
+
+    /**
+     * NOUVEAU v2.0: Calcule des features avancées pour améliorer la discrimination
+     */
+    private function calculateAdvancedFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $billingPpid = env('TIMWE_BILLING_PPID', '63980');
+        
+        // Récupérer toutes les transactions pour analyse fine
+        $allTransactions = DB::table('transactions_history as th')
+            ->where('th.client_id', $clientId)
+            ->where(function($q) {
+                $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
+                  ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+            })
+            ->whereBetween('th.created_at', [$startDate, $endDate])
+            ->whereNotNull('th.result')
+            ->orderBy('th.created_at')
+            ->get();
+
+        $successes = [];
+        $failures = [];
+        $amounts = [];
+
+        foreach ($allTransactions as $transaction) {
+            $result = json_decode($transaction->result, true);
+            if (!is_array($result)) continue;
+            
+            $ppid = $result['pricepointId'] ?? null;
+            $delivery = $result['mnoDeliveryCode'] ?? null;
+            $totalCharged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
+            $date = Carbon::parse($transaction->created_at);
+            
+            $isSuccess = (string)$ppid === (string)$billingPpid && $delivery === 'DELIVERED' && $totalCharged > 0;
+            
+            if ($isSuccess) {
+                $successes[] = ['date' => $date, 'amount' => $totalCharged / 1000];
+            } else {
+                $failures[] = ['date' => $date, 'delivery' => $delivery];
+            }
+            
+            $amounts[] = $totalCharged / 1000;
+        }
+
+        // 1. Patterns temporels avancés
+        $morningSuccesses = collect($successes)->filter(fn($s) => $s['date']->hour >= 6 && $s['date']->hour < 12)->count();
+        $afternoonSuccesses = collect($successes)->filter(fn($s) => $s['date']->hour >= 12 && $s['date']->hour < 18)->count();
+        $eveningSuccesses = collect($successes)->filter(fn($s) => $s['date']->hour >= 18 && $s['date']->hour < 22)->count();
+        $totalSuccesses = count($successes);
+
+        $morningSuccessRate = $totalSuccesses > 0 ? $morningSuccesses / $totalSuccesses : 0;
+        $afternoonSuccessRate = $totalSuccesses > 0 ? $afternoonSuccesses / $totalSuccesses : 0;
+        $eveningSuccessRate = $totalSuccesses > 0 ? $eveningSuccesses / $totalSuccesses : 0;
+
+        // 2. Patterns de récupération après échec
+        $recoveryAfterFailureCount = 0;
+        $totalFailures = count($failures);
+        
+        for ($i = 0; $i < count($failures) - 1; $i++) {
+            $failureDate = $failures[$i]['date'];
+            // Chercher un succès dans les 7 jours suivants
+            $hasRecovery = collect($successes)->filter(function($s) use ($failureDate) {
+                return $s['date']->gt($failureDate) && $s['date']->diffInDays($failureDate) <= 7;
+            })->isNotEmpty();
+            
+            if ($hasRecovery) {
+                $recoveryAfterFailureCount++;
+            }
+        }
+
+        $recoveryAfterFailureRate = $totalFailures > 0 ? $recoveryAfterFailureCount / $totalFailures : 0;
+
+        // 3. Stabilité des montants
+        $paymentAmountStd = count($amounts) > 1 ? $this->standardDeviation($amounts) : 0;
+
+        // 4. Patterns d'échec spécifiques  
+        $noBalanceFailures = collect($failures)->filter(fn($f) => $f['delivery'] === 'NO_BALANCE')->count();
+        $notDeliveredFailures = collect($failures)->filter(fn($f) => $f['delivery'] === 'NOT_DELIVERED')->count();
+        $noBalanceRate = $totalFailures > 0 ? $noBalanceFailures / $totalFailures : 0;
+        $notDeliveredRate = $totalFailures > 0 ? $notDeliveredFailures / $totalFailures : 0;
+
+        // 5. Séquences de succès maximales
+        $maxConsecutiveSuccesses = $this->calculateMaxConsecutiveSuccesses($successes, $failures);
+
+        // 6. Indicateur de flexibilité (succès avec montants différents)
+        $uniqueSuccessAmounts = collect($successes)->pluck('amount')->unique()->count();
+        $amountFlexibility = $totalSuccesses > 0 ? min($uniqueSuccessAmounts / $totalSuccesses, 1.0) : 0;
+
+        return [
+            // Patterns temporels fins
+            'morning_success_rate' => round($morningSuccessRate, 4),
+            'afternoon_success_rate' => round($afternoonSuccessRate, 4),
+            'evening_success_rate' => round($eveningSuccessRate, 4),
+            
+            // Patterns de récupération
+            'recovery_after_failure_rate' => round($recoveryAfterFailureRate, 4),
+            'max_consecutive_successes' => $maxConsecutiveSuccesses,
+            
+            // Stabilité comportementale
+            'payment_amount_std' => round($paymentAmountStd, 4),
+            'amount_flexibility' => round($amountFlexibility, 4),
+            
+            // Patterns d'échec spécifiques
+            'no_balance_failure_rate' => round($noBalanceRate, 4),
+            'not_delivered_failure_rate' => round($notDeliveredRate, 4),
+        ];
+    }
+
+    /**
+     * Calcule l'écart-type d'un tableau de valeurs
+     */
+    private function standardDeviation(array $values): float
+    {
+        if (count($values) < 2) return 0;
+        
+        $mean = array_sum($values) / count($values);
+        $squaredDiffs = array_map(fn($x) => pow($x - $mean, 2), $values);
+        $variance = array_sum($squaredDiffs) / count($values);
+        
+        return sqrt($variance);
+    }
+
+    /**
+     * Calcule la plus longue séquence de succès consécutifs
+     */
+    private function calculateMaxConsecutiveSuccesses(array $successes, array $failures): int
+    {
+        if (empty($successes)) return 0;
+        
+        // Merger et trier toutes les transactions par date
+        $allEvents = [];
+        foreach ($successes as $s) {
+            $allEvents[] = ['date' => $s['date'], 'type' => 'success'];
+        }
+        foreach ($failures as $f) {
+            $allEvents[] = ['date' => $f['date'], 'type' => 'failure'];
+        }
+        
+        usort($allEvents, fn($a, $b) => $a['date']->timestamp - $b['date']->timestamp);
+        
+        $maxStreak = 0;
+        $currentStreak = 0;
+        
+        foreach ($allEvents as $event) {
+            if ($event['type'] === 'success') {
+                $currentStreak++;
+                $maxStreak = max($maxStreak, $currentStreak);
+            } else {
+                $currentStreak = 0;
+            }
+        }
+        
+        return $maxStreak;
     }
 }

@@ -128,6 +128,28 @@ Route::middleware(['auth'])->group(function () {
             
             // Extraction de features
             Route::post('/features/extract', [MLDashboardController::class, 'extractFeatures'])->name('features.extract');
+            
+            // NOUVEAU v2.0: Entraînement modèle et A/B testing
+            Route::post('/train', [MLDashboardController::class, 'trainModel'])->name('train');
+            Route::post('/ab-test/start', [MLDashboardController::class, 'startABTest'])->name('ab-test.start');
+            Route::get('/ab-test/results/{testId}', [MLDashboardController::class, 'getABTestResults'])->name('ab-test.results');
+            Route::post('/ab-test/{testId}/end', [MLDashboardController::class, 'endABTest'])->name('ab-test.end');
+        });
+
+        // === AI AGENT ROUTES ===
+        Route::prefix('ai-agent')->name('ai-agent.')->group(function () {
+            // Interface principale
+            Route::get('/', [\App\Http\Controllers\Admin\AIAgentController::class, 'index'])->name('index');
+            
+            // API pour interaction avec l'agent IA
+            Route::post('/ask', [\App\Http\Controllers\Admin\AIAgentController::class, 'ask'])->name('ask');
+            Route::get('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'getConversation'])->name('conversation');
+            Route::delete('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'deleteConversation'])->name('conversation.delete');
+            
+            // Utilitaires
+            Route::get('/sessions', [\App\Http\Controllers\Admin\AIAgentController::class, 'getRecentSessions'])->name('sessions');
+            Route::get('/test', [\App\Http\Controllers\Admin\AIAgentController::class, 'test'])->name('test');
+            Route::get('/stats', [\App\Http\Controllers\Admin\AIAgentController::class, 'getStats'])->name('stats');
         });
         
         // Tracking et monitoring Eklektik

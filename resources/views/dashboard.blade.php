@@ -2051,6 +2051,7 @@
       @endif
       <button class="nav-tab" onclick="showTab('comparison')">Comparison</button>
       @if(Auth::user()->isSuperAdmin())
+      <button class="nav-tab" onclick="showTab('ai-agent')">🤖 Agent IA</button>
       <button class="nav-tab" onclick="window.location.href='{{ route('admin.timwe-diagnostic') }}'">🩺 Diagnostic Timwe</button>
       @endif
       <!-- <button class="nav-tab" onclick="showTab('insights')">Insights</button> -->
@@ -3094,7 +3095,103 @@
       </div>
     </div>
 
-    <!-- Tab 6: Insights (Hidden) -->
+    <!-- Tab 6: Agent IA (Style ChatGPT) -->
+    <div id="ai-agent" class="tab-content">
+      <div class="ai-chat-container" style="background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); height: 650px; display: flex; flex-direction: column;">
+        
+        <!-- Header minimaliste -->
+        <div class="ai-header" style="padding: 16px 24px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border-radius: 12px 12px 0 0;">
+          <div style="display: flex; justify-content: between; align-items: center;">
+            <div>
+              <h5 style="margin: 0; font-weight: 600;">🤖 Assistant IA Expert ML</h5>
+              <small style="opacity: 0.9;">85k clients • 36 features • Recommandations instantanées</small>
+            </div>
+            <button onclick="newAIConversationNow()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">
+              ➕ Nouveau
+            </button>
+          </div>
+        </div>
+
+        <!-- Zone de messages (style ChatGPT) -->
+        <div id="aiMessagesZone" style="flex: 1; overflow-y: auto; padding: 0;">
+          
+          <!-- Message de bienvenue -->
+          <div class="ai-welcome-msg" style="padding: 24px; background: #f9fafb; border-bottom: 1px solid #f0f0f0;">
+            <div style="max-width: 800px;">
+              <p style="margin: 0 0 12px 0; color: #374151; font-size: 1rem;">
+                <strong>👋 Salut ! Je suis votre expert IA.</strong> Posez-moi n'importe quelle question sur vos données ML et stratégies de pricing.
+              </p>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px;">
+                <button onclick="askAIQuestion('Quel est le taux de succès actuel ?')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer; transition: all 0.2s;">
+                  Taux de succès actuel ?
+                </button>
+                <button onclick="askAIQuestion('Compare quotidien 0.3 TND vs mensuel 3.0 TND')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer; transition: all 0.2s;">
+                  ROI quotidien vs mensuel
+                </button>
+                <button onclick="askAIQuestion('Quelle stratégie pour les 29k clients High Risk ?')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer; transition: all 0.2s;">
+                  Stratégie High Risk ?
+                </button>
+                <button onclick="askAIQuestion('Explique les top 5 features ML les plus importantes')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer; transition: all 0.2s;">
+                  Top features ML
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zone des conversations -->
+          <div id="aiMessagesContainer" style="padding: 0; min-height: 200px;">
+            <!-- Les messages apparaîtront ici -->
+          </div>
+
+          <!-- Indicateur de frappe ChatGPT style -->
+          <div id="aiTypingIndicator" style="display: none; padding: 16px 24px;">
+            <div style="display: flex; align-items: center; color: #6b7280;">
+              <div style="display: flex; gap: 4px; margin-right: 8px;">
+                <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot1 1.4s infinite;"></div>
+                <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot2 1.4s infinite;"></div>
+                <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot3 1.4s infinite;"></div>
+              </div>
+              <span style="font-style: italic; font-size: 0.9rem;">Agent IA analyse vos données...</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Zone de saisie (style ChatGPT) -->
+        <div class="ai-input-zone" style="padding: 16px 24px; background: white; border-top: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+          <div style="display: flex; align-items: end; gap: 8px; max-width: 100%; position: relative;">
+            <div style="flex: 1; position: relative;">
+              <textarea id="aiQuestionInput" 
+                       placeholder="Posez votre question (ex: Compare les 3 stratégies de pricing...)"
+                       style="width: 100%; min-height: 44px; max-height: 120px; padding: 12px 50px 12px 16px; 
+                              border: 2px solid #e5e7eb; border-radius: 22px; font-size: 1rem; 
+                              resize: none; outline: none; font-family: inherit;"
+                       rows="1"
+                       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIQuestionNow();}"></textarea>
+              <button id="aiSendBtn" 
+                      onclick="sendAIQuestionNow()"
+                      style="position: absolute; right: 8px; bottom: 6px; width: 32px; height: 32px; 
+                             background: #6366f1; border: none; border-radius: 50%; color: white; 
+                             display: flex; align-items: center; justify-content: center; cursor: pointer;
+                             transition: all 0.2s;">
+                ➤
+              </button>
+            </div>
+          </div>
+          
+          <!-- Info discrète -->
+          <div style="text-align: center; margin-top: 8px;">
+            <small style="color: #9ca3af; font-size: 0.8rem;">
+              Session <code id="aiCurrentSession" style="font-size: 0.75rem; color: #6366f1;">nouvelle</code> • 
+              Expert ML avec 85k clients analysés
+            </small>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Tab 7: Insights (Hidden) -->
     <!--
     <div id="insights" class="tab-content">
       <div class="insights-grid">
@@ -9640,7 +9737,295 @@
     #clientTransactionsModal table tbody tr {
       transition: background-color 0.2s;
     }
+
+    /* Agent IA Styles (ChatGPT-like) */
+    .ai-message-user {
+      padding: 16px 24px;
+      background: white;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .ai-message-assistant {
+      padding: 16px 24px; 
+      background: #f7f7f8;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .ai-message-content {
+      max-width: 100%;
+      line-height: 1.6;
+      color: #374151;
+    }
+
+    .ai-message-user .ai-message-content {
+      font-weight: 500;
+    }
+
+    .ai-suggestion-simple:hover {
+      background: #e5e7eb !important;
+      border-color: #d1d5db !important;
+    }
+
+    #aiInputChatGPT:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    #aiSendChatGPT:hover {
+      background: #4f46e5;
+      transform: scale(1.05);
+    }
+
+    #aiSendChatGPT:disabled {
+      background: #d1d5db;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Animations pour typing indicator */
+    @keyframes ai-dot1 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
+    @keyframes ai-dot2 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
+    @keyframes ai-dot3 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
+
+    .ai-dot1 { animation-delay: 0ms; }
+    .ai-dot2 { animation-delay: 150ms; }
+    .ai-dot3 { animation-delay: 300ms; }
   </style>
+
+  <script>
+    // ===== AGENT IA STYLE CHATGPT =====
+    let aiSessionDashboard = null;
+
+    function initializeAIDashboard() {
+      console.log('🤖 Initialisation Agent IA...');
+      
+      aiSessionDashboard = generateAIUUID();
+      const sessionEl = document.getElementById('aiCurrentSession');
+      if (sessionEl) {
+        sessionEl.textContent = aiSessionDashboard.substr(0, 8);
+      }
+      
+      // Auto-resize textarea seulement
+      const aiInput = document.getElementById('aiQuestionInput');
+      if (aiInput) {
+        aiInput.addEventListener('input', function() {
+          this.style.height = 'auto';
+          this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+      }
+      
+      console.log('✅ Agent IA initialisé');
+    }
+
+    // === FONCTIONS DIRECTES (SANS EVENT LISTENERS) ===
+    
+    function askAIQuestion(question) {
+      console.log('💡 Question suggérée:', question);
+      document.getElementById('aiQuestionInput').value = question;
+      sendAIQuestionNow();
+    }
+    
+    function newAIConversationNow() {
+      console.log('🔄 Nouvelle conversation directe');
+      aiSessionDashboard = generateAIUUID();
+      document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
+      document.getElementById('aiMessagesContainer').innerHTML = '';
+      showNotification('🤖 Nouvelle conversation', 'success');
+    }
+
+    function sendAIQuestionNow() {
+      console.log('📤 Envoi direct question IA');
+      
+      const input = document.getElementById('aiQuestionInput');
+      const question = input.value.trim();
+      const sendBtn = document.getElementById('aiSendBtn');
+      
+      console.log('Question à envoyer:', question);
+      
+      if (!question) {
+        console.log('❌ Question vide');
+        showNotification('❌ Veuillez saisir une question', 'error');
+        return;
+      }
+      
+      if (!aiSessionDashboard) {
+        aiSessionDashboard = generateAIUUID();
+        document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
+      }
+      
+      // Désactiver bouton
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.style.background = '#d1d5db';
+      }
+      if (input) {
+        input.disabled = true;
+      }
+      
+      // Afficher question utilisateur
+      appendAIMessage('user', question);
+      input.value = '';
+      
+      // Afficher indicateur
+      document.getElementById('aiTypingIndicator').style.display = 'block';
+      scrollAIToBottom();
+      
+      // Appel API avec gestion des erreurs détaillée
+      console.log('🌐 Appel vers /admin/ai-agent/ask avec session:', aiSessionDashboard);
+      
+      fetch('/admin/ai-agent/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({
+          question: question,
+          session_id: aiSessionDashboard
+        })
+      })
+      .then(response => {
+        console.log('📨 Réponse reçue:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          console.error('❌ Erreur HTTP:', response.status);
+          throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        console.log('📄 Content-Type:', contentType);
+        
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error('❌ Réponse non-JSON reçue');
+          // Lire le HTML d'erreur pour diagnostic
+          return response.text().then(html => {
+            console.error('HTML reçu:', html.substring(0, 500));
+            throw new Error('Serveur a renvoyé du HTML au lieu de JSON - Vérifiez les routes et middleware');
+          });
+        }
+        
+        return response.json();
+      })
+      .then(data => {
+        console.log('📄 Données:', data);
+        document.getElementById('aiTypingIndicator').style.display = 'none';
+        
+        if (data.success) {
+          appendAIMessage('assistant', data.message);
+          showNotification('🤖 Réponse générée', 'success');
+        } else {
+          appendAIMessage('assistant', '❌ ' + (data.error || 'Erreur de configuration. Vérifiez OPENAI_API_KEY dans .env'));
+          showNotification('❌ ' + (data.error || 'Erreur configuration'), 'error');
+        }
+      })
+      .catch(error => {
+        console.error('❌ Erreur:', error);
+        document.getElementById('aiTypingIndicator').style.display = 'none';
+        appendAIMessage('assistant', '❌ Erreur réseau ou configuration. Vérifiez :\n\n1. OPENAI_API_KEY dans .env\n2. Tables agent IA créées\n3. Connexion internet');
+        showNotification('❌ Erreur réseau', 'error');
+      })
+      .finally(() => {
+        // Réactiver
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.style.background = '#6366f1';
+        }
+        if (input) {
+          input.disabled = false;
+          input.focus();
+        }
+      });
+    }
+
+
+    function appendAIMessage(type, content) {
+      const container = document.getElementById('aiMessagesContainer');
+      if (!container) {
+        console.error('Container aiMessagesContainer non trouvé');
+        return;
+      }
+      
+      console.log('📝 Ajout message:', type, content.substring(0, 50) + '...');
+      
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `ai-message-${type}`;
+      
+      if (type === 'user') {
+        messageDiv.innerHTML = `
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="width: 30px; height: 30px; background: #6366f1; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">
+              U
+            </div>
+            <div class="ai-message-content" style="flex: 1; padding-top: 4px;">
+              ${content}
+            </div>
+          </div>
+        `;
+      } else {
+        messageDiv.innerHTML = `
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <div style="width: 30px; height: 30px; background: #10b981; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">
+              🤖
+            </div>
+            <div class="ai-message-content" style="flex: 1; padding-top: 4px;">
+              ${formatAIMessage(content)}
+            </div>
+          </div>
+        `;
+      }
+      
+      container.appendChild(messageDiv);
+      scrollAIToBottom();
+    }
+
+    function formatAIMessage(content) {
+      // Format simple et propre comme ChatGPT
+      let formatted = content
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-family:monospace;color:#e11d48;">$1</code>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>');
+
+      // Tableaux simples
+      if (formatted.includes('|')) {
+        formatted = formatted.replace(/\|(.+?)\|/g, function(match, row) {
+          const cells = row.split('|').map(cell => cell.trim()).filter(cell => cell);
+          if (cells.length > 1) {
+            return '<tr>' + cells.map(cell => `<td style="padding:8px 12px; border-bottom:1px solid #e5e7eb; font-size:0.9rem;">${cell}</td>`).join('') + '</tr>';
+          }
+          return match;
+        });
+        
+        if (formatted.includes('<tr>')) {
+          formatted = '<table style="width:100%; margin:12px 0; border-collapse:collapse; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">' + formatted + '</table>';
+        }
+      }
+      
+      return '<div style="line-height: 1.6;">' + formatted + '</div>';
+    }
+
+    function scrollAIToBottom() {
+      const container = document.getElementById('aiMessagesZone');
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      } else {
+        // Fallback
+        const fallback = document.getElementById('aiMessagesContainer');
+        if (fallback && fallback.parentElement) {
+          fallback.parentElement.scrollTop = fallback.parentElement.scrollHeight;
+        }
+      }
+    }
+
+    function generateAIUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+  </script>
 
 </body>
 </html>

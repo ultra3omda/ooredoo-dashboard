@@ -4,29 +4,42 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\MLPredictionService;
+use App\Services\MLPredictionServiceV2;
 use App\Services\MLRecommendationService;
 use App\Services\MLFeatureExtractionService;
+use App\Services\MLABTestingService;
+use App\Services\MLModelTrainingService;
 use App\Models\MLClientFeature;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class MLDashboardController extends Controller
 {
     private MLPredictionService $predictionService;
+    private MLPredictionServiceV2 $predictionServiceV2;
     private MLRecommendationService $recommendationService;
     private MLFeatureExtractionService $featureService;
+    private MLABTestingService $abTestingService;
+    private MLModelTrainingService $modelTrainingService;
 
     public function __construct(
         MLPredictionService $predictionService,
+        MLPredictionServiceV2 $predictionServiceV2,
         MLRecommendationService $recommendationService,
-        MLFeatureExtractionService $featureService
+        MLFeatureExtractionService $featureService,
+        MLABTestingService $abTestingService,
+        MLModelTrainingService $modelTrainingService
     ) {
         $this->predictionService = $predictionService;
+        $this->predictionServiceV2 = $predictionServiceV2;
         $this->recommendationService = $recommendationService;
         $this->featureService = $featureService;
+        $this->abTestingService = $abTestingService;
+        $this->modelTrainingService = $modelTrainingService;
     }
 
     /**
@@ -74,8 +87,13 @@ class MLDashboardController extends Controller
                 'segments' => MLClientFeature::getSegmentStats($date),
                 'recommendations' => $this->recommendationService->getPriorityRecommendations(10),
                 'predictions' => $this->predictionService->getDashboardPredictions(20),
-                'trends' => $this->getTrendData(30), // 30 derniers jours
-                'model_performance' => $this->getModelPerformance()
+                'trends' => $this->getTrendData(30),
+                'model_performance' => $this->getModelPerformanceAdvanced(),
+                'ab_tests' => $this->getABTestsData(),
+                'feature_importance' => $this->getFeatureImportance(),
+                'data_quality' => $this->getDataQualityMetrics(),
+                'operator_comparison' => $this->getOperatorComparison(),
+                'offer_type_analysis' => $this->getOfferTypeAnalysis()
             ];
 
             return response()->json([
@@ -108,7 +126,8 @@ class MLDashboardController extends Controller
                 ? Carbon::parse($request->input('prediction_date'))
                 : Carbon::now();
 
-            $prediction = $this->predictionService->predictPaymentSuccess($clientId, $predictionDate);
+            // Utiliser le nouveau service V2 avec A/B testing
+            $prediction = $this->predictionServiceV2->predictPaymentSuccess($clientId, $predictionDate);
 
             return response()->json([
                 'success' => true,
