@@ -9,44 +9,126 @@ use Carbon\Carbon;
 
 class MLPredictionService
 {
+    public function __construct(
+        private MLPythonBridgeService $mlBridge
+    ) {}
+
     /**
      * Prédit la probabilité de succès de facturation pour un client
      */
     public function predictPaymentSuccess(int $clientId, Carbon $predictionDate = null): array
     {
-        if (!$predictionDate) {
+        if (! $predictionDate) {
             $predictionDate = Carbon::now();
         }
 
-        Log::info("MLPredictionService - Prédiction succès paiement pour client $clientId");
+        Log::info("MLPredictionService - Prédiction succès paiement pour client {$clientId}");
 
         try {
-            // Récupérer les features les plus récentes du client
             $features = MLClientFeature::getLatestForClient($clientId);
-            
-            if (!$features) {
-                Log::warning("MLPredictionService - Aucune feature trouvée pour client $clientId");
+
+            if (! $features) {
+                Log::warning("MLPredictionService - Aucune feature trouvée pour client {$clientId}");
+
                 return $this->getDefaultPrediction();
             }
 
-            // === MODÈLE SIMPLE BASÉ SUR LES RÈGLES ===
-            // (En attendant l'implémentation des vrais modèles ML)
-            
-            $prediction = $this->ruleBasedPaymentPrediction($features, $predictionDate);
-            
-            // Sauvegarder la prédiction
-            $this->storePrediction($clientId, $predictionDate, $prediction);
-            
-            return $prediction;
+            $prediction = $this->mlBasedPaymentPrediction($features, $predictionDate);
 
+            $this->storePrediction($clientId, $predictionDate, $prediction);
+
+            return $prediction;
         } catch (\Exception $e) {
-            Log::error("MLPredictionService - Erreur prédiction client $clientId", [
+            Log::error("MLPredictionService - Erreur prédiction client {$clientId}", [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return $this->getDefaultPrediction();
         }
+    }
+
+    /**
+     * Prédiction via le modèle ML LightGBM (Python). Fallback rule-based si indisponible.
+     */
+    private function mlBasedPaymentPrediction(MLClientFeature $features, Carbon $predictionDate): array
+    {
+        if (! $this->mlBridge->isModelAvailable()) {
+            return $this->ruleBasedPaymentPrediction($features, $predictionDate);
+        }
+
+        $mlFeatures = $this->buildFeatureArrayForPython($features);
+
+        try {
+            $result = $this->mlBridge->predictPaymentSuccess($mlFeatures);
+        } catch (\Throwable $e) {
+            Log::warning('MLPredictionService - Fallback rule-based après échec ML', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->ruleBasedPaymentPrediction($features, $predictionDate);
+        }
+
+        $optimalTiming = $this->calculateOptimalTiming($features, $predictionDate);
+        $optimalPrice = $this->calculateOptimalPrice($features);
+
+        return [
+            'client_id' => $features->client_id,
+            'prediction_date' => $predictionDate->toDateString(),
+            'payment_success_probability' => round($result['probability'], 4),
+            'success_confidence' => round($result['confidence'], 4),
+            'base_success_rate' => round($features->payment_success_rate ?? 0, 4),
+            'time_adjustment' => 0,
+            'behavior_adjustment' => 0,
+            'optimal_billing_time' => $optimalTiming['datetime'],
+            'optimal_billing_day_of_week' => $optimalTiming['day_of_week'],
+            'optimal_billing_hour' => $optimalTiming['hour'],
+            'timing_confidence' => $optimalTiming['confidence'],
+            'optimal_price' => $optimalPrice['price'],
+            'optimal_frequency' => $optimalPrice['frequency'],
+            'price_confidence' => $optimalPrice['confidence'],
+            'client_segment' => $features->client_segment,
+            'churn_probability' => $features->churn_probability ?? 0,
+            'model_version' => 'lightgbm_v3.0',
+            'features_used' => array_keys($mlFeatures),
+        ];
+    }
+
+    /**
+     * Construit le tableau de features attendu par le script Python (même ordre/noms que train_model.py).
+     */
+    private function buildFeatureArrayForPython(MLClientFeature $features): array
+    {
+        $map = [
+            'consecutive_failures' => $features->consecutive_failures ?? 0,
+            'total_payments' => $features->total_payments ?? 0,
+            'total_attempts' => $features->total_attempts ?? 0,
+            'payment_frequency' => $features->payment_frequency ?? 0,
+            'avg_payment_amount' => (float) ($features->avg_payment_amount ?? 0),
+            'days_since_last_payment' => $features->days_since_last_payment ?? 0,
+            'best_billing_day_week' => $features->best_billing_day_week ?? 3,
+            'best_billing_hour' => $features->best_billing_hour ?? 14,
+            'end_month_success_rate' => (float) ($features->end_month_success_rate ?? 0),
+            'beginning_month_success_rate' => (float) ($features->beginning_month_success_rate ?? 0),
+            'subscription_age_days' => $features->subscription_age_days ?? 0,
+            'churn_probability' => (float) ($features->churn_probability ?? 0),
+            'failure_streak' => $features->failure_streak ?? 0,
+            'is_high_value_client' => $features->is_high_value_client ? 1 : 0,
+            'payment_reliability_score' => (float) ($features->payment_reliability_score ?? 0),
+            'engagement_score' => (float) ($features->engagement_score ?? 0),
+            'lifetime_value_score' => (float) ($features->lifetime_value_score ?? 0),
+            'morning_success_rate' => (float) ($features->morning_success_rate ?? 0),
+            'afternoon_success_rate' => (float) ($features->afternoon_success_rate ?? 0),
+            'evening_success_rate' => (float) ($features->evening_success_rate ?? 0),
+            'recovery_after_failure_rate' => (float) ($features->recovery_after_failure_rate ?? 0),
+            'max_consecutive_successes' => $features->max_consecutive_successes ?? 0,
+            'payment_amount_std' => (float) ($features->payment_amount_std ?? 0),
+            'amount_flexibility' => (float) ($features->amount_flexibility ?? 0),
+            'no_balance_failure_rate' => (float) ($features->no_balance_failure_rate ?? 0),
+            'not_delivered_failure_rate' => (float) ($features->not_delivered_failure_rate ?? 0),
+        ];
+
+        return $map;
     }
 
     /**

@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use App\Services\AIAgentService;
 use App\Models\AIConversation;
+use App\Models\AIConversationSession;
 
 class AIAgentController extends Controller
 {
@@ -44,7 +45,8 @@ class AIAgentController extends Controller
     {
         $request->validate([
             'question' => 'required|string|max:2000',
-            'session_id' => 'nullable|string' // Changé de uuid vers string pour plus de flexibilité
+            'session_id' => 'nullable|string',
+            'provider' => 'nullable|string|in:openai,anthropic,gemini'
         ]);
         
         // Vérifier que l'agent est configuré
@@ -59,7 +61,19 @@ class AIAgentController extends Controller
         
         $sessionId = $request->input('session_id') ?: Str::uuid()->toString();
         $question = trim($request->input('question'));
+        $provider = $request->input('provider', 'openai');
         $userId = auth()->id();
+
+        AIConversationSession::firstOrCreate(
+            ['session_id' => $sessionId, 'user_id' => $userId],
+            ['title' => null]
+        );
+
+        // S'assurer que le provider est disponible
+        $available = $this->aiAgent->getAvailableProviders();
+        if (!isset($available[$provider])) {
+            $provider = !empty($available) ? array_key_first($available) : 'openai';
+        }
         
         // Validation rate limiting simple
         $recentQuestions = AIConversation::where('user_id', $userId)
@@ -78,10 +92,11 @@ class AIAgentController extends Controller
         Log::info("AIAgentController - Question reçue", [
             'user_id' => $userId,
             'session_id' => substr($sessionId, 0, 8),
+            'provider' => $provider,
             'question_length' => strlen($question)
         ]);
         
-        $response = $this->aiAgent->ask($question, $sessionId, $userId);
+        $response = $this->aiAgent->ask($question, $sessionId, $userId, $provider);
         
         // Ajouter l'ID de session à la réponse
         $response['session_id'] = $sessionId;
@@ -90,31 +105,72 @@ class AIAgentController extends Controller
     }
     
     /**
-     * NOUVEAU: Récupère les conversations récentes pour la sidebar
+     * Récupère les conversations récentes pour la sidebar (sauvegardées en BDD automatiquement)
      */
     public function getRecentConversations(): JsonResponse
     {
-        $conversations = AIConversation::where('user_id', auth()->id())
+        $userId = auth()->id();
+        $sessionIds = AIConversation::where('user_id', $userId)
             ->where('created_at', '>=', now()->subDays(7))
-            ->select('session_id', 'message', 'created_at')
-            ->where('message_type', 'user') // Première question de chaque conversation
+            ->select('session_id')
             ->groupBy('session_id')
-            ->orderBy('created_at', 'desc')
-            ->limit(15)
+            ->orderByRaw('MAX(created_at) DESC')
+            ->limit(20)
+            ->pluck('session_id');
+
+        $sessions = AIConversationSession::whereIn('session_id', $sessionIds)
+            ->where('user_id', $userId)
             ->get()
-            ->map(function($conv) {
-                $firstMessage = substr(strip_tags($conv->message), 0, 50) . '...';
-                return [
-                    'session_id' => $conv->session_id,
-                    'title' => $firstMessage,
-                    'created_at' => $conv->created_at->diffForHumans(),
-                    'timestamp' => $conv->created_at->toISOString()
-                ];
-            });
-        
+            ->keyBy('session_id');
+
+        $conversations = collect();
+        foreach ($sessionIds as $sid) {
+            $firstMsg = AIConversation::where('session_id', $sid)
+                ->where('user_id', $userId)
+                ->where('message_type', 'user')
+                ->orderBy('created_at')
+                ->first();
+            if (! $firstMsg) {
+                continue;
+            }
+            $session = $sessions->get($sid);
+            $title = $session && $session->title
+                ? $session->title
+                : substr(strip_tags($firstMsg->message), 0, 50) . (strlen(strip_tags($firstMsg->message)) > 50 ? '...' : '');
+            $conversations->push([
+                'session_id' => $sid,
+                'title' => $title,
+                'created_at' => $firstMsg->created_at->diffForHumans(),
+                'timestamp' => $firstMsg->created_at->toISOString(),
+            ]);
+        }
+
         return response()->json([
             'success' => true,
-            'conversations' => $conversations
+            'conversations' => $conversations->values()
+        ]);
+    }
+
+    /**
+     * Met à jour le titre d'une conversation (nommer le chat)
+     */
+    public function updateConversationTitle(Request $request, string $sessionId): JsonResponse
+    {
+        $request->validate(['title' => 'required|string|max:255']);
+        $title = trim($request->input('title'));
+        $userId = auth()->id();
+
+        $session = AIConversationSession::firstOrCreate(
+            ['session_id' => $sessionId, 'user_id' => $userId],
+            ['title' => null]
+        );
+        $session->title = $title;
+        $session->save();
+
+        return response()->json([
+            'success' => true,
+            'session_id' => $sessionId,
+            'title' => $title,
         ]);
     }
     

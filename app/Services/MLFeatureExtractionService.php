@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Jobs\ExtractClientFeaturesJob;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -70,23 +72,42 @@ class MLFeatureExtractionService
     }
 
     /**
+     * Cache Redis/Laravel pour les stats de transactions (évite requêtes répétées)
+     */
+    private function getCachedTransactionStats(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $cacheKey = 'ml_trans_stats_' . $clientId . '_' . $startDate->format('Ymd') . '_' . $endDate->format('Ymd');
+        return Cache::remember($cacheKey, 3600, function () use ($clientId, $startDate, $endDate) {
+            return $this->fetchRawTransactionsForPeriod($clientId, $startDate, $endDate);
+        });
+    }
+
+    /**
+     * Requête brute des transactions pour une période (utilisée par le cache)
+     */
+    private function fetchRawTransactionsForPeriod(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $rows = DB::table('transactions_history as th')
+            ->where('th.client_id', $clientId)
+            ->where(function ($q) {
+                $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
+                    ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+            })
+            ->whereBetween('th.created_at', [$startDate, $endDate])
+            ->whereNotNull('th.result')
+            ->orderBy('th.created_at')
+            ->get(['th.transaction_history_id', 'th.created_at', 'th.status', 'th.result']);
+        return $rows->toArray();
+    }
+
+    /**
      * Calcule les features liées aux paiements
      */
     private function calculatePaymentFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
     {
         $billingPpid = env('TIMWE_BILLING_PPID', '63980');
-        
-        // Récupérer toutes les tentatives de facturation
-        $transactions = DB::table('transactions_history as th')
-            ->where('th.client_id', $clientId)
-            ->where(function($q) {
-                $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                  ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
-            })
-            ->whereBetween('th.created_at', [$startDate, $endDate])
-            ->whereNotNull('th.result')
-            ->orderBy('th.created_at')
-            ->get();
+        $transactions = $this->getCachedTransactionStats($clientId, $startDate, $endDate);
+        $transactions = collect($transactions);
 
         $totalAttempts = 0;
         $totalPayments = 0;
@@ -96,25 +117,25 @@ class MLFeatureExtractionService
         $failures = [];
 
         foreach ($transactions as $transaction) {
-            $result = json_decode($transaction->result, true);
+            $resultRaw = is_array($transaction) ? ($transaction['result'] ?? null) : $transaction->result;
+            $result = is_string($resultRaw) ? json_decode($resultRaw, true) : $resultRaw;
             if (!is_array($result)) continue;
-            
+
             $ppid = $result['pricepointId'] ?? null;
             $delivery = $result['mnoDeliveryCode'] ?? null;
-            $totalCharged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
-            
+            $totalCharged = isset($result['totalCharged']) ? (int) $result['totalCharged'] : 0;
+
             $totalAttempts++;
-            
-            if ((string)$ppid === (string)$billingPpid && $delivery === 'DELIVERED' && $totalCharged > 0) {
-                // Paiement réussi
+
+            $createdAt = is_array($transaction) ? ($transaction['created_at'] ?? null) : $transaction->created_at;
+            if ((string) $ppid === (string) $billingPpid && $delivery === 'DELIVERED' && $totalCharged > 0) {
                 $totalPayments++;
-                $totalAmount += $totalCharged / 1000; // Convertir en TND
-                $consecutiveFailures = 0; // Reset
-                $lastPaymentDate = $transaction->created_at;
+                $totalAmount += $totalCharged / 1000;
+                $consecutiveFailures = 0;
+                $lastPaymentDate = $createdAt;
             } else {
-                // Échec de paiement
                 $consecutiveFailures++;
-                $failures[] = $transaction->created_at;
+                $failures[] = $createdAt;
             }
         }
 
@@ -635,70 +656,87 @@ class MLFeatureExtractionService
     }
 
     /**
-     * Extrait les features pour tous les clients actifs et les sauvegarde
+     * Retourne les IDs des clients actifs pour une date de calcul (pour queues ou batch)
      */
-    public function extractAndStoreFeaturesForDate(Carbon $calculationDate): int
+    public function getActiveClientIds(Carbon $calculationDate): array
     {
-        Log::info("MLFeatureExtractionService - Début extraction pour la date {$calculationDate->toDateString()}");
-
-        // Récupérer tous les clients qui ont eu des transactions Timwe
         $timweOperatorIds = DB::table('country_payments_methods')
             ->whereRaw("TRIM(country_payments_methods_name) LIKE '%timwe%'")
             ->pluck('country_payments_methods_id')
             ->toArray();
 
         if (empty($timweOperatorIds)) {
-            Log::warning("MLFeatureExtractionService - Aucun opérateur Timwe trouvé");
-            return 0;
+            return [];
         }
 
-        // Récupérer les clients actifs (avec abonnement ou transactions récentes)
-        $activeClients = DB::table('client_abonnement as ca')
+        return DB::table('client_abonnement as ca')
             ->whereIn('ca.country_payments_methods_id', $timweOperatorIds)
             ->where('ca.client_abonnement_creation', '<=', $calculationDate)
-            ->where(function($q) use ($calculationDate) {
+            ->where(function ($q) use ($calculationDate) {
                 $q->whereNull('ca.client_abonnement_expiration')
-                  ->orWhere('ca.client_abonnement_expiration', '>=', $calculationDate);
+                    ->orWhere('ca.client_abonnement_expiration', '>=', $calculationDate);
             })
             ->distinct()
             ->pluck('ca.client_id')
             ->toArray();
+    }
 
-        Log::info("MLFeatureExtractionService - {count} clients actifs trouvés", ['count' => count($activeClients)]);
+    /**
+     * Extrait les features pour tous les clients actifs et les sauvegarde.
+     * Si $useQueue = true, dispatch des jobs en chunks de 500 sur la queue ml-extraction.
+     */
+    public function extractAndStoreFeaturesForDate(Carbon $calculationDate, bool $useQueue = false): int
+    {
+        Log::info("MLFeatureExtractionService - Début extraction pour la date {$calculationDate->toDateString()}", [
+            'use_queue' => $useQueue,
+        ]);
+
+        $activeClients = $this->getActiveClientIds($calculationDate);
+        $total = count($activeClients);
+
+        if ($total === 0) {
+            Log::warning("MLFeatureExtractionService - Aucun client actif trouvé");
+            return 0;
+        }
+
+        if ($useQueue) {
+            $chunkSize = (int) env('ML_EXTRACTION_CHUNK_SIZE', 500);
+            $chunks = array_chunk($activeClients, $chunkSize);
+            foreach ($chunks as $chunk) {
+                ExtractClientFeaturesJob::dispatch($chunk, $calculationDate)->onQueue('ml-extraction');
+            }
+            Log::info("MLFeatureExtractionService - {$total} clients dispatchés en " . count($chunks) . " jobs (queue ml-extraction)");
+            return $total;
+        }
 
         $processedCount = 0;
         $batchSize = 100;
 
-        // Traiter par batches pour éviter la surcharge mémoire
         foreach (array_chunk($activeClients, $batchSize) as $batch) {
             $featuresData = [];
-            
             foreach ($batch as $clientId) {
                 try {
-                    $features = $this->extractClientFeatures($clientId, $calculationDate);
+                    $features = $this->extractClientFeatures((int) $clientId, $calculationDate);
                     $featuresData[] = $features;
                     $processedCount++;
                 } catch (\Exception $e) {
                     Log::error("MLFeatureExtractionService - Erreur pour client $clientId", [
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
-            
-            // Insérer le batch en base
             if (!empty($featuresData)) {
                 DB::table('ml_client_features')->upsert(
                     $featuresData,
-                    ['client_id', 'calculation_date'], // Clés uniques
-                    array_keys($featuresData[0]) // Colonnes à mettre à jour
+                    ['client_id', 'calculation_date'],
+                    array_keys($featuresData[0])
                 );
             }
-            
             Log::info("MLFeatureExtractionService - Batch traité, total: $processedCount");
         }
 
         Log::info("MLFeatureExtractionService - Extraction terminée pour {$calculationDate->toDateString()}", [
-            'clients_processed' => $processedCount
+            'clients_processed' => $processedCount,
         ]);
 
         return $processedCount;
@@ -729,31 +767,23 @@ class MLFeatureExtractionService
     private function calculateAdvancedFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
     {
         $billingPpid = env('TIMWE_BILLING_PPID', '63980');
-        
-        // Récupérer toutes les transactions pour analyse fine
-        $allTransactions = DB::table('transactions_history as th')
-            ->where('th.client_id', $clientId)
-            ->where(function($q) {
-                $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                  ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
-            })
-            ->whereBetween('th.created_at', [$startDate, $endDate])
-            ->whereNotNull('th.result')
-            ->orderBy('th.created_at')
-            ->get();
+        $rawTransactions = $this->getCachedTransactionStats($clientId, $startDate, $endDate);
+        $allTransactions = collect($rawTransactions);
 
         $successes = [];
         $failures = [];
         $amounts = [];
 
         foreach ($allTransactions as $transaction) {
-            $result = json_decode($transaction->result, true);
+            $resultRaw = is_array($transaction) ? ($transaction['result'] ?? null) : $transaction->result;
+            $result = is_string($resultRaw) ? json_decode($resultRaw, true) : $resultRaw;
             if (!is_array($result)) continue;
-            
+
             $ppid = $result['pricepointId'] ?? null;
             $delivery = $result['mnoDeliveryCode'] ?? null;
-            $totalCharged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
-            $date = Carbon::parse($transaction->created_at);
+            $totalCharged = isset($result['totalCharged']) ? (int) $result['totalCharged'] : 0;
+            $createdAt = is_array($transaction) ? ($transaction['created_at'] ?? null) : $transaction->created_at;
+            $date = Carbon::parse($createdAt);
             
             $isSuccess = (string)$ppid === (string)$billingPpid && $delivery === 'DELIVERED' && $totalCharged > 0;
             

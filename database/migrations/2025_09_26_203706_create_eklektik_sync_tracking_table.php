@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('eklektik_sync_tracking')) {
+            return;
+        }
         Schema::create('eklektik_sync_tracking', function (Blueprint $table) {
             $table->id();
             

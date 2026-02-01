@@ -2078,6 +2078,17 @@
 
       // Add active class to clicked tab
       event.target.classList.add('active');
+
+      // Masquer la section dates / périodes sur l'onglet Agent IA
+      const filtersBar = document.querySelector('.enhanced-filters-bar');
+      if (filtersBar) {
+        filtersBar.style.display = (tabName === 'ai-agent') ? 'none' : '';
+      }
+
+      // Charger l'historique des conversations Agent IA dès l'ouverture de l'onglet
+      if (tabName === 'ai-agent' && typeof initializeAIDashboard === 'function') {
+        initializeAIDashboard();
+      }
       
       // Auto-scroll to center active tab on mobile
       if (typeof centerActiveTab === 'function') {
@@ -3226,8 +3237,14 @@
             </div>
           </div>
           
-          <!-- Info discrète -->
-          <div style="text-align: center; margin-top: 8px;">
+          <!-- Modèle / Fournisseur + Session -->
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 8px;">
+            <label for="aiProviderSelectDashboard" style="color: #9ca3af; font-size: 0.8rem; margin: 0;">🤖 Modèle :</label>
+            <select id="aiProviderSelectDashboard" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e7eb; color: #374151; min-width: 160px;">
+              <option value="openai">OpenAI (GPT)</option>
+              <option value="anthropic">Claude (Anthropic)</option>
+              <option value="gemini">Gemini (Google)</option>
+            </select>
             <small style="color: #9ca3af; font-size: 0.8rem;">
               Session <code id="aiCurrentSession" style="font-size: 0.75rem; color: #6366f1;">nouvelle</code> • 
               Expert ML avec 85k clients analysés
@@ -3236,6 +3253,18 @@
         </div>
 
       </div>
+      </div>
+    </div>
+
+    <!-- Modal fluide pour nommer la conversation Agent IA -->
+    <div id="aiRenameModal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.4); align-items: center; justify-content: center;">
+      <div class="ai-rename-modal-box" style="background: white; border-radius: 12px; padding: 24px; min-width: 360px; max-width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+        <div style="font-weight: 600; font-size: 1.1rem; color: #374151; margin-bottom: 12px;">✏️ Nommer la conversation</div>
+        <input type="text" id="aiRenameModalInput" placeholder="Nom de la conversation" style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem; margin-bottom: 16px; box-sizing: border-box;">
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" id="aiRenameModalCancel" style="padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 8px; background: #f9fafb; color: #374151; cursor: pointer; font-size: 0.9rem;">Annuler</button>
+          <button type="button" id="aiRenameModalOk" style="padding: 8px 16px; border: none; border-radius: 8px; background: #6366f1; color: white; cursor: pointer; font-size: 0.9rem;">OK</button>
+        </div>
       </div>
     </div>
 
@@ -9862,10 +9891,16 @@
   <script>
     // ===== AGENT IA STYLE CHATGPT =====
     let aiSessionDashboard = null;
+    let aiConversationsFromApi = [];
+    let aiDashboardInitialized = false;
 
     function initializeAIDashboard() {
       console.log('🤖 Initialisation Agent IA...');
-      
+      if (aiDashboardInitialized) {
+        loadConversationsFromDatabase();
+        return;
+      }
+      aiDashboardInitialized = true;
       aiSessionDashboard = generateAIUUID();
       const sessionEl = document.getElementById('aiCurrentSession');
       const sidebarSessionEl = document.getElementById('aiSessionSidebar');
@@ -9876,7 +9911,6 @@
         sidebarSessionEl.textContent = aiSessionDashboard.substr(0, 8);
       }
       
-      // Charger les conversations sauvegardées (localStorage + BDD)
       loadConversationsFromDatabase();
       updateConversationsSidebar();
       
@@ -9889,12 +9923,111 @@
         });
       }
       
-      // Sauvegarder automatiquement avant fermeture de page
       window.addEventListener('beforeunload', function() {
         saveCurrentConversationAuto();
       });
+
+      // Modal renommer : boutons et fermeture
+      const renameModal = document.getElementById('aiRenameModal');
+      const renameInput = document.getElementById('aiRenameModalInput');
+      const renameOk = document.getElementById('aiRenameModalOk');
+      const renameCancel = document.getElementById('aiRenameModalCancel');
+      if (renameOk) renameOk.addEventListener('click', submitRenameConversation);
+      if (renameCancel) renameCancel.addEventListener('click', closeRenameModal);
+      if (renameInput) renameInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); submitRenameConversation(); }
+        if (e.key === 'Escape') closeRenameModal();
+      });
+      if (renameModal) renameModal.addEventListener('click', function(e) {
+        if (e.target === renameModal) closeRenameModal();
+      });
       
       console.log('✅ Agent IA initialisé');
+    }
+
+    function loadConversationsFromDatabase() {
+      fetch('/admin/ai-agent/conversations', {
+        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.conversations) {
+          aiConversationsFromApi = data.conversations;
+          updateConversationsSidebar();
+        }
+      })
+      .catch(() => { aiConversationsFromApi = []; });
+    }
+
+    function renameCurrentConversation() {
+      if (!aiSessionDashboard) {
+        showNotification('❌ Aucune conversation active', 'error');
+        return;
+      }
+      const currentFromApi = aiConversationsFromApi.find(c => c.session_id === aiSessionDashboard);
+      const modal = document.getElementById('aiRenameModal');
+      const input = document.getElementById('aiRenameModalInput');
+      if (!modal || !input) return;
+      input.value = currentFromApi && currentFromApi.title ? currentFromApi.title : '';
+      modal.style.display = 'flex';
+      input.focus();
+      input.select();
+    }
+
+    function closeRenameModal() {
+      const modal = document.getElementById('aiRenameModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function submitRenameConversation() {
+      const input = document.getElementById('aiRenameModalInput');
+      const title = input && input.value ? input.value.trim() : '';
+      if (!title) {
+        showNotification('❌ Saisissez un nom', 'error');
+        return;
+      }
+      if (!aiSessionDashboard) return;
+      closeRenameModal();
+      fetch('/admin/ai-agent/conversation/' + aiSessionDashboard + '/title', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ title: title })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          loadConversationsFromDatabase();
+          updateConversationsSidebar(aiSessionDashboard);
+          showNotification('✅ Conversation nommée : ' + data.title, 'success');
+        } else {
+          showNotification('❌ Erreur lors de la mise à jour', 'error');
+        }
+      })
+      .catch(() => showNotification('❌ Erreur réseau', 'error'));
+    }
+
+    function loadConversationFromApi(sessionId) {
+      fetch('/admin/ai-agent/conversation/' + sessionId, {
+        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success || !data.messages) {
+          showNotification('❌ Impossible de charger la conversation', 'error');
+          return;
+        }
+        document.getElementById('aiMessagesContainer').innerHTML = '';
+        data.messages.forEach(m => appendAIMessageFromHistory(m.type, m.message));
+        aiSessionDashboard = sessionId;
+        document.getElementById('aiCurrentSession').textContent = sessionId.substr(0, 8);
+        document.getElementById('aiSessionSidebar').textContent = sessionId.substr(0, 8);
+        updateConversationsSidebar(sessionId);
+        showNotification('📂 Conversation chargée', 'success');
+      })
+      .catch(() => showNotification('❌ Erreur chargement', 'error'));
     }
 
     // === FONCTIONS DIRECTES (SANS EVENT LISTENERS) ===
@@ -10033,45 +10166,78 @@
     }
 
     function updateConversationsSidebar(activeId = null) {
-      const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
       const container = document.getElementById('aiConversationsList');
-      
-      // Garder la conversation actuelle
-      container.innerHTML = `
-        <div class="ai-conversation-item ${!activeId ? 'active' : ''}" data-session="current" onclick="selectCurrentConversation()" style="padding: 12px; margin: 4px 0; background: ${!activeId ? 'white' : '#f9fafb'}; border-radius: 8px; border-left: 3px solid ${!activeId ? '#6366f1' : 'transparent'}; cursor: pointer;">
-          <div style="font-size: 0.85rem; font-weight: 500; color: #374151;">💬 Conversation Actuelle</div>
-          <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Session active</div>
-        </div>
-      `;
-      
-      // Ajouter les conversations sauvegardées
+      const isCurrentActive = !activeId || activeId === aiSessionDashboard;
+      const currentFromApi = aiConversationsFromApi.find(c => c.session_id === aiSessionDashboard);
+      const currentTitle = currentFromApi ? (currentFromApi.title || '💬 Conversation Actuelle') : '💬 Conversation Actuelle';
+
+      container.innerHTML = '';
+
+      // Bloc "Conversation Actuelle" avec bouton Nommer (sans dates)
+      const currentDiv = document.createElement('div');
+      currentDiv.className = 'ai-conversation-item' + (isCurrentActive ? ' active' : '');
+      currentDiv.setAttribute('data-session', 'current');
+      currentDiv.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isCurrentActive ? 'white' : '#f9fafb') + '; border-radius: 8px; border-left: 3px solid ' + (isCurrentActive ? '#6366f1' : 'transparent') + '; cursor: pointer;';
+      currentDiv.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;"><div style="font-size: 0.85rem; font-weight: 500; color: #374151;">' + currentTitle.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div></div><button type="button" title="Nommer cette conversation" style="background: #6366f1; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; white-space: nowrap; flex-shrink: 0;">✏️ Nommer</button></div>';
+      currentDiv.querySelector('div[style="flex: 1; min-width: 0;"]').onclick = selectCurrentConversation;
+      currentDiv.querySelector('button').onclick = function(e) { e.stopPropagation(); renameCurrentConversation(); };
+      container.appendChild(currentDiv);
+
+      // Conversations depuis l'API (sans dates, avec bouton supprimer)
+      aiConversationsFromApi.forEach(conv => {
+        if (conv.session_id === aiSessionDashboard) return;
+        const isActive = activeId === conv.session_id;
+        const title = (conv.title || 'Sans titre').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const item = document.createElement('div');
+        item.className = 'ai-conversation-item' + (isActive ? ' active' : '');
+        item.setAttribute('data-session', conv.session_id);
+        item.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isActive ? 'white' : '#f9fafb') + '; border-radius: 8px; border-left: 3px solid ' + (isActive ? '#6366f1' : 'transparent') + '; cursor: pointer;';
+        item.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;"><div style="font-size: 0.8rem; font-weight: 500; color: #374151;">' + title + '</div></div><button type="button" title="Supprimer cette conversation" style="background: transparent; border: none; color: #ef4444; font-size: 0.85rem; cursor: pointer; padding: 2px; flex-shrink: 0;">🗑️</button></div>';
+        item.querySelector('button').onclick = function(e) { e.stopPropagation(); deleteConversationFromApi(conv.session_id); };
+        item.onclick = function() { loadConversationFromApi(conv.session_id); };
+        container.appendChild(item);
+      });
+
+      // Conversations sauvegardées localement (sans dates, avec supprimer)
+      const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
       conversations.forEach(conv => {
         const isActive = activeId === conv.id;
-        const timeAgo = new Date(conv.created_at).toLocaleString('fr-FR', {
-          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
-        
         const firstMessage = conv.messages.find(m => m.type === 'user')?.content || 'Conversation';
-        const preview = firstMessage.replace(/<[^>]*>/g, '').substring(0, 50) + '...';
-        
-        container.innerHTML += `
-          <div class="ai-conversation-item ${isActive ? 'active' : ''}" 
-               data-session="${conv.id}" 
-               onclick="loadConversation('${conv.id}')"
-               style="padding: 12px; margin: 4px 0; background: ${isActive ? 'white' : '#f9fafb'}; border-radius: 8px; border-left: 3px solid ${isActive ? '#6366f1' : 'transparent'}; cursor: pointer;">
-            <div style="display: flex; justify-content: between; align-items: start;">
-              <div style="flex: 1;">
-                <div style="font-size: 0.8rem; font-weight: 500; color: #374151; margin-bottom: 4px;">${conv.title}</div>
-                <div style="font-size: 0.75rem; color: #6b7280; line-height: 1.3;">${preview}</div>
-                <div style="font-size: 0.7rem; color: #9ca3af; margin-top: 4px;">${timeAgo}</div>
-              </div>
-              <button onclick="event.stopPropagation(); deleteConversation('${conv.id}')" style="background: transparent; border: none; color: #ef4444; font-size: 0.8rem; cursor: pointer; padding: 2px;">
-                🗑️
-              </button>
-            </div>
-          </div>
-        `;
+        const preview = firstMessage.replace(/<[^>]*>/g, '').substring(0, 50) + (firstMessage.length > 50 ? '...' : '');
+        const item = document.createElement('div');
+        item.className = 'ai-conversation-item' + (isActive ? ' active' : '');
+        item.setAttribute('data-session', conv.id);
+        item.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isActive ? 'white' : '#f9fafb') + '; border-radius: 8px; border-left: 3px solid ' + (isActive ? '#6366f1' : 'transparent') + '; cursor: pointer;';
+        item.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;"><div style="font-size: 0.8rem; font-weight: 500; color: #374151;">' + (conv.title || '').replace(/</g, '&lt;') + '</div><div style="font-size: 0.75rem; color: #6b7280; line-height: 1.3; margin-top: 2px;">' + preview.replace(/</g, '&lt;') + '</div></div><button type="button" title="Supprimer" style="background: transparent; border: none; color: #ef4444; font-size: 0.85rem; cursor: pointer; padding: 2px; flex-shrink: 0;">🗑️</button></div>';
+        item.querySelector('button').onclick = function(e) { e.stopPropagation(); deleteConversation(conv.id); };
+        item.onclick = function() { loadConversation(conv.id); };
+        container.appendChild(item);
       });
+    }
+
+    function deleteConversationFromApi(sessionId) {
+      if (!sessionId || !confirm('Supprimer cette conversation ?')) return;
+      fetch('/admin/ai-agent/conversation/' + encodeURIComponent(sessionId), {
+        method: 'DELETE',
+        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          if (aiSessionDashboard === sessionId) {
+            aiSessionDashboard = generateAIUUID();
+            document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
+            document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8);
+            document.getElementById('aiMessagesContainer').innerHTML = '';
+          }
+          loadConversationsFromDatabase();
+          updateConversationsSidebar();
+          showNotification('🗑️ Conversation supprimée', 'success');
+        } else {
+          showNotification('❌ Erreur lors de la suppression', 'error');
+        }
+      })
+      .catch(() => showNotification('❌ Erreur réseau', 'error'));
     }
 
     function selectCurrentConversation() {
@@ -10162,7 +10328,8 @@
         },
         body: JSON.stringify({
           question: question,
-          session_id: aiSessionDashboard
+          session_id: aiSessionDashboard,
+          provider: (document.getElementById('aiProviderSelectDashboard') && document.getElementById('aiProviderSelectDashboard').value) || 'openai'
         })
       })
       .then(response => {
@@ -10193,6 +10360,14 @@
         
         if (data.success) {
           appendAIMessage('assistant', data.message);
+          if (data.session_id) {
+            aiSessionDashboard = data.session_id;
+            const sessionEl = document.getElementById('aiCurrentSession');
+            const sidebarEl = document.getElementById('aiSessionSidebar');
+            if (sessionEl) sessionEl.textContent = data.session_id.substr(0, 8);
+            if (sidebarEl) sidebarEl.textContent = data.session_id.substr(0, 8);
+          }
+          loadConversationsFromDatabase();
           showNotification('🤖 Réponse générée', 'success');
         } else {
           appendAIMessage('assistant', '❌ ' + (data.error || 'Erreur de configuration. Vérifiez OPENAI_API_KEY dans .env'));

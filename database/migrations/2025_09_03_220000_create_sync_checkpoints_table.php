@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (Schema::hasTable('sync_checkpoints')) {
+            return;
+        }
         Schema::create('sync_checkpoints', function (Blueprint $table) {
             $table->id();
             $table->string('table_name')->unique();

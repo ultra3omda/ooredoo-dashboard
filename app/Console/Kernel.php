@@ -51,6 +51,13 @@ class Kernel extends ConsoleKernel
             // Métriques ML (ml_model_performance) - Chaque jour à 3h
             // Décommenter pour alimenter ml_model_performance automatiquement
             // $schedule->command('ml:log-performance')->dailyAt('03:00')->withoutOverlapping();
+
+            // Cache intelligent (contexte agent IA, KPIs, features ML) - Tous les jours à 6h
+            $schedule->command('cache:warmup')
+                ->dailyAt('06:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/cache-warmup.log'));
     }
 
     /**

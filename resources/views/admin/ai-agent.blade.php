@@ -250,9 +250,19 @@
                             </button>
                         </div>
                         
-                        <div class="d-flex justify-content-between align-items-center mt-2">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center mt-2 gap-2">
                             <small class="text-muted">💬 Session : <code id="currentSessionId">Nouvelle</code></small>
-                            <small class="text-muted">🔥 Modèle : {{ $config['configuration']['model'] ?? 'gpt-4' }}</small>
+                            <div class="d-flex align-items-center gap-2">
+                                <label for="aiProviderSelect" class="text-muted small mb-0">🤖 Modèle :</label>
+                                <select id="aiProviderSelect" class="form-select form-select-sm" style="width: auto; min-width: 180px;">
+                                    @foreach($config['configuration']['available_providers'] ?? [] as $key => $info)
+                                        <option value="{{ $key }}" {{ ($config['configuration']['default_provider'] ?? 'openai') === $key ? 'selected' : '' }}>{{ $info['label'] }} ({{ $info['model'] }})</option>
+                                    @endforeach
+                                    @if(empty($config['configuration']['available_providers']))
+                                        <option value="openai">OpenAI — configurez une clé dans .env</option>
+                                    @endif
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -419,7 +429,8 @@
                     },
                     body: JSON.stringify({
                         question: question,
-                        session_id: currentSessionId
+                        session_id: currentSessionId,
+                        provider: document.getElementById('aiProviderSelect')?.value || 'openai'
                     })
                 });
                 

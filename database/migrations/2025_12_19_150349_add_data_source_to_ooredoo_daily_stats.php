@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('ooredoo_daily_stats') || Schema::hasColumn('ooredoo_daily_stats', 'data_source')) {
+            return;
+        }
         Schema::table('ooredoo_daily_stats', function (Blueprint $table) {
             $table->enum('data_source', ['officiel_dgv', 'calculé', 'mixte'])
                   ->default('calculé')

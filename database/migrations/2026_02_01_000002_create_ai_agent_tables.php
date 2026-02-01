@@ -9,6 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         // Table des conversations avec l'agent IA
+        if (!Schema::hasTable('ai_agent_conversations')) {
         Schema::create('ai_agent_conversations', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id'); // Pas de foreign key contrainte pour éviter problèmes
@@ -27,8 +28,10 @@ return new class extends Migration
             // Index foreign key manuel sans contrainte
             $table->index('user_id');
         });
+        }
         
         // Table du cache de contexte ML pour optimiser les requêtes
+        if (!Schema::hasTable('ai_agent_context_cache')) {
         Schema::create('ai_agent_context_cache', function (Blueprint $table) {
             $table->id();
             $table->string('cache_key', 100)->unique();
@@ -40,6 +43,7 @@ return new class extends Migration
             
             $table->index(['context_type', 'expires_at']);
         });
+        }
     }
     
     public function down(): void

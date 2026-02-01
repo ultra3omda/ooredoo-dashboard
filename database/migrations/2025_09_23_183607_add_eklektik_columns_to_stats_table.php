@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('eklektik_stats_daily') || Schema::hasColumn('eklektik_stats_daily', 'offer_name')) {
+            return;
+        }
         Schema::table('eklektik_stats_daily', function (Blueprint $table) {
             // Nouvelles colonnes basées sur l'interface Eklektik
             $table->integer('simchurn')->default(0)->after('unsubscriptions'); // Simchurn

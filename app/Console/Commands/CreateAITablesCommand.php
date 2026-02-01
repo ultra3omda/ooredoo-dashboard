@@ -84,8 +84,8 @@ class CreateAITablesCommand extends Command
             $this->info('🎉 Configuration Agent IA terminée !');
             $this->info('📍 Accès: http://localhost:8000/dashboard → Onglet "🤖 Agent IA"');
             
-            if (empty(env('OPENAI_API_KEY')) || env('OPENAI_API_KEY') === 'sk-your-openai-key-here') {
-                $this->warn('⚠️  Ajoutez votre vraie clé OpenAI dans .env pour activer l\'agent');
+            if (empty(env('OPENAI_API_KEY')) && empty(env('ANTHROPIC_API_KEY')) && empty(env('GEMINI_API_KEY'))) {
+                $this->warn('⚠️  Ajoutez au moins une clé API dans .env : OPENAI_API_KEY, ANTHROPIC_API_KEY ou GEMINI_API_KEY');
             }
             
         } catch (\Exception $e) {

@@ -38,10 +38,10 @@ Route::prefix('auth')->group(function () {
 });
 
 // Mot de passe oublié / réinitialisation (public)
-Route::get('/password/forgot', [PasswordController::class, 'showForgotPasswordForm'])->name('password.forgot');
-Route::post('/password/send-reset', [PasswordController::class, 'sendResetLink'])->name('password.send-reset');
-Route::get('/password/reset/{token}', [PasswordController::class, 'showResetForm'])->name('password.reset.form');
-Route::post('/password/reset', [PasswordController::class, 'resetPassword'])->name('password.reset');
+    Route::get('/password/forgot', [PasswordController::class, 'showForgotPasswordForm'])->name('password.forgot');
+    Route::post('/password/send-reset', [PasswordController::class, 'sendResetLink'])->name('password.send-reset');
+    Route::get('/password/reset/{token}', [PasswordController::class, 'showResetForm'])->name('password.reset.form');
+    Route::post('/password/reset', [PasswordController::class, 'resetPassword'])->name('password.reset');
 
 // Routes manquantes pour le dashboard (AVANT l'authentification)
 Route::get('/password/change', function() { return redirect()->route('dashboard'); })->name('password.change');
@@ -144,6 +144,7 @@ Route::middleware(['auth'])->group(function () {
             // API pour interaction avec l'agent IA
             Route::post('/ask', [\App\Http\Controllers\Admin\AIAgentController::class, 'ask'])->name('ask');
             Route::get('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'getConversation'])->name('conversation');
+            Route::patch('/conversation/{sessionId}/title', [\App\Http\Controllers\Admin\AIAgentController::class, 'updateConversationTitle'])->name('conversation.title');
             Route::delete('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'deleteConversation'])->name('conversation.delete');
             
             // Utilitaires

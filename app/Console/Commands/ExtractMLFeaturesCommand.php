@@ -12,7 +12,8 @@ class ExtractMLFeaturesCommand extends Command
                             {--start-date= : Date de début (format: Y-m-d)} 
                             {--end-date= : Date de fin (format: Y-m-d)} 
                             {--batch-days=7 : Nombre de jours par batch}
-                            {--force : Forcer la regénération même si les données existent}';
+                            {--force : Forcer la regénération même si les données existent}
+                            {--use-queue : Dispatch en queue ml-extraction (parallèle, nécessite php artisan queue:work)}';
 
     protected $description = 'Extrait les features ML pour l\'entraînement des modèles';
 
@@ -33,7 +34,12 @@ class ExtractMLFeaturesCommand extends Command
         $endDateStr = $this->option('end-date') ?: Carbon::now()->toDateString();
         $batchDays = (int) $this->option('batch-days');
         $force = $this->option('force');
-        
+        $useQueue = $this->option('use-queue');
+
+        if ($useQueue) {
+            $this->info('📤 Mode queue activé: les jobs seront traités par les workers (queue: ml-extraction)');
+        }
+
         try {
             $startDate = Carbon::parse($startDateStr);
             $endDate = Carbon::parse($endDateStr);
@@ -84,16 +90,16 @@ class ExtractMLFeaturesCommand extends Command
             $batchDate = $currentDate->copy();
             while ($batchDate->lte($batchEndDate)) {
                 try {
-                    $processedCount = $this->featureService->extractAndStoreFeaturesForDate($batchDate);
+                    $processedCount = $this->featureService->extractAndStoreFeaturesForDate($batchDate, $useQueue);
                     $totalProcessed += $processedCount;
-                    
+
                     $progressBar->advance();
-                    $this->line(" ✅ {$batchDate->toDateString()}: $processedCount clients");
-                    
+                    $this->line(' ✅ ' . $batchDate->toDateString() . ': ' . $processedCount . ' clients' . ($useQueue ? ' dispatchés' : ''));
+
                 } catch (\Exception $e) {
                     $this->error(" ❌ Erreur pour {$batchDate->toDateString()}: {$e->getMessage()}");
                 }
-                
+
                 $batchDate->addDay();
             }
             

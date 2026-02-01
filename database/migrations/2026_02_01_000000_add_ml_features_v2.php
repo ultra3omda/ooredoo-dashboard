@@ -8,6 +8,7 @@ return new class extends Migration
 {
     public function up()
     {
+        if (!Schema::hasColumn('ml_client_features', 'morning_success_rate')) {
         Schema::table('ml_client_features', function (Blueprint $table) {
             // Nouvelles features v2.0 pour améliorer la discrimination
             $table->decimal('morning_success_rate', 5, 4)->nullable()->comment('Taux succès 6h-12h');
@@ -45,7 +46,9 @@ return new class extends Migration
             $table->index(['calculation_date', 'client_segment']);
             $table->index(['consecutive_failures', 'recovery_after_failure_rate']);
         });
+        }
         
+        if (!Schema::hasColumn('ml_predictions', 'ab_test_group')) {
         Schema::table('ml_predictions', function (Blueprint $table) {
             // Nouvelles colonnes pour A/B testing et modèle v2
             $table->string('ab_test_group', 20)->nullable()->comment('Groupe A/B: control/treatment');
@@ -54,7 +57,9 @@ return new class extends Migration
             
             $table->index(['prediction_date', 'ab_test_group']);
         });
+        }
         
+        if (!Schema::hasColumn('ml_ab_tests', 'current_participants')) {
         Schema::table('ml_ab_tests', function (Blueprint $table) {
             // Nouvelles métriques pour suivi A/B
             $table->integer('current_participants')->default(0)->comment('Participants actuels');
@@ -62,7 +67,9 @@ return new class extends Migration
             $table->boolean('is_significant')->default(false)->comment('Résultats significatifs');
             $table->text('end_reason')->nullable()->comment('Raison de fin de test');
         });
+        }
 
+        if (!Schema::hasColumn('ml_model_performance', 'training_duration_minutes')) {
         Schema::table('ml_model_performance', function (Blueprint $table) {
             // Nouvelles métriques pour monitoring avancé
             $table->decimal('training_duration_minutes', 8, 2)->nullable();
@@ -72,6 +79,7 @@ return new class extends Migration
             $table->json('training_params')->nullable()->comment('Paramètres d\'entraînement');
             $table->json('feature_importance')->nullable()->comment('Importance des features');
         });
+        }
     }
 
     public function down()

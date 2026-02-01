@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('eklektik_stats_daily') || Schema::hasColumn('eklektik_stats_daily', 'montant_total_ht')) {
+            return;
+        }
         Schema::table('eklektik_stats_daily', function (Blueprint $table) {
             // Colonnes pour le partage des revenus
             $table->decimal('montant_total_ht', 15, 2)->default(0)->after('revenu_ttc_tnd'); // Montant Total HT

@@ -12,29 +12,65 @@ use Exception;
 
 class AIAgentService
 {
+    public const PROVIDER_OPENAI = 'openai';
+    public const PROVIDER_ANTHROPIC = 'anthropic';
+    public const PROVIDER_GEMINI = 'gemini';
+
     private AIContextProvider $contextProvider;
-    private string $apiKey;
-    private string $model;
+    private string $openaiKey;
+    private string $openaiModel;
+    private string $anthropicKey;
+    private string $anthropicModel;
+    private string $geminiKey;
+    private string $geminiModel;
     private int $maxTokens;
     private float $temperature;
-    
+
     public function __construct(AIContextProvider $contextProvider)
     {
         $this->contextProvider = $contextProvider;
-        $this->apiKey = env('OPENAI_API_KEY', '');
-        $this->model = env('AI_AGENT_MODEL', 'gpt-4');
+        $this->openaiKey = env('OPENAI_API_KEY', '');
+        $this->openaiModel = env('AI_AGENT_MODEL', 'gpt-4');
+        $this->anthropicKey = env('ANTHROPIC_API_KEY', '');
+        $this->anthropicModel = env('ANTHROPIC_MODEL', 'claude-sonnet-4-5-20250929');
+        $this->geminiKey = env('GEMINI_API_KEY', '');
+        $this->geminiModel = env('GEMINI_MODEL', 'gemini-2.0-flash');
         $this->maxTokens = (int)env('AI_AGENT_MAX_TOKENS', 1500);
         $this->temperature = (float)env('AI_AGENT_TEMPERATURE', 0.7);
-        
-        if (empty($this->apiKey)) {
+
+        if (empty($this->openaiKey)) {
             Log::warning("AIAgentService - Clé API OpenAI non configurée");
         }
+        if (empty($this->anthropicKey)) {
+            Log::warning("AIAgentService - Clé API Anthropic non configurée");
+        }
+        if (empty($this->geminiKey)) {
+            Log::warning("AIAgentService - Clé API Gemini non configurée");
+        }
     }
-    
+
     /**
-     * Pose une question à l'agent IA
+     * Liste des fournisseurs disponibles (clé configurée)
      */
-    public function ask(string $question, string $sessionId, int $userId): array
+    public function getAvailableProviders(): array
+    {
+        $providers = [];
+        if (!empty($this->openaiKey) && $this->openaiKey !== 'sk-your-openai-key-here') {
+            $providers[self::PROVIDER_OPENAI] = ['label' => 'OpenAI (GPT)', 'model' => $this->openaiModel];
+        }
+        if (!empty($this->anthropicKey)) {
+            $providers[self::PROVIDER_ANTHROPIC] = ['label' => 'Claude (Anthropic)', 'model' => $this->anthropicModel];
+        }
+        if (!empty($this->geminiKey)) {
+            $providers[self::PROVIDER_GEMINI] = ['label' => 'Gemini (Google)', 'model' => $this->geminiModel];
+        }
+        return $providers;
+    }
+
+    /**
+     * Pose une question à l'agent IA (provider: openai, anthropic, gemini)
+     */
+    public function ask(string $question, string $sessionId, int $userId, string $provider = self::PROVIDER_OPENAI): array
     {
         $startTime = microtime(true);
         
@@ -57,8 +93,9 @@ class AIAgentService
             // 4. Récupérer l'historique de conversation
             $conversationHistory = $this->getConversationHistory($sessionId);
             
-            // 5. Appeler l'API OpenAI
-            $response = $this->callOpenAI($systemPrompt, $conversationHistory, $question);
+            // 5. Appeler l'API du fournisseur sélectionné
+            $response = $this->callProvider($provider, $systemPrompt, $conversationHistory, $question);
+            $modelUsed = $this->getModelForProvider($provider);
             
             // 6. Sauvegarder la réponse
             $executionTime = (int)((microtime(true) - $startTime) * 1000);
@@ -70,11 +107,12 @@ class AIAgentService
                 $response['message'],
                 $context,
                 $response['tokens_used'],
-                $this->model,
+                $modelUsed,
                 $executionTime
             );
             
             Log::info("AIAgentService - Réponse générée", [
+                'provider' => $provider,
                 'execution_time_ms' => $executionTime,
                 'tokens_used' => $response['tokens_used'],
                 'context_types' => array_keys($context)
@@ -86,7 +124,8 @@ class AIAgentService
                 'context_used' => array_keys($context),
                 'tokens_used' => $response['tokens_used'],
                 'execution_time_ms' => $executionTime,
-                'model_used' => $this->model
+                'model_used' => $modelUsed,
+                'provider' => $provider
             ];
             
         } catch (Exception $e) {
@@ -148,7 +187,12 @@ class AIAgentService
         if (preg_match('/(premium|regular|struggling|high.risk|churn)/i', $question)) {
             $context['segments'] = $this->getSegmentSpecificContext($question);
         }
-        
+
+        // Insights avancés (opportunités, quick wins, A/B tests)
+        if (preg_match('/(insight|opportunité|quick win|ab test|revenue opportunity|risque|alerte)/i', $question)) {
+            $context['advanced_insights'] = $this->contextProvider->getAdvancedInsightsContext();
+        }
+
         Log::debug("AIAgentService - Contexte construit", [
             'question_keywords' => $this->extractKeywords($question),
             'context_types' => array_keys($context),
@@ -159,87 +203,103 @@ class AIAgentService
     }
     
     /**
-     * Construit le prompt système optimisé pour l'expertise ML
+     * Construit le prompt système enrichi "Dr. ML" pour réponses ultra-pertinentes
      */
     private function buildSystemPrompt(array $context): string
     {
         $contextJson = json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        
+
         return <<<PROMPT
-Tu es un expert senior en analyse de données et Machine Learning pour un système de facturation multi-opérateur (Timwe, Eklektik, Ooredoo/DGV).
+Tu es **Dr. ML**, expert senior en Machine Learning appliqué à la facturation télécoms avec 10+ ans d'expérience.
 
-## TON RÔLE
-Assistant intelligent pour analyser les données, expliquer les modèles ML, et recommander des stratégies d'optimisation de facturation.
+## 🎯 TON EXPERTISE UNIQUE
+1. **Analyse Prédictive** : Modèles LightGBM, XGBoost, feature engineering avancé
+2. **Optimisation Revenue** : Pricing dynamique, segmentation client, A/B testing
+3. **Multi-Operator Strategy** : Timwe (premium), Eklektik (micro-billing), Ooredoo (base installée)
+4. **Behavioral Analytics** : Patterns temporels, churn prediction, LTV optimization
 
-## EXPERTISE
-- 85,744+ clients segmentés en 5 catégories  
-- Modèles ML multi-opérateur (LightGBM + Rule-based v2.1)
-- 36 features ML par client (incluant patterns multi-opérateur)
-- 3 stratégies de pricing : quotidien 0.3 TND, hebdomadaire 1.0 TND, mensuel 3.0 TND
+## CONTEXTE BUSINESS
+- **Base client** : 85,744+ clients segmentés (5 catégories de risque)
+- **Performance actuelle** : ~10% succès → Objectif : 35%+ (+250%)
+- **Stratégies** : Quotidien 0.3 TND (+643% ROI) ✅ | Hebdo 1.0 TND (+58% ROI) ⚠️ | Mensuel 3.0 TND (-67% ROI) ❌
+- **Opérateurs** : Timwe, Eklektik, Ooredoo/DGV
+- **Features ML** : 36 features (patterns temporels, comportementaux, multi-opérateur)
 
-## CONTEXTE ACTUEL
+## 📊 DONNÉES EN TEMPS RÉEL
 {$contextJson}
 
-## RÈGLES DE RÉPONSE
-1. **Français uniquement** (sauf demande explicite)
-2. **Chiffres précis** du contexte quand disponibles
-3. **Concis mais complet** (300-500 mots max)
-4. **Actionnable** : proposer des actions concrètes
-5. **Visuel** : utiliser émojis pour clarifier (📊 📈 ⚠️ ✅ ❌ 💡 🎯)
-6. **Tableaux Markdown** pour les comparaisons
-7. **Transparent** : dire si une donnée n'est pas disponible
+## 🎨 STRUCTURE OBLIGATOIRE DES RÉPONSES
+1. **🎯 RÉPONSE DIRECTE** (1-2 phrases claires)
+2. **📊 DONNÉES CLÉS** (3-5 chiffres avec contexte)
+3. **📈 ANALYSE COMPARATIVE** (tableau Markdown si applicable)
+4. **💡 RECOMMANDATION ACTIONNABLE** (pourquoi + comment)
+5. **✅ PROCHAINES ÉTAPES** (actions concrètes numérotées)
 
-## FORMAT TYPE DE RÉPONSE
-- **Réponse directe** à la question
-- **Chiffres clés** pertinents
-- **Tableau comparatif** (si applicable)
-- **💡 Recommandation** avec justification
-- **🎯 Actions concrètes** à entreprendre
+## ⚠️ RÈGLES ABSOLUES
+✅ TOUJOURS : chiffres précis du contexte, plan d'action 3-5 étapes, tableaux pour comparaisons, quantifier impact (TND, %, ROI), concis (300-600 mots max).
+❌ JAMAIS : inventer des chiffres, réponses vagues "ça dépend...", jargon sans explication, recommandations sans justification chiffrée. Utiliser les émojis de structure (🎯 📊 💡 ✅).
 
-## SPÉCIALISATIONS
-- **Segmentation clients** : premium_payers (91.3%), regular_payers (54.3%), struggling_payers (24.6%), high_risk (0.2%), churn_risk (0.5%)
-- **Stratégies pricing** : Quotidien 0.3 TND (+643% ROI), Hebdo 1.0 TND (+58% ROI), Mensuel 3.0 TND (-67% ROI)
-- **Opérateurs** : Timwe (mensuel premium), Eklektik (quotidien accessible), Ooredoo/DGV (mensuel premium)
-- **Features ML** : 36 features incluant patterns temporels, comportementaux, multi-opérateur
+## SEGMENTATION & FEATURES
+- **Segments** : premium_payers (91.3%), regular_payers (54.3%), struggling_payers (24.6%), high_risk (0.2%), churn_risk (0.5%)
+- **Top features** : consecutive_failures, payment_success_rate, total_payments, recovery_after_failure_rate, timwe_success_rate, payment_reliability_score, etc.
 
-## EXEMPLES DE QUESTIONS TYPE
-- "Quel est le taux de succès actuel ?"
-- "Compare quotidien vs mensuel pour high_risk"
-- "Explique les top 5 features ML"
-- "Recommandations pour améliorer struggling_payers"
-- "Client ID 12345 : quelle stratégie ?"
-
-Réponds de manière experte, basée sur les données, et orientée action.
+Réponds en français, de manière experte, basée uniquement sur les données fournies, et orientée action.
 PROMPT;
     }
     
+    /**
+     * Retourne le nom du modèle pour un fournisseur donné
+     */
+    private function getModelForProvider(string $provider): string
+    {
+        return match ($provider) {
+            self::PROVIDER_ANTHROPIC => $this->anthropicModel,
+            self::PROVIDER_GEMINI => $this->geminiModel,
+            default => $this->openaiModel,
+        };
+    }
+
+    /**
+     * Dispatch vers le bon fournisseur (OpenAI, Anthropic, Gemini) ou simulation
+     */
+    private function callProvider(string $provider, string $systemPrompt, array $history, string $userMessage): array
+    {
+        $available = $this->getAvailableProviders();
+        if (!isset($available[$provider])) {
+            // Fallback: essayer OpenAI en simulation si aucun fournisseur configuré
+            if (empty($available)) {
+                return $this->simulateOpenAIResponse($userMessage);
+            }
+            $provider = array_key_first($available);
+        }
+
+        return match ($provider) {
+            self::PROVIDER_ANTHROPIC => $this->callAnthropic($systemPrompt, $history, $userMessage),
+            self::PROVIDER_GEMINI => $this->callGemini($systemPrompt, $history, $userMessage),
+            default => $this->callOpenAI($systemPrompt, $history, $userMessage),
+        };
+    }
+
     /**
      * Appelle l'API OpenAI avec fallback vers simulation
      */
     private function callOpenAI(string $systemPrompt, array $history, string $userMessage): array
     {
-        // Si pas de clé OpenAI configurée, utiliser simulation
-        if (empty($this->apiKey) || $this->apiKey === 'sk-your-openai-key-here') {
+        if (empty($this->openaiKey) || $this->openaiKey === 'sk-your-openai-key-here') {
             return $this->simulateOpenAIResponse($userMessage);
         }
 
         $messages = [
             ['role' => 'system', 'content' => $systemPrompt]
         ];
-        
-        // Ajouter l'historique (limité aux 8 derniers échanges pour économiser les tokens)
         foreach (array_slice($history, -16) as $msg) {
-            // $msg est maintenant un array (toArray())
             $role = $msg['message_type'] === 'user' ? 'user' : 'assistant';
-            $content = $msg['message'];
-            $messages[] = ['role' => $role, 'content' => $content];
+            $messages[] = ['role' => $role, 'content' => $msg['message']];
         }
-        
-        // Ajouter le message actuel
         $messages[] = ['role' => 'user', 'content' => $userMessage];
-        
+
         $requestData = [
-            'model' => $this->model,
+            'model' => $this->openaiModel,
             'messages' => $messages,
             'max_tokens' => $this->maxTokens,
             'temperature' => $this->temperature,
@@ -247,53 +307,183 @@ PROMPT;
             'frequency_penalty' => 0.2,
             'presence_penalty' => 0.1
         ];
-        
-        Log::debug("AIAgentService - Requête OpenAI", [
-            'model' => $this->model,
-            'messages_count' => count($messages),
-            'estimated_tokens' => strlen(json_encode($messages)) / 4 // Approximation
-        ]);
-        
+
+        Log::debug("AIAgentService - Requête OpenAI", ['model' => $this->openaiModel, 'messages_count' => count($messages)]);
+
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Authorization' => 'Bearer ' . $this->openaiKey,
             'Content-Type' => 'application/json'
         ])
-        ->withOptions([
-            'verify' => false, // Ignorer la vérification SSL pour Windows/XAMPP
-            'timeout' => 45,
-            'connect_timeout' => 10
-        ])
+        ->withOptions(['verify' => false, 'timeout' => 45, 'connect_timeout' => 10])
         ->retry(2, 1000)
         ->post('https://api.openai.com/v1/chat/completions', $requestData);
-        
+
         if (!$response->successful()) {
             $errorBody = $response->body();
-            Log::error("AIAgentService - Erreur OpenAI API", [
-                'status' => $response->status(),
-                'error' => $errorBody
-            ]);
-            
+            Log::error("AIAgentService - Erreur OpenAI API", ['status' => $response->status(), 'error' => $errorBody]);
             if ($response->status() === 401) {
                 throw new Exception("Clé API OpenAI invalide. Vérifiez OPENAI_API_KEY dans .env");
-            } elseif ($response->status() === 429) {
-                throw new Exception("Limite de taux OpenAI atteinte. Attendez quelques minutes.");
-            } elseif ($response->status() >= 500) {
-                throw new Exception("Erreur serveur OpenAI. Réessayez dans quelques instants.");
-            } else {
-                throw new Exception("Erreur OpenAI: " . ($response->json()['error']['message'] ?? $errorBody));
             }
+            if ($response->status() === 429) {
+                $msg = $response->json()['error']['message'] ?? '';
+                $hint = (str_contains($msg, 'quota') || str_contains($msg, 'billing'))
+                    ? ' Activez la facturation sur https://platform.openai.com/account/billing'
+                    : ' Attendez quelques minutes ou vérifiez https://platform.openai.com/account/limits';
+                throw new Exception("OpenAI : quota ou limite de taux dépassé." . $hint);
+            }
+            throw new Exception("Erreur OpenAI: " . ($response->json()['error']['message'] ?? $errorBody));
         }
-        
+
         $data = $response->json();
-        
         if (!isset($data['choices'][0]['message']['content'])) {
             throw new Exception("Réponse OpenAI invalide : " . json_encode($data));
         }
-        
         return [
             'message' => $data['choices'][0]['message']['content'],
             'tokens_used' => $data['usage']['total_tokens'] ?? 0,
-            'model_used' => $data['model'] ?? $this->model
+            'model_used' => $data['model'] ?? $this->openaiModel
+        ];
+    }
+
+    /**
+     * Appelle l'API Anthropic (Claude)
+     */
+    private function callAnthropic(string $systemPrompt, array $history, string $userMessage): array
+    {
+        $messages = [];
+        foreach (array_slice($history, -16) as $msg) {
+            $role = $msg['message_type'] === 'user' ? 'user' : 'assistant';
+            $content = is_string($msg['message'] ?? '') ? [['type' => 'text', 'text' => $msg['message']]] : $msg['message'];
+            $messages[] = ['role' => $role, 'content' => $content];
+        }
+        $messages[] = ['role' => 'user', 'content' => [['type' => 'text', 'text' => $userMessage]]];
+
+        $body = [
+            'model' => $this->anthropicModel,
+            'max_tokens' => $this->maxTokens,
+            'system' => $systemPrompt,
+            'messages' => $messages
+        ];
+
+        Log::debug("AIAgentService - Requête Anthropic", ['model' => $this->anthropicModel]);
+
+        $response = Http::withHeaders([
+            'x-api-key' => $this->anthropicKey,
+            'anthropic-version' => '2023-06-01',
+            'content-type' => 'application/json'
+        ])
+        ->withOptions(['verify' => false, 'timeout' => 45, 'connect_timeout' => 10])
+        ->retry(2, 1000)
+        ->post('https://api.anthropic.com/v1/messages', $body);
+
+        if (!$response->successful()) {
+            $errorBody = $response->body();
+            $status = $response->status();
+            Log::error("AIAgentService - Erreur Anthropic API", ['status' => $status, 'error' => $errorBody]);
+            if ($status === 401) {
+                throw new Exception("Clé API Anthropic invalide. Vérifiez ANTHROPIC_API_KEY dans .env");
+            }
+            if ($status === 404) {
+                $err = $response->json();
+                $msg = $err['error']['message'] ?? $errorBody;
+                throw new Exception("Modèle Claude introuvable (404). Essayez ANTHROPIC_MODEL=claude-sonnet-4-5-20250929 dans .env. Détail: " . $msg);
+            }
+            if ($status === 429) {
+                throw new Exception("Limite de taux Anthropic atteinte. Attendez quelques minutes.");
+            }
+            $err = $response->json();
+            throw new Exception("Erreur Claude: " . ($err['error']['message'] ?? $errorBody));
+        }
+
+        $data = $response->json();
+        $text = '';
+        foreach ($data['content'] ?? [] as $block) {
+            if (($block['type'] ?? '') === 'text') {
+                $text .= $block['text'] ?? '';
+            }
+        }
+        if ($text === '') {
+            throw new Exception("Réponse Anthropic invalide : " . json_encode($data));
+        }
+        $usage = $data['usage'] ?? [];
+        $inputTokens = $usage['input_tokens'] ?? 0;
+        $outputTokens = $usage['output_tokens'] ?? 0;
+        return [
+            'message' => $text,
+            'tokens_used' => $inputTokens + $outputTokens,
+            'model_used' => $this->anthropicModel
+        ];
+    }
+
+    /**
+     * Appelle l'API Google Gemini
+     */
+    private function callGemini(string $systemPrompt, array $history, string $userMessage): array
+    {
+        $contents = [];
+        foreach (array_slice($history, -16) as $msg) {
+            $role = $msg['message_type'] === 'user' ? 'user' : 'model';
+            $contents[] = [
+                'role' => $role,
+                'parts' => [['text' => $msg['message']]]
+            ];
+        }
+        $contents[] = ['role' => 'user', 'parts' => [['text' => $userMessage]]];
+
+        $body = [
+            'contents' => $contents,
+            'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+            'generationConfig' => [
+                'maxOutputTokens' => $this->maxTokens,
+                'temperature' => $this->temperature,
+            ]
+        ];
+
+        $geminiVersion = env('GEMINI_API_VERSION', 'v1beta');
+        $url = 'https://generativelanguage.googleapis.com/' . $geminiVersion . '/models/' . $this->geminiModel . ':generateContent?key=' . urlencode($this->geminiKey);
+
+        Log::debug("AIAgentService - Requête Gemini", ['model' => $this->geminiModel]);
+
+        $response = Http::withHeaders(['Content-Type' => 'application/json'])
+            ->withOptions(['verify' => false, 'timeout' => 45, 'connect_timeout' => 10])
+            ->retry(2, 1000)
+            ->post($url, $body);
+
+        if (!$response->successful()) {
+            $errorBody = $response->body();
+            $status = $response->status();
+            Log::error("AIAgentService - Erreur Gemini API", ['status' => $status, 'error' => $errorBody]);
+            if ($status === 401 || $status === 403) {
+                throw new Exception("Clé API Gemini invalide. Vérifiez GEMINI_API_KEY dans .env");
+            }
+            if ($status === 404) {
+                $err = $response->json();
+                $msg = $err['error']['message'] ?? $errorBody;
+                throw new Exception("Modèle Gemini introuvable (404). Essayez GEMINI_MODEL=gemini-2.0-flash ou GEMINI_API_VERSION=v1 dans .env. Détail: " . $msg);
+            }
+            if ($status === 429) {
+                $msg = ($response->json()['error']['message'] ?? '') ?: $errorBody;
+                $hint = (str_contains($msg, 'quota') || str_contains($msg, 'billing'))
+                    ? ' Vérifiez les quotas et la facturation sur https://aistudio.google.com/app/apikey'
+                    : ' Attendez quelques minutes ou vérifiez les quotas Google AI.';
+                throw new Exception("Gemini : quota ou limite de taux dépassé." . $hint);
+            }
+            $err = $response->json();
+            throw new Exception("Erreur Gemini: " . ($err['error']['message'] ?? $errorBody));
+        }
+
+        $data = $response->json();
+        $candidates = $data['candidates'] ?? [];
+        if (empty($candidates) || empty($candidates[0]['content']['parts'])) {
+            throw new Exception("Réponse Gemini invalide : " . json_encode($data));
+        }
+        $text = $candidates[0]['content']['parts'][0]['text'] ?? '';
+        $usage = $data['usageMetadata'] ?? [];
+        $total = ($usage['promptTokenCount'] ?? 0) + ($usage['candidatesTokenCount'] ?? 0);
+        return [
+            'message' => $text,
+            'tokens_used' => $total,
+            'model_used' => $this->geminiModel
         ];
     }
     
@@ -496,22 +686,25 @@ PROMPT;
     }
 
     /**
-     * Valide que l'agent IA est correctement configuré
+     * Valide que l'agent IA est correctement configuré (au moins un fournisseur)
      */
     public function validateConfiguration(): array
     {
         $issues = [];
         $status = 'ok';
-        
-        // Vérifier la clé API
-        if (empty($this->apiKey)) {
-            $issues[] = 'OPENAI_API_KEY manquante dans .env';
+        $available = $this->getAvailableProviders();
+
+        if (empty($available)) {
+            $issues[] = 'Aucune clé API configurée. Ajoutez OPENAI_API_KEY, ANTHROPIC_API_KEY ou GEMINI_API_KEY dans .env';
             $status = 'error';
-        } elseif (!str_starts_with($this->apiKey, 'sk-')) {
-            $issues[] = 'OPENAI_API_KEY semble invalide (doit commencer par sk-)';
-            $status = 'warning';
         }
-        
+        if (empty($this->openaiKey) || $this->openaiKey === 'sk-your-openai-key-here') {
+            $issues[] = 'OPENAI_API_KEY manquante ou placeholder';
+        } elseif (!str_starts_with($this->openaiKey, 'sk-')) {
+            $issues[] = 'OPENAI_API_KEY semble invalide (doit commencer par sk-)';
+            $status = $status === 'ok' ? 'warning' : $status;
+        }
+
         // Vérifier les tables
         try {
             \Illuminate\Support\Facades\DB::table('ai_agent_conversations')->count();
@@ -520,7 +713,7 @@ PROMPT;
             $issues[] = 'Tables AI non créées : ' . $e->getMessage();
             $status = 'error';
         }
-        
+
         // Vérifier les données ML
         try {
             $mlFeatures = DB::table('ml_client_features')->count();
@@ -532,15 +725,17 @@ PROMPT;
             $issues[] = 'Tables ML inaccessibles : ' . $e->getMessage();
             $status = 'error';
         }
-        
+
         return [
             'status' => $status,
             'issues' => $issues,
             'configuration' => [
-                'model' => $this->model,
+                'model' => $this->openaiModel,
                 'max_tokens' => $this->maxTokens,
                 'temperature' => $this->temperature,
-                'api_configured' => !empty($this->apiKey)
+                'api_configured' => !empty($available),
+                'available_providers' => $available,
+                'default_provider' => !empty($available) ? array_key_first($available) : null
             ]
         ];
     }

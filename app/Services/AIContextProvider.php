@@ -161,6 +161,27 @@ class AIContextProvider
         );
     }
 
+    /**
+     * Contexte des insights avancés (opportunités revenus, quick wins, alertes risque, A/B tests)
+     */
+    public function getAdvancedInsightsContext(): array
+    {
+        return AIContextCache::getOrCreate(
+            'advanced_insights_v1',
+            'insights',
+            function () {
+                return [
+                    'revenue_opportunities' => $this->calculateRevenueOpportunities(),
+                    'quick_wins' => $this->identifyQuickWins(),
+                    'risk_alerts' => $this->getCurrentRiskAlerts(),
+                    'ab_test_suggestions' => $this->generateABTestSuggestions(),
+                    'feature_importance_trends' => $this->getFeatureImportanceTrends()
+                ];
+            },
+            60 // Cache 1 heure
+        );
+    }
+
     // ===== MÉTHODES PRIVÉES DE COLLECTE DE DONNÉES =====
 
     private function getTotalClients(): int
@@ -517,5 +538,249 @@ class AIContextProvider
         return DB::table('ml_ab_tests')
             ->where('status', 'active')
             ->count();
+    }
+
+    // ===== INSIGHTS AVANCÉS (Partie 2 - Dr. ML) =====
+
+    /**
+     * Identifie les segments avec le plus fort potentiel d'amélioration de revenus
+     */
+    private function calculateRevenueOpportunities(): array
+    {
+        $latestDate = DB::table('ml_client_features')->max('calculation_date');
+        if (!$latestDate) {
+            return [];
+        }
+
+        $segments = DB::table('ml_client_features')
+            ->where('calculation_date', $latestDate)
+            ->whereNotNull('client_segment')
+            ->select('client_segment')
+            ->selectRaw('COUNT(*) as client_count')
+            ->selectRaw('AVG(payment_success_rate) as current_success_rate')
+            ->groupBy('client_segment')
+            ->get();
+
+        $result = collect($segments)->map(function ($seg) {
+            $currentRevenue = $seg->client_count * ($seg->current_success_rate ?? 0) * 3.0; // Mensuel 3.0 TND
+            $potentialSuccessRate = $this->estimatePotentialSuccessRate($seg->client_segment);
+            $potentialRevenueMonthly = $seg->client_count * $potentialSuccessRate * 0.3 * 30; // Quotidien 0.3 TND × 30 jours
+            $opportunityTnd = max(0, round($potentialRevenueMonthly - $currentRevenue, 0));
+            $roiPercentage = $currentRevenue > 0
+                ? round((($potentialRevenueMonthly / $currentRevenue) - 1) * 100, 0)
+                : 0;
+
+            return [
+                'segment' => $seg->client_segment,
+                'clients' => (int) $seg->client_count,
+                'current_revenue_monthly' => (int) round($currentRevenue, 0),
+                'potential_revenue_monthly' => (int) round($potentialRevenueMonthly, 0),
+                'opportunity_tnd' => (int) $opportunityTnd,
+                'roi_percentage' => $roiPercentage
+            ];
+        })->sortByDesc('opportunity_tnd')->values()->toArray();
+
+        return $result;
+    }
+
+    /**
+     * Estime le taux de succès potentiel par segment avec stratégie quotidienne 0.3 TND
+     */
+    private function estimatePotentialSuccessRate(string $segment): float
+    {
+        $rates = [
+            'premium_payers' => 0.35,
+            'regular_payers' => 0.22,
+            'struggling_payers' => 0.18,
+            'high_risk' => 0.15,
+            'churn_risk' => 0.12,
+            'unknown' => 0.10
+        ];
+        return $rates[$segment] ?? 0.10;
+    }
+
+    /**
+     * Identifie les actions à impact rapide
+     */
+    private function identifyQuickWins(): array
+    {
+        $highRiskCount = DB::table('ml_client_features')
+            ->where('calculation_date', DB::table('ml_client_features')->max('calculation_date'))
+            ->where('client_segment', 'high_risk')
+            ->count();
+
+        $strugglingCount = DB::table('ml_client_features')
+            ->where('calculation_date', DB::table('ml_client_features')->max('calculation_date'))
+            ->where('client_segment', 'struggling_payers')
+            ->count();
+
+        return [
+            [
+                'action' => 'Migrer segment high_risk vers quotidien 0.3 TND',
+                'segment' => 'high_risk',
+                'clients_affected' => $highRiskCount,
+                'expected_impact' => '+7,381% ROI estimé',
+                'effort' => 'medium',
+                'timeline' => '2-4 semaines'
+            ],
+            [
+                'action' => 'Tester A/B hebdo 1.0 TND sur struggling_payers',
+                'segment' => 'struggling_payers',
+                'clients_affected' => $strugglingCount,
+                'expected_impact' => '+58% ROI vs mensuel',
+                'effort' => 'low',
+                'timeline' => '1-2 semaines'
+            ],
+            [
+                'action' => 'Optimiser timing (best_billing_hour) pour regular_payers',
+                'segment' => 'regular_payers',
+                'clients_affected' => null,
+                'expected_impact' => '+5-15% succès',
+                'effort' => 'low',
+                'timeline' => '1 semaine'
+            ]
+        ];
+    }
+
+    /**
+     * Retourne les alertes risque actuelles
+     */
+    private function getCurrentRiskAlerts(): array
+    {
+        $latestDate = DB::table('ml_client_features')->max('calculation_date');
+        if (!$latestDate) {
+            return [];
+        }
+
+        $alerts = [];
+
+        $churnCount = DB::table('ml_client_features')
+            ->where('calculation_date', $latestDate)
+            ->where('client_segment', 'churn_risk')
+            ->count();
+        if ($churnCount > 0) {
+            $alerts[] = [
+                'type' => 'churn_risk',
+                'message' => "{$churnCount} clients en risque de churn",
+                'severity' => 'high',
+                'recommendation' => 'Offre rétention quotidien 0.3 TND + bonus'
+            ];
+        }
+
+        $highFailureCount = DB::table('ml_client_features')
+            ->where('calculation_date', $latestDate)
+            ->where('consecutive_failures', '>=', 5)
+            ->count();
+        if ($highFailureCount > 100) {
+            $alerts[] = [
+                'type' => 'consecutive_failures',
+                'message' => "{$highFailureCount} clients avec 5+ échecs consécutifs",
+                'severity' => 'medium',
+                'recommendation' => 'Pause facturation ou passage quotidien pour réactivation'
+            ];
+        }
+
+        $zeroSuccessRate = DB::table('ml_client_features')
+            ->where('calculation_date', $latestDate)
+            ->where('payment_success_rate', 0)
+            ->count();
+        $total = DB::table('ml_client_features')->where('calculation_date', $latestDate)->count();
+        $zeroPct = $total > 0 ? round($zeroSuccessRate / $total * 100, 1) : 0;
+        if ($zeroPct > 70) {
+            $alerts[] = [
+                'type' => 'zero_success',
+                'message' => "{$zeroPct}% des clients avec 0% succès historique",
+                'severity' => 'high',
+                'recommendation' => 'Priorité migration quotidien 0.3 TND sur high_risk'
+            ];
+        }
+
+        return $alerts;
+    }
+
+    /**
+     * Génère des suggestions d'A/B tests
+     */
+    private function generateABTestSuggestions(): array
+    {
+        $activeCount = $this->getActiveABTests();
+        $suggestions = [
+            [
+                'name' => 'high_risk_quotidien_vs_mensuel',
+                'description' => 'Groupe A: mensuel 3.0 TND, Groupe B: quotidien 0.3 TND',
+                'target_segment' => 'high_risk',
+                'sample_size' => 1000,
+                'duration_days' => 14,
+                'primary_metric' => 'payment_success_rate',
+                'expected_improvement' => '+15% succès sur B'
+            ],
+            [
+                'name' => 'struggling_hebdo_vs_mensuel',
+                'description' => 'Groupe A: mensuel 3.0 TND, Groupe B: hebdo 1.0 TND',
+                'target_segment' => 'struggling_payers',
+                'sample_size' => 500,
+                'duration_days' => 21,
+                'primary_metric' => 'revenue_per_client',
+                'expected_improvement' => '+58% ROI sur B'
+            ],
+            [
+                'name' => 'timing_optimization',
+                'description' => 'Groupe A: heure actuelle, Groupe B: best_billing_hour prédit',
+                'target_segment' => 'regular_payers',
+                'sample_size' => 2000,
+                'duration_days' => 7,
+                'primary_metric' => 'success_rate',
+                'expected_improvement' => '+5-10% succès sur B'
+            ]
+        ];
+
+        return [
+            'active_tests_count' => $activeCount,
+            'suggestions' => $suggestions
+        ];
+    }
+
+    /**
+     * Tendances d'importance des features (basé sur ml_model_performance si disponible)
+     */
+    private function getFeatureImportanceTrends(): array
+    {
+        $latest = DB::table('ml_model_performance')
+            ->whereNotNull('feature_importance')
+            ->orderBy('evaluation_date', 'desc')
+            ->first();
+
+        if (!$latest || !$latest->feature_importance) {
+            return [
+                'source' => 'static',
+                'top_5' => collect($this->getMostImportantFeatures())->take(5)->values()->toArray(),
+                'note' => 'Importances statiques (modèle LightGBM non encore évalué en DB)'
+            ];
+        }
+
+        $importance = is_string($latest->feature_importance)
+            ? json_decode($latest->feature_importance, true)
+            : $latest->feature_importance;
+        if (!is_array($importance)) {
+            $importance = [];
+        }
+        arsort($importance);
+        $top5 = array_slice(array_keys($importance), 0, 5);
+
+        $top5WithRank = [];
+        foreach (array_values($top5) as $rank => $name) {
+            $top5WithRank[] = [
+                'feature' => $name,
+                'importance' => round((float) ($importance[$name] ?? 0), 4),
+                'rank' => $rank + 1
+            ];
+        }
+
+        return [
+            'source' => 'ml_model_performance',
+            'evaluation_date' => $latest->evaluation_date ?? null,
+            'top_5' => $top5WithRank,
+            'note' => 'Dernière évaluation modèle'
+        ];
     }
 }

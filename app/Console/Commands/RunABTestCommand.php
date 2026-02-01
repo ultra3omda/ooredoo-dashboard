@@ -12,6 +12,9 @@ class RunABTestCommand extends Command
                             {--name= : Nom du test A/B}
                             {--participants=100 : Nombre de participants à assigner (control + treatment)}
                             {--days=14 : Durée du test en jours}
+                            {--segment= : Segment client (ex: high_risk, low_risk) - filtre ml_client_features}
+                            {--price= : Prix traitement en TND (ex: 0.3 pour quotidien)}
+                            {--frequency=daily : Fréquence traitement (daily|monthly)}
                             {--list : Afficher les tests A/B existants sans en créer}';
 
     protected $description = 'Crée et lance un test A/B (remplit ml_ab_tests et ml_ab_test_participants)';
@@ -25,6 +28,9 @@ class RunABTestCommand extends Command
         $name = $this->option('name') ?: 'Test facturation optimisée ' . now()->format('Y-m-d H:i');
         $participants = (int) $this->option('participants');
         $days = (int) $this->option('days');
+        $segment = $this->option('segment');
+        $price = $this->option('price');
+        $frequency = $this->option('frequency') ?: 'daily';
 
         if ($participants < 2) {
             $this->error('Le nombre de participants doit être au moins 2.');
@@ -35,8 +41,21 @@ class RunABTestCommand extends Command
         $this->line("   Nom: {$name}");
         $this->line("   Participants: {$participants}");
         $this->line("   Durée: {$days} jours");
+        if ($segment) {
+            $this->line("   Segment: {$segment}");
+        }
+        if ($price !== null && $price !== '') {
+            $this->line("   Prix traitement: {$price} TND ({$frequency})");
+        }
 
         $testId = 'ab_' . str_replace([' ', ':'], ['_', ''], now()->format('Y-m-d_His'));
+
+        $treatmentPrice = $price !== null && $price !== '' ? (float) $price : 'recommended';
+        $treatmentStrategy = [
+            'billing_time' => 'optimized',
+            'price' => $treatmentPrice,
+            'frequency' => $frequency,
+        ];
 
         try {
             $startDate = Carbon::today();
@@ -45,7 +64,9 @@ class RunABTestCommand extends Command
             DB::table('ml_ab_tests')->insert([
                 'test_id' => $testId,
                 'test_name' => $name,
-                'test_description' => "Test A/B créé via ml:ab-test. Contrôle vs traitement sur stratégie de facturation.",
+                'test_description' => "Test A/B créé via ml:ab-test. Contrôle vs traitement sur stratégie de facturation."
+                    . ($segment ? " Segment: {$segment}." : '')
+                    . ($treatmentPrice !== 'recommended' ? " Traitement: {$treatmentPrice} TND ({$frequency})." : ''),
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'status' => 'running',
@@ -56,11 +77,7 @@ class RunABTestCommand extends Command
                     'price' => 'current',
                     'frequency' => 'monthly',
                 ]),
-                'treatment_strategy' => json_encode([
-                    'billing_time' => 'optimized',
-                    'price' => 'recommended',
-                    'frequency' => 'recommended',
-                ]),
+                'treatment_strategy' => json_encode($treatmentStrategy),
                 'primary_metric' => 'success_rate',
                 'secondary_metrics' => json_encode(['revenue', 'churn']),
                 'minimum_detectable_effect' => 0.05,
@@ -71,10 +88,12 @@ class RunABTestCommand extends Command
 
             $this->line("   Test créé: {$testId}");
 
-            // Récupérer des client_id distincts (avec features de préférence)
-            $clientIds = DB::table('ml_client_features')
-                ->distinct('client_id')
-                ->limit($participants * 2)
+            // Récupérer des client_id (filtrer par segment si --segment=)
+            $query = DB::table('ml_client_features')->distinct('client_id');
+            if ($segment) {
+                $query->where('client_segment', $segment);
+            }
+            $clientIds = $query->limit($participants * 2)
                 ->pluck('client_id')
                 ->shuffle()
                 ->take($participants)
