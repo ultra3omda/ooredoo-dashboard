@@ -507,7 +507,7 @@ class TimweDiagnosticApiService
      */
     public function getBillingRateEvolution(string $start, string $end): array
     {
-        $key = self::cacheKey('billing_evolution', $start, $end, []);
+        $key = self::cacheKey('billing_evolution_v2', $start, $end, []);
         $cached = Cache::get($key);
         if ($cached !== null) {
             return array_merge($cached, ['cached' => true]);
@@ -516,17 +516,18 @@ class TimweDiagnosticApiService
         if (!$this->hasAggregates($start, $end)) {
             return ['success' => false, 'error' => 'no_aggregates', 'by_date' => []];
         }
+        $normalizeDate = fn ($row) => Carbon::parse($row->stat_date)->format('Y-m-d');
         $summaryByDate = DB::table('timwe_diagnostic_daily_summary')
             ->whereBetween('stat_date', [$start, $end])
             ->orderBy('stat_date')
-            ->get(['stat_date', 'total_billed'])
-            ->keyBy('stat_date');
+            ->get(['stat_date', 'total_billed', 'total_transactions'])
+            ->keyBy($normalizeDate);
         $phonesByDate = DB::table('timwe_diagnostic_daily_phone')
             ->whereBetween('stat_date', [$start, $end])
             ->groupBy('stat_date')
-            ->selectRaw('stat_date, COUNT(DISTINCT client_telephone) as unique_phones')
+            ->selectRaw('stat_date, COUNT(DISTINCT client_telephone) as unique_phones, COALESCE(SUM(total_attempts),0) as total_attempts')
             ->get()
-            ->keyBy('stat_date');
+            ->keyBy($normalizeDate);
         $startCarbon = Carbon::parse($start);
         $endCarbon = Carbon::parse($end);
         $byDate = [];
@@ -535,11 +536,17 @@ class TimweDiagnosticApiService
             $summaryRow = $summaryByDate->get($dateStr);
             $phonesRow = $phonesByDate->get($dateStr);
             $totalBilled = $summaryRow ? (int) ($summaryRow->total_billed ?? 0) : 0;
+            // Nombre de tentatives : même source que les KPIs funnel (summary.total_transactions), fallback table phone
+            $totalAttempts = $summaryRow ? (int) ($summaryRow->total_transactions ?? 0) : 0;
+            if ($totalAttempts === 0 && $phonesRow) {
+                $totalAttempts = (int) ($phonesRow->total_attempts ?? 0);
+            }
             $uniquePhones = $phonesRow ? (int) ($phonesRow->unique_phones ?? 0) : 0;
             $billingRate = $uniquePhones > 0 ? round(($totalBilled / $uniquePhones) * 100, 2) : 0;
             $byDate[] = [
                 'date' => $dateStr,
                 'total_billed' => $totalBilled,
+                'total_attempts' => $totalAttempts,
                 'unique_phones' => $uniquePhones,
                 'billing_rate' => $billingRate,
             ];

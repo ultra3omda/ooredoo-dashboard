@@ -707,12 +707,14 @@ const diagnosticApp = {
             const dt = new Date(d.date + 'T12:00:00');
             return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
         });
-        const data = byDate.map(d => d.billing_rate);
-        const sorted = [...data].filter(v => typeof v === 'number' && !isNaN(v)).sort((a, b) => a - b);
+        const billingData = byDate.map(d => d.billing_rate);
+        const attemptsData = byDate.map(d => (typeof d.total_attempts === 'number' ? d.total_attempts : 0));
+        const sorted = [...billingData].filter(v => typeof v === 'number' && !isNaN(v)).sort((a, b) => a - b);
         const median = sorted.length === 0 ? 0 : sorted.length % 2 === 1
             ? sorted[(sorted.length - 1) / 2]
             : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
         const medianLineData = labels.map(() => median);
+        const maxAttempts = Math.max(...attemptsData, 1);
         const ctx = canvas.getContext('2d');
         this.billingRateChart = new Chart(ctx, {
             type: 'line',
@@ -721,13 +723,14 @@ const diagnosticApp = {
                 datasets: [
                     {
                         label: 'Taux de facturation (%)',
-                        data,
+                        data: billingData,
                         borderColor: '#8B5CF6',
                         backgroundColor: 'rgba(139, 92, 246, 0.1)',
                         fill: true,
                         tension: 0.2,
-                        pointRadius: data.length <= 31 ? 4 : 0,
-                        pointHoverRadius: 6
+                        pointRadius: billingData.length <= 31 ? 4 : 0,
+                        pointHoverRadius: 6,
+                        yAxisID: 'y'
                     },
                     {
                         label: 'Médiane (' + median.toFixed(1) + ' %)',
@@ -737,13 +740,26 @@ const diagnosticApp = {
                         borderWidth: 2,
                         fill: false,
                         pointRadius: 0,
-                        pointHoverRadius: 0
+                        pointHoverRadius: 0,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Nombre de tentatives',
+                        data: attemptsData,
+                        borderColor: '#0d9488',
+                        backgroundColor: 'rgba(13, 148, 136, 0.08)',
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: attemptsData.length <= 31 ? 4 : 0,
+                        pointHoverRadius: 6,
+                        yAxisID: 'yAttempts'
                     }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
                         display: true,
@@ -756,10 +772,20 @@ const diagnosticApp = {
                         ticks: { maxRotation: 45, maxTicksLimit: 15 }
                     },
                     y: {
+                        type: 'linear',
+                        position: 'left',
                         min: 0,
-                        max: Math.max(100, Math.ceil(Math.max(...data, median) / 10) * 10) || 100,
+                        max: Math.max(100, Math.ceil(Math.max(...billingData, median) / 10) * 10) || 100,
                         grid: { color: 'rgba(0,0,0,0.06)' },
                         ticks: { callback: v => v + ' %' }
+                    },
+                    yAttempts: {
+                        type: 'linear',
+                        position: 'right',
+                        min: 0,
+                        max: Math.ceil(maxAttempts * 1.1) || 1,
+                        grid: { drawOnChartArea: false },
+                        ticks: { callback: v => Number(v).toLocaleString('fr-FR') }
                     }
                 }
             }
