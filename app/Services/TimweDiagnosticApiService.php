@@ -127,6 +127,87 @@ class TimweDiagnosticApiService
     }
 
     /**
+     * GET funnel-kpis — agrégation unique (summary + delivery) pour KPI et funnel. Cible < 50 ms.
+     * Tous les taux sont pondérés sur le volume réel (pas moyenne journalière).
+     */
+    public function getFunnelKpis(string $start, string $end): array
+    {
+        $key = self::cacheKey('funnel_kpis', $start, $end, []);
+        $cached = Cache::get($key);
+        if ($cached !== null) {
+            $this->logTiming('funnel_kpis', 0, 1, true);
+            return array_merge($cached, ['cached' => true]);
+        }
+        $t0 = microtime(true);
+        if (!$this->hasAggregates($start, $end)) {
+            return ['success' => false, 'error' => 'no_aggregates', 'kpis' => null];
+        }
+        $summaryRow = DB::table('timwe_diagnostic_daily_summary')
+            ->whereBetween('stat_date', [$start, $end])
+            ->selectRaw('COALESCE(SUM(total_transactions),0) as total_transactions, COALESCE(SUM(total_billed),0) as total_billed, COALESCE(SUM(total_revenue_tnd),0) as total_revenue_tnd')
+            ->first();
+        $totalAttempts = (int) ($summaryRow->total_transactions ?? 0);
+        $totalSuccess = (int) ($summaryRow->total_billed ?? 0);
+        $totalRevenueTnd = (float) ($summaryRow->total_revenue_tnd ?? 0);
+
+        $deliveryRows = DB::table('timwe_diagnostic_daily_delivery')
+            ->whereBetween('stat_date', [$start, $end])
+            ->groupBy('delivery_code')
+            ->selectRaw('delivery_code, COALESCE(SUM(count),0) as count')
+            ->get();
+        $totalDelivered = 0;
+        $totalNoBalance = 0;
+        $totalNotDelivered = 0;
+        $totalOther = 0;
+        foreach ($deliveryRows as $r) {
+            $c = (int) $r->count;
+            switch (strtoupper((string) $r->delivery_code)) {
+                case 'DELIVERED':
+                    $totalDelivered += $c;
+                    break;
+                case 'NO_BALANCE':
+                    $totalNoBalance += $c;
+                    break;
+                case 'NOT_DELIVERED':
+                    $totalNotDelivered += $c;
+                    break;
+                default:
+                    $totalOther += $c;
+                    break;
+            }
+        }
+
+        // Selon la doc : on peut recevoir DELIVERED sans facturation (totalCharged = 0)
+        $deliveredNonBilled = max(0, $totalDelivered - $totalSuccess);
+        $deliveryRate = $totalAttempts > 0 ? ($totalDelivered / $totalAttempts) * 100 : 0;
+        $billingRateOnDelivered = $totalDelivered > 0 ? ($totalSuccess / $totalDelivered) * 100 : 0;
+        $billingRateGlobal = $totalAttempts > 0 ? ($totalSuccess / $totalAttempts) * 100 : 0;
+        // No Balance Ratio = part des tentatives en NO_BALANCE (sur total_attempts, pas total_delivered)
+        $noBalanceRatio = $totalAttempts > 0 ? ($totalNoBalance / $totalAttempts) * 100 : 0;
+        $technicalLossRate = $totalAttempts > 0 ? ($totalNotDelivered / $totalAttempts) * 100 : 0;
+
+        $kpis = [
+            'total_attempts' => $totalAttempts,
+            'total_success' => $totalSuccess,
+            'total_delivered' => $totalDelivered,
+            'delivered_non_billed' => $deliveredNonBilled,
+            'total_no_balance' => $totalNoBalance,
+            'total_not_delivered' => $totalNotDelivered,
+            'total_other' => $totalOther,
+            'total_revenue_tnd' => round($totalRevenueTnd, 2),
+            'delivery_rate' => round($deliveryRate, 2),
+            'billing_rate_on_delivered' => round($billingRateOnDelivered, 2),
+            'billing_rate_global' => round($billingRateGlobal, 2),
+            'no_balance_ratio' => round($noBalanceRatio, 2),
+            'technical_loss_rate' => round($technicalLossRate, 2),
+        ];
+        $this->logTiming('funnel_kpis', (microtime(true) - $t0) * 1000, 1, false);
+        $payload = ['success' => true, 'kpis' => $kpis];
+        Cache::put($key, $payload, self::TTL_SUMMARY);
+        return array_merge($payload, ['cached' => false]);
+    }
+
+    /**
      * GET delivery — tables d'agrégation uniquement. Cible < 20 ms.
      * Cache: timwe:delivery:{start}:{end}, TTL 10 min.
      */

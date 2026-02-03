@@ -112,6 +112,7 @@ Route::middleware(['auth'])->group(function () {
         // API rapide (endpoints séparés, < 200 ms)
         Route::prefix('timwe-diagnostic/api')->name('timwe-diagnostic.api.')->group(function () {
             Route::get('/summary', [TimweDiagnosticApiController::class, 'summary'])->name('summary');
+            Route::get('/funnel-kpis', [TimweDiagnosticApiController::class, 'funnelKpis'])->name('funnel-kpis');
             Route::get('/delivery', [TimweDiagnosticApiController::class, 'delivery'])->name('delivery');
             Route::get('/phones', [TimweDiagnosticApiController::class, 'phones'])->name('phones');
             Route::get('/phones/{phone}/delivery-codes', [TimweDiagnosticApiController::class, 'phoneDeliveryCodes'])->name('phones.delivery-codes');

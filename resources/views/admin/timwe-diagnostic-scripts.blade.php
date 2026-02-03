@@ -2,6 +2,8 @@
 const diagnosticApp = {
     data: null,
     billingRateChart: null,
+    funnelVolumeChart: null,
+    funnelRatesChart: null,
     currentPages: {
         byPhone: 1,
         byDeliveryCode: 1,
@@ -211,12 +213,14 @@ const diagnosticApp = {
                 const page = this.phonePageRequested || 1;
                 const { sort_by, sort_dir } = this.getApiSortParams();
                 const base = `start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`;
-                const summaryPromise = fetch(`/admin/timwe-diagnostic/api/summary?${base}&delivery_code=${encodeURIComponent(deliveryCode || '')}`).then(r => { this.setProgress(25, '25%'); return r; });
+                const summaryPromise = fetch(`/admin/timwe-diagnostic/api/summary?${base}&delivery_code=${encodeURIComponent(deliveryCode || '')}`).then(r => { this.setProgress(20, '20%'); return r; });
+                const funnelPromise = fetch(`/admin/timwe-diagnostic/api/funnel-kpis?${base}`).then(r => { this.setProgress(35, '35%'); return r; });
                 const deliveryPromise = fetch(`/admin/timwe-diagnostic/api/delivery?${base}`).then(r => { this.setProgress(50, '50%'); return r; });
                 const phonesPromise = fetch(`/admin/timwe-diagnostic/api/phones?${base}&page=${page}&per_page=${this.apiPerPage}&search_phone=${encodeURIComponent(searchPhone || '')}&delivery_code=${encodeURIComponent(deliveryCode || '')}&sort_by=${encodeURIComponent(sort_by)}&sort_dir=${encodeURIComponent(sort_dir)}`).then(r => { this.setProgress(75, '75%'); return r; });
                 const recentPromise = fetch(`/admin/timwe-diagnostic/api/recent?${base}&limit=100`);
-                const [summaryRes, deliveryRes, phonesRes, recentRes] = await Promise.all([summaryPromise, deliveryPromise, phonesPromise, recentPromise]);
+                const [summaryRes, funnelRes, deliveryRes, phonesRes, recentRes] = await Promise.all([summaryPromise, funnelPromise, deliveryPromise, phonesPromise, recentPromise]);
                 const summary = await summaryRes.json();
+                const funnel = await funnelRes.json();
                 const delivery = await deliveryRes.json();
                 const phones = await phonesRes.json();
                 const recent = await recentRes.json();
@@ -287,6 +291,7 @@ const diagnosticApp = {
                     phones_page: phones.meta?.current_page ?? 1,
                     phones_per_page: phones.meta?.per_page ?? this.apiPerPage,
                     summary: summary.summary,
+                    kpis: funnel.success && funnel.kpis ? funnel.kpis : null,
                     by_phone,
                     by_delivery_code: delivery.by_delivery_code || [],
                     recent_transactions: recent.recent_transactions || []
@@ -632,14 +637,32 @@ const diagnosticApp = {
             }
         }
         
-        // Résumé
-        if (data.summary) {
-            document.getElementById('totalTransactions').textContent = (data.summary.total_transactions ?? 0).toLocaleString();
-            document.getElementById('uniquePhones').textContent = (data.summary.unique_phones ?? 0).toLocaleString();
-            document.getElementById('totalBilled').textContent = (data.summary.total_billed ?? 0).toLocaleString();
-            document.getElementById('billingRate').textContent = (data.summary.billing_rate ?? 0) + '%';
-            document.getElementById('totalRevenue').textContent = (data.summary.total_revenue_tnd ?? 0).toLocaleString('fr-FR', {minimumFractionDigits: 2});
-            document.getElementById('deliveryCodesCount').textContent = (data.summary.delivery_codes_count ?? 0);
+        // KPI Cards (funnel-kpis) + graphiques funnel
+        if (data.kpis) {
+            const k = data.kpis;
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+            set('kpiTotalAttempts', (k.total_attempts ?? 0).toLocaleString());
+            set('kpiTotalRevenue', (k.total_revenue_tnd ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            set('kpiBillingRateGlobal', (k.billing_rate_global ?? 0).toFixed(2) + ' %');
+            set('kpiTotalDelivered', (k.total_delivered ?? 0).toLocaleString());
+            set('kpiDeliveryRate', (k.delivery_rate ?? 0).toFixed(2) + ' %');
+            set('kpiTotalNotDelivered', (k.total_not_delivered ?? 0).toLocaleString());
+            set('kpiTechnicalLossRate', (k.technical_loss_rate ?? 0).toFixed(2) + ' %');
+            set('kpiDeliveredBilled', (k.total_success ?? 0).toLocaleString());
+            set('kpiDeliveredNonBilled', (k.delivered_non_billed ?? 0).toLocaleString());
+            set('kpiBillingRateOnDelivered', (k.billing_rate_on_delivered ?? 0).toFixed(2) + ' %');
+            set('kpiTotalNoBalance', (k.total_no_balance ?? 0).toLocaleString());
+            set('kpiNoBalanceRatio', (k.no_balance_ratio ?? 0).toFixed(2) + ' %');
+            this.renderFunnelCharts(k);
+        } else {
+            const ids = ['kpiTotalAttempts','kpiTotalRevenue','kpiBillingRateGlobal','kpiTotalDelivered','kpiDeliveryRate','kpiTotalNotDelivered','kpiTechnicalLossRate','kpiDeliveredBilled','kpiDeliveredNonBilled','kpiBillingRateOnDelivered','kpiTotalNoBalance','kpiNoBalanceRatio'];
+            ids.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '-'; });
+            this.destroyFunnelCharts();
+        }
+        const funnelSection = document.getElementById('funnelChartsSection');
+        if (funnelSection) {
+            if (data.kpis && !data.no_aggregates_message) { funnelSection.classList.add('visible'); funnelSection.style.display = 'grid'; }
+            else { funnelSection.classList.remove('visible'); funnelSection.style.display = 'none'; }
         }
         
         // Tables
@@ -746,6 +769,68 @@ const diagnosticApp = {
             this.billingRateChart.destroy();
             this.billingRateChart = null;
         }
+    },
+    
+    renderFunnelCharts(kpis) {
+        if (typeof Chart === 'undefined') return;
+        this.destroyFunnelCharts();
+        const volCanvas = document.getElementById('funnelVolumeChartCanvas');
+        const ratesCanvas = document.getElementById('funnelRatesChartCanvas');
+        if (!volCanvas || !ratesCanvas) return;
+        const s = kpis.total_success ?? 0;
+        const notSuccess = kpis.delivered_non_billed ?? 0;
+        const nb = kpis.total_no_balance ?? 0;
+        const nd = kpis.total_not_delivered ?? 0;
+        this.funnelVolumeChart = new Chart(volCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['Success', 'Not success', 'No Balance', 'Not Delivered'],
+                datasets: [{
+                    label: 'Volume',
+                    data: [s, notSuccess, nb, nd],
+                    backgroundColor: ['#10b981', '#f59e0b', '#eab308', '#ef4444'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxRotation: 25 } },
+                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' } }
+                }
+            }
+        });
+        const dr = (kpis.delivery_rate ?? 0).toFixed(2);
+        const bd = (kpis.billing_rate_on_delivered ?? 0).toFixed(2);
+        const bg = (kpis.billing_rate_global ?? 0).toFixed(2);
+        this.funnelRatesChart = new Chart(ratesCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['Delivery Rate', 'Billing sur Delivered', 'Billing Global'],
+                datasets: [{
+                    label: '%',
+                    data: [parseFloat(dr), parseFloat(bd), parseFloat(bg)],
+                    backgroundColor: ['#3b82f6', '#10b981', '#6B46C1'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxRotation: 25 } },
+                    y: { beginAtZero: true, max: 100, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { callback: v => v + ' %' } }
+                }
+            }
+        });
+    },
+    
+    destroyFunnelCharts() {
+        if (this.funnelVolumeChart) { this.funnelVolumeChart.destroy(); this.funnelVolumeChart = null; }
+        if (this.funnelRatesChart) { this.funnelRatesChart.destroy(); this.funnelRatesChart = null; }
     },
     
     renderPhoneTable(phones) {

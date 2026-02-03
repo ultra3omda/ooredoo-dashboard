@@ -40,6 +40,16 @@ class TimweDiagnosticApiController extends Controller
     }
 
     /**
+     * GET /api/timwe-diagnostic/funnel-kpis?start=&end=
+     */
+    public function funnelKpis(Request $request): JsonResponse
+    {
+        [$start, $end] = $this->normalizePeriod($request);
+        $data = (new TimweDiagnosticApiService())->getFunnelKpis($start, $end);
+        return response()->json($data);
+    }
+
+    /**
      * GET /api/timwe-diagnostic/delivery?start=&end=
      */
     public function delivery(Request $request): JsonResponse

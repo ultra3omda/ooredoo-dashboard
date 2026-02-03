@@ -407,6 +407,54 @@
             position: relative;
             height: 280px;
         }
+
+        .timwe-kpi-blocks {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .timwe-kpi-blocks.hidden-until-data {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .timwe-kpi-blocks.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .timwe-kpi-block {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-top: 4px solid var(--border);
+        }
+        .timwe-kpi-block-global { border-top-color: var(--brand-primary); }
+        .timwe-kpi-block-technical { border-top-color: #8B5CF6; }
+        .timwe-kpi-block-business { border-top-color: var(--success); }
+        .timwe-kpi-block-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+        .timwe-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+        }
+        .timwe-kpi-grid .summary-card { border-top: none; }
+        .timwe-chart-section.funnel-charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        @media (max-width: 900px) {
+            .timwe-chart-section.funnel-charts { grid-template-columns: 1fr; }
+        }
         
         .tabs-nav {
             display: flex;
@@ -866,33 +914,90 @@
             <div id="progressBarLabel" class="progress-bar-label">0%</div>
         </div>
                     
-        <!-- Summary Cards (template visible dès le chargement, rempli progressivement) -->
-        <div id="summarySection" class="summary-grid hidden-until-data">
-            <div class="summary-card">
-                <div class="summary-label">Total Transactions</div>
-                <div class="summary-value" id="totalTransactions">-</div>
-                                </div>
-            <div class="summary-card">
-                <div class="summary-label">Numéros Uniques</div>
-                <div class="summary-value" id="uniquePhones">-</div>
-                            </div>
-            <div class="summary-card">
-                <div class="summary-label">Facturés</div>
-                <div class="summary-value" id="totalBilled" style="color: var(--success)">-</div>
-                        </div>
-            <div class="summary-card">
-                <div class="summary-label">Taux Facturation</div>
-                <div class="summary-value" id="billingRate" style="color: var(--warning)">-</div>
-                                </div>
-            <div class="summary-card">
-                <div class="summary-label">Revenu Total (TND)</div>
-                <div class="summary-value" id="totalRevenue" style="color: var(--success)">-</div>
-                            </div>
-            <div class="summary-card">
-                <div class="summary-label">Types Delivery</div>
-                <div class="summary-value" id="deliveryCodesCount">-</div>
-                        </div>
+        <!-- KPI Cards — Bloc Global -->
+        <div id="summarySection" class="timwe-kpi-blocks hidden-until-data">
+            <div class="timwe-kpi-block timwe-kpi-block-global">
+                <div class="timwe-kpi-block-title">Global</div>
+                <div class="timwe-kpi-grid">
+                    <div class="summary-card">
+                        <div class="summary-label">Total Tentatives</div>
+                        <div class="summary-value" id="kpiTotalAttempts">-</div>
                     </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Revenue Total (TND)</div>
+                        <div class="summary-value" id="kpiTotalRevenue" style="color: var(--success)">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Billing Rate Global (%)</div>
+                        <div class="summary-value" id="kpiBillingRateGlobal" style="color: var(--warning)">-</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Bloc Performance Technique (MNO layer) -->
+            <div class="timwe-kpi-block timwe-kpi-block-technical">
+                <div class="timwe-kpi-block-title">Performance Technique (MNO)</div>
+                <div class="timwe-kpi-grid">
+                    <div class="summary-card">
+                        <div class="summary-label">Total Delivered</div>
+                        <div class="summary-value" id="kpiTotalDelivered">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Delivery Rate (%)</div>
+                        <div class="summary-value" id="kpiDeliveryRate" style="color: var(--accent)">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Not Delivered</div>
+                        <div class="summary-value" id="kpiTotalNotDelivered" style="color: var(--danger)">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Technical Loss Rate (%)</div>
+                        <div class="summary-value" id="kpiTechnicalLossRate" style="color: var(--danger)">-</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Bloc Performance Business (Charging layer) -->
+            <div class="timwe-kpi-block timwe-kpi-block-business">
+                <div class="timwe-kpi-block-title">Performance Business (Charging)</div>
+                <div class="timwe-kpi-grid">
+                    <div class="summary-card">
+                        <div class="summary-label">Delivered Facturés (Success)</div>
+                        <div class="summary-value" id="kpiDeliveredBilled" style="color: var(--success)">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Delivered Non Facturés</div>
+                        <div class="summary-value" id="kpiDeliveredNonBilled" style="color: var(--warning)">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Billing Rate sur Delivered (%)</div>
+                        <div class="summary-value" id="kpiBillingRateOnDelivered" style="color: var(--success)">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">No Balance</div>
+                        <div class="summary-value" id="kpiTotalNoBalance">-</div>
+                    </div>
+                    <div class="summary-card" title="Part des tentatives en NO_BALANCE (sur total tentatives)">
+                        <div class="summary-label">No Balance Ratio (%)</div>
+                        <div class="summary-value" id="kpiNoBalanceRatio">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graphiques Funnel (volume + taux %) -->
+        <div id="funnelChartsSection" class="timwe-chart-section funnel-charts hidden-until-data" style="display: none;">
+            <div class="timwe-chart-card">
+                <div class="timwe-chart-title">Funnel – Volume</div>
+                <div class="timwe-chart-container" style="height: 260px;">
+                    <canvas id="funnelVolumeChartCanvas"></canvas>
+                </div>
+            </div>
+            <div class="timwe-chart-card">
+                <div class="timwe-chart-title">Taux (%)</div>
+                <div class="timwe-chart-container" style="height: 260px;">
+                    <canvas id="funnelRatesChartCanvas"></canvas>
+                </div>
+            </div>
+        </div>
 
         <!-- Graphique évolution du taux de facturation -->
         <div id="billingRateChartSection" class="timwe-chart-section hidden-until-data">
