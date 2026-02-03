@@ -431,8 +431,9 @@
             border-top: 4px solid var(--border);
         }
         .timwe-kpi-block-global { border-top-color: var(--brand-primary); }
-        .timwe-kpi-block-technical { border-top-color: #8B5CF6; }
-        .timwe-kpi-block-business { border-top-color: var(--success); }
+        .timwe-kpi-block-delivered { border-top-color: var(--success); }
+        .timwe-kpi-block-no-balance { border-top-color: var(--warning); }
+        .timwe-kpi-block-not-delivered { border-top-color: var(--danger); }
         .timwe-kpi-block-title {
             font-size: 14px;
             font-weight: 700;
@@ -914,7 +915,7 @@
             <div id="progressBarLabel" class="progress-bar-label">0%</div>
         </div>
                     
-        <!-- KPI Cards — Bloc Global -->
+        <!-- KPI Cards — Global puis Performance Technique par statut (Delivered / No Balance / Not Delivered) -->
         <div id="summarySection" class="timwe-kpi-blocks hidden-until-data">
             <div class="timwe-kpi-block timwe-kpi-block-global">
                 <div class="timwe-kpi-block-title">Global</div>
@@ -935,38 +936,16 @@
                         <div class="summary-label">Revenu BigDeal TTC (TND)</div>
                         <div class="summary-value" id="kpiBigDealRevenue" style="color: var(--success)">-</div>
                     </div>
-                    <div class="summary-card">
-                        <div class="summary-label">Billing Rate Global (%)</div>
-                        <div class="summary-value" id="kpiBillingRateGlobal" style="color: var(--warning)">-</div>
-                    </div>
                 </div>
             </div>
-            <!-- Bloc Performance Technique (MNO layer) -->
-            <div class="timwe-kpi-block timwe-kpi-block-technical">
-                <div class="timwe-kpi-block-title">Performance Technique (MNO)</div>
+            <!-- Statut Delivered -->
+            <div class="timwe-kpi-block timwe-kpi-block-delivered">
+                <div class="timwe-kpi-block-title">Performance Technique – Statut Delivered</div>
                 <div class="timwe-kpi-grid">
                     <div class="summary-card">
                         <div class="summary-label">Total Delivered</div>
                         <div class="summary-value" id="kpiTotalDelivered">-</div>
                     </div>
-                    <div class="summary-card">
-                        <div class="summary-label">Delivery Rate (%)</div>
-                        <div class="summary-value" id="kpiDeliveryRate" style="color: var(--accent)">-</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-label">Not Delivered</div>
-                        <div class="summary-value" id="kpiTotalNotDelivered" style="color: var(--danger)">-</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-label">Technical Loss Rate (%)</div>
-                        <div class="summary-value" id="kpiTechnicalLossRate" style="color: var(--danger)">-</div>
-                    </div>
-                </div>
-            </div>
-            <!-- Bloc Performance Business (Charging layer) -->
-            <div class="timwe-kpi-block timwe-kpi-block-business">
-                <div class="timwe-kpi-block-title">Performance Business (Charging)</div>
-                <div class="timwe-kpi-grid">
                     <div class="summary-card">
                         <div class="summary-label">Delivered Facturés (Success)</div>
                         <div class="summary-value" id="kpiDeliveredBilled" style="color: var(--success)">-</div>
@@ -976,9 +955,23 @@
                         <div class="summary-value" id="kpiDeliveredNonBilled" style="color: var(--warning)">-</div>
                     </div>
                     <div class="summary-card">
+                        <div class="summary-label">Delivery Rate (%)</div>
+                        <div class="summary-value" id="kpiDeliveryRate" style="color: var(--accent)">-</div>
+                    </div>
+                    <div class="summary-card">
                         <div class="summary-label">Billing Rate sur Delivered (%)</div>
                         <div class="summary-value" id="kpiBillingRateOnDelivered" style="color: var(--success)">-</div>
                     </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Billing Rate Global (%)</div>
+                        <div class="summary-value" id="kpiBillingRateGlobal" style="color: var(--warning)">-</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Statut No Balance -->
+            <div class="timwe-kpi-block timwe-kpi-block-no-balance">
+                <div class="timwe-kpi-block-title">Performance Technique – Statut No Balance</div>
+                <div class="timwe-kpi-grid">
                     <div class="summary-card">
                         <div class="summary-label">No Balance</div>
                         <div class="summary-value" id="kpiTotalNoBalance">-</div>
@@ -986,6 +979,20 @@
                     <div class="summary-card" title="Part des tentatives en NO_BALANCE (sur total tentatives)">
                         <div class="summary-label">No Balance Ratio (%)</div>
                         <div class="summary-value" id="kpiNoBalanceRatio">-</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Statut Not Delivered -->
+            <div class="timwe-kpi-block timwe-kpi-block-not-delivered">
+                <div class="timwe-kpi-block-title">Performance Technique – Statut Not Delivered</div>
+                <div class="timwe-kpi-grid">
+                    <div class="summary-card">
+                        <div class="summary-label">Not Delivered</div>
+                        <div class="summary-value" id="kpiTotalNotDelivered" style="color: var(--danger)">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Technical Loss Rate (%)</div>
+                        <div class="summary-value" id="kpiTechnicalLossRate" style="color: var(--danger)">-</div>
                     </div>
                 </div>
             </div>
@@ -1010,7 +1017,7 @@
         <!-- Graphique évolution du taux de facturation -->
         <div id="billingRateChartSection" class="timwe-chart-section hidden-until-data">
             <div class="timwe-chart-card">
-                <div class="timwe-chart-title">Évolution du taux de facturation (%)</div>
+                <div class="timwe-chart-title">Évolution : facturations success et tentatives</div>
                 <div class="timwe-chart-container">
                     <canvas id="billingRateChartCanvas"></canvas>
                 </div>

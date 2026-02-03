@@ -719,14 +719,14 @@ const diagnosticApp = {
             const dt = new Date(d.date + 'T12:00:00');
             return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
         });
-        const billingData = byDate.map(d => d.billing_rate);
+        const successData = byDate.map(d => (typeof d.total_billed === 'number' ? d.total_billed : 0));
         const attemptsData = byDate.map(d => (typeof d.total_attempts === 'number' ? d.total_attempts : 0));
-        const sorted = [...billingData].filter(v => typeof v === 'number' && !isNaN(v)).sort((a, b) => a - b);
-        const median = sorted.length === 0 ? 0 : sorted.length % 2 === 1
-            ? sorted[(sorted.length - 1) / 2]
-            : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
-        const medianLineData = labels.map(() => median);
-        const maxAttempts = Math.max(...attemptsData, 1);
+        const sortedSuccess = [...successData].filter(v => typeof v === 'number' && !isNaN(v)).sort((a, b) => a - b);
+        const medianSuccess = sortedSuccess.length === 0 ? 0 : sortedSuccess.length % 2 === 1
+            ? sortedSuccess[(sortedSuccess.length - 1) / 2]
+            : (sortedSuccess[sortedSuccess.length / 2 - 1] + sortedSuccess[sortedSuccess.length / 2]) / 2;
+        const medianSuccessLineData = labels.map(() => Math.round(medianSuccess));
+        const maxCount = Math.max(...successData, ...attemptsData, 1);
         const ctx = canvas.getContext('2d');
         this.billingRateChart = new Chart(ctx, {
             type: 'line',
@@ -734,26 +734,26 @@ const diagnosticApp = {
                 labels,
                 datasets: [
                     {
-                        label: 'Taux de facturation (%)',
-                        data: billingData,
+                        label: 'Nombre de facturations success',
+                        data: successData,
                         borderColor: '#8B5CF6',
                         backgroundColor: 'rgba(139, 92, 246, 0.1)',
                         fill: true,
                         tension: 0.2,
-                        pointRadius: billingData.length <= 31 ? 4 : 0,
+                        pointRadius: successData.length <= 31 ? 4 : 0,
                         pointHoverRadius: 6,
-                        yAxisID: 'y'
+                        yAxisID: 'yCounts'
                     },
                     {
-                        label: 'Médiane (' + median.toFixed(1) + ' %)',
-                        data: medianLineData,
+                        label: 'Médiane facturations (' + Math.round(medianSuccess).toLocaleString('fr-FR') + ')',
+                        data: medianSuccessLineData,
                         borderColor: '#f59e0b',
                         borderDash: [6, 4],
                         borderWidth: 2,
                         fill: false,
                         pointRadius: 0,
                         pointHoverRadius: 0,
-                        yAxisID: 'y'
+                        yAxisID: 'yCounts'
                     },
                     {
                         label: 'Nombre de tentatives',
@@ -764,7 +764,7 @@ const diagnosticApp = {
                         tension: 0.2,
                         pointRadius: attemptsData.length <= 31 ? 4 : 0,
                         pointHoverRadius: 6,
-                        yAxisID: 'yAttempts'
+                        yAxisID: 'yCounts'
                     }
                 ]
             },
@@ -783,20 +783,12 @@ const diagnosticApp = {
                         grid: { display: false },
                         ticks: { maxRotation: 45, maxTicksLimit: 15 }
                     },
-                    y: {
-                        type: 'linear',
-                        position: 'left',
-                        min: 0,
-                        max: Math.max(100, Math.ceil(Math.max(...billingData, median) / 10) * 10) || 100,
-                        grid: { color: 'rgba(0,0,0,0.06)' },
-                        ticks: { callback: v => v + ' %' }
-                    },
-                    yAttempts: {
+                    yCounts: {
                         type: 'linear',
                         position: 'right',
                         min: 0,
-                        max: Math.ceil(maxAttempts * 1.1) || 1,
-                        grid: { drawOnChartArea: false },
+                        max: Math.ceil(maxCount * 1.1) || 1,
+                        grid: { color: 'rgba(0,0,0,0.06)' },
                         ticks: { callback: v => Number(v).toLocaleString('fr-FR') }
                     }
                 }
