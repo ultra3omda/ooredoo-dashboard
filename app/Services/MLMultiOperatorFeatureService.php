@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 
 class MLMultiOperatorFeatureService
@@ -404,19 +405,42 @@ class MLMultiOperatorFeatureService
 
         Log::info("MLMultiOperatorFeatureService - Opérateurs trouvés: " . count($allOperatorIds));
 
-        // Clients actifs (avec abonnement récent ou transactions)
-        $activeClients = DB::table('client_abonnement as ca')
+        // Clients actifs : 1) abonnements non expirés à la date de calcul
+        $fromSubscriptions = DB::table('client_abonnement as ca')
             ->whereIn('ca.country_payments_methods_id', $allOperatorIds)
+            ->whereNotNull('ca.client_id')
             ->where('ca.client_abonnement_creation', '<=', $calculationDate)
-            ->where(function($q) use ($calculationDate) {
+            ->where(function ($q) use ($calculationDate) {
                 $q->whereNull('ca.client_abonnement_expiration')
                   ->orWhere('ca.client_abonnement_expiration', '>=', $calculationDate);
             })
             ->distinct()
             ->pluck('ca.client_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
             ->toArray();
 
-        Log::info("MLMultiOperatorFeatureService - Clients actifs multi-opérateur: " . count($activeClients));
+        // 2) Fallback : clients ayant au moins une transaction (Timwe/Eklektik/Ooredoo/DGV) sur les 6 derniers mois
+        $periodStart = $calculationDate->copy()->subMonths(6);
+        $fromTransactions = DB::table('transactions_history')
+            ->whereBetween('created_at', [$periodStart, $calculationDate])
+            ->where(function ($q) {
+                $q->where('status', 'LIKE', '%TIMWE%')
+                  ->orWhere('status', 'LIKE', '%EKLEKTIK%')
+                  ->orWhere('status', 'LIKE', '%OOREDOO%')
+                  ->orWhere('status', 'LIKE', '%DGV%')
+                  ->orWhere('status', 'LIKE', '%CLUB_PRIVILEGE%');
+            })
+            ->distinct()
+            ->pluck('client_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->toArray();
+
+        $activeClients = array_values(array_unique(array_merge($fromSubscriptions, $fromTransactions)));
+        Log::info("MLMultiOperatorFeatureService - Clients actifs multi-opérateur: " . count($activeClients) . " (abonnements: " . count($fromSubscriptions) . ", transactions: " . count($fromTransactions) . ")");
 
         $processedCount = 0;
         $batchSize = 50; // Réduit pour traiter multi-opérateur
@@ -425,6 +449,10 @@ class MLMultiOperatorFeatureService
             $featuresData = [];
             
             foreach ($batch as $clientId) {
+                $clientId = (int) $clientId;
+                if ($clientId <= 0) {
+                    continue;
+                }
                 try {
                     $features = $this->extractClientFeatures($clientId, $calculationDate);
                     $featuresData[] = $features;
@@ -434,13 +462,20 @@ class MLMultiOperatorFeatureService
                 }
             }
             
-            // Insérer en base avec upsert sur nouvelles colonnes
+            // Insérer en base : ne garder que les colonnes existantes dans ml_client_features
             if (!empty($featuresData)) {
-                DB::table('ml_client_features')->upsert(
-                    $featuresData,
-                    ['client_id', 'calculation_date'],
-                    array_keys($featuresData[0])
-                );
+                $allowedColumns = array_flip(Schema::getColumnListing('ml_client_features'));
+                $filteredData = array_map(function (array $row) use ($allowedColumns) {
+                    return array_intersect_key($row, $allowedColumns);
+                }, $featuresData);
+                $columns = array_keys($filteredData[0]);
+                if (!empty($columns)) {
+                    DB::table('ml_client_features')->upsert(
+                        $filteredData,
+                        ['client_id', 'calculation_date'],
+                        $columns
+                    );
+                }
             }
             
             Log::info("MLMultiOperatorFeatureService - Batch traité, total: $processedCount");

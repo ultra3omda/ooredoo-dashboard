@@ -11,10 +11,10 @@ class ExtractMultiOperatorFeaturesCommand extends Command
 {
     protected $signature = 'ml:extract-multi {--start-date= : Date de début (YYYY-MM-DD)}
                                             {--end-date= : Date de fin (YYYY-MM-DD)}
-                                            {--batch-days=7 : Nombre de jours par batch}
+                                            {--batch-days= : Pas en jours (défaut: 1 = chaque jour). Ex: 7 = une date par semaine}
                                             {--operator= : Opérateur spécifique (timwe/eklektik/ooredoo)}
                                             {--client-id= : Client spécifique}
-                                            {--force : Forcer même si données existantes}';
+                                            {--force : Forcer le retraitement des dates déjà présentes}';
 
     protected $description = 'Extrait les features ML pour tous les opérateurs (Timwe, Eklektik, Ooredoo/DGV)';
 
@@ -55,45 +55,50 @@ class ExtractMultiOperatorFeaturesCommand extends Command
                 return $this->extractSingleClient($clientId, $endDate);
             }
 
-            // Vérifier les données existantes
-            if (!$this->option('force')) {
-                $existingCount = \DB::table('ml_client_features')
-                    ->whereBetween('calculation_date', [$startDate, $endDate])
-                    ->count();
-                    
-                if ($existingCount > 0) {
-                    if (!$this->confirm("$existingCount features existent déjà. Continuer?")) {
-                        $this->info('Extraction annulée');
-                        return Command::SUCCESS;
-                    }
-                }
+            // Pas entre deux dates : défaut 1 (toutes les dates), sinon valeur option
+            $batchDays = $this->option('batch-days') !== null ? (int) $this->option('batch-days') : 1;
+            if ($batchDays < 1) {
+                $batchDays = 1;
             }
+            $this->info($batchDays === 1 ? '📅 Mode: chaque jour (toutes les dates). Dates déjà traitées seront ignorées sauf --force.' : "📅 Pas: {$batchDays} jour(s) entre chaque date de calcul.");
 
-            // Extraction par période
+            // Extraction par période : une date à la fois, en sautant les dates déjà traitées (sauf --force)
             $totalProcessed = 0;
-            $batchDays = (int)$this->option('batch-days');
-            
+            $skipped = 0;
             $currentDate = $startDate->copy();
             while ($currentDate->lte($endDate)) {
-                $this->info("📊 Extraction pour {$currentDate->toDateString()}...");
-                
+                $dateStr = $currentDate->toDateString();
+                if (!$this->option('force')) {
+                    $alreadyDone = \DB::table('ml_client_features')->where('calculation_date', $dateStr)->exists();
+                    if ($alreadyDone) {
+                        $this->line("⏭️  {$dateStr} déjà traité, skip.");
+                        $skipped++;
+                        $currentDate->addDays($batchDays);
+                        continue;
+                    }
+                }
+                $this->info("📊 Extraction pour {$dateStr}...");
                 $processed = $this->featureService->extractAndStoreFeaturesForDate($currentDate);
                 $totalProcessed += $processed;
-                
-                $this->info("✅ {$processed} clients traités pour {$currentDate->toDateString()}");
-                
+                $this->info("✅ {$processed} clients traités pour {$dateStr}");
                 $currentDate->addDays($batchDays);
+            }
+            if ($skipped > 0) {
+                $this->info("⏭️  {$skipped} date(s) déjà traitées ignorées (relancer avec --force pour retraiter).");
             }
 
             $this->newLine();
             $this->info("🎉 Extraction terminée!");
-            $this->table(['Métrique', 'Valeur'], [
+            $rows = [
                 ['Clients traités', number_format($totalProcessed)],
                 ['Période', "{$startDate->toDateString()} → {$endDate->toDateString()}"],
                 ['Opérateurs', $operator ?: 'Tous (Timwe, Eklektik, Ooredoo)'],
-                ['Nouvelles features', '18 features multi-opérateur ajoutées'],
-                ['Features v2.0 total', '36 features par client']
-            ]);
+            ];
+            if ($skipped > 0) {
+                $rows[] = ['Dates ignorées (déjà traitées)', number_format($skipped)];
+            }
+            $rows[] = ['Features', 'Multi-opérateur (timwe, eklektik, ooredoo)'];
+            $this->table(['Métrique', 'Valeur'], $rows);
 
             // Analyser les résultats
             $this->analyzeExtractionResults($startDate, $endDate);
