@@ -117,6 +117,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/phones/{phone}/delivery-codes', [TimweDiagnosticApiController::class, 'phoneDeliveryCodes'])->name('phones.delivery-codes');
             Route::get('/recent', [TimweDiagnosticApiController::class, 'recent'])->name('recent');
             Route::get('/lifetime', [TimweDiagnosticApiController::class, 'lifetime'])->name('lifetime');
+            Route::get('/billing-rate-evolution', [TimweDiagnosticApiController::class, 'billingRateEvolution'])->name('billing-rate-evolution');
         });
 
         // === ML DASHBOARD ROUTES === 

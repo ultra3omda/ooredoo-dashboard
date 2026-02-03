@@ -1,6 +1,7 @@
 <script>
 const diagnosticApp = {
     data: null,
+    billingRateChart: null,
     currentPages: {
         byPhone: 1,
         byDeliveryCode: 1,
@@ -646,6 +647,105 @@ const diagnosticApp = {
         this.renderDeliveryCodeTable(data.by_delivery_code || []);
         this.renderTransactionsTable(data.recent_transactions || []);
         this.updateSortIcons(this.sortColumn);
+        // Graphique taux de facturation (période courante)
+        const chartSection = document.getElementById('billingRateChartSection');
+        if (chartSection) {
+            if (data.period && data.period.start && data.period.end && !data.no_aggregates_message) {
+                chartSection.classList.add('visible');
+                this.loadBillingRateChart(data.period.start, data.period.end);
+            } else {
+                chartSection.classList.remove('visible');
+                this.destroyBillingRateChart();
+            }
+        }
+    },
+    
+    loadBillingRateChart(start, end) {
+        const base = `start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+        fetch(`/admin/timwe-diagnostic/api/billing-rate-evolution?${base}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res.success && res.by_date && res.by_date.length > 0) {
+                    this.renderBillingRateChart(res.by_date);
+                } else {
+                    this.destroyBillingRateChart();
+                }
+            })
+            .catch(() => this.destroyBillingRateChart());
+    },
+    
+    renderBillingRateChart(byDate) {
+        const canvas = document.getElementById('billingRateChartCanvas');
+        if (!canvas || typeof Chart === 'undefined') return;
+        this.destroyBillingRateChart();
+        const labels = byDate.map(d => {
+            const dt = new Date(d.date + 'T12:00:00');
+            return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
+        });
+        const data = byDate.map(d => d.billing_rate);
+        const sorted = [...data].filter(v => typeof v === 'number' && !isNaN(v)).sort((a, b) => a - b);
+        const median = sorted.length === 0 ? 0 : sorted.length % 2 === 1
+            ? sorted[(sorted.length - 1) / 2]
+            : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+        const medianLineData = labels.map(() => median);
+        const ctx = canvas.getContext('2d');
+        this.billingRateChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Taux de facturation (%)',
+                        data,
+                        borderColor: '#8B5CF6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: data.length <= 31 ? 4 : 0,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Médiane (' + median.toFixed(1) + ' %)',
+                        data: medianLineData,
+                        borderColor: '#f59e0b',
+                        borderDash: [6, 4],
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        pointHoverRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { maxRotation: 45, maxTicksLimit: 15 }
+                    },
+                    y: {
+                        min: 0,
+                        max: Math.max(100, Math.ceil(Math.max(...data, median) / 10) * 10) || 100,
+                        grid: { color: 'rgba(0,0,0,0.06)' },
+                        ticks: { callback: v => v + ' %' }
+                    }
+                }
+            }
+        });
+    },
+    
+    destroyBillingRateChart() {
+        if (this.billingRateChart) {
+            this.billingRateChart.destroy();
+            this.billingRateChart = null;
+        }
     },
     
     renderPhoneTable(phones) {

@@ -387,6 +387,26 @@
             color: var(--brand-dark);
             font-size: 14px;
         }
+
+        .timwe-chart-section {
+            margin-bottom: 24px;
+        }
+        .timwe-chart-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .timwe-chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--brand-dark);
+            margin-bottom: 16px;
+        }
+        .timwe-chart-container {
+            position: relative;
+            height: 280px;
+        }
         
         .tabs-nav {
             display: flex;
@@ -873,6 +893,16 @@
                 <div class="summary-value" id="deliveryCodesCount">-</div>
                         </div>
                     </div>
+
+        <!-- Graphique évolution du taux de facturation -->
+        <div id="billingRateChartSection" class="timwe-chart-section hidden-until-data">
+            <div class="timwe-chart-card">
+                <div class="timwe-chart-title">Évolution du taux de facturation (%)</div>
+                <div class="timwe-chart-container">
+                    <canvas id="billingRateChartCanvas"></canvas>
+                </div>
+            </div>
+        </div>
                     
         <!-- Tabs Container (template visible pendant le chargement) -->
         <div id="diagnosticTabs" class="tabs-container hidden-until-data">
@@ -892,6 +922,7 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 @include('admin.timwe-diagnostic-scripts')
 </body>
 </html>

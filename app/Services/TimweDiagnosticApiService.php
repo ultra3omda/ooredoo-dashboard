@@ -405,4 +405,53 @@ class TimweDiagnosticApiService
         Cache::put($key, $payload, self::TTL_LIFETIME);
         return array_merge($payload, ['cached' => false]);
     }
+
+    /**
+     * GET billing-rate-evolution — taux de facturation par jour sur la période (pour courbe). Cible < 100 ms.
+     * Cache: timwe:billing_evolution:{start}:{end}, TTL 10 min.
+     */
+    public function getBillingRateEvolution(string $start, string $end): array
+    {
+        $key = self::cacheKey('billing_evolution', $start, $end, []);
+        $cached = Cache::get($key);
+        if ($cached !== null) {
+            return array_merge($cached, ['cached' => true]);
+        }
+        $t0 = microtime(true);
+        if (!$this->hasAggregates($start, $end)) {
+            return ['success' => false, 'error' => 'no_aggregates', 'by_date' => []];
+        }
+        $summaryByDate = DB::table('timwe_diagnostic_daily_summary')
+            ->whereBetween('stat_date', [$start, $end])
+            ->orderBy('stat_date')
+            ->get(['stat_date', 'total_billed'])
+            ->keyBy('stat_date');
+        $phonesByDate = DB::table('timwe_diagnostic_daily_phone')
+            ->whereBetween('stat_date', [$start, $end])
+            ->groupBy('stat_date')
+            ->selectRaw('stat_date, COUNT(DISTINCT client_telephone) as unique_phones')
+            ->get()
+            ->keyBy('stat_date');
+        $startCarbon = Carbon::parse($start);
+        $endCarbon = Carbon::parse($end);
+        $byDate = [];
+        for ($d = $startCarbon->copy(); $d->lte($endCarbon); $d->addDay()) {
+            $dateStr = $d->format('Y-m-d');
+            $summaryRow = $summaryByDate->get($dateStr);
+            $phonesRow = $phonesByDate->get($dateStr);
+            $totalBilled = $summaryRow ? (int) ($summaryRow->total_billed ?? 0) : 0;
+            $uniquePhones = $phonesRow ? (int) ($phonesRow->unique_phones ?? 0) : 0;
+            $billingRate = $uniquePhones > 0 ? round(($totalBilled / $uniquePhones) * 100, 2) : 0;
+            $byDate[] = [
+                'date' => $dateStr,
+                'total_billed' => $totalBilled,
+                'unique_phones' => $uniquePhones,
+                'billing_rate' => $billingRate,
+            ];
+        }
+        $this->logTiming('billing_evolution', (microtime(true) - $t0) * 1000, count($byDate), false);
+        $payload = ['success' => true, 'by_date' => $byDate];
+        Cache::put($key, $payload, self::TTL_SUMMARY);
+        return array_merge($payload, ['cached' => false]);
+    }
 }

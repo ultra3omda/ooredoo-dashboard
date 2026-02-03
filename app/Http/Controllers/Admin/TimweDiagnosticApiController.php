@@ -101,4 +101,14 @@ class TimweDiagnosticApiController extends Controller
         $data = (new TimweDiagnosticApiService())->getLifetime($phones);
         return response()->json($data);
     }
+
+    /**
+     * GET /api/timwe-diagnostic/billing-rate-evolution?start=&end=
+     */
+    public function billingRateEvolution(Request $request): JsonResponse
+    {
+        [$start, $end] = $this->normalizePeriod($request);
+        $data = (new TimweDiagnosticApiService())->getBillingRateEvolution($start, $end);
+        return response()->json($data);
+    }
 }
