@@ -924,8 +924,16 @@
                         <div class="summary-value" id="kpiTotalAttempts">-</div>
                     </div>
                     <div class="summary-card">
+                        <div class="summary-label">Numéros uniques</div>
+                        <div class="summary-value" id="kpiUniquePhones">-</div>
+                    </div>
+                    <div class="summary-card">
                         <div class="summary-label">Revenue Total (TND)</div>
                         <div class="summary-value" id="kpiTotalRevenue" style="color: var(--success)">-</div>
+                    </div>
+                    <div class="summary-card" title="Paliers BigDeal : 1,2 TND jusqu'à 100k facturés, 1,0 TND de 100k à 250k, +250k : 250k TND flat">
+                        <div class="summary-label">Revenu BigDeal TTC (TND)</div>
+                        <div class="summary-value" id="kpiBigDealRevenue" style="color: var(--success)">-</div>
                     </div>
                     <div class="summary-card">
                         <div class="summary-label">Billing Rate Global (%)</div>

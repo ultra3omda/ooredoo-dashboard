@@ -642,7 +642,9 @@ const diagnosticApp = {
             const k = data.kpis;
             const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
             set('kpiTotalAttempts', (k.total_attempts ?? 0).toLocaleString());
+            set('kpiUniquePhones', (k.unique_phones ?? 0).toLocaleString());
             set('kpiTotalRevenue', (k.total_revenue_tnd ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            set('kpiBigDealRevenue', (k.bigdeal_revenue_tnd ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
             set('kpiBillingRateGlobal', (k.billing_rate_global ?? 0).toFixed(2) + ' %');
             set('kpiTotalDelivered', (k.total_delivered ?? 0).toLocaleString());
             set('kpiDeliveryRate', (k.delivery_rate ?? 0).toFixed(2) + ' %');
@@ -655,7 +657,7 @@ const diagnosticApp = {
             set('kpiNoBalanceRatio', (k.no_balance_ratio ?? 0).toFixed(2) + ' %');
             this.renderFunnelCharts(k);
         } else {
-            const ids = ['kpiTotalAttempts','kpiTotalRevenue','kpiBillingRateGlobal','kpiTotalDelivered','kpiDeliveryRate','kpiTotalNotDelivered','kpiTechnicalLossRate','kpiDeliveredBilled','kpiDeliveredNonBilled','kpiBillingRateOnDelivered','kpiTotalNoBalance','kpiNoBalanceRatio'];
+            const ids = ['kpiTotalAttempts','kpiUniquePhones','kpiTotalRevenue','kpiBigDealRevenue','kpiBillingRateGlobal','kpiTotalDelivered','kpiDeliveryRate','kpiTotalNotDelivered','kpiTechnicalLossRate','kpiDeliveredBilled','kpiDeliveredNonBilled','kpiBillingRateOnDelivered','kpiTotalNoBalance','kpiNoBalanceRatio'];
             ids.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '-'; });
             this.destroyFunnelCharts();
         }

@@ -150,6 +150,18 @@ class TimweDiagnosticApiService
         $totalSuccess = (int) ($summaryRow->total_billed ?? 0);
         $totalRevenueTnd = (float) ($summaryRow->total_revenue_tnd ?? 0);
 
+        $uniquePhones = (int) DB::table('timwe_diagnostic_daily_phone')
+            ->whereBetween('stat_date', [$start, $end])
+            ->selectRaw('COUNT(DISTINCT client_telephone) as c')
+            ->value('c');
+
+        // Revenu BigDeal TTC (paliers sur abonnements facturés) : 1.2 TND jusqu'à 100k, 1.0 TND de 100k à 250k, +250k : 250k TND flat
+        $billed = $totalSuccess;
+        $tier1 = min($billed, 100000) * 1.2;
+        $tier2 = min(max($billed - 100000, 0), 150000) * 1.0;
+        $tier3 = $billed > 250000 ? 250000.0 : 0.0;
+        $bigdealRevenueTnd = round($tier1 + $tier2 + $tier3, 2);
+
         $deliveryRows = DB::table('timwe_diagnostic_daily_delivery')
             ->whereBetween('stat_date', [$start, $end])
             ->groupBy('delivery_code')
@@ -188,6 +200,7 @@ class TimweDiagnosticApiService
 
         $kpis = [
             'total_attempts' => $totalAttempts,
+            'unique_phones' => $uniquePhones,
             'total_success' => $totalSuccess,
             'total_delivered' => $totalDelivered,
             'delivered_non_billed' => $deliveredNonBilled,
@@ -195,6 +208,7 @@ class TimweDiagnosticApiService
             'total_not_delivered' => $totalNotDelivered,
             'total_other' => $totalOther,
             'total_revenue_tnd' => round($totalRevenueTnd, 2),
+            'bigdeal_revenue_tnd' => $bigdealRevenueTnd,
             'delivery_rate' => round($deliveryRate, 2),
             'billing_rate_on_delivered' => round($billingRateOnDelivered, 2),
             'billing_rate_global' => round($billingRateGlobal, 2),
