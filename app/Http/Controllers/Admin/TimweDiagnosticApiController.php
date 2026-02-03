@@ -100,7 +100,8 @@ class TimweDiagnosticApiController extends Controller
     }
 
     /**
-     * GET /api/timwe-diagnostic/lifetime?phones[]=... (batch, page courante uniquement)
+     * GET /api/timwe-diagnostic/lifetime?phones[]=... ou POST avec body JSON { "phones": [...] }
+     * POST recommandé pour éviter 414 Request-URI Too Large quand la liste est longue.
      */
     public function lifetime(Request $request): JsonResponse
     {
@@ -108,6 +109,7 @@ class TimweDiagnosticApiController extends Controller
         if (is_string($phones)) {
             $phones = array_filter(explode(',', $phones));
         }
+        $phones = array_values(array_filter(array_map('trim', (array) $phones)));
         $data = (new TimweDiagnosticApiService())->getLifetime($phones);
         return response()->json($data);
     }

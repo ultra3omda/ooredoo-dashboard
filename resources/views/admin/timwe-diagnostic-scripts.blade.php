@@ -14,6 +14,20 @@ const diagnosticApp = {
     sortColumn: 'lifetime_attempts',
     sortDirection: 'desc',
     useNewApi: true,
+
+    /** Appel API lifetime en POST (évite 414 Request-URI Too Large avec beaucoup de numéros). */
+    fetchLifetime(phoneList) {
+        const csrf = document.querySelector('meta[name="csrf-token"]');
+        return fetch('/admin/timwe-diagnostic/api/lifetime', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrf ? csrf.getAttribute('content') : ''
+            },
+            body: JSON.stringify({ phones: phoneList })
+        }).then(r => r.json());
+    },
     
     init() {
         document.getElementById('btnSearch').addEventListener('click', () => this.search());
@@ -300,8 +314,7 @@ const diagnosticApp = {
                 this.renderData(this.data);
                 this.showLoading(false);
                 if (phoneList.length > 0) {
-                    fetch(`/admin/timwe-diagnostic/api/lifetime?${phoneList.map(p => 'phones[]=' + encodeURIComponent(p)).join('&')}`)
-                        .then(r => r.json())
+                    this.fetchLifetime(phoneList)
                         .then(life => {
                             if (!life.success || !life.by_phone) return;
                             const lifetimeByPhone = life.by_phone;
@@ -426,8 +439,7 @@ const diagnosticApp = {
                     this.data.phones_page = phones.meta?.current_page ?? requestedApiPage;
                     this.renderPhoneTable(this.data.by_phone);
                     if (phoneList.length > 0) {
-                        fetch(`/admin/timwe-diagnostic/api/lifetime?${phoneList.map(p => 'phones[]=' + encodeURIComponent(p)).join('&')}`)
-                            .then(r => r.json())
+                        this.fetchLifetime(phoneList)
                             .then(life => {
                                 if (!life.success || !life.by_phone || !this.data || !this.data.by_phone) return;
                                 const lifetimeByPhone = life.by_phone;
