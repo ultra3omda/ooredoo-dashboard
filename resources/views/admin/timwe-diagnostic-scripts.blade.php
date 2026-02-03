@@ -7,8 +7,10 @@ const diagnosticApp = {
         recentTransactions: 1
     },
     perPage: 50,
+    apiPerPage: 500,
     sortColumn: 'lifetime_attempts',
     sortDirection: 'desc',
+    useNewApi: true,
     
     init() {
         document.getElementById('btnSearch').addEventListener('click', () => this.search());
@@ -32,75 +34,140 @@ const diagnosticApp = {
             }
         });
         
+        // Limiter la date max à aujourd'hui (au cas où la page reste ouverte après minuit)
+        this.initDateLimits();
         // Auto-search au chargement (7 derniers jours)
         this.search();
     },
     
+    initDateLimits() {
+        const today = new Date().toISOString().slice(0, 10);
+        const endInput = document.getElementById('end_date');
+        const startInput = document.getElementById('start_date');
+        if (endInput) endInput.setAttribute('max', today);
+        if (startInput) startInput.setAttribute('max', today);
+    },
+    
+    showError(type, message, details) {
+        const zone = document.getElementById('timweErrorZone');
+        if (!zone) return;
+        zone.style.display = 'block';
+        zone.className = 'timwe-error-zone ' + (type === 'error' ? 'error' : 'warning');
+        const icon = type === 'error' ? '⚠️' : 'ℹ️';
+        zone.innerHTML = '<span class="timwe-error-icon">' + icon + '</span><div class="timwe-error-body">' + message + (details ? '<div class="timwe-error-details">' + details + '</div>' : '') + '</div>';
+    },
+    
+    clearError() {
+        const zone = document.getElementById('timweErrorZone');
+        if (zone) { zone.style.display = 'none'; zone.innerHTML = ''; }
+        if (document.getElementById('timweNoAggregatesAlert')) document.getElementById('timweNoAggregatesAlert').remove();
+    },
+    
+    validateDates() {
+        const startDate = document.getElementById('start_date').value;
+        const endDate = document.getElementById('end_date').value;
+        if (!startDate || !endDate) {
+            this.showError('error', 'Veuillez sélectionner une date de début et une date de fin.');
+            return false;
+        }
+        const today = new Date().toISOString().slice(0, 10);
+        if (endDate > today) {
+            this.showError('error', 'La date de fin ne peut pas être dans le futur.', 'Choisissez une date égale ou antérieure à aujourd\'hui.');
+            return false;
+        }
+        if (startDate > today) {
+            this.showError('error', 'La date de début ne peut pas être dans le futur.');
+            return false;
+        }
+        if (startDate > endDate) {
+            this.showError('error', 'La date de début doit être antérieure ou égale à la date de fin.');
+            return false;
+        }
+        this.clearError();
+        return true;
+    },
+    
     initSort() {
-        document.querySelectorAll('#phoneTable .sortable').forEach(th => {
-            th.addEventListener('click', () => {
-                const column = th.dataset.sort;
-                const type = th.dataset.type;
-                this.sortTable(column, type);
-            });
+        const table = document.getElementById('phoneTable');
+        if (!table) return;
+        table.addEventListener('click', (e) => {
+            const th = e.target.closest('th.sortable');
+            if (!th || !th.dataset.sort) return;
+            const column = th.dataset.sort;
+            const type = th.dataset.type || 'string';
+            this.sortTable(column, type);
         });
     },
     
+    getApiSortParams() {
+        if (this.sortColumn === 'lifetime_total_charged_tnd') {
+            return { sort_by: 'total_charged_tnd', sort_dir: this.sortDirection };
+        }
+        return { sort_by: 'total_attempts', sort_dir: 'desc' };
+    },
+    
     sortTable(column, type) {
-        if (!this.data || !this.data.by_phone) return;
-        
-        // Toggle direction si même colonne
         if (this.sortColumn === column) {
             this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
         } else {
             this.sortColumn = column;
-            this.sortDirection = 'desc'; // Par défaut desc pour les nombres
+            this.sortDirection = (type === 'string') ? 'asc' : 'desc';
         }
         
-        // Trier les données
-        this.data.by_phone.sort((a, b) => {
-            let valA = a[column];
-            let valB = b[column];
-            
-            // Gérer les valeurs nulles
-            if (valA === null || valA === undefined) valA = '';
-            if (valB === null || valB === undefined) valB = '';
-            
-            // Conversion selon le type
-            if (type === 'number') {
-                valA = parseFloat(valA) || 0;
-                valB = parseFloat(valB) || 0;
-            } else if (type === 'date') {
-                valA = new Date(valA).getTime();
-                valB = new Date(valB).getTime();
-            } else {
-                valA = String(valA).toLowerCase();
-                valB = String(valB).toLowerCase();
+        if (column === 'lifetime_total_charged_tnd') {
+            this.currentPages.byPhone = 1;
+            this.phonePageRequested = 1;
+            this.search();
+            this.updateSortIcons(column);
+            return;
+        }
+        
+        if (!this.data || !this.data.by_phone || this.data.by_phone.length === 0) return;
+        
+        const dir = this.sortDirection === 'asc' ? 1 : -1;
+        const getSortValue = (row, col) => {
+            if (col === 'lifetime_total_charged_tnd') {
+                const lifetime = Number(row.lifetime_total_charged_tnd) || 0;
+                const period = Number(row.total_charged_tnd) || 0;
+                return Math.max(lifetime, period);
             }
-            
-            // Comparaison
+            let v = row[col];
+            if (v === null || v === undefined) return (type === 'number' ? 0 : '');
+            return v;
+        };
+        this.data.by_phone.sort((a, b) => {
+            let valA = getSortValue(a, column);
+            let valB = getSortValue(b, column);
+            if (type === 'number') {
+                valA = Number(valA) || 0;
+                valB = Number(valB) || 0;
+            } else if (type === 'date') {
+                valA = (valA && !isNaN(new Date(valA).getTime())) ? new Date(valA).getTime() : 0;
+                valB = (valB && !isNaN(new Date(valB).getTime())) ? new Date(valB).getTime() : 0;
+            } else {
+                valA = String(valA || '').toLowerCase();
+                valB = String(valB || '').toLowerCase();
+            }
             let result = 0;
             if (valA < valB) result = -1;
             if (valA > valB) result = 1;
-            
-            return this.sortDirection === 'asc' ? result : -result;
+            if (result !== 0) return result * dir;
+            const phoneA = String(a.phone || '').toLowerCase();
+            const phoneB = String(b.phone || '').toLowerCase();
+            return phoneA.localeCompare(phoneB) * dir;
         });
         
-        // Réinitialiser la page à 1
         this.currentPages.byPhone = 1;
-        
-        // Re-render le tableau
         this.renderPhoneTable(this.data.by_phone);
-        
-        // Mettre à jour les indicateurs visuels
+        this.updateSortIcons(column);
+    },
+    
+    updateSortIcons(column) {
         document.querySelectorAll('#phoneTable .sortable').forEach(th => {
             th.classList.remove('sorted-asc', 'sorted-desc');
         });
-        
         const sortedTh = document.querySelector(`#phoneTable .sortable[data-sort="${column}"]`);
-        if (sortedTh) {
-            sortedTh.classList.add(`sorted-${this.sortDirection}`);
-        }
+        if (sortedTh) sortedTh.classList.add(`sorted-${this.sortDirection}`);
     },
     
     switchTab(tabName) {
@@ -121,59 +188,298 @@ const diagnosticApp = {
         document.getElementById(tabName).classList.add('active');
     },
     
-    async search() {
-        // Réinitialiser les pages
-        this.currentPages = {
-            byPhone: 1,
-            byDeliveryCode: 1,
-            recentTransactions: 1
-        };
-        
+    getBaseParams() {
         const startDate = document.getElementById('start_date').value;
         const endDate = document.getElementById('end_date').value;
         const searchPhone = document.getElementById('search_phone').value;
         const deliveryCode = document.getElementById('delivery_code').value;
-        
-        if (!startDate || !endDate) {
-            alert('Veuillez sélectionner une période');
-            return;
-        }
-        
+        return { startDate, endDate, searchPhone, deliveryCode };
+    },
+    
+    async search() {
+        this.currentPages = { byPhone: 1, byDeliveryCode: 1, recentTransactions: 1 };
+        if (!this.validateDates()) return;
+        const { startDate, endDate, searchPhone, deliveryCode } = this.getBaseParams();
+        this.clearError();
         this.showLoading(true);
         document.getElementById('btnExport').disabled = true;
-        
+        this.setProgress(0, '0%');
+        this.showProgressBar(true);
         try {
-            const params = new URLSearchParams({
-                start_date: startDate,
-                end_date: endDate,
-                search_phone: searchPhone,
-                delivery_code: deliveryCode
-            });
-            
-            const response = await fetch(`/admin/timwe-diagnostic/data?${params}`);
-            const data = await response.json();
-            
-            if (!data.success) {
-                alert('Erreur: ' + (data.message || 'Impossible de charger les données'));
+            if (this.useNewApi) {
+                const page = this.phonePageRequested || 1;
+                const { sort_by, sort_dir } = this.getApiSortParams();
+                const base = `start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`;
+                const summaryPromise = fetch(`/admin/timwe-diagnostic/api/summary?${base}&delivery_code=${encodeURIComponent(deliveryCode || '')}`).then(r => { this.setProgress(25, '25%'); return r; });
+                const deliveryPromise = fetch(`/admin/timwe-diagnostic/api/delivery?${base}`).then(r => { this.setProgress(50, '50%'); return r; });
+                const phonesPromise = fetch(`/admin/timwe-diagnostic/api/phones?${base}&page=${page}&per_page=${this.apiPerPage}&search_phone=${encodeURIComponent(searchPhone || '')}&delivery_code=${encodeURIComponent(deliveryCode || '')}&sort_by=${encodeURIComponent(sort_by)}&sort_dir=${encodeURIComponent(sort_dir)}`).then(r => { this.setProgress(75, '75%'); return r; });
+                const recentPromise = fetch(`/admin/timwe-diagnostic/api/recent?${base}&limit=100`);
+                const [summaryRes, deliveryRes, phonesRes, recentRes] = await Promise.all([summaryPromise, deliveryPromise, phonesPromise, recentPromise]);
+                const summary = await summaryRes.json();
+                const delivery = await deliveryRes.json();
+                const phones = await phonesRes.json();
+                const recent = await recentRes.json();
+                if (!summary.success || !delivery.success || !phones.success || !recent.success) {
+                    const err = summary.error || delivery.error || phones.error || recent.error || 'Données indisponibles';
+                    if (summary.error === 'no_aggregates' || phones.error === 'no_aggregates' || delivery.error === 'no_aggregates') {
+                        this.data = {
+                            success: true,
+                            period: { start: startDate, end: endDate },
+                            total_count: 0,
+                            total_phones: 0,
+                            phones_page: 1,
+                            phones_per_page: this.apiPerPage,
+                            summary: { total_transactions: 0, unique_phones: 0, total_billed: 0, billing_rate: 0, total_revenue_tnd: 0, delivery_codes_count: 0 },
+                            by_phone: [],
+                            by_delivery_code: [],
+                            recent_transactions: [],
+                            no_aggregates_message: true
+                        };
+                        this.phonePageRequested = null;
+                        this.renderData(this.data);
+                        this.showLoading(false);
+                        this.setProgress(100, '100%');
+                        setTimeout(() => this.showProgressBar(false), 500);
+                        document.getElementById('btnExport').disabled = false;
+                        this.showError('warning',
+                            'Aucune donnée agrégée disponible pour cette période.',
+                            'Les statistiques pour les longues périodes doivent être calculées côté serveur. Contactez l\'administrateur pour lancer le calcul des agrégats (backfill).'
+                        );
+                        return;
+                    }
+                    this.showError('error', 'Erreur lors du chargement des données.', err || 'Données indisponibles');
+                    this.showLoading(false);
+                    this.setProgress(100, '100%');
+                    setTimeout(() => this.showProgressBar(false), 500);
+                    document.getElementById('btnExport').disabled = false;
+                    return;
+                }
+                this.setProgress(75, '75%');
+                const phoneList = (phones.by_phone || []).map(p => p.phone);
+                const by_phone = (phones.by_phone || []).map(row => {
+                    const sub = row.subscription_date;
+                    const lastAttempt = row.last_attempt;
+                    let days_inscription_to_last = null;
+                    if (sub && lastAttempt) {
+                        const d = Math.floor((new Date(lastAttempt) - new Date(sub)) / (1000 * 60 * 60 * 24));
+                        if (d >= 0) days_inscription_to_last = d;
+                    }
+                    return {
+                        ...row,
+                        delivery_codes: row.delivery_codes || [],
+                        lifetime_attempts: 0,
+                        lifetime_delivered: 0,
+                        lifetime_no_balance: 0,
+                        lifetime_not_delivered: 0,
+                        lifetime_other: 0,
+                        lifetime_total_charged_tnd: 0,
+                        lifetime_last_attempt: null,
+                        lifetime_loaded: false,
+                        days_inscription_to_last
+                    };
+                });
+                this.data = {
+                    success: true,
+                    period: { start: startDate, end: endDate },
+                    total_count: summary.summary?.total_transactions ?? 0,
+                    total_phones: phones.total_phones ?? 0,
+                    phones_page: phones.meta?.current_page ?? 1,
+                    phones_per_page: phones.meta?.per_page ?? this.apiPerPage,
+                    summary: summary.summary,
+                    by_phone,
+                    by_delivery_code: delivery.by_delivery_code || [],
+                    recent_transactions: recent.recent_transactions || []
+                };
+                this.phonePageRequested = null;
+                this.renderData(this.data);
+                this.showLoading(false);
+                if (phoneList.length > 0) {
+                    fetch(`/admin/timwe-diagnostic/api/lifetime?${phoneList.map(p => 'phones[]=' + encodeURIComponent(p)).join('&')}`)
+                        .then(r => r.json())
+                        .then(life => {
+                            if (!life.success || !life.by_phone) return;
+                            const lifetimeByPhone = life.by_phone;
+                            if (!this.data || !this.data.by_phone) return;
+                            this.data.by_phone.forEach(row => {
+                                const l = lifetimeByPhone[row.phone] || {};
+                                const lastAttempt = row.last_attempt || l.lifetime_last_attempt;
+                                const sub = row.subscription_date;
+                                let days_inscription_to_last = null;
+                                if (sub && lastAttempt) {
+                                    const d = Math.floor((new Date(lastAttempt) - new Date(sub)) / (1000 * 60 * 60 * 24));
+                                    if (d >= 0) days_inscription_to_last = d;
+                                }
+                                row.lifetime_attempts = l.lifetime_attempts ?? 0;
+                                row.lifetime_delivered = l.lifetime_delivered ?? 0;
+                                row.lifetime_no_balance = l.lifetime_no_balance ?? 0;
+                                row.lifetime_not_delivered = l.lifetime_not_delivered ?? 0;
+                                row.lifetime_other = l.lifetime_other ?? 0;
+                                row.lifetime_total_charged_tnd = l.lifetime_total_charged_tnd ?? 0;
+                                row.lifetime_last_attempt = l.lifetime_last_attempt ?? null;
+                                row.lifetime_loaded = true;
+                                row.days_inscription_to_last = days_inscription_to_last;
+                            });
+                            if (this.sortColumn === 'lifetime_total_charged_tnd') {
+                                const dir = this.sortDirection === 'asc' ? 1 : -1;
+                                const getCharged = (row) => Math.max(Number(row.lifetime_total_charged_tnd) || 0, Number(row.total_charged_tnd) || 0);
+                                this.data.by_phone.sort((a, b) => {
+                                    const diff = getCharged(a) - getCharged(b);
+                                    if (diff !== 0) return diff * dir;
+                                    return String(a.phone || '').localeCompare(String(b.phone || '')) * dir;
+                                });
+                            }
+                            this.setProgress(100, '100%');
+                            this.renderPhoneTable(this.data.by_phone);
+                            this.updateSortIcons(this.sortColumn);
+                            setTimeout(() => this.showProgressBar(false), 1500);
+                        })
+                        .catch(() => {
+                            this.setProgress(100, '100%');
+                            setTimeout(() => this.showProgressBar(false), 500);
+                        });
+                } else {
+                    this.setProgress(100, '100%');
+                    setTimeout(() => this.showProgressBar(false), 500);
+                }
+                document.getElementById('btnExport').disabled = false;
                 return;
+            } else {
+                const params = new URLSearchParams({
+                    start_date: startDate,
+                    end_date: endDate,
+                    search_phone: searchPhone,
+                    delivery_code: deliveryCode,
+                    page: String(this.phonePageRequested || 1),
+                    per_page: String(this.apiPerPage)
+                });
+                const response = await fetch(`/admin/timwe-diagnostic/data?${params}`);
+                const data = await response.json();
+                if (!data.success) {
+                    alert('Erreur: ' + (data.message || 'Impossible de charger les données'));
+                    return;
+                }
+                this.data = data;
+                this.phonePageRequested = null;
+                this.data.by_phone = (this.data.by_phone || []).map(row => ({ ...row, lifetime_loaded: true }));
+                this.setProgress(100, '100%');
             }
-            
-            this.data = data;
-            this.renderData(data);
+            this.renderData(this.data);
             document.getElementById('btnExport').disabled = false;
-            
         } catch (error) {
             console.error('Erreur:', error);
-            alert('Erreur lors du chargement des données');
+            this.showError('error', 'Erreur lors du chargement des données.', error && error.message ? error.message : 'Veuillez réessayer.');
+            document.getElementById('btnExport').disabled = false;
         } finally {
             this.showLoading(false);
+            this.showProgressBar(false);
         }
     },
     
-    changePage(tabName, page) {
+    async changePage(tabName, page) {
+        if (tabName === 'byPhone' && this.useNewApi && this.data && this.data.total_phones != null) {
+            const phonesPerPageApi = this.data.phones_per_page || this.apiPerPage;
+            const totalPagesApi = Math.ceil(this.data.total_phones / phonesPerPageApi) || 1;
+            const startItemIndex = (page - 1) * this.perPage;
+            const requestedApiPage = Math.min(Math.floor(startItemIndex / phonesPerPageApi) + 1, totalPagesApi);
+            const currentApiPage = this.data.phones_page || 1;
+            if (requestedApiPage !== currentApiPage) {
+                this.currentPages.byPhone = page;
+                this.phonePageRequested = requestedApiPage;
+                this.showLoading(true);
+                try {
+                    const { startDate, endDate, searchPhone, deliveryCode } = this.getBaseParams();
+                    const { sort_by, sort_dir } = this.getApiSortParams();
+                    const base = `start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`;
+                    const phonesRes = await fetch(`/admin/timwe-diagnostic/api/phones?${base}&page=${requestedApiPage}&per_page=${this.apiPerPage}&search_phone=${encodeURIComponent(searchPhone || '')}&delivery_code=${encodeURIComponent(deliveryCode || '')}&sort_by=${encodeURIComponent(sort_by)}&sort_dir=${encodeURIComponent(sort_dir)}`);
+                    const phones = await phonesRes.json();
+                    if (!phones.success) return;
+                    const phoneList = (phones.by_phone || []).map(p => p.phone);
+                    const by_phone = (phones.by_phone || []).map(row => {
+                        const sub = row.subscription_date;
+                        const lastAttempt = row.last_attempt;
+                        let days_inscription_to_last = null;
+                        if (sub && lastAttempt) {
+                            const d = Math.floor((new Date(lastAttempt) - new Date(sub)) / (1000 * 60 * 60 * 24));
+                            if (d >= 0) days_inscription_to_last = d;
+                        }
+                        return {
+                            ...row,
+                            delivery_codes: row.delivery_codes || [],
+                            lifetime_attempts: 0,
+                            lifetime_delivered: 0,
+                            lifetime_no_balance: 0,
+                            lifetime_not_delivered: 0,
+                            lifetime_other: 0,
+                            lifetime_total_charged_tnd: 0,
+                            lifetime_last_attempt: null,
+                            lifetime_loaded: false,
+                            days_inscription_to_last
+                        };
+                    });
+                    this.data.by_phone = by_phone;
+                    this.data.phones_page = phones.meta?.current_page ?? requestedApiPage;
+                    this.renderPhoneTable(this.data.by_phone);
+                    if (phoneList.length > 0) {
+                        fetch(`/admin/timwe-diagnostic/api/lifetime?${phoneList.map(p => 'phones[]=' + encodeURIComponent(p)).join('&')}`)
+                            .then(r => r.json())
+                            .then(life => {
+                                if (!life.success || !life.by_phone || !this.data || !this.data.by_phone) return;
+                                const lifetimeByPhone = life.by_phone;
+                                this.data.by_phone.forEach(row => {
+                                    const l = lifetimeByPhone[row.phone] || {};
+                                    const lastAttempt = row.last_attempt || l.lifetime_last_attempt;
+                                    const sub = row.subscription_date;
+                                    let days_inscription_to_last = null;
+                                    if (sub && lastAttempt) {
+                                        const d = Math.floor((new Date(lastAttempt) - new Date(sub)) / (1000 * 60 * 60 * 24));
+                                        if (d >= 0) days_inscription_to_last = d;
+                                    }
+                                    row.lifetime_attempts = l.lifetime_attempts ?? 0;
+                                    row.lifetime_delivered = l.lifetime_delivered ?? 0;
+                                    row.lifetime_no_balance = l.lifetime_no_balance ?? 0;
+                                    row.lifetime_not_delivered = l.lifetime_not_delivered ?? 0;
+                                    row.lifetime_other = l.lifetime_other ?? 0;
+                                    row.lifetime_total_charged_tnd = l.lifetime_total_charged_tnd ?? 0;
+                                    row.lifetime_last_attempt = l.lifetime_last_attempt ?? null;
+                                    row.lifetime_loaded = true;
+                                    row.days_inscription_to_last = days_inscription_to_last;
+                                });
+                                if (this.sortColumn === 'lifetime_total_charged_tnd') {
+                                    const dir = this.sortDirection === 'asc' ? 1 : -1;
+                                    const getCharged = (row) => Math.max(Number(row.lifetime_total_charged_tnd) || 0, Number(row.total_charged_tnd) || 0);
+                                    this.data.by_phone.sort((a, b) => {
+                                        const diff = getCharged(a) - getCharged(b);
+                                        if (diff !== 0) return diff * dir;
+                                        return String(a.phone || '').localeCompare(String(b.phone || '')) * dir;
+                                    });
+                                }
+                                this.renderPhoneTable(this.data.by_phone);
+                                this.updateSortIcons(this.sortColumn);
+                            });
+                    }
+                } finally {
+                    this.showLoading(false);
+                }
+                return;
+            }
+        }
+        if (tabName === 'byPhone' && this.data && this.data.total_phones != null) {
+            const perPage = this.perPage;
+            const totalPhones = this.data.total_phones;
+            const phonesPerPageApi = this.data.phones_per_page || 1000;
+            const batchStart = ((this.data.phones_page || 1) - 1) * phonesPerPageApi;
+            const startIndex = (page - 1) * perPage;
+            const endIndex = page * perPage;
+            if (!this.useNewApi && (endIndex > batchStart + (this.data.by_phone || []).length || startIndex < batchStart)) {
+                const requiredApiPage = Math.ceil(endIndex / phonesPerPageApi);
+                if (requiredApiPage !== (this.data.phones_page || 1)) {
+                    this.phonePageRequested = requiredApiPage;
+                    this.currentPages.byPhone = page;
+                    return this.search();
+                }
+            }
+        }
         this.currentPages[tabName] = page;
-        
-        // Re-render le tableau concerné
         if (tabName === 'byPhone') {
             this.renderPhoneTable(this.data.by_phone);
         } else if (tabName === 'byDeliveryCode') {
@@ -247,23 +553,70 @@ const diagnosticApp = {
         container.innerHTML = html;
     },
     
+    setProgress(percent, label) {
+        const container = document.getElementById('progressBarContainer');
+        const fill = document.getElementById('progressBarFill');
+        const lbl = document.getElementById('progressBarLabel');
+        if (!container || !fill || !lbl) return;
+        const p = Math.min(100, Math.max(0, percent));
+        fill.style.width = p + '%';
+        lbl.textContent = label != null ? label : (p + '%');
+        if (p > 0) container.style.display = 'block';
+    },
+    showProgressBar(show) {
+        const container = document.getElementById('progressBarContainer');
+        if (container) container.style.display = show ? 'block' : 'none';
+    },
     showLoading(show) {
         const indicator = document.getElementById('loadingIndicator');
         const btnSearch = document.getElementById('btnSearch');
+        const summarySection = document.getElementById('summarySection');
+        const diagnosticTabs = document.getElementById('diagnosticTabs');
         
         if (show) {
             indicator.classList.add('active');
             btnSearch.disabled = true;
+            summarySection.classList.remove('hidden-until-data');
+            summarySection.classList.add('visible', 'skeleton-mode');
+            diagnosticTabs.classList.remove('hidden-until-data');
+            diagnosticTabs.classList.add('visible');
+            this.renderSkeletonTables();
         } else {
             indicator.classList.remove('active');
             btnSearch.disabled = false;
         }
     },
     
+    renderSkeletonTables() {
+        const skeletonRow = (cols, id) => {
+            const cells = Array(cols).fill('<td><div class="skeleton-cell w-60"></div></td>').join('');
+            return `<tr class="skeleton-row">${cells}</tr>`;
+        };
+        const phoneBody = document.getElementById('phoneTableBody');
+        const deliveryBody = document.getElementById('deliveryCodeTableBody');
+        const transactionsBody = document.getElementById('transactionsTableBody');
+        if (phoneBody) {
+            const rows = Array(8).fill(0).map(() => skeletonRow(13, 'phone'));
+            phoneBody.innerHTML = rows.join('');
+        }
+        if (deliveryBody) {
+            const rows = Array(4).fill(0).map(() => skeletonRow(5, 'delivery'));
+            deliveryBody.innerHTML = rows.join('');
+        }
+        if (transactionsBody) {
+            const rows = Array(5).fill(0).map(() => skeletonRow(6, 'recent'));
+            transactionsBody.innerHTML = rows.join('');
+        }
+        document.getElementById('paginationByPhone').style.display = 'none';
+        document.getElementById('paginationByDeliveryCode').style.display = 'none';
+        document.getElementById('paginationRecentTransactions').style.display = 'none';
+    },
+    
     renderData(data) {
-        // Afficher les sections
-        document.getElementById('summarySection').classList.add('active');
-        document.getElementById('diagnosticTabs').classList.add('active');
+        const summarySection = document.getElementById('summarySection');
+        summarySection.classList.remove('skeleton-mode');
+        summarySection.classList.add('visible');
+        document.getElementById('diagnosticTabs').classList.add('visible');
         
         // Indicateur cache (comme Timwe/Ooredoo)
         const cacheBadge = document.getElementById('cacheBadge');
@@ -279,55 +632,77 @@ const diagnosticApp = {
         }
         
         // Résumé
-        document.getElementById('totalTransactions').textContent = data.summary.total_transactions.toLocaleString();
-        document.getElementById('uniquePhones').textContent = data.summary.unique_phones.toLocaleString();
-        document.getElementById('totalBilled').textContent = data.summary.total_billed.toLocaleString();
-        document.getElementById('billingRate').textContent = data.summary.billing_rate + '%';
-        document.getElementById('totalRevenue').textContent = data.summary.total_revenue_tnd.toLocaleString('fr-FR', {minimumFractionDigits: 2});
-        document.getElementById('deliveryCodesCount').textContent = data.summary.delivery_codes_count;
+        if (data.summary) {
+            document.getElementById('totalTransactions').textContent = (data.summary.total_transactions ?? 0).toLocaleString();
+            document.getElementById('uniquePhones').textContent = (data.summary.unique_phones ?? 0).toLocaleString();
+            document.getElementById('totalBilled').textContent = (data.summary.total_billed ?? 0).toLocaleString();
+            document.getElementById('billingRate').textContent = (data.summary.billing_rate ?? 0) + '%';
+            document.getElementById('totalRevenue').textContent = (data.summary.total_revenue_tnd ?? 0).toLocaleString('fr-FR', {minimumFractionDigits: 2});
+            document.getElementById('deliveryCodesCount').textContent = (data.summary.delivery_codes_count ?? 0);
+        }
         
         // Tables
-        this.renderPhoneTable(data.by_phone);
-        this.renderDeliveryCodeTable(data.by_delivery_code);
-        this.renderTransactionsTable(data.recent_transactions);
+        this.renderPhoneTable(data.by_phone || []);
+        this.renderDeliveryCodeTable(data.by_delivery_code || []);
+        this.renderTransactionsTable(data.recent_transactions || []);
+        this.updateSortIcons(this.sortColumn);
     },
     
     renderPhoneTable(phones) {
         const tbody = document.getElementById('phoneTableBody');
+        const totalPhones = (this.data && this.data.total_phones != null) ? this.data.total_phones : (phones ? phones.length : 0);
         
-        if (phones.length === 0) {
+        if (!phones || phones.length === 0) {
             tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; color: var(--muted); padding: 40px;">Aucune donnée trouvée</td></tr>';
-            this.renderPagination('byPhone', 0, 'paginationByPhone');
+            this.renderPagination('byPhone', totalPhones, 'paginationByPhone');
             return;
         }
         
-        // Pagination côté client
         const currentPage = this.currentPages.byPhone;
         const startIndex = (currentPage - 1) * this.perPage;
-        const endIndex = startIndex + this.perPage;
-        const paginatedPhones = phones.slice(startIndex, endIndex);
+        const endIndex = currentPage * this.perPage;
+        const batchStart = (this.data && this.data.phones_per_page) ? ((this.data.phones_page || 1) - 1) * this.data.phones_per_page : 0;
+        let paginatedPhones;
+        if (this.data && this.data.total_phones != null && this.data.phones_per_page && (startIndex >= batchStart && endIndex <= batchStart + phones.length)) {
+            paginatedPhones = phones.slice(startIndex - batchStart, endIndex - batchStart);
+        } else {
+            paginatedPhones = phones.slice(startIndex, endIndex);
+        }
         
         tbody.innerHTML = paginatedPhones.map(phone => {
+            const lifetimeLoaded = phone.lifetime_loaded === true;
             const lifetime = phone.lifetime_attempts ?? 0;
+            const periodAttempts = phone.total_attempts ?? 0;
             const lifetimeDelivered = phone.lifetime_delivered ?? 0;
+            const periodDelivered = phone.delivered ?? 0;
             const lifetimeNoBalance = phone.lifetime_no_balance ?? 0;
+            const periodNoBalance = phone.no_balance ?? 0;
             const lifetimeNotDelivered = phone.lifetime_not_delivered ?? 0;
+            const periodNotDelivered = phone.not_delivered ?? 0;
             const lifetimeOther = phone.lifetime_other ?? 0;
+            const periodOther = phone.other ?? 0;
             const lifetimeCharged = (phone.lifetime_total_charged_tnd ?? 0).toFixed(3);
+            const periodCharged = (phone.total_charged_tnd ?? 0).toFixed(3);
+            const deliveredVal = lifetimeLoaded ? (lifetimeDelivered || periodDelivered) : '—';
+            const noBalanceVal = lifetimeLoaded ? (lifetimeNoBalance || periodNoBalance) : '—';
+            const notDeliveredVal = lifetimeLoaded ? (lifetimeNotDelivered || periodNotDelivered) : '—';
+            const otherVal = lifetimeLoaded ? (lifetimeOther || periodOther) : '—';
+            const chargedVal = lifetimeLoaded ? (parseFloat(lifetimeCharged) > 0 ? lifetimeCharged : periodCharged) : '—';
+            const lifetimeCell = lifetimeLoaded ? `<span class="badge badge-info" title="Tentatives toutes périodes">${lifetime || periodAttempts}</span>` : '<span class="lifetime-loading">Chargement…</span>';
             const daysLabel = (phone.days_inscription_to_last !== undefined && phone.days_inscription_to_last !== null)
                 ? String(phone.days_inscription_to_last) : '—';
             return `
             <tr>
                 <td><strong>${phone.phone}</strong></td>
                 <td>${phone.client_name || 'N/A'}</td>
-                <td><span class="badge badge-primary">${phone.total_attempts}</span></td>
-                <td><span class="badge badge-info" title="Toutes périodes">${lifetime}</span></td>
+                <td><span class="badge badge-primary" title="Tentatives sur la période">${periodAttempts}</span></td>
+                <td>${lifetimeCell}</td>
                 <td><strong>${daysLabel}</strong></td>
-                <td><span class="badge badge-success">${lifetimeDelivered}</span></td>
-                <td><span class="badge badge-warning">${lifetimeNoBalance}</span></td>
-                <td><span class="badge badge-danger">${lifetimeNotDelivered}</span></td>
-                <td><span class="badge badge-secondary">${lifetimeOther}</span></td>
-                <td><strong>${lifetimeCharged} TND</strong></td>
+                <td><span class="badge badge-success" title="DELIVERED (période / lifetime)">${deliveredVal}</span></td>
+                <td><span class="badge badge-warning" title="NO_BALANCE">${noBalanceVal}</span></td>
+                <td><span class="badge badge-danger" title="NOT_DELIVERED">${notDeliveredVal}</span></td>
+                <td><span class="badge badge-secondary" title="Autres">${otherVal}</span></td>
+                <td><strong>${chargedVal} TND</strong></td>
                 <td><small>${phone.subscription_date ? new Date(phone.subscription_date).toLocaleString('fr-FR') : '<span style="color: var(--muted);">N/A</span>'}</small></td>
                 <td><small>${phone.last_attempt ? new Date(phone.last_attempt).toLocaleString('fr-FR') : '—'}</small></td>
                 <td>
@@ -339,8 +714,7 @@ const diagnosticApp = {
         `;
         }).join('');
         
-        // Render pagination
-        this.renderPagination('byPhone', phones.length, 'paginationByPhone');
+        this.renderPagination('byPhone', totalPhones, 'paginationByPhone');
     },
     
     renderDeliveryCodeTable(codes) {
@@ -372,7 +746,7 @@ const diagnosticApp = {
                 <tr>
                     <td><span class="badge ${badgeClass}">${code.code}</span></td>
                     <td><strong>${code.count.toLocaleString()}</strong></td>
-                    <td>${code.unique_phones.toLocaleString()}</td>
+                    <td>${(code.unique_phones ?? 0).toLocaleString()}</td>
                     <td><strong>${code.total_charged_tnd.toFixed(3)} TND</strong></td>
                     <td>
                         <div class="progress">
@@ -479,7 +853,7 @@ const diagnosticApp = {
                 ${phoneEntry.client_name ? `<p style="color: var(--muted); margin-bottom: 12px;">${phoneEntry.client_name}</p>` : ''}
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
-                    <div class="card" style="padding: 12px; border: 1px solid var(--border); border-radius: 8px;">
+                    <div id="phoneDetailsLifetimeCard" class="card" style="padding: 12px; border: 1px solid var(--border); border-radius: 8px;">
                         <strong style="color: var(--muted); font-size: 12px;">Tentatives lifetime</strong>
                         <p style="font-size: 20px; font-weight: bold; margin: 4px 0;">${lifetimeAttempts}</p>
                         <div style="font-size: 12px; color: var(--muted);">
@@ -528,6 +902,7 @@ const diagnosticApp = {
             .then(res => res.json())
             .then(data => {
                 const tbody = document.getElementById('phoneDetailsLifetimeBody');
+                const lifetimeCard = document.getElementById('phoneDetailsLifetimeCard');
                 if (!tbody) return;
                 if (!data.success || !data.transactions) {
                     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 24px;">Erreur lors du chargement</td></tr>';
@@ -536,7 +911,39 @@ const diagnosticApp = {
                 const transactions = data.transactions;
                 if (transactions.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">Aucune transaction lifetime</td></tr>';
+                    if (lifetimeCard) {
+                        lifetimeCard.innerHTML = `
+                            <strong style="color: var(--muted); font-size: 12px;">Tentatives lifetime</strong>
+                            <p style="font-size: 20px; font-weight: bold; margin: 4px 0;">0</p>
+                            <div style="font-size: 12px; color: var(--muted);">DELIVERED: <strong>0</strong> · NO_BALANCE: <strong>0</strong> · NOT_DELIVERED: <strong>0</strong> · Autres: <strong>0</strong></div>
+                            <div style="font-size: 12px; margin-top: 4px;">Facturé lifetime: <strong>0.000 TND</strong></div>
+                            <div style="font-size: 12px; margin-top: 4px;">Nb jours: <strong>—</strong></div>
+                        `;
+                    }
                     return;
+                }
+                const ltAttempts = transactions.length;
+                const ltDelivered = transactions.filter(t => t.delivery_code === 'DELIVERED').length;
+                const ltNoBalance = transactions.filter(t => t.delivery_code === 'NO_BALANCE').length;
+                const ltNotDelivered = transactions.filter(t => t.delivery_code === 'NOT_DELIVERED').length;
+                const ltOther = ltAttempts - ltDelivered - ltNoBalance - ltNotDelivered;
+                const ltCharged = transactions.reduce((s, t) => s + (parseFloat(t.total_charged_tnd) || 0), 0);
+                const lastTxDate = transactions.length ? transactions.reduce((max, t) => t.date > max ? t.date : max, transactions[0].date) : null;
+                let daysLabel = '—';
+                if (l.subscription_date && lastTxDate) {
+                    const d = Math.floor((new Date(lastTxDate) - new Date(l.subscription_date)) / (1000 * 60 * 60 * 24));
+                    if (d >= 0) daysLabel = d + ' jour(s)';
+                }
+                if (lifetimeCard) {
+                    lifetimeCard.innerHTML = `
+                        <strong style="color: var(--muted); font-size: 12px;">Tentatives lifetime</strong>
+                        <p style="font-size: 20px; font-weight: bold; margin: 4px 0;">${ltAttempts}</p>
+                        <div style="font-size: 12px; color: var(--muted);">
+                            DELIVERED: <strong>${ltDelivered}</strong> · NO_BALANCE: <strong>${ltNoBalance}</strong> · NOT_DELIVERED: <strong>${ltNotDelivered}</strong> · Autres: <strong>${ltOther}</strong>
+                        </div>
+                        <div style="font-size: 12px; margin-top: 4px;">Facturé lifetime: <strong>${ltCharged.toFixed(3)} TND</strong></div>
+                        <div style="font-size: 12px; margin-top: 4px;">Nb jours (inscription → dernière tentative): <strong>${daysLabel}</strong></div>
+                    `;
                 }
                 tbody.innerHTML = transactions.map(tx => {
                     const badgeClass = tx.delivery_code === 'DELIVERED' ? 'badge-success' : 

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DataControllerOptimized;
 use App\Http\Controllers\Api\EklektikController;
 use App\Http\Controllers\Api\EklektikStatsController;
 use App\Http\Controllers\Api\EklektikDashboardController;
+use App\Http\Controllers\Api\TimweDiagnosticApiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -78,6 +79,16 @@ Route::prefix('eklektik-dashboard')->name('api.eklektik-dashboard.')->group(func
     Route::get('/subs-evolution', [EklektikDashboardController::class, 'getSubsEvolution'])->name('subs-evolution');
     Route::get('/sync-status', [EklektikDashboardController::class, 'getSyncStatus'])->name('sync-status');
     Route::post('/clear-cache', [EklektikDashboardController::class, 'clearCache'])->name('clear-cache');
+});
+
+// Diagnostic Timwe — API découpée (summary / delivery / phones / recent / lifetime), objectif < 200 ms
+Route::middleware('auth')->prefix('timwe-diagnostic')->name('api.timwe-diagnostic.')->group(function () {
+    Route::get('/summary', [TimweDiagnosticApiController::class, 'summary'])->name('summary');
+    Route::get('/delivery', [TimweDiagnosticApiController::class, 'delivery'])->name('delivery');
+    Route::get('/phones', [TimweDiagnosticApiController::class, 'phones'])->name('phones');
+    Route::get('/phones/{phone}/delivery-codes', [TimweDiagnosticApiController::class, 'phoneDeliveryCodes'])->name('phones.delivery-codes');
+    Route::get('/recent', [TimweDiagnosticApiController::class, 'recent'])->name('recent');
+    Route::get('/lifetime', [TimweDiagnosticApiController::class, 'lifetime'])->name('lifetime');
 });
 
 // Routes optimisées additionnelles si présentes

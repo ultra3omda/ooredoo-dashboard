@@ -176,9 +176,11 @@
             font-weight: 500;
         }
         
-        /* Loading */
+        /* Loading: spinner + état actif */
         .loading {
             display: none;
+            align-items: center;
+            gap: 10px;
             color: var(--muted);
             font-size: 14px;
         }
@@ -187,16 +189,78 @@
             display: inline-flex;
         }
         
-        /* Summary Cards */
+        .loading-spinner {
+            width: 22px;
+            height: 22px;
+            border: 3px solid var(--border);
+            border-top-color: var(--brand-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Skeleton (remplissage progressif) */
+        .skeleton {
+            background: linear-gradient(90deg, var(--border) 25%, var(--bg) 50%, var(--border) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-pulse 1.2s ease-in-out infinite;
+            border-radius: 6px;
+        }
+        
+        .skeleton-text {
+            height: 1em;
+            min-width: 40px;
+        }
+        
+        .skeleton-value {
+            height: 32px;
+            width: 80px;
+            margin: 8px auto 0;
+        }
+        
+        @keyframes skeleton-pulse {
+            0%, 100% { opacity: 0.6; background-position: 200% 0; }
+            50% { opacity: 1; background-position: -200% 0; }
+        }
+        
+        .summary-grid.skeleton-mode .summary-value,
+        .summary-grid.skeleton-mode .summary-value * {
+            visibility: hidden;
+        }
+        
+        .summary-grid.skeleton-mode .summary-value::after {
+            content: '';
+            display: block;
+            visibility: visible;
+            height: 32px;
+            width: 70px;
+            margin: 8px auto 0;
+            background: linear-gradient(90deg, var(--border) 25%, var(--bg) 50%, var(--border) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-pulse 1.2s ease-in-out infinite;
+            border-radius: 6px;
+        }
+        
+        /* Summary Cards : visible dès le chargement */
         .summary-grid {
-            display: none;
+            display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 16px;
             margin-bottom: 24px;
         }
         
-        .summary-grid.active {
-            display: grid;
+        .summary-grid.hidden-until-data {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        
+        .summary-grid.visible {
+            opacity: 1;
+            pointer-events: auto;
         }
         
         .summary-card {
@@ -223,17 +287,105 @@
             color: var(--brand-dark);
         }
         
-        /* Tabs */
+        /* Tabs : visible dès le chargement */
         .tabs-container {
-            display: none;
             background: var(--card);
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             overflow: hidden;
         }
         
-        .tabs-container.active {
-            display: block;
+        .tabs-container.hidden-until-data {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        
+        .tabs-container.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .skeleton-row td {
+            padding: 14px 16px;
+        }
+        
+        .skeleton-row .skeleton-cell {
+            height: 20px;
+            background: linear-gradient(90deg, var(--border) 25%, var(--bg) 50%, var(--border) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-pulse 1.2s ease-in-out infinite;
+            border-radius: 4px;
+        }
+        
+        .skeleton-cell.w-60 { width: 60%; }
+        .skeleton-cell.w-40 { width: 40%; }
+        .skeleton-cell.w-25 { width: 25%; }
+
+        /* Barre de progression (25% summary → 50% delivery → 75% phones → 100% lifetime) */
+        .progress-bar-container {
+            margin-bottom: 20px;
+            padding: 8px 0;
+        }
+        .progress-bar-track {
+            height: 8px;
+            background: var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary));
+            border-radius: 8px;
+            transition: width 0.3s ease;
+        }
+        .progress-bar-label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 4px;
+            font-weight: 600;
+        }
+        .lifetime-loading {
+            color: var(--muted);
+            font-style: italic;
+        }
+
+        .timwe-error-zone {
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .timwe-error-zone.error {
+            background: #fef2f2;
+            border: 1px solid var(--danger);
+            color: #991b1b;
+        }
+        .timwe-error-zone.error .timwe-error-icon { color: var(--danger); }
+        .timwe-error-zone.warning {
+            background: #fef3c7;
+            border: 1px solid var(--warning);
+            color: var(--brand-dark);
+        }
+        .timwe-error-zone.warning .timwe-error-icon { color: var(--warning); }
+        .timwe-error-zone .timwe-error-icon { font-size: 20px; flex-shrink: 0; }
+        .timwe-error-zone .timwe-error-body { flex: 1; }
+        .timwe-error-zone .timwe-error-details {
+            margin-top: 8px;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        .timwe-no-aggregates-alert {
+            background: #fef3c7;
+            border: 1px solid var(--warning);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            color: var(--brand-dark);
+            font-size: 14px;
         }
         
         .tabs-nav {
@@ -644,74 +796,86 @@
             <div class="filters-grid">
                 <div class="filter-group">
                     <label class="filter-label">Date Début</label>
-                    <input type="date" id="start_date" class="filter-input" value="{{ \Carbon\Carbon::now()->subDays(7)->format('Y-m-d') }}">
+                    <input type="date" id="start_date" class="filter-input" value="{{ \Carbon\Carbon::now()->subDays(7)->format('Y-m-d') }}" max="{{ \Carbon\Carbon::now()->format('Y-m-d') }}">
                 </div>
                 <div class="filter-group">
                     <label class="filter-label">Date Fin</label>
-                    <input type="date" id="end_date" class="filter-input" value="{{ \Carbon\Carbon::now()->format('Y-m-d') }}">
+                    <input type="date" id="end_date" class="filter-input" value="{{ \Carbon\Carbon::now()->format('Y-m-d') }}" max="{{ \Carbon\Carbon::now()->format('Y-m-d') }}">
                 </div>
                 <div class="filter-group">
                     <label class="filter-label">Rechercher Téléphone</label>
                     <input type="text" id="search_phone" class="filter-input" placeholder="Ex: +21612345678">
-                </div>
+                        </div>
                 <div class="filter-group">
                     <label class="filter-label">Filtrer Delivery Code</label>
                     <select id="delivery_code" class="filter-select">
-                        <option value="">Tous</option>
-                        <option value="DELIVERED">DELIVERED</option>
-                        <option value="NO_BALANCE">NO_BALANCE</option>
-                        <option value="NOT_DELIVERED">NOT_DELIVERED</option>
-                        <option value="UNKNOWN">UNKNOWN</option>
-                    </select>
-                </div>
-            </div>
-            
+                                <option value="">Tous</option>
+                                <option value="DELIVERED">DELIVERED</option>
+                                <option value="NO_BALANCE">NO_BALANCE</option>
+                                <option value="NOT_DELIVERED">NOT_DELIVERED</option>
+                                <option value="UNKNOWN">UNKNOWN</option>
+                            </select>
+                        </div>
+                    </div>
+                    
             <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                 <button id="btnSearch" class="btn btn-primary">
                     🔍 Rechercher
-                </button>
-                <button id="btnExport" class="btn btn-success" disabled>
+                            </button>
+                            <button id="btnExport" class="btn btn-success" disabled>
                     📥 Exporter CSV
-                </button>
-                <span id="loadingIndicator" class="loading">
-                    ⏳ Chargement...
+                            </button>
+                <span id="loadingIndicator" class="loading" aria-live="polite">
+                    <span class="loading-spinner" aria-hidden="true"></span>
+                    <span>Chargement des données…</span>
                 </span>
                 <span id="cacheBadge" class="cache-badge" style="display: none;" title="Données servies depuis le cache Redis">
                     📦 Données en cache
-                </span>
+                            </span>
+                        </div>
+                    </div>
+
+        <!-- Zone d'erreur / info (dates, pas d'agrégats) -->
+        <div id="timweErrorZone" class="timwe-error-zone" role="alert" style="display: none;"></div>
+
+        <!-- Barre de progression (summary 25% → delivery 50% → phones 75% → lifetime 100%) -->
+        <div id="progressBarContainer" class="progress-bar-container" style="display: none;" aria-hidden="true">
+            <div class="progress-bar-track">
+                <div id="progressBarFill" class="progress-bar-fill" style="width: 0%;"></div>
             </div>
+            <div id="progressBarLabel" class="progress-bar-label">0%</div>
         </div>
-        
-        <!-- Summary Cards -->
-        <div id="summarySection" class="summary-grid">
+                    
+        <!-- Summary Cards (template visible dès le chargement, rempli progressivement) -->
+        <div id="summarySection" class="summary-grid hidden-until-data">
             <div class="summary-card">
                 <div class="summary-label">Total Transactions</div>
                 <div class="summary-value" id="totalTransactions">-</div>
-            </div>
+                                </div>
             <div class="summary-card">
                 <div class="summary-label">Numéros Uniques</div>
                 <div class="summary-value" id="uniquePhones">-</div>
-            </div>
+                            </div>
             <div class="summary-card">
                 <div class="summary-label">Facturés</div>
                 <div class="summary-value" id="totalBilled" style="color: var(--success)">-</div>
-            </div>
+                        </div>
             <div class="summary-card">
                 <div class="summary-label">Taux Facturation</div>
                 <div class="summary-value" id="billingRate" style="color: var(--warning)">-</div>
-            </div>
+                                </div>
             <div class="summary-card">
                 <div class="summary-label">Revenu Total (TND)</div>
                 <div class="summary-value" id="totalRevenue" style="color: var(--success)">-</div>
-            </div>
+                            </div>
             <div class="summary-card">
                 <div class="summary-label">Types Delivery</div>
                 <div class="summary-value" id="deliveryCodesCount">-</div>
-            </div>
-        </div>
-        
-        <!-- Tabs Container -->
-        <div id="diagnosticTabs" class="tabs-container">
+                        </div>
+                    </div>
+                    
+        <!-- Tabs Container (template visible pendant le chargement) -->
+        <div id="diagnosticTabs" class="tabs-container hidden-until-data">
             <div class="tabs-nav">
                 <button class="tab-button active" data-tab="byPhone">
                     📱 Par Numéro
@@ -725,9 +889,9 @@
             </div>
             
             @include('admin.timwe-diagnostic-tabs')
-        </div>
     </div>
-    
-    @include('admin.timwe-diagnostic-scripts')
+</div>
+
+@include('admin.timwe-diagnostic-scripts')
 </body>
 </html>

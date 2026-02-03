@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\DataControllerOptimized;
 use App\Http\Controllers\SubStoreController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\TimweDiagnosticController;
+use App\Http\Controllers\Admin\TimweDiagnosticApiController;
 use App\Http\Controllers\Admin\MLDashboardController;
 use App\Http\Controllers\Admin\EklektikSyncTrackingController;
 use App\Http\Controllers\Admin\EklektikCronController;
@@ -108,6 +109,15 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/timwe-diagnostic/data', [TimweDiagnosticController::class, 'getDiagnosticData'])->name('timwe-diagnostic.data');
         Route::get('/timwe-diagnostic/phone/{phone}/transactions', [TimweDiagnosticController::class, 'getPhoneTransactions'])->name('timwe-diagnostic.phone.transactions');
         Route::get('/timwe-diagnostic/export', [TimweDiagnosticController::class, 'exportCsv'])->name('timwe-diagnostic.export');
+        // API rapide (endpoints séparés, < 200 ms)
+        Route::prefix('timwe-diagnostic/api')->name('timwe-diagnostic.api.')->group(function () {
+            Route::get('/summary', [TimweDiagnosticApiController::class, 'summary'])->name('summary');
+            Route::get('/delivery', [TimweDiagnosticApiController::class, 'delivery'])->name('delivery');
+            Route::get('/phones', [TimweDiagnosticApiController::class, 'phones'])->name('phones');
+            Route::get('/phones/{phone}/delivery-codes', [TimweDiagnosticApiController::class, 'phoneDeliveryCodes'])->name('phones.delivery-codes');
+            Route::get('/recent', [TimweDiagnosticApiController::class, 'recent'])->name('recent');
+            Route::get('/lifetime', [TimweDiagnosticApiController::class, 'lifetime'])->name('lifetime');
+        });
 
         // === ML DASHBOARD ROUTES === 
         Route::prefix('ml-dashboard')->name('ml.')->group(function () {
