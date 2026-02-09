@@ -40,6 +40,14 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/timwe-stats.log'));
+
+            // Calcul du diagnostic Timwe quotidien - Chaque jour à 2h35 du matin
+            $yesterday = \Carbon\Carbon::yesterday()->format('Y-m-d');
+            $schedule->command("timwe:diagnostic-backfill --start-date={$yesterday} --end-date={$yesterday} --force")
+                ->dailyAt('02:35')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/timwe-diagnostic.log'));
             
             // Calcul des statistiques Ooredoo/DGV quotidiennes - Chaque jour à 2h45 du matin
             $schedule->command('ooredoo:update-daily-stats')
