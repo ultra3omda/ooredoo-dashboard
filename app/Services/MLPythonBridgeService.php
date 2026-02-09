@@ -72,28 +72,39 @@ class MLPythonBridgeService
     /**
      * Entraîne un nouveau modèle sur les dernières données (ml_client_features).
      *
+     * @param  callable(int $elapsedSeconds, string $buffer)|null  $outputCallback  Si fourni, appelé à chaque sortie avec (secondes écoulées, ligne)
      * @return array{status: string, output: string}
      *
      * @throws \Symfony\Component\Process\Exception\ProcessFailedException
      */
-    public function trainNewModel(): array
+    public function trainNewModel(?callable $outputCallback = null): array
     {
         if (! is_file($this->trainScriptPath)) {
             throw new \RuntimeException("Script d'entraînement introuvable: {$this->trainScriptPath}");
         }
+
+        $timeout = (int) env('ML_TRAIN_TIMEOUT', 7200); // 2h par défaut (entraînement sur gros volume)
+        $startTime = time();
 
         $process = new Process(
             [$this->pythonPath, $this->trainScriptPath],
             base_path(),
             null,
             null,
-            1800
+            $timeout
         );
 
         Log::info('MLPythonBridge - Début entraînement modèle ML');
 
-        $process->run(function (string $type, string $buffer): void {
-            Log::info('ML Training: '.trim($buffer));
+        $process->run(function (string $type, string $buffer) use ($outputCallback, $startTime): void {
+            $elapsed = time() - $startTime;
+            $line = trim($buffer);
+            if ($line !== '') {
+                if (is_callable($outputCallback)) {
+                    $outputCallback($elapsed, $line);
+                }
+                Log::info('ML Training: '.$line);
+            }
         });
 
         if (! $process->isSuccessful()) {

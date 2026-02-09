@@ -46,17 +46,23 @@ class AnalyzeOperatorPreferencesCommand extends Command
     {
         $this->info('📊 1. Répartition des clients par opérateur:');
         
+        // CORRECTION v2: Utiliser une subquery pour sélectionner les dernières features
         $distribution = DB::select("
             SELECT 
-                SUM(timwe_has_activity) as timwe_users,
-                AVG(timwe_success_rate) as timwe_avg_success,
-                SUM(eklektik_has_activity) as eklektik_users,
-                AVG(eklektik_success_rate) as eklektik_avg_success,
-                SUM(ooredoo_has_activity) as ooredoo_users,
-                AVG(ooredoo_success_rate) as ooredoo_avg_success,
-                COUNT(*) as total_clients
-            FROM ml_client_features
-            WHERE calculation_date >= ?
+                SUM(f.timwe_has_activity) as timwe_users,
+                AVG(f.timwe_success_rate) as timwe_avg_success,
+                SUM(f.eklektik_has_activity) as eklektik_users,
+                AVG(f.eklektik_success_rate) as eklektik_avg_success,
+                SUM(f.ooredoo_has_activity) as ooredoo_users,
+                AVG(f.ooredoo_success_rate) as ooredoo_avg_success,
+                COUNT(DISTINCT f.client_id) as total_clients
+            FROM ml_client_features f
+            INNER JOIN (
+                SELECT client_id, MAX(calculation_date) as max_date
+                FROM ml_client_features
+                WHERE calculation_date >= ?
+                GROUP BY client_id
+            ) latest ON f.client_id = latest.client_id AND f.calculation_date = latest.max_date
         ", [$cutoffDate->toDateString()]);
         
         if (!empty($distribution)) {
@@ -64,7 +70,7 @@ class AnalyzeOperatorPreferencesCommand extends Command
             $this->table(['Opérateur', 'Clients Actifs', '% Total', 'Taux Succès Moyen'], [
                 ['Timwe (3.0 TND mensuel)', number_format($d->timwe_users), round($d->timwe_users / $d->total_clients * 100, 1) . '%', round($d->timwe_avg_success * 100, 1) . '%'],
                 ['Eklektik (0.3 TND quotidien)', number_format($d->eklektik_users), round($d->eklektik_users / $d->total_clients * 100, 1) . '%', round($d->eklektik_avg_success * 100, 1) . '%'],
-                ['Ooredoo/DGV (3.0 TND mensuel)', number_format($d->ooredoo_users), round($d->ooredoo_users / $d->total_clients * 100, 1) . '%', round($d->ooredoo_avg_success * 100, 1) . '%'],
+                ['Ooredoo/DGV (0.3 TND quotidien)', number_format($d->ooredoo_users), round($d->ooredoo_users / $d->total_clients * 100, 1) . '%', round($d->ooredoo_avg_success * 100, 1) . '%'],
                 ['Total', number_format($d->total_clients), '100%', '-']
             ]);
         }
@@ -75,14 +81,24 @@ class AnalyzeOperatorPreferencesCommand extends Command
         $this->newLine();
         $this->info('🏆 2. Performance comparée par opérateur:');
         
+        // CORRECTION v2: Utiliser INNER JOIN pour sélectionner uniquement les dernières features
         $performance = DB::select("
+            WITH latest_features AS (
+                SELECT f.*
+                FROM ml_client_features f
+                INNER JOIN (
+                    SELECT client_id, MAX(calculation_date) as max_date
+                    FROM ml_client_features
+                    WHERE calculation_date >= ?
+                    GROUP BY client_id
+                ) latest ON f.client_id = latest.client_id AND f.calculation_date = latest.max_date
+            )
             SELECT 
                 'Premium (>70% succès)' as segment,
                 SUM(CASE WHEN timwe_success_rate > 0.7 THEN 1 ELSE 0 END) as timwe_count,
                 SUM(CASE WHEN eklektik_success_rate > 0.7 THEN 1 ELSE 0 END) as eklektik_count,
                 SUM(CASE WHEN ooredoo_success_rate > 0.7 THEN 1 ELSE 0 END) as ooredoo_count
-            FROM ml_client_features
-            WHERE calculation_date >= ?
+            FROM latest_features
             
             UNION ALL
             
@@ -91,8 +107,7 @@ class AnalyzeOperatorPreferencesCommand extends Command
                 SUM(CASE WHEN timwe_success_rate BETWEEN 0.3 AND 0.7 THEN 1 ELSE 0 END) as timwe_count,
                 SUM(CASE WHEN eklektik_success_rate BETWEEN 0.3 AND 0.7 THEN 1 ELSE 0 END) as eklektik_count,
                 SUM(CASE WHEN ooredoo_success_rate BETWEEN 0.3 AND 0.7 THEN 1 ELSE 0 END) as ooredoo_count
-            FROM ml_client_features
-            WHERE calculation_date >= ?
+            FROM latest_features
             
             UNION ALL
             
@@ -101,9 +116,8 @@ class AnalyzeOperatorPreferencesCommand extends Command
                 SUM(CASE WHEN timwe_success_rate < 0.3 THEN 1 ELSE 0 END) as timwe_count,
                 SUM(CASE WHEN eklektik_success_rate < 0.3 THEN 1 ELSE 0 END) as eklektik_count,
                 SUM(CASE WHEN ooredoo_success_rate < 0.3 THEN 1 ELSE 0 END) as ooredoo_count
-            FROM ml_client_features
-            WHERE calculation_date >= ?
-        ", [$cutoffDate->toDateString(), $cutoffDate->toDateString(), $cutoffDate->toDateString()]);
+            FROM latest_features
+        ", [$cutoffDate->toDateString()]);
         
         $tableData = [];
         foreach ($performance as $p) {
@@ -123,16 +137,22 @@ class AnalyzeOperatorPreferencesCommand extends Command
         $this->newLine();
         $this->info('💰 3. Préférences prix et fréquence:');
         
+        // CORRECTION v2: Utiliser INNER JOIN
         $preferences = DB::select("
             SELECT 
-                SUM(prefers_low_price) as low_price_users,
-                SUM(prefers_high_price) as high_price_users,
-                SUM(prefers_daily_offers) as daily_users,
-                SUM(prefers_monthly_offers) as monthly_users,
-                SUM(CASE WHEN preferred_frequency = 'mixed' THEN 1 ELSE 0 END) as flexible_users,
-                COUNT(*) as total
-            FROM ml_client_features
-            WHERE calculation_date >= ?
+                SUM(f.prefers_low_price) as low_price_users,
+                SUM(f.prefers_high_price) as high_price_users,
+                SUM(f.prefers_daily_offers) as daily_users,
+                SUM(f.prefers_monthly_offers) as monthly_users,
+                SUM(CASE WHEN f.preferred_frequency = 'mixed' THEN 1 ELSE 0 END) as flexible_users,
+                COUNT(DISTINCT f.client_id) as total
+            FROM ml_client_features f
+            INNER JOIN (
+                SELECT client_id, MAX(calculation_date) as max_date
+                FROM ml_client_features
+                WHERE calculation_date >= ?
+                GROUP BY client_id
+            ) latest ON f.client_id = latest.client_id AND f.calculation_date = latest.max_date
         ", [$cutoffDate->toDateString()]);
         
         if (!empty($preferences)) {
@@ -152,16 +172,23 @@ class AnalyzeOperatorPreferencesCommand extends Command
         $this->newLine();
         $this->info('🌐 4. Comportement multi-opérateur:');
         
+        // CORRECTION v2: Utiliser INNER JOIN
         $multiOp = DB::select("
             SELECT 
-                total_operators_used,
-                COUNT(*) as clients,
-                AVG(operator_diversity_score) as avg_diversity,
-                AVG(GREATEST(timwe_success_rate, eklektik_success_rate, ooredoo_success_rate)) as best_success_rate
-            FROM ml_client_features
-            WHERE calculation_date >= ? AND total_operators_used > 0
-            GROUP BY total_operators_used
-            ORDER BY total_operators_used
+                f.total_operators_used,
+                COUNT(DISTINCT f.client_id) as clients,
+                AVG(f.operator_diversity_score) as avg_diversity,
+                AVG(GREATEST(f.timwe_success_rate, f.eklektik_success_rate, f.ooredoo_success_rate)) as best_success_rate
+            FROM ml_client_features f
+            INNER JOIN (
+                SELECT client_id, MAX(calculation_date) as max_date
+                FROM ml_client_features
+                WHERE calculation_date >= ?
+                GROUP BY client_id
+            ) latest ON f.client_id = latest.client_id AND f.calculation_date = latest.max_date
+            WHERE f.total_operators_used > 0
+            GROUP BY f.total_operators_used
+            ORDER BY f.total_operators_used
         ", [$cutoffDate->toDateString()]);
         
         $tableData = [];
@@ -183,14 +210,21 @@ class AnalyzeOperatorPreferencesCommand extends Command
         $this->info('🎯 5. Recommandations stratégiques:');
         
         // Analyser les patterns pour des recommandations
+        // CORRECTION v2: Utiliser INNER JOIN
         $insights = DB::select("
             SELECT 
-                best_performing_operator,
-                COUNT(*) as clients,
-                AVG(GREATEST(timwe_success_rate, eklektik_success_rate, ooredoo_success_rate)) as success_rate
-            FROM ml_client_features
-            WHERE calculation_date >= ? AND best_performing_operator != 'none'
-            GROUP BY best_performing_operator
+                f.best_performing_operator,
+                COUNT(DISTINCT f.client_id) as clients,
+                AVG(GREATEST(f.timwe_success_rate, f.eklektik_success_rate, f.ooredoo_success_rate)) as success_rate
+            FROM ml_client_features f
+            INNER JOIN (
+                SELECT client_id, MAX(calculation_date) as max_date
+                FROM ml_client_features
+                WHERE calculation_date >= ?
+                GROUP BY client_id
+            ) latest ON f.client_id = latest.client_id AND f.calculation_date = latest.max_date
+            WHERE f.best_performing_operator != 'none'
+            GROUP BY f.best_performing_operator
             ORDER BY success_rate DESC
         ", [Carbon::now()->subDays(30)->toDateString()]);
         
@@ -208,14 +242,14 @@ class AnalyzeOperatorPreferencesCommand extends Command
             } elseif ($op === 'timwe') {
                 $recommendations[] = "   • Timwe: $clients clients spécialisés ({$rate}% succès) → Offres mensuelles 3.0 TND";
             } elseif ($op === 'ooredoo') {
-                $recommendations[] = "   • Ooredoo: $clients clients spécialisés ({$rate}% succès) → Offres mensuelles 3.0 TND";
+                $recommendations[] = "   • Ooredoo: $clients clients spécialisés ({$rate}% succès) → Offres quotidiennes 0.3 TND"; // CORRECTION: 0.3 TND quotidien
             }
         }
         
         $recommendations[] = "";
         $recommendations[] = "🔄 **Actions Recommandées:**";
         $recommendations[] = "   • Segmenter les modèles ML par opérateur";
-        $recommendations[] = "   • A/B test: quotidien (Eklektik) vs mensuel (Timwe/Ooredoo)";
+        $recommendations[] = "   • A/B test: quotidien (Eklektik/Ooredoo 0.3 TND) vs mensuel (Timwe 3.0 TND)";
         $recommendations[] = "   • Personnaliser timing selon type d'offre";
         $recommendations[] = "   • Exploiter les clients multi-opérateur pour cross-selling";
         

@@ -33,10 +33,16 @@ class TrainPythonModelCommand extends Command
         }
         $this->info("✅ Features ML en base: " . number_format($count));
 
+        $this->line('');
+        $this->info('⏱️  Compteur: 0s (démarrage...)');
+        $this->line('');
+
         try {
-            $result = $this->mlBridge->trainNewModel();
+            $result = $this->mlBridge->trainNewModel(function (int $elapsedSeconds, string $line): void {
+                $this->line(sprintf('[ Compteur: %ss ] %s', number_format($elapsedSeconds), $line));
+            });
             $this->info('✅ Entraînement terminé avec succès.');
-            $this->line($result['output'] ?? '');
+            // Ne pas réafficher la sortie complète (déjà affichée ligne à ligne avec le compteur)
 
             return Command::SUCCESS;
         } catch (\Throwable $e) {

@@ -10,6 +10,7 @@ use Exception;
 class TrainMLModelCommand extends Command
 {
     protected $signature = 'ml:train {--model=lightgbm_v1 : Nom du modèle} 
+                                      {--source=training : Source des données (production ou training)}
                                       {--start-date= : Date de début (YYYY-MM-DD)}
                                       {--end-date= : Date de fin (YYYY-MM-DD)}
                                       {--max-rounds=200 : Nombre max de rounds}
@@ -33,8 +34,22 @@ class TrainMLModelCommand extends Command
         
         try {
             $modelName = $this->option('model');
+            $source = $this->option('source');
+            
+            // Déterminer la table source
+            $sourceTable = $source === 'production' ? 'ml_client_features' : 'ml_client_features_training';
+            
+            // Déterminer les dates par défaut
+            $defaultStartDate = $this->option('start-date');
+            if (!$defaultStartDate) {
+                // Utiliser la date minimale disponible dans la table source
+                $minDate = \DB::table($sourceTable)->min('calculation_date');
+                $defaultStartDate = $minDate ?? Carbon::now()->subMonths(6)->toDateString();
+            }
+            
             $options = [
-                'start_date' => $this->option('start-date') ?? Carbon::now()->subMonths(6)->toDateString(),
+                'source_table' => $sourceTable,
+                'start_date' => $defaultStartDate,
                 'end_date' => $this->option('end-date') ?? Carbon::now()->toDateString(),
                 'max_rounds' => (int)$this->option('max-rounds'),
                 'learning_rate' => (float)$this->option('learning-rate'),
@@ -42,6 +57,7 @@ class TrainMLModelCommand extends Command
                 'force' => $this->option('force')
             ];
             
+            $this->info("📊 Source: {$sourceTable}");
             $this->info("📅 Période: {$options['start_date']} → {$options['end_date']}");
             $this->info("⚙️  Paramètres: LR={$options['learning_rate']}, Rounds={$options['max_rounds']}");
             
@@ -101,15 +117,19 @@ class TrainMLModelCommand extends Command
         $this->info('✅ Librairies Python: ' . implode(', ', $requiredLibs));
         
         // 3. Vérifier les données ML
-        $featuresCount = \DB::table('ml_client_features')->count();
+        $sourceTable = $this->option('source') === 'production' 
+            ? 'ml_client_features' 
+            : 'ml_client_features_training';
+        
+        $featuresCount = \DB::table($sourceTable)->count();
         if ($featuresCount < 1000) {
             if (!$this->option('force')) {
-                $this->error("❌ Pas assez de features ML ($featuresCount). Utilisez --force ou lancez ml:extract-features");
+                $this->error("❌ Pas assez de features ML ($featuresCount dans $sourceTable). Utilisez --force ou lancez ml:extract-features");
                 return false;
             }
             $this->warn("⚠️  Peu de données ($featuresCount features) mais --force activé");
         }
-        $this->info("✅ Features ML: " . number_format($featuresCount));
+        $this->info("✅ Features ML ($sourceTable): " . number_format($featuresCount));
         
         return true;
     }

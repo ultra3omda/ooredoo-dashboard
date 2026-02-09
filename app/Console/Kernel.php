@@ -58,6 +58,36 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/cache-warmup.log'));
+
+            // ============================================================
+            // SYSTÈME ML INCRÉMENTAL - Architecture optimisée
+            // ============================================================
+            
+            // Ingestion incrémentale des transactions vers tx_daily_agg
+            // Toutes les 5 minutes pour minimiser le retard
+            $schedule->command('ml:tx-daily-ingest --batch-size=100000 --max-batches=5')
+                ->everyFiveMinutes()
+                ->withoutOverlapping(30) // Timeout 30 min
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-ingest.log'));
+
+            // Construction des features ML 90 jours depuis les agrégats
+            // Toutes les 2 heures pour maintenir les features à jour
+            $schedule->command('ml:build-90d-features --chunk=2000')
+                ->everyTwoHours()
+                ->withoutOverlapping(60) // Timeout 60 min
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-features-90d.log'));
+
+            // Maintenance et nettoyage des agrégats (rétention 120 jours)
+            // Une fois par semaine le dimanche à 4h
+            $schedule->command('ml:tx-daily-maintenance --retention-days=120 --vacuum')
+                ->weekly()
+                ->sundays()
+                ->at('04:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-maintenance.log'));
     }
 
     /**

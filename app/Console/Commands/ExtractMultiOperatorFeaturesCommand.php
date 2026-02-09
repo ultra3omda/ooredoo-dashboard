@@ -28,6 +28,7 @@ class ExtractMultiOperatorFeaturesCommand extends Command
 
     public function handle()
     {
+        @ini_set('memory_limit', '512M');
         $this->info('🌐 Extraction features multi-opérateur...');
         
         try {

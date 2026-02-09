@@ -25,7 +25,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 // Opérateurs (session via EnsureFrontendRequestsAreStateful pour appels same-origin)
-Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
+// DÉSACTIVÉ : route déplacée vers web.php pour utiliser l'authentification web correcte
+// Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
 
 // Dashboard API routes
 Route::prefix('dashboard')->name('api.dashboard.')->group(function () {

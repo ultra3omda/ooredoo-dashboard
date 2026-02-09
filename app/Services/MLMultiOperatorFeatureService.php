@@ -9,8 +9,27 @@ use Carbon\Carbon;
 
 class MLMultiOperatorFeatureService
 {
+    /** Batch size for insert/upsert (MySQL limit ~65535 placeholders: cols × rows). */
+    private const INSERT_BATCH_SIZE = 1000;
+
+    /** Process clients in chunks to avoid memory exhaustion (80k+ clients). Plus gros chunks = moins d’allers-retours DB. */
+    private const CLIENT_CHUNK_SIZE = 3000;
+
+    /** Chunk size when streaming transactions (memory). */
+    private const TX_STREAM_CHUNK = 10000;
+
+    /** tarif_id → opérateur (CPM 9 Solde téléphonique) : 10,16=Orange ; 15=TT ; 39=Ooredoo ; 43=Taraji */
+    private const TARIF_ID_TO_OPERATOR = [
+        10 => 'orange',
+        16 => 'orange',
+        15 => 'tt',
+        39 => 'ooredoo',
+        43 => 'taraji',
+    ];
+
     /**
-     * Extrait les features pour tous les opérateurs (Timwe, Eklektik, Ooredoo/DGV)
+     * Extrait les features pour un seul client (usage diagnostic / API).
+     * Conserve le comportement N+1 pour ce cas.
      */
     public function extractClientFeatures(int $clientId, Carbon $calculationDate): array
     {
@@ -24,36 +43,26 @@ class MLMultiOperatorFeatureService
         $startDate = $calculationDate->copy()->subMonths(6);
 
         try {
-            // === 1. Features par Opérateur ===
             $timweFeatures = $this->extractTimweFeatures($clientId, $startDate, $calculationDate);
             $eklektikFeatures = $this->extractEklektikFeatures($clientId, $startDate, $calculationDate);
             $ooredooFeatures = $this->extractOoredooFeatures($clientId, $startDate, $calculationDate);
-            
-            // === 2. Features Cross-Opérateur ===
             $crossFeatures = $this->extractCrossOperatorFeatures($clientId, $startDate, $calculationDate);
-            
-            // === 3. Features par Type d'Offre ===
             $offerTypeFeatures = $this->extractOfferTypeFeatures($clientId, $startDate, $calculationDate);
-            
-            // === 4. Features de Préférence Client ===
             $preferenceFeatures = $this->extractClientPreferences($clientId, $startDate, $calculationDate);
 
-            // Fusionner toutes les features
             $features = array_merge(
                 $features,
                 $timweFeatures,
-                $eklektikFeatures, 
+                $eklektikFeatures,
                 $ooredooFeatures,
                 $crossFeatures,
                 $offerTypeFeatures,
                 $preferenceFeatures
             );
-
         } catch (\Exception $e) {
             Log::error("MLMultiOperatorFeatureService - Erreur extraction client $clientId", [
                 'error' => $e->getMessage()
             ]);
-            
             $features = $this->getDefaultMultiOperatorFeatures($clientId, $calculationDate);
         }
 
@@ -61,48 +70,399 @@ class MLMultiOperatorFeatureService
     }
 
     /**
-     * Features spécifiques Timwe (mensuel 3.0 TND)
+     * Extrait et enregistre les features pour une date donnée (batch).
+     * Pas de requêtes par client : préchargement agrégé + merge en mémoire + insert par lots.
      */
-    private function extractTimweFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    public function extractAndStoreFeaturesForDate(Carbon $calculationDate): int
     {
-        $billingPpid = env('TIMWE_BILLING_PPID', '63980');
-        
-        $transactions = DB::table('transactions_history as th')
-            ->where('th.client_id', $clientId)
-            ->where(function($q) {
-                $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                  ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+        $dateStr = $calculationDate->toDateString();
+        Log::info("MLMultiOperatorFeatureService - Début extraction multi-opérateur pour {$dateStr}");
+
+        $t0 = microtime(true);
+        $startDate = $calculationDate->copy()->subDays(180);
+
+        // --- 1) Clients actifs (2 requêtes, pas de boucle)
+        $allOperatorIds = $this->getMultiOperatorCpmIds();
+        if (empty($allOperatorIds)) {
+            Log::warning("MLMultiOperatorFeatureService - Aucun opérateur trouvé");
+            return 0;
+        }
+
+        $activeClients = $this->getActiveClientIdsForDate($calculationDate, $startDate, $allOperatorIds);
+        $nClients = count($activeClients);
+        Log::info("MLMultiOperatorFeatureService - Clients actifs multi-opérateur: {$nClients}");
+
+        if ($nClients === 0) {
+            Log::info("MLMultiOperatorFeatureService - Extraction terminée", ['clients_processed' => 0, 'date' => $dateStr]);
+            return 0;
+        }
+
+        $allowedColumns = array_flip(Schema::getColumnListing('ml_client_features'));
+        $defaults = $this->getDefaultMultiOperatorFeatures(0, $calculationDate);
+        unset($defaults['client_id'], $defaults['calculation_date']);
+
+        $totalInserted = 0;
+        $totalTxTime = 0;
+        $totalSubTime = 0;
+        $totalMergeTime = 0;
+        $totalInsertTime = 0;
+        $chunkIndex = 0;
+        $chunks = array_chunk($activeClients, self::CLIENT_CHUNK_SIZE);
+
+        foreach ($chunks as $clientChunk) {
+            $chunkIndex++;
+
+            // --- Préchargement transactions pour ce chunk (index: client_id, created_at)
+            $t1 = microtime(true);
+            $transactionsByClient = $this->loadTransactionsInWindowForClients($startDate, $calculationDate, $clientChunk);
+            $totalTxTime += microtime(true) - $t1;
+
+            // --- Préchargement abonnements pour ce chunk (index: client_id, client_abonnement_creation)
+            $t2 = microtime(true);
+            $subscriptionsByClient = $this->loadSubscriptionsInWindowForClients($startDate, $calculationDate, $allOperatorIds, $clientChunk);
+            $totalSubTime += microtime(true) - $t2;
+
+            // --- Calcul des features en mémoire
+            $t3 = microtime(true);
+            $featuresRows = [];
+            foreach ($clientChunk as $clientId) {
+                $clientId = (int) $clientId;
+                if ($clientId <= 0) {
+                    continue;
+                }
+                $txList = $transactionsByClient[$clientId] ?? [];
+                $subList = $subscriptionsByClient[$clientId] ?? [];
+                try {
+                    $row = $this->computeFeaturesForClient($clientId, $calculationDate, $txList, $subList);
+                    $row = array_intersect_key($row, $allowedColumns);
+                    if (!empty($row)) {
+                        $featuresRows[] = $row;
+                    }
+                } catch (\Exception $e) {
+                    Log::error("MLMultiOperatorFeatureService - Erreur client $clientId: " . $e->getMessage());
+                    $row = array_merge(
+                        ['client_id' => $clientId, 'calculation_date' => $dateStr],
+                        $defaults
+                    );
+                    $featuresRows[] = array_intersect_key($row, $allowedColumns);
+                }
+            }
+            $totalMergeTime += microtime(true) - $t3;
+
+            // --- Insert par lots de 1000 (évite trop de placeholders MySQL)
+            $t4 = microtime(true);
+            $inserted = $this->bulkUpsertFeatures($featuresRows, $allowedColumns);
+            $totalInsertTime += microtime(true) - $t4;
+            $totalInserted += $inserted;
+
+            Log::info("MLMultiOperatorFeatureService - Chunk {$chunkIndex}/" . count($chunks), [
+                'clients' => count($clientChunk),
+                'rows_inserted' => $inserted,
+            ]);
+
+            unset($transactionsByClient, $subscriptionsByClient, $featuresRows);
+            gc_collect_cycles();
+        }
+
+        $totalTime = round(microtime(true) - $t0, 2);
+        Log::info("MLMultiOperatorFeatureService - Extraction terminée", [
+            'clients_processed' => $totalInserted,
+            'date' => $dateStr,
+            'total_seconds' => $totalTime,
+            'tx_seconds' => round($totalTxTime, 2),
+            'sub_seconds' => round($totalSubTime, 2),
+            'merge_seconds' => round($totalMergeTime, 2),
+            'insert_seconds' => round($totalInsertTime, 2),
+        ]);
+
+        return $totalInserted;
+    }
+
+    /**
+     * Retourne les country_payments_methods_id pour Timwe, Eklektik, Ooredoo, DGV.
+     */
+    private function getMultiOperatorCpmIds(): array
+    {
+        return DB::table('country_payments_methods')
+            ->whereRaw("TRIM(LOWER(country_payments_methods_name)) LIKE '%timwe%'")
+            ->orWhereRaw("TRIM(LOWER(country_payments_methods_name)) LIKE '%eklektik%'")
+            ->orWhereRaw("TRIM(LOWER(country_payments_methods_name)) LIKE '%ooredoo%'")
+            ->orWhereRaw("TRIM(LOWER(country_payments_methods_name)) LIKE '%dgv%'")
+            ->pluck('country_payments_methods_id')
+            ->toArray();
+    }
+
+    /**
+     * Clients actifs à la date de calcul : abonnements non expirés + clients avec tx sur la fenêtre.
+     * Utilise index client_abonnement(client_id, client_abonnement_creation) et transactions_history(created_at, client_id).
+     */
+    private function getActiveClientIdsForDate(Carbon $calculationDate, Carbon $periodStart, array $cpmIds): array
+    {
+        $fromSubscriptions = DB::table('client_abonnement')
+            ->whereIn('country_payments_methods_id', $cpmIds)
+            ->whereNotNull('client_id')
+            ->where('client_abonnement_creation', '<=', $calculationDate)
+            ->where(function ($q) use ($calculationDate) {
+                $q->whereNull('client_abonnement_expiration')
+                  ->orWhere('client_abonnement_expiration', '>=', $calculationDate);
             })
-            ->whereBetween('th.created_at', [$startDate, $endDate])
-            ->whereNotNull('th.result')
+            ->distinct()
+            ->pluck('client_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->toArray();
+
+        $fromTransactions = DB::table('transactions_history')
+            ->whereBetween('created_at', [$periodStart, $calculationDate])
+            ->where(function ($q) {
+                $q->where('status', 'LIKE', 'TIMWE_%')
+                  ->orWhere('status', 'LIKE', 'ORANGE_%')
+                  ->orWhere('status', 'LIKE', 'TARAJI_%')
+                  ->orWhere('status', 'LIKE', 'TT_%')
+                  ->orWhere('status', 'LIKE', '%OOREDOO%')
+                  ->orWhere('status', 'LIKE', '%DGV%')
+                  ->orWhere('status', 'LIKE', '%EKLEKTIK%')
+                  ->orWhere('status', 'LIKE', 'EKLECTIC_%')
+                  ->orWhere('status', 'LIKE', '%CLUB_PRIVILEGE%');
+            })
+            ->distinct()
+            ->pluck('client_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->toArray();
+
+        return array_values(array_unique(array_merge($fromSubscriptions, $fromTransactions)));
+    }
+
+    /**
+     * Charge les transactions de la fenêtre pour une liste de client_id (index: client_id, created_at).
+     * Utilise chunkById pour une pagination par clé (évite la dégradation offset sur grosses tables).
+     * Retourne [ client_id => [ ['created_at'=>..., 'status'=>..., 'result'=>...], ... ] ]
+     */
+    private function loadTransactionsInWindowForClients(Carbon $startDate, Carbon $endDate, array $clientIds): array
+    {
+        $clientIds = array_values(array_filter(array_map('intval', $clientIds), fn ($id) => $id > 0));
+        if (empty($clientIds)) {
+            return [];
+        }
+
+        $byClient = [];
+        DB::table('transactions_history')
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereIn('client_id', $clientIds)
+            ->where(function ($q) {
+                $q->where('status', 'LIKE', 'TIMWE_%')
+                  ->orWhere('status', 'LIKE', 'ORANGE_%')
+                  ->orWhere('status', 'LIKE', 'TARAJI_%')
+                  ->orWhere('status', 'LIKE', 'TT_%')
+                  ->orWhere('status', 'LIKE', '%OOREDOO%')
+                  ->orWhere('status', 'LIKE', '%DGV%')
+                  ->orWhere('status', 'LIKE', '%EKLEKTIK%')
+                  ->orWhere('status', 'LIKE', 'EKLECTIC_%')
+                  ->orWhere('status', 'LIKE', '%CLUB_PRIVILEGE%');
+            })
+            ->select('transaction_history_id', 'client_id', 'created_at', 'status', 'result')
+            ->orderBy('transaction_history_id')
+            ->chunkById(self::TX_STREAM_CHUNK, function ($rows) use (&$byClient) {
+                foreach ($rows as $r) {
+                    $cid = (int) $r->client_id;
+                    if ($cid <= 0) {
+                        continue;
+                    }
+                    if (!isset($byClient[$cid])) {
+                        $byClient[$cid] = [];
+                    }
+                    $byClient[$cid][] = [
+                        'created_at' => $r->created_at,
+                        'status' => $r->status,
+                        'result' => $r->result,
+                    ];
+                }
+            }, 'transaction_history_id');
+
+        return $byClient;
+    }
+
+    /**
+     * Charge tous les abonnements pertinents (client_id, client_abonnement_creation, tarif_id indexés).
+     * Retourne [ client_id => [ ['cpm_name'=>..., 'prix'=>..., 'duration'=>..., 'frequence'=>..., 'creation'=>...], ... ] ]
+     */
+    /**
+     * Charge les abonnements créés dans la fenêtre pour une liste de client_id.
+     * Jointure minimale : client_abonnement + country_payments_methods + abonnement_tarifs (sans abonnement pour perf).
+     * Enrichit chaque abo avec : expiration, tarif_id, operator (orange/tt/ooredoo/taraji), état (facturé/actif/expiré).
+     * $endDate = date de calcul (pour dériver actif/expiré à cette date).
+     */
+    private function loadSubscriptionsInWindowForClients(Carbon $startDate, Carbon $endDate, array $cpmIds, array $clientIds): array
+    {
+        $clientIds = array_values(array_filter(array_map('intval', $clientIds), fn ($id) => $id > 0));
+        if (empty($clientIds)) {
+            return [];
+        }
+
+        $asOfDate = $endDate->toDateString();
+        $byClient = [];
+        $rows = DB::table('client_abonnement as ca')
+            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+            ->leftJoin('abonnement_tarifs as at', 'ca.tarif_id', '=', 'at.abonnement_tarifs_id')
+            ->whereIn('ca.country_payments_methods_id', $cpmIds)
+            ->whereIn('ca.client_id', $clientIds)
+            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
+            ->select(
+                'ca.client_id',
+                'ca.client_abonnement_creation as creation',
+                'ca.client_abonnement_expiration as expiration',
+                'ca.tarif_id',
+                'cpm.country_payments_methods_name as cpm_name',
+                'at.abonnement_tarifs_prix as prix',
+                'at.abonnement_tarifs_duration as duration',
+                'at.abonnement_tarifs_frequence as frequence'
+            )
             ->get();
 
+        foreach ($rows as $r) {
+            $cid = (int) $r->client_id;
+            if ($cid <= 0) {
+                continue;
+            }
+            $tarifId = isset($r->tarif_id) ? (int) $r->tarif_id : null;
+            $operator = $tarifId !== null && isset(self::TARIF_ID_TO_OPERATOR[$tarifId])
+                ? self::TARIF_ID_TO_OPERATOR[$tarifId]
+                : null;
+            $expiration = isset($r->expiration) && $r->expiration !== null ? $r->expiration : null;
+            if ($expiration === null) {
+                $etat = 'facture';
+            } else {
+                $expStr = $expiration instanceof \DateTimeInterface ? $expiration->format('Y-m-d') : (string) $expiration;
+                $etat = $expStr < $asOfDate ? 'expire' : 'actif';
+            }
+            if (!isset($byClient[$cid])) {
+                $byClient[$cid] = [];
+            }
+            $byClient[$cid][] = [
+                'cpm_name' => $r->cpm_name ?? '',
+                'prix' => $r->prix ?? null,
+                'duration' => $r->duration ?? null,
+                'frequence' => $r->frequence ?? null,
+                'creation' => $r->creation ?? null,
+                'expiration' => $expiration,
+                'tarif_id' => $tarifId,
+                'operator' => $operator,
+                'etat' => $etat,
+            ];
+        }
+
+        return $byClient;
+    }
+
+    /**
+     * Calcule toutes les features pour un client à partir des listes préchargées (aucune requête).
+     */
+    private function computeFeaturesForClient(int $clientId, Carbon $calculationDate, array $txList, array $subList): array
+    {
+        $dateStr = $calculationDate->toDateString();
+
+        $timwe = $this->computeTimweFeaturesFromList($txList);
+        $eklektik = $this->computeEklektikFeaturesFromList($txList, $subList);
+        $ooredoo = $this->computeOoredooFeaturesFromList($txList, $subList);
+        $cross = $this->computeCrossOperatorFeaturesFromList($subList);
+        $offerType = $this->computeOfferTypeFeaturesFromList($subList);
+        $prefs = $this->computeClientPreferencesFromList($txList);
+        $subState = $this->computeSubscriptionStateFeaturesFromList($subList);
+
+        return array_merge(
+            ['client_id' => $clientId, 'calculation_date' => $dateStr],
+            $timwe,
+            $eklektik,
+            $ooredoo,
+            $cross,
+            $offerType,
+            $prefs,
+            $subState
+        );
+    }
+
+    /**
+     * À partir des abonnements enrichis (expiration, operator, etat) : compte facturé/expiré/actif et par opérateur.
+     */
+    private function computeSubscriptionStateFeaturesFromList(array $subList): array
+    {
+        $factureCount = 0;
+        $expireCount = 0;
+        $actifCount = 0;
+        $orangeCount = 0;
+        $ttCount = 0;
+        $ooredooCount = 0;
+
+        foreach ($subList as $s) {
+            $etat = $s['etat'] ?? null;
+            if ($etat === 'facture') {
+                $factureCount++;
+            } elseif ($etat === 'expire') {
+                $expireCount++;
+            } elseif ($etat === 'actif') {
+                $actifCount++;
+            }
+            $op = $s['operator'] ?? null;
+            if ($op === 'orange') {
+                $orangeCount++;
+            } elseif ($op === 'tt') {
+                $ttCount++;
+            } elseif ($op === 'ooredoo') {
+                $ooredooCount++;
+            }
+        }
+
+        return [
+            'subs_facture_count' => $factureCount,
+            'subs_expire_count' => $expireCount,
+            'subs_actif_count' => $actifCount,
+            'has_facture_subscription' => $factureCount > 0 ? 1 : 0,
+            'orange_subs_count' => $orangeCount,
+            'tt_subs_count' => $ttCount,
+            'ooredoo_subs_count' => $ooredooCount,
+        ];
+    }
+
+    private function computeTimweFeaturesFromList(array $txList): array
+    {
+        $billingPpid = env('TIMWE_BILLING_PPID', '63980');
+        $timweTx = array_filter($txList, fn ($t) => str_contains($t['status'] ?? '', 'TIMWE_RENEWED_NOTIF') || str_contains($t['status'] ?? '', 'TIMWE_CHARGE_DELIVERED'));
+        $timweTx = array_values(array_filter($timweTx, fn ($t) => !empty($t['result'])));
+
         $successes = 0;
-        $attempts = count($transactions);
         $totalRevenue = 0;
         $noBalanceCount = 0;
         $notDeliveredCount = 0;
 
-        foreach ($transactions as $transaction) {
-            $result = json_decode($transaction->result, true);
-            if (!is_array($result)) continue;
-            
-            $ppid = $result['pricepointId'] ?? null;
-            $delivery = $result['mnoDeliveryCode'] ?? null;
-            $charged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
-            
+        foreach ($timweTx as $t) {
+            $result = is_string($t['result'] ?? null) ? json_decode($t['result'], true) : ($t['result'] ?? []);
+            if (!is_array($result)) {
+                continue;
+            }
+            $ppid = $this->getResultPricepointId($result);
+            $delivery = $this->getResultMnoDeliveryCode($result);
+            $charged = $this->getResultTotalCharged($result);
+
             if ((string)$ppid === (string)$billingPpid && $delivery === 'DELIVERED' && $charged > 0) {
                 $successes++;
-                $totalRevenue += $charged / 1000; // Millimes → TND
+                $totalRevenue += $charged / 1000;
             }
-            
-            if ($delivery === 'NO_BALANCE') $noBalanceCount++;
-            if ($delivery === 'NOT_DELIVERED') $notDeliveredCount++;
+            if ($delivery === 'NO_BALANCE') {
+                $noBalanceCount++;
+            }
+            if ($delivery === 'NOT_DELIVERED') {
+                $notDeliveredCount++;
+            }
         }
 
+        $attempts = count($timweTx);
         $successRate = $attempts > 0 ? $successes / $attempts : 0;
         $avgRevenue = $successes > 0 ? $totalRevenue / $successes : 0;
         $noBalanceRate = $attempts > 0 ? $noBalanceCount / $attempts : 0;
+        $notDeliveredRate = $attempts > 0 ? $notDeliveredCount / $attempts : 0;
 
         return [
             'timwe_success_rate' => round($successRate, 4),
@@ -110,48 +470,35 @@ class MLMultiOperatorFeatureService
             'timwe_total_successes' => $successes,
             'timwe_avg_revenue_per_success' => round($avgRevenue, 3),
             'timwe_no_balance_rate' => round($noBalanceRate, 4),
-            'timwe_not_delivered_rate' => round($attempts > 0 ? $notDeliveredCount / $attempts : 0, 4),
+            'timwe_not_delivered_rate' => round($notDeliveredRate, 4),
             'timwe_has_activity' => $attempts > 0 ? 1 : 0,
         ];
     }
 
-    /**
-     * Features spécifiques Eklektik (quotidien 0.3 TND Club Privilèges)
-     */
-    private function extractEklektikFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    private function computeEklektikFeaturesFromList(array $txList, array $subList): array
     {
-        // Vérifier dans eklektik_stats_daily et transactions history pour Eklektik
-        $eklektikTransactions = DB::table('transactions_history as th')
-            ->where('th.client_id', $clientId)
-            ->where(function($q) {
-                $q->where('th.status', 'LIKE', '%EKLEKTIK%')
-                  ->orWhere('th.status', 'LIKE', '%CLUB_PRIVILEGE%')
-                  ->orWhere('th.status', 'LIKE', '%DAILY%');
-            })
-            ->whereBetween('th.created_at', [$startDate, $endDate])
-            ->get();
+        $eklektikTx = array_filter($txList, function ($t) {
+            $s = $t['status'] ?? '';
+            return str_starts_with($s, 'ORANGE_') || str_starts_with($s, 'TARAJI_') || str_starts_with($s, 'TT_')
+                || str_contains($s, 'EKLEKTIK') || str_starts_with($s, 'EKLECTIC_') || str_contains($s, 'CLUB_PRIVILEGE');
+        });
 
-        // Aussi vérifier les abonnements Eklektik 
-        $eklektikSubscriptions = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-            ->where('ca.client_id', $clientId)
-            ->where(function($q) {
-                $q->whereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%eklektik%'")
-                  ->orWhere('ca.client_abonnement_prix', '0.300')
-                  ->orWhere('ca.client_abonnement_prix', '300'); // En millimes
-            })
-            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
-            ->count();
+        $eklektikSubs = 0;
+        foreach ($subList as $s) {
+            if (stripos($s['cpm_name'] ?? '', 'eklektik') !== false) {
+                $eklektikSubs++;
+            }
+        }
 
-        $attempts = count($eklektikTransactions);
+        $attempts = count($eklektikTx);
         $successes = 0;
         $dailySuccesses = [];
 
-        foreach ($eklektikTransactions as $transaction) {
-            $result = json_decode($transaction->result, true);
-            if (is_array($result) && isset($result['success']) && $result['success']) {
+        foreach ($eklektikTx as $t) {
+            $isSuccess = $this->isEklektikSuccess($t);
+            if ($isSuccess) {
                 $successes++;
-                $date = Carbon::parse($transaction->created_at)->toDateString();
+                $date = Carbon::parse($t['created_at'])->toDateString();
                 $dailySuccesses[$date] = ($dailySuccesses[$date] ?? 0) + 1;
             }
         }
@@ -163,139 +510,125 @@ class MLMultiOperatorFeatureService
         return [
             'eklektik_success_rate' => round($successRate, 4),
             'eklektik_total_attempts' => $attempts,
-            'eklektik_total_subscriptions' => $eklektikSubscriptions,
+            'eklektik_total_subscriptions' => $eklektikSubs,
             'eklektik_avg_daily_successes' => round($avgDailySuccesses, 2),
             'eklektik_daily_consistency' => round($consistencyScore, 4),
-            'eklektik_has_activity' => $attempts > 0 || $eklektikSubscriptions > 0 ? 1 : 0,
+            'eklektik_has_activity' => ($attempts > 0 || $eklektikSubs > 0) ? 1 : 0,
         ];
     }
 
-    /**
-     * Features spécifiques Ooredoo/DGV (mensuel 3.0 TND)
-     */
-    private function extractOoredooFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    private function computeOoredooFeaturesFromList(array $txList, array $subList): array
     {
-        // Transactions Ooredoo/DGV
-        $ooredooTransactions = DB::table('transactions_history as th')
-            ->where('th.client_id', $clientId)
-            ->where(function($q) {
-                $q->where('th.status', 'LIKE', '%OOREDOO%')
-                  ->orWhere('th.status', 'LIKE', '%DGV%')
-                  ->orWhere('th.status', 'LIKE', '%MONTHLY%');
-            })
-            ->whereBetween('th.created_at', [$startDate, $endDate])
-            ->get();
+        $ooredooTx = array_filter($txList, function ($t) {
+            $s = $t['status'] ?? '';
+            return str_contains($s, 'OOREDOO') || str_contains($s, 'DGV');
+        });
 
-        // Abonnements Ooredoo/DGV
-        $ooredooSubscriptions = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-            ->where('ca.client_id', $clientId)
-            ->where(function($q) {
-                $q->whereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%ooredoo%'")
-                  ->orWhereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%dgv%'")
-                  ->orWhere('ca.client_abonnement_prix', '3.000')
-                  ->orWhere('ca.client_abonnement_prix', '3000'); // En millimes
-            })
-            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
-            ->count();
+        $ooredooSubs = 0;
+        foreach ($subList as $s) {
+            $n = $s['cpm_name'] ?? '';
+            if (stripos($n, 'ooredoo') !== false || stripos($n, 'dgv') !== false) {
+                $ooredooSubs++;
+            }
+        }
 
-        $attempts = count($ooredooTransactions);
+        $attempts = count($ooredooTx);
         $successes = 0;
         $monthlyPattern = [];
 
-        foreach ($ooredooTransactions as $transaction) {
-            $result = json_decode($transaction->result, true);
-            if (is_array($result) && isset($result['success']) && $result['success']) {
+        foreach ($ooredooTx as $t) {
+            $isSuccess = $this->isOoredooSuccess($t);
+            if ($isSuccess) {
                 $successes++;
-                $month = Carbon::parse($transaction->created_at)->format('Y-m');
+                $month = Carbon::parse($t['created_at'])->format('Y-m');
                 $monthlyPattern[$month] = ($monthlyPattern[$month] ?? 0) + 1;
             }
         }
 
         $successRate = $attempts > 0 ? $successes / $attempts : 0;
-        $monthlyConsistency = count($monthlyPattern) > 0 ? min(count($monthlyPattern) / 6, 1) : 0; // Sur 6 mois
+        $monthlyConsistency = count($monthlyPattern) > 0 ? min(count($monthlyPattern) / 6, 1) : 0;
         $avgMonthlySuccesses = count($monthlyPattern) > 0 ? array_sum($monthlyPattern) / count($monthlyPattern) : 0;
 
         return [
             'ooredoo_success_rate' => round($successRate, 4),
             'ooredoo_total_attempts' => $attempts,
-            'ooredoo_total_subscriptions' => $ooredooSubscriptions,
+            'ooredoo_total_subscriptions' => $ooredooSubs,
             'ooredoo_avg_monthly_successes' => round($avgMonthlySuccesses, 2),
             'ooredoo_monthly_consistency' => round($monthlyConsistency, 4),
-            'ooredoo_has_activity' => $attempts > 0 || $ooredooSubscriptions > 0 ? 1 : 0,
+            'ooredoo_has_activity' => ($attempts > 0 || $ooredooSubs > 0) ? 1 : 0,
         ];
     }
 
-    /**
-     * Features cross-opérateur pour analyser les préférences
-     */
-    private function extractCrossOperatorFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    private function computeCrossOperatorFeaturesFromList(array $subList): array
     {
-        // Récupérer l'activité sur tous les opérateurs
-        $allOperators = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-            ->where('ca.client_id', $clientId)
-            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
-            ->select('cpm.country_payments_methods_name', 'ca.client_abonnement_prix')
-            ->get();
+        $operatorNames = [];
+        $prices = [];
+        $lowPriceCount = 0;
+        $highPriceCount = 0;
 
-        $operatorCount = $allOperators->pluck('country_payments_methods_name')->unique()->count();
-        $pricePoints = $allOperators->pluck('client_abonnement_prix')->unique()->values()->toArray();
-        
-        // Préférence prix (bas vs élevé)
-        $lowPriceCount = $allOperators->where('client_abonnement_prix', '<=', 1.0)->count();
-        $highPriceCount = $allOperators->where('client_abonnement_prix', '>', 1.0)->count();
+        foreach ($subList as $s) {
+            $name = $s['cpm_name'] ?? '';
+            $operatorNames[$name] = true;
+            $prix = $s['prix'] ?? null;
+            if ($prix !== null && $prix !== '') {
+                $prices[(string)$prix] = true;
+                if ((float)$prix <= 1.0) {
+                    $lowPriceCount++;
+                } else {
+                    $highPriceCount++;
+                }
+            } else {
+                if (stripos($name, 'eklektik') !== false) {
+                    $lowPriceCount++;
+                } elseif (preg_match('/timwe|ooredoo|dgv/i', $name)) {
+                    $highPriceCount++;
+                }
+            }
+        }
+
+        $operatorCount = count($operatorNames);
+        $uniquePricePoints = count($prices);
         $pricePreference = $lowPriceCount > $highPriceCount ? 'low' : ($highPriceCount > $lowPriceCount ? 'high' : 'mixed');
-
-        // Diversité des opérateurs
-        $operatorDiversity = min($operatorCount / 3, 1); // Normalisation sur 3 opérateurs max
+        $operatorDiversity = min($operatorCount / 3, 1);
 
         return [
             'total_operators_used' => $operatorCount,
             'operator_diversity_score' => round($operatorDiversity, 4),
             'price_preference' => $pricePreference,
-            'unique_price_points' => count($pricePoints),
+            'unique_price_points' => $uniquePricePoints,
             'prefers_low_price' => $pricePreference === 'low' ? 1 : 0,
             'prefers_high_price' => $pricePreference === 'high' ? 1 : 0,
             'is_multi_operator_user' => $operatorCount > 1 ? 1 : 0,
         ];
     }
 
-    /**
-     * Features par type d'offre (quotidien vs mensuel)
-     */
-    private function extractOfferTypeFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    private function computeOfferTypeFeaturesFromList(array $subList): array
     {
-        // Analyser le comportement quotidien (Eklektik 0.3 TND)
-        $dailyOffers = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-            ->where('ca.client_id', $clientId)
-            ->where(function($q) {
-                $q->where('ca.client_abonnement_prix', '<=', 1.0) // Prix bas = offres quotidiennes
-                  ->orWhereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%eklektik%'");
-            })
-            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
-            ->count();
+        $dailyOffers = 0;
+        $monthlyOffers = 0;
 
-        // Analyser le comportement mensuel (Timwe, Ooredoo 3.0 TND)
-        $monthlyOffers = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')  
-            ->where('ca.client_id', $clientId)
-            ->where(function($q) {
-                $q->where('ca.client_abonnement_prix', '>', 1.0) // Prix élevé = offres mensuelles
-                  ->orWhereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%timwe%'")
-                  ->orWhereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%ooredoo%'");
-            })
-            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
-            ->count();
+        foreach ($subList as $r) {
+            $name = strtolower(trim($r['cpm_name'] ?? ''));
+            $duration = (int)($r['duration'] ?? 0);
+            $frequence = (int)($r['frequence'] ?? 0);
+            $isTimwe = str_contains($name, 'timwe');
+            $isEklektik = str_contains($name, 'eklektik') || str_contains($name, 'orange') || str_contains($name, 'taraji') || str_contains($name, 'tt') || str_contains($name, 'izi');
+            $isMonthlyByTarif = ($duration >= 28 && $duration <= 31) || ($duration === 0 && $frequence >= 28 && $frequence <= 31);
+            $isDailyByTarif = ($duration === 1) || ($duration === 0 && $frequence === 1);
+
+            if ($isTimwe || $isMonthlyByTarif) {
+                $monthlyOffers++;
+            } elseif ($isDailyByTarif || $isEklektik) {
+                $dailyOffers++;
+            } else {
+                $dailyOffers++;
+            }
+        }
 
         $totalOffers = $dailyOffers + $monthlyOffers;
-        
-        // Patterns de préférence d'engagement
         $dailyEngagementRate = $totalOffers > 0 ? $dailyOffers / $totalOffers : 0;
         $monthlyEngagementRate = $totalOffers > 0 ? $monthlyOffers / $totalOffers : 0;
 
-        // Analyse de la fréquence optimale
         $preferredFrequency = 'unknown';
         if ($dailyOffers > $monthlyOffers * 2) {
             $preferredFrequency = 'daily';
@@ -318,187 +651,322 @@ class MLMultiOperatorFeatureService
         ];
     }
 
-    /**
-     * Features de préférences client basées sur l'historique multi-opérateur
-     */
-    private function extractClientPreferences(int $clientId, Carbon $startDate, Carbon $endDate): array
+    private function computeClientPreferencesFromList(array $txList): array
     {
-        // Analyser les patterns de succès par opérateur pour détecter les préférences
-        $operatorSuccessRates = [];
-        
         $operators = [
-            'timwe' => ['%TIMWE%'],
-            'eklektik' => ['%EKLEKTIK%', '%CLUB_PRIVILEGE%'],
-            'ooredoo' => ['%OOREDOO%', '%DGV%']
+            'timwe' => fn ($s) => str_starts_with($s, 'TIMWE_'),
+            'eklektik' => fn ($s) => str_starts_with($s, 'ORANGE_') || str_starts_with($s, 'TARAJI_') || str_starts_with($s, 'TT_') || str_contains($s, 'EKLEKTIK') || str_starts_with($s, 'EKLECTIC_'),
+            'ooredoo' => fn ($s) => str_contains($s, 'OOREDOO') || str_contains($s, 'DGV'),
         ];
 
-        foreach ($operators as $operatorName => $patterns) {
-            $transactions = DB::table('transactions_history')
-                ->where('client_id', $clientId)
-                ->where(function($q) use ($patterns) {
-                    foreach ($patterns as $pattern) {
-                        $q->orWhere('status', 'LIKE', $pattern);
-                    }
-                })
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->get();
-
+        $rates = [];
+        foreach ($operators as $opName => $match) {
+            $subset = array_filter($txList, fn ($t) => $match($t['status'] ?? ''));
+            $attempts = count($subset);
             $successes = 0;
-            $attempts = count($transactions);
-            
-            foreach ($transactions as $transaction) {
-                $result = json_decode($transaction->result, true);
-                if (is_array($result)) {
-                    // Détecter le succès selon le type d'opérateur
-                    if (isset($result['success']) && $result['success']) {
-                        $successes++;
-                    } elseif (isset($result['mnoDeliveryCode']) && $result['mnoDeliveryCode'] === 'DELIVERED') {
+            foreach ($subset as $t) {
+                if ($opName === 'eklektik' && $this->isEklektikSuccess($t)) {
+                    $successes++;
+                } elseif ($opName === 'ooredoo' && $this->isOoredooSuccess($t)) {
+                    $successes++;
+                } else {
+                    $result = is_string($t['result'] ?? null) ? json_decode($t['result'], true) : ($t['result'] ?? []);
+                    if (is_array($result) && (! empty($result['success']) || $this->getResultMnoDeliveryCode($result) === 'DELIVERED')) {
                         $successes++;
                     }
                 }
             }
-
-            $successRate = $attempts > 0 ? $successes / $attempts : 0;
-            $operatorSuccessRates[$operatorName] = $successRate;
+            $rates[$opName] = $attempts > 0 ? $successes / $attempts : 0;
         }
 
-        // Déterminer l'opérateur préféré
         $bestOperator = 'none';
-        $maxSuccessRate = 0;
-        foreach ($operatorSuccessRates as $op => $rate) {
-            if ($rate > $maxSuccessRate) {
-                $maxSuccessRate = $rate;
+        $maxRate = 0;
+        foreach ($rates as $op => $rate) {
+            if ($rate > $maxRate) {
+                $maxRate = $rate;
                 $bestOperator = $op;
             }
         }
 
-        return [
-            'best_performing_operator' => $bestOperator,
-            // Note: best_operator_success_rate retiré car pas dans migration
-            // 'timwe_preference_score' => round($operatorSuccessRates['timwe'] ?? 0, 4),
-            // 'eklektik_preference_score' => round($operatorSuccessRates['eklektik'] ?? 0, 4), 
-            // 'ooredoo_preference_score' => round($operatorSuccessRates['ooredoo'] ?? 0, 4),
-            // 'is_operator_specialist' => $maxSuccessRate > 0.5 ? 1 : 0,
-        ];
+        return ['best_performing_operator' => $bestOperator];
     }
 
-    /**
-     * Extrait toutes les features pour tous les clients actifs (multi-opérateur)
-     */
-    public function extractAndStoreFeaturesForDate(Carbon $calculationDate): int
+    /** @param array<string, int>|null $allowedColumns colonnes autorisées (array_flip), null = recalcul depuis la table */
+    private function bulkUpsertFeatures(array $featuresRows, ?array $allowedColumns = null): int
     {
-        Log::info("MLMultiOperatorFeatureService - Début extraction multi-opérateur pour {$calculationDate->toDateString()}");
-
-        // Récupérer TOUS les clients actifs (tous opérateurs)
-        $allOperatorIds = DB::table('country_payments_methods')
-            ->whereRaw("TRIM(LOWER(country_payments_methods_name)) LIKE '%timwe%'")
-            ->orWhereRaw("TRIM(LOWER(country_payments_methods_name)) LIKE '%eklektik%'")
-            ->orWhereRaw("TRIM(LOWER(country_payments_methods_name)) LIKE '%ooredoo%'")
-            ->orWhereRaw("TRIM(LOWER(country_payments_methods_name)) LIKE '%dgv%'")
-            ->pluck('country_payments_methods_id')
-            ->toArray();
-
-        if (empty($allOperatorIds)) {
-            Log::warning("MLMultiOperatorFeatureService - Aucun opérateur trouvé");
+        if (empty($featuresRows)) {
             return 0;
         }
 
-        Log::info("MLMultiOperatorFeatureService - Opérateurs trouvés: " . count($allOperatorIds));
+        if ($allowedColumns === null) {
+            $allowedColumns = array_flip(Schema::getColumnListing('ml_client_features'));
+        }
+        $now = now();
+        $total = 0;
 
-        // Clients actifs : 1) abonnements non expirés à la date de calcul
-        $fromSubscriptions = DB::table('client_abonnement as ca')
-            ->whereIn('ca.country_payments_methods_id', $allOperatorIds)
-            ->whereNotNull('ca.client_id')
-            ->where('ca.client_abonnement_creation', '<=', $calculationDate)
-            ->where(function ($q) use ($calculationDate) {
-                $q->whereNull('ca.client_abonnement_expiration')
-                  ->orWhere('ca.client_abonnement_expiration', '>=', $calculationDate);
-            })
-            ->distinct()
-            ->pluck('ca.client_id')
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn ($id) => $id > 0)
-            ->values()
-            ->toArray();
-
-        // 2) Fallback : clients ayant au moins une transaction (Timwe/Eklektik/Ooredoo/DGV) sur les 6 derniers mois
-        $periodStart = $calculationDate->copy()->subMonths(6);
-        $fromTransactions = DB::table('transactions_history')
-            ->whereBetween('created_at', [$periodStart, $calculationDate])
-            ->where(function ($q) {
-                $q->where('status', 'LIKE', '%TIMWE%')
-                  ->orWhere('status', 'LIKE', '%EKLEKTIK%')
-                  ->orWhere('status', 'LIKE', '%OOREDOO%')
-                  ->orWhere('status', 'LIKE', '%DGV%')
-                  ->orWhere('status', 'LIKE', '%CLUB_PRIVILEGE%');
-            })
-            ->distinct()
-            ->pluck('client_id')
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn ($id) => $id > 0)
-            ->values()
-            ->toArray();
-
-        $activeClients = array_values(array_unique(array_merge($fromSubscriptions, $fromTransactions)));
-        Log::info("MLMultiOperatorFeatureService - Clients actifs multi-opérateur: " . count($activeClients) . " (abonnements: " . count($fromSubscriptions) . ", transactions: " . count($fromTransactions) . ")");
-
-        $processedCount = 0;
-        $batchSize = 50; // Réduit pour traiter multi-opérateur
-
-        foreach (array_chunk($activeClients, $batchSize) as $batch) {
-            $featuresData = [];
-            
-            foreach ($batch as $clientId) {
-                $clientId = (int) $clientId;
-                if ($clientId <= 0) {
-                    continue;
+        foreach (array_chunk($featuresRows, self::INSERT_BATCH_SIZE) as $batch) {
+            $filtered = array_map(function (array $row) use ($allowedColumns, $now) {
+                $row = array_intersect_key($row, $allowedColumns);
+                if (isset($allowedColumns['updated_at'])) {
+                    $row['updated_at'] = $now;
                 }
-                try {
-                    $features = $this->extractClientFeatures($clientId, $calculationDate);
-                    $featuresData[] = $features;
-                    $processedCount++;
-                } catch (\Exception $e) {
-                    Log::error("MLMultiOperatorFeatureService - Erreur client $clientId: " . $e->getMessage());
+                if (isset($allowedColumns['created_at'])) {
+                    $row['created_at'] = $now;
                 }
+                return $row;
+            }, $batch);
+            $cols = array_keys($filtered[0]);
+            if (empty($cols)) {
+                continue;
             }
-            
-            // Insérer en base : ne garder que les colonnes existantes dans ml_client_features
-            if (!empty($featuresData)) {
-                $allowedColumns = array_flip(Schema::getColumnListing('ml_client_features'));
-                $filteredData = array_map(function (array $row) use ($allowedColumns) {
-                    return array_intersect_key($row, $allowedColumns);
-                }, $featuresData);
-                $columns = array_keys($filteredData[0]);
-                if (!empty($columns)) {
-                    DB::table('ml_client_features')->upsert(
-                        $filteredData,
-                        ['client_id', 'calculation_date'],
-                        $columns
-                    );
-                }
-            }
-            
-            Log::info("MLMultiOperatorFeatureService - Batch traité, total: $processedCount");
+            $updateColumns = array_values(array_diff($cols, ['client_id', 'calculation_date', 'created_at']));
+            DB::table('ml_client_features')->upsert($filtered, ['client_id', 'calculation_date'], $updateColumns);
+            $total += count($filtered);
         }
 
-        Log::info("MLMultiOperatorFeatureService - Extraction terminée", [
-            'clients_processed' => $processedCount,
-            'date' => $calculationDate->toDateString()
-        ]);
+        return $total;
+    }
 
-        return $processedCount;
+    // --------------- Helpers JSON (inchangés) ---------------
+
+    private function getResultPricepointId(array $result): ?string
+    {
+        $ppid = $result['pricepointId'] ?? $result['pricePointId'] ?? $result['pricepoint_id'] ?? null;
+        if ($ppid !== null) return (string) $ppid;
+        if (isset($result['response']['pricepointId'])) return (string) $result['response']['pricepointId'];
+        if (isset($result['user']['pricepointId'])) return (string) $result['user']['pricepointId'];
+        if (isset($result['data']['pricepointId'])) return (string) $result['data']['pricepointId'];
+        return null;
+    }
+
+    private function getResultMnoDeliveryCode(array $result): ?string
+    {
+        $code = $result['mnoDeliveryCode'] ?? $result['mno_delivery_code'] ?? null;
+        if ($code !== null) return (string) $code;
+        if (isset($result['response']['mnoDeliveryCode'])) return (string) $result['response']['mnoDeliveryCode'];
+        if (isset($result['data']['mnoDeliveryCode'])) return (string) $result['data']['mnoDeliveryCode'];
+        return null;
+    }
+
+    private function getResultTotalCharged(array $result): int
+    {
+        if (isset($result['totalCharged'])) return (int) $result['totalCharged'];
+        if (isset($result['response']['totalCharged'])) return (int) $result['response']['totalCharged'];
+        if (isset($result['data']['totalCharged'])) return (int) $result['data']['totalCharged'];
+        return 0;
     }
 
     /**
-     * Features par défaut multi-opérateur
+     * Eklektik : considère succès si le statut indique CHARGE/RENEW ou si result contient un indicateur de succès.
+     * Formats réels (doc/TRANSACTIONS_HISTORY_STATUS_ANALYSIS) : result['message']==='OK', result['status']===0,
+     * ou statuts ORANGE_CHARGE_DELIVERED, TT_RENEWED, etc.
      */
+    private function isEklektikSuccess(array $t): bool
+    {
+        $status = $t['status'] ?? '';
+        if (str_contains($status, 'CHARGE_DELIVERED') || str_contains($status, 'RENEWED')) {
+            return true;
+        }
+        $result = is_string($t['result'] ?? null) ? json_decode($t['result'], true) : ($t['result'] ?? []);
+        if (! is_array($result)) {
+            return false;
+        }
+        if (! empty($result['success']) || $this->getResultMnoDeliveryCode($result) === 'DELIVERED') {
+            return true;
+        }
+        if (isset($result['message']) && (string) $result['message'] === 'OK') {
+            return true;
+        }
+        if (array_key_exists('status', $result) && (int) $result['status'] === 0) {
+            return true;
+        }
+        if (isset($result['confirm']) && (string) $result['confirm'] === 'ok') {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Ooredoo/DGV : facturation réussie alignée sur OoredooStatsService et tables officielles (ooredoo_daily_stats).
+     * - Avant 01/09/2025 : OOREDOO_PAYMENT_OFFLINE = facturation (result souvent null).
+     * - Après 01/09/2025 : OOREDOO_PAYMENT_OFFLINE_INIT + result.type=INVOICE + result.status=SUCCESS.
+     * - OOREDOO_PAYMENT_SUCCESS = nouvel abonnement réussi.
+     */
+    private function isOoredooSuccess(array $t): bool
+    {
+        $status = $t['status'] ?? '';
+        if ($status === 'OOREDOO_PAYMENT_OFFLINE') {
+            return true;
+        }
+        if ($status === 'OOREDOO_PAYMENT_SUCCESS' || $status === 'OOREDOO_CHARGE_DELIVERED' || $status === 'OOREDOO_RENEWED') {
+            return true;
+        }
+        if ($status === 'OOREDOO_PAYMENT_OFFLINE_INIT') {
+            $result = is_string($t['result'] ?? null) ? json_decode($t['result'], true) : ($t['result'] ?? []);
+            if (is_array($result) && isset($result['type']) && (string) $result['type'] === 'INVOICE' && isset($result['status']) && (string) $result['status'] === 'SUCCESS') {
+                return true;
+            }
+            return false;
+        }
+        $result = is_string($t['result'] ?? null) ? json_decode($t['result'], true) : ($t['result'] ?? []);
+        if (! is_array($result)) {
+            return false;
+        }
+        if (! empty($result['success']) || $this->getResultMnoDeliveryCode($result) === 'DELIVERED') {
+            return true;
+        }
+        if (isset($result['status']) && (string) $result['status'] === 'SUCCESS') {
+            return true;
+        }
+        return false;
+    }
+
+    // --------------- Anciennes méthodes (single-client, gardées pour diagnostic) ---------------
+
+    private function extractTimweFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $transactions = DB::table('transactions_history as th')
+            ->where('th.client_id', $clientId)
+            ->where(function ($q) {
+                $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
+                  ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+            })
+            ->whereBetween('th.created_at', [$startDate, $endDate])
+            ->whereNotNull('th.result')
+            ->get();
+
+        $txList = $transactions->map(fn ($t) => [
+            'created_at' => $t->created_at,
+            'status' => $t->status,
+            'result' => $t->result,
+        ])->all();
+
+        return $this->computeTimweFeaturesFromList($txList);
+    }
+
+    private function extractEklektikFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $eklektikTransactions = DB::table('transactions_history as th')
+            ->where('th.client_id', $clientId)
+            ->where(function ($q) {
+                $q->where('th.status', 'LIKE', 'ORANGE_%')
+                  ->orWhere('th.status', 'LIKE', 'TARAJI_%')
+                  ->orWhere('th.status', 'LIKE', 'TT_%')
+                  ->orWhere('th.status', 'LIKE', '%EKLEKTIK%')
+                  ->orWhere('th.status', 'LIKE', 'EKLECTIC_%')
+                  ->orWhere('th.status', 'LIKE', '%CLUB_PRIVILEGE%');
+            })
+            ->whereBetween('th.created_at', [$startDate, $endDate])
+            ->get();
+
+        $eklektikSubscriptions = DB::table('client_abonnement as ca')
+            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+            ->where('ca.client_id', $clientId)
+            ->whereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%eklektik%'")
+            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
+            ->count();
+
+        $txList = $eklektikTransactions->map(fn ($t) => ['created_at' => $t->created_at, 'status' => $t->status, 'result' => $t->result])->all();
+        $subList = array_fill(0, $eklektikSubscriptions, ['cpm_name' => 'eklektik', 'prix' => null, 'duration' => null, 'frequence' => null, 'creation' => null]);
+
+        return $this->computeEklektikFeaturesFromList($txList, $subList);
+    }
+
+    private function extractOoredooFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $ooredooTransactions = DB::table('transactions_history as th')
+            ->where('th.client_id', $clientId)
+            ->where(function ($q) {
+                $q->where('th.status', 'LIKE', '%OOREDOO%')->orWhere('th.status', 'LIKE', '%DGV%');
+            })
+            ->whereBetween('th.created_at', [$startDate, $endDate])
+            ->get();
+
+        $ooredooSubscriptions = DB::table('client_abonnement as ca')
+            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+            ->where('ca.client_id', $clientId)
+            ->where(function ($q) {
+                $q->whereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%ooredoo%'")
+                  ->orWhereRaw("LOWER(cpm.country_payments_methods_name) LIKE '%dgv%'");
+            })
+            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
+            ->count();
+
+        $txList = $ooredooTransactions->map(fn ($t) => ['created_at' => $t->created_at, 'status' => $t->status, 'result' => $t->result])->all();
+        $subList = array_fill(0, $ooredooSubscriptions, ['cpm_name' => 'ooredoo', 'prix' => null, 'duration' => null, 'frequence' => null, 'creation' => null]);
+
+        return $this->computeOoredooFeaturesFromList($txList, $subList);
+    }
+
+    private function extractCrossOperatorFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $allOperators = DB::table('client_abonnement as ca')
+            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+            ->leftJoin('abonnement_tarifs as at', 'ca.tarif_id', '=', 'at.abonnement_tarifs_id')
+            ->where('ca.client_id', $clientId)
+            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
+            ->select('cpm.country_payments_methods_name', 'at.abonnement_tarifs_prix as prix')
+            ->get();
+
+        $subList = $allOperators->map(fn ($o) => [
+            'cpm_name' => $o->country_payments_methods_name ?? '',
+            'prix' => $o->prix ?? null,
+            'duration' => null,
+            'frequence' => null,
+            'creation' => null,
+        ])->all();
+
+        return $this->computeCrossOperatorFeaturesFromList($subList);
+    }
+
+    private function extractOfferTypeFeatures(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $rows = DB::table('client_abonnement as ca')
+            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+            ->leftJoin('abonnement_tarifs as at', 'ca.tarif_id', '=', 'at.abonnement_tarifs_id')
+            ->where('ca.client_id', $clientId)
+            ->whereBetween('ca.client_abonnement_creation', [$startDate, $endDate])
+            ->select('cpm.country_payments_methods_name', 'at.abonnement_tarifs_duration as duration', 'at.abonnement_tarifs_frequence as frequence')
+            ->get();
+
+        $subList = $rows->map(fn ($r) => [
+            'cpm_name' => $r->country_payments_methods_name ?? '',
+            'prix' => null,
+            'duration' => $r->duration ?? null,
+            'frequence' => $r->frequence ?? null,
+            'creation' => null,
+        ])->all();
+
+        return $this->computeOfferTypeFeaturesFromList($subList);
+    }
+
+    private function extractClientPreferences(int $clientId, Carbon $startDate, Carbon $endDate): array
+    {
+        $transactions = DB::table('transactions_history')
+            ->where('client_id', $clientId)
+            ->where(function ($q) {
+                $q->where('status', 'LIKE', 'TIMWE_%')
+                  ->orWhere('status', 'LIKE', 'ORANGE_%')
+                  ->orWhere('status', 'LIKE', 'TARAJI_%')
+                  ->orWhere('status', 'LIKE', 'TT_%')
+                  ->orWhere('status', 'LIKE', '%EKLEKTIK%')
+                  ->orWhere('status', 'LIKE', 'EKLECTIC_%')
+                  ->orWhere('status', 'LIKE', '%OOREDOO%')
+                  ->orWhere('status', 'LIKE', '%DGV%');
+            })
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->get();
+
+        $txList = $transactions->map(fn ($t) => ['created_at' => $t->created_at, 'status' => $t->status, 'result' => $t->result])->all();
+
+        return $this->computeClientPreferencesFromList($txList);
+    }
+
     private function getDefaultMultiOperatorFeatures(int $clientId, Carbon $calculationDate): array
     {
         return [
             'client_id' => $clientId,
             'calculation_date' => $calculationDate->toDateString(),
-            
-            // Timwe features
             'timwe_success_rate' => 0,
             'timwe_total_attempts' => 0,
             'timwe_total_successes' => 0,
@@ -506,24 +974,18 @@ class MLMultiOperatorFeatureService
             'timwe_no_balance_rate' => 0,
             'timwe_not_delivered_rate' => 0,
             'timwe_has_activity' => 0,
-            
-            // Eklektik features  
             'eklektik_success_rate' => 0,
             'eklektik_total_attempts' => 0,
             'eklektik_total_subscriptions' => 0,
             'eklektik_avg_daily_successes' => 0,
             'eklektik_daily_consistency' => 0,
             'eklektik_has_activity' => 0,
-            
-            // Ooredoo features
             'ooredoo_success_rate' => 0,
             'ooredoo_total_attempts' => 0,
             'ooredoo_total_subscriptions' => 0,
             'ooredoo_avg_monthly_successes' => 0,
             'ooredoo_monthly_consistency' => 0,
             'ooredoo_has_activity' => 0,
-            
-            // Cross-operator features
             'total_operators_used' => 0,
             'operator_diversity_score' => 0,
             'price_preference' => 'unknown',
@@ -531,8 +993,6 @@ class MLMultiOperatorFeatureService
             'prefers_low_price' => 0,
             'prefers_high_price' => 0,
             'is_multi_operator_user' => 0,
-            
-            // Offer type features
             'daily_offers_count' => 0,
             'monthly_offers_count' => 0,
             'total_offers_count' => 0,
@@ -542,9 +1002,14 @@ class MLMultiOperatorFeatureService
             'prefers_daily_offers' => 0,
             'prefers_monthly_offers' => 0,
             'is_frequency_flexible' => 0,
-            
-            // Preference features
             'best_performing_operator' => 'none',
+            'subs_facture_count' => 0,
+            'subs_expire_count' => 0,
+            'subs_actif_count' => 0,
+            'has_facture_subscription' => 0,
+            'orange_subs_count' => 0,
+            'tt_subs_count' => 0,
+            'ooredoo_subs_count' => 0,
         ];
     }
 }

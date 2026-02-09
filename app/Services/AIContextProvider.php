@@ -95,9 +95,12 @@ class AIContextProvider
                 $recentTransactions = DB::table('transactions_history')
                     ->where('client_id', $clientId)
                     ->where(function($q) {
-                        $q->where('status', 'LIKE', '%TIMWE_%')
-                          ->orWhere('status', 'LIKE', '%EKLEKTIK_%')
-                          ->orWhere('status', 'LIKE', '%OOREDOO_%');
+                        $q->where('status', 'LIKE', 'TIMWE_%')
+                          ->orWhere('status', 'LIKE', 'ORANGE_%')
+                          ->orWhere('status', 'LIKE', 'TARAJI_%')
+                          ->orWhere('status', 'LIKE', 'TT_%')
+                          ->orWhere('status', 'LIKE', '%EKLEKTIK%')
+                          ->orWhere('status', 'LIKE', '%OOREDOO%');
                     })
                     ->orderBy('created_at', 'desc')
                     ->limit(10)

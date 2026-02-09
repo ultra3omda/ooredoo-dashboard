@@ -18,6 +18,8 @@ Ce document décrit ce qui est déjà en place et comment enchaîner **extractio
 
 L’extraction multi-agrégateur lit **transactions_history** (tous statuts pertinents) et **client_abonnement** ; elle ne s’appuie pas sur les tables d’agrégation diagnostic pour les features.
 
+**Prix et classification des abonnements** : la table **abonnement_tarifs** est liée à **client_abonnement** via `client_abonnement.tarif_id` = `abonnement_tarifs.abonnement_tarifs_id`. Elle fournit le **prix** (`abonnement_tarifs_prix`) et la **durée/fréquence** (`abonnement_tarifs_duration`, `abonnement_tarifs_frequence` en jours). L’extraction ML s’en sert pour : préférence prix (bas/élevé), nombre de prix distincts, et classification **quotidien vs mensuel**. En pratique, **seul Timwe est mensuel** (duration 28–31 ou nom "timwe") ; Eklektik (Orange, TT, Taraji) et offres avec duration 1 = quotidien.
+
 **Agrégateurs et sources (modèle pour tous types d’abonnement) :**
 
 | Agrégateur | Offres | Facturation | Source d’extraction |
@@ -41,8 +43,35 @@ Le **même modèle ML** utilise **ml_client_features** avec colonnes par agréga
 - Features par agrégateur : Timwe (taux succès, tentatives, no_balance, etc.), Eklektik (taux succès, consistance quotidienne), Ooredoo/DGV (taux succès, consistance mensuelle), plus cross-opérateur (meilleur opérateur, préférence quotidien/mensuel, diversité).  
 - Les résultats sont **upsertés** dans **ml_client_features** (clé `client_id` + `calculation_date`). Les colonnes multi-opérateur (timwe_*, eklektik_*, ooredoo_*) sont remplies pour chaque client.
 
-**Période d’analyse** (A et B) : pour une `calculation_date`, on regarde les **6 mois précédents**.  
-**Features globales** (option A ou B) : payment_success_rate, consecutive_failures, client_segment, scores (reliability, engagement, lifetime_value), features temporelles (v2), etc.
+**Période d’analyse** (A et B) : pour une `calculation_date`, on regarde les **6 mois précédents** (180 jours pour l’extraction batch).
+
+#### Qui remplit quelles colonnes (éviter les confusions NULL / unknown)
+
+La table **ml_client_features** a beaucoup de colonnes ; elles ne sont pas toutes remplies par le même job :
+
+| Rempli par | Commande | Colonnes concernées |
+|------------|----------|----------------------|
+| **Option B – Multi-opérateur** | `ml:extract-multi`, `ml:reset-and-extract` | `client_id`, `calculation_date`, **timwe_***, **eklektik_***, **ooredoo_***, `total_operators_used`, `operator_diversity_score`, `price_preference`, `unique_price_points`, `prefers_low_price`, `prefers_high_price`, `is_multi_operator_user`, `daily_offers_count`, `monthly_offers_count`, `total_offers_count`, `daily_engagement_rate`, `monthly_engagement_rate`, `preferred_frequency`, `prefers_daily_offers`, `prefers_monthly_offers`, `is_frequency_flexible`, `best_performing_operator`, `created_at`, `updated_at`. |
+| **Option A – Ancien pipeline** | `ml:extract-features` | `payment_success_rate`, `consecutive_failures`, `client_segment`, `churn_probability`, `engagement_score`, `lifetime_value_score`, `morning_success_rate`, `afternoon_success_rate`, `evening_success_rate`, `has_recent_failures`, `payment_reliability_score`, etc. |
+
+Si vous n’exécutez que **Option B** (multi-opérateur), il est **normal** que les colonnes de l’Option A restent **NULL** ou à 0, et que `client_segment` soit **unknown** (ou NULL). Les valeurs **unknown** pour `price_preference` et `preferred_frequency` sont le défaut quand le client n’a aucun abonnement dans la fenêtre.
+
+**Optionnel – remplir aussi segment et scores** : pour avoir `client_segment`, `churn_probability`, `engagement_score`, `morning/afternoon/evening_success_rate`, etc., il faut lancer l’extraction **Option A** (`ml:extract-features`) pour les mêmes dates. Elle cible principalement les clients Timwe ; les lignes sont mises à jour par upsert (même clé `client_id` + `calculation_date`), donc les colonnes multi-opérateur déjà remplies par Option B sont conservées.
+
+#### Commandes utiles
+
+| Action | Commande |
+|--------|----------|
+| Extraire sans ré-insérer les dates déjà traitées | `php artisan ml:extract-multi --start-date=YYYY-MM-DD --end-date=YYYY-MM-DD` |
+| Forcer le recalcul d’une date | `php artisan ml:extract-multi --start-date=YYYY-MM-DD --end-date=YYYY-MM-DD --force` |
+| Vider la table puis ré-extraire une période | `php artisan ml:reset-and-extract --start-date=YYYY-MM-DD --end-date=YYYY-MM-DD` |
+| Vérifier le contenu (lignes, activité, timestamps) | `php artisan ml:verify-features` ou `php artisan ml:verify-features --date=YYYY-MM-DD` |
+| Diagnostic détaillé pour un client | `php artisan ml:diagnose-features --client-id=XXX --date=YYYY-MM-DD` |
+
+**Référence détaillée** : pour savoir colonne par colonne qui remplit quoi et si la table est correctement alimentée, voir [ML_CLIENT_FEATURES_COLUMNS_SOURCES.md](ML_CLIENT_FEATURES_COLUMNS_SOURCES.md).
+
+**Si les features multi-opérateur sont à 0 / NULL** : les lignes ont souvent été créées lors d’une ancienne exécution où le code levait des erreurs (ex. colonne manquante), donc chaque client a reçu des valeurs par défaut (0). Il faut **ré-exécuter l’extraction avec `--force`** pour la date concernée afin d’écraser et recalculer. Exemple :  
+`php artisan ml:extract-multi --start-date=2026-01-01 --end-date=2026-01-01 --force`
 
 ### 1.3 Apprentissage (entraînement)
 
@@ -54,7 +83,7 @@ Le **même modèle ML** utilise **ml_client_features** avec colonnes par agréga
 
 Les deux s’attendent à avoir **suffisamment de lignes** dans `ml_client_features` (ordre de grandeur : au moins 50–100, mieux plusieurs milliers).
 
-### 1.4 Agent IA
+### 1.5 Agent IA
 
 - **Contexte** : `AIContextProvider` lit **ml_client_features**, **ml_predictions**, **ml_recommendations**, etc.
 - **Contenu injecté dans le prompt** (selon la question) :

@@ -268,6 +268,11 @@ class DataControllerOptimized extends Controller
      */
     private function validateOperatorAccess($user, string $requestedOperator): string
     {
+        // Sécurité : vérifier que l'utilisateur existe
+        if (!$user) {
+            abort(401, 'Unauthenticated');
+        }
+        
         // Si c'est "ALL", autoriser uniquement pour SuperAdmin
         if ($requestedOperator === 'ALL' || $requestedOperator === '' || $requestedOperator === null) {
             if ($user->isSuperAdmin()) {

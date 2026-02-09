@@ -5577,7 +5577,7 @@
         const endDateObj = new Date(endDate);
         const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24));
         
-        // Build API URL (route /api/dashboard/data - api.php avec session via EnsureFrontendRequestsAreStateful)
+        // Build API URL (route /api/dashboard/data - web.php avec auth middleware)
         let apiUrl = '/api/dashboard/data';
         const params = new URLSearchParams();
         

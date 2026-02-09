@@ -1983,9 +1983,52 @@ class DashboardService
     private function calculateTimweBillingRate(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
     {
         try {
-            // Essayer d'utiliser la table de cache d'abord
-            $endDate = $endExclusive->copy()->subDay(); // endExclusive -1 jour pour avoir la vraie fin
-            $stats = TimweDailyStat::getStatsForPeriod($startBound, $endDate);
+            // PRIORITÉ : Utiliser les tables de diagnostic Timwe (mêmes données que la page Diagnostic)
+            $startDate = $startBound->format('Y-m-d');
+            $endDate = $endExclusive->copy()->subDay()->format('Y-m-d');
+            
+            // Vérifier si les données existent dans timwe_diagnostic_daily_summary
+            $hasDiagnosticData = DB::table('timwe_diagnostic_daily_summary')
+                ->whereBetween('stat_date', [$startDate, $endDate])
+                ->exists();
+            
+            if ($hasDiagnosticData) {
+                // Utiliser les données de diagnostic (ALIGNEMENT AVEC LE DIAGNOSTIC TIMWE)
+                $summary = DB::table('timwe_diagnostic_daily_summary')
+                    ->whereBetween('stat_date', [$startDate, $endDate])
+                    ->selectRaw('
+                        COALESCE(SUM(total_transactions), 0) as total_transactions,
+                        COALESCE(SUM(total_billed), 0) as total_billed,
+                        COALESCE(SUM(total_revenue_tnd), 0) as total_revenue_tnd
+                    ')
+                    ->first();
+                
+                $uniquePhones = DB::table('timwe_diagnostic_daily_phone')
+                    ->whereBetween('stat_date', [$startDate, $endDate])
+                    ->selectRaw('COUNT(DISTINCT client_telephone) as count')
+                    ->value('count');
+                
+                $totalAttempts = (int) ($summary->total_transactions ?? 0);
+                $totalBilled = (int) ($summary->total_billed ?? 0);
+                $totalRevenue = (float) ($summary->total_revenue_tnd ?? 0);
+                
+                // BILLING RATE GLOBAL = (total_billed / total_attempts) × 100
+                // EXACTEMENT la même formule que le Diagnostic Timwe (ligne 196 de TimweDiagnosticApiService)
+                $billingRate = $totalAttempts > 0 ? round(($totalBilled / $totalAttempts) * 100, 2) : 0;
+                
+                return [
+                    'rate' => $billingRate,
+                    'total_clients' => $uniquePhones, // Numéros uniques
+                    'billed_clients' => $totalBilled, // Total facturé
+                    'total_billings' => $totalBilled, // Même valeur
+                    'total_revenue' => $totalRevenue, // Revenu TND
+                    'total_attempts' => $totalAttempts, // Tentatives totales
+                    'source' => 'diagnostic' // Indicateur de la source
+                ];
+            }
+            
+            // Fallback : Essayer timwe_daily_stats (ancien cache)
+            $stats = TimweDailyStat::getStatsForPeriod($startBound, $endExclusive->copy()->subDay());
 
             if ($stats->isNotEmpty()) {
                 // Utiliser les données de la table de cache
@@ -1994,8 +2037,9 @@ class DashboardService
                 return [
                     'rate' => $lastDayStat->billing_rate,
                     'total_clients' => $lastDayStat->total_clients,
-                    'billed_clients' => 0, // Non utilisé dans l'interface
-                    'total_billings' => $stats->sum('total_billings')
+                    'billed_clients' => 0,
+                    'total_billings' => $stats->sum('total_billings'),
+                    'source' => 'timwe_daily_stats'
                 ];
             }
 
