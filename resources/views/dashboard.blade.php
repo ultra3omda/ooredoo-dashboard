@@ -6694,16 +6694,24 @@
             change: comparisonTotals ? calculateChange(totals.simchurnRevenue, comparisonTotals.simchurnRevenue) : 0
           }, ' TND');
           
+          // Alignement Diagnostic : Revenu TTC et CA BigDeal depuis le même total_billed que NOMBRE FACTURATION
+          const revenueFromDiagnostic = kpis?.timwe_revenue_ttc_tnd;
+          const caBigdealFromDiagnostic = kpis?.timwe_ca_bigdeal_ht;
+          const revenueTndCurrent = revenueFromDiagnostic != null ? revenueFromDiagnostic.current : totals.revenueTnd;
+          const revenueTndPrevious = revenueFromDiagnostic != null ? revenueFromDiagnostic.previous : (comparisonTotals?.revenueTnd ?? 0);
+          const caBigdealCurrent = caBigdealFromDiagnostic != null ? caBigdealFromDiagnostic.current : totals.caBigdealHt;
+          const caBigdealPrevious = caBigdealFromDiagnostic != null ? caBigdealFromDiagnostic.previous : (comparisonTotals?.caBigdealHt ?? 0);
+          
           updateKPI('timwe-revenue-tnd', {
-            current: formatNumber(totals.revenueTnd, 3),
-            previous: comparisonTotals ? formatNumber(comparisonTotals.revenueTnd, 3) : 0,
-            change: comparisonTotals ? calculateChange(totals.revenueTnd, comparisonTotals.revenueTnd) : 0
+            current: formatNumber(revenueTndCurrent, 3),
+            previous: formatNumber(revenueTndPrevious, 3),
+            change: comparisonTotals ? calculateChange(revenueTndCurrent, revenueTndPrevious) : 0
           }, ' TND');
           
           updateKPI('timwe-revenue-usd', {
-            current: formatNumber(totals.caBigdealHt, 3),
-            previous: comparisonTotals ? formatNumber(comparisonTotals.caBigdealHt, 3) : 0,
-            change: comparisonTotals ? calculateChange(totals.caBigdealHt, comparisonTotals.caBigdealHt) : 0
+            current: formatNumber(caBigdealCurrent, 3),
+            previous: formatNumber(caBigdealPrevious, 3),
+            change: comparisonTotals ? calculateChange(caBigdealCurrent, caBigdealPrevious) : 0
           }, ' TND');
           
           // Calculer le nombre de jours de la période pour normaliser l'ARPU
@@ -6736,17 +6744,16 @@
             change: netGrowthRateComparison !== null ? calculateChange(netGrowthRate, netGrowthRateComparison) : 0
           }, '%');
           
-          // ARPU mensuel normalisé (30 jours)
-          // Formule : (Revenu Total / Active Subs) * (30 / Nombre de jours)
+          // ARPU et Revenu moyen/facturation basés sur le même revenu que Revenu TTC (aligné diagnostic)
           const arpuValue = totals.activeSubsEndOfPeriod > 0 
-            ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays)
+            ? (revenueTndCurrent / totals.activeSubsEndOfPeriod) * (30 / periodDays)
             : 0;
           const arpuFormatted = formatNumber(arpuValue, 3);
           
           updateKPI('timwe-arpu', { current: arpuFormatted, previous: 0, change: 0 }, ' TND');
           
           const avgBillingValue = kpis?.totalTimweBillings?.current > 0 
-            ? totals.revenueTnd / kpis.totalTimweBillings.current
+            ? revenueTndCurrent / kpis.totalTimweBillings.current
             : 0;
           const avgBillingFormatted = formatNumber(avgBillingValue, 3);
           updateKPI('timwe-avg-billing-revenue', { current: avgBillingFormatted, previous: 0, change: 0 }, ' TND');

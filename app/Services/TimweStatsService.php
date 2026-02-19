@@ -150,7 +150,6 @@ class TimweStatsService
                         $phone = 'client_id:' . $transaction->client_id;
                     }
                     
-                    // Compter uniquement les numéros uniques (comme dans les CSV)
                     if (!isset($billedPhones[$phone])) {
                         $billedPhones[$phone] = true;
                         $billings++;
@@ -158,35 +157,12 @@ class TimweStatsService
                 }
             }
 
+            // Revenu TTC (TND) = Nbfacturation × 3 DT (prix abonnement) — formule explicite
+            $revenueTnd = $billings * 3.0;
+
             // 8. Taux de facturation
             $billingRate = $totalClients > 0 ? round(($billings / $totalClients) * 100, 2) : 0;
 
-            // 9. Revenus (calculés depuis transactions_history avec pricepointId = 63980, mnoDeliveryCode = DELIVERED et totalCharged > 0)
-            // totalCharged est en millimes, donc on divise par 1000 pour obtenir des TND
-            // CORRECTION: Utiliser la même logique que pour les facturations (même filtres)
-            // Pour les revenus, on somme TOUS les totalCharged même si c'est le même client plusieurs fois
-            $revenueTnd = 0;
-            foreach ($transactions as $transaction) {
-                if ($transaction->result) {
-                    $result = json_decode($transaction->result, true);
-                    if (!is_array($result)) {
-                        continue;
-                    }
-                    
-                    $ppid = $result['pricepointId'] ?? null;
-                    $delivery = $result['mnoDeliveryCode'] ?? null;
-                    $totalCharged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
-                    
-                    // Même logique que le script : pricepointId = billingPpid, mnoDeliveryCode = DELIVERED, totalCharged > 0
-                    if ((string)$ppid !== (string)$billingPpid || $delivery !== 'DELIVERED' || $totalCharged <= 0) {
-                        continue;
-                    }
-                    
-                    // Convertir millimes en TND (diviser par 1000)
-                    $revenueTnd += floatval($totalCharged) / 1000;
-                }
-            }
-            
             $revenueUsd = $revenueTnd * 0.343; // Conversion approximative: 1 TND = 0.343 USD
 
             // 10. Détail par offre (désactivé pour l'instant - table offre n'existe pas)

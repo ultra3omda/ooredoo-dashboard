@@ -628,6 +628,24 @@ class DashboardService
                 "previous" => $totalTimweBillingsComparison,
                 "change" => $this->calculatePercentageChange($totalTimweBillings, $totalTimweBillingsComparison)
             ],
+            // Revenu TTC et CA BigDeal alignés sur le diagnostic (même source que NOMBRE FACTURATION)
+            "timwe_revenue_ttc_tnd" => ($billingRateTimweData['source'] ?? null) === 'diagnostic'
+                ? [
+                    "current" => $totalTimweBillings * 3,
+                    "previous" => $totalTimweBillingsComparison * 3,
+                    "change" => $this->calculatePercentageChange($totalTimweBillings * 3, $totalTimweBillingsComparison * 3)
+                ]
+                : null,
+            "timwe_ca_bigdeal_ht" => ($billingRateTimweData['source'] ?? null) === 'diagnostic'
+                ? [
+                    "current" => $this->timweCaBigdealHtFromBillings($totalTimweBillings),
+                    "previous" => $this->timweCaBigdealHtFromBillings($totalTimweBillingsComparison),
+                    "change" => $this->calculatePercentageChange(
+                        $this->timweCaBigdealHtFromBillings($totalTimweBillings),
+                        $this->timweCaBigdealHtFromBillings($totalTimweBillingsComparison)
+                    )
+                ]
+                : null,
             "billingRateOoredoo" => [
                 "current" => $billingRateOoredoo,
                 "previous" => $billingRateOoredooComparison,
@@ -1980,6 +1998,20 @@ class DashboardService
      * 
      * @return array ['rate' => float, 'total_clients' => int, 'billed_clients' => int, 'total_billings' => int]
      */
+    /**
+     * CA BigDeal HT (TND) = Nbfacturation × prix selon paliers du contrat.
+     */
+    private function timweCaBigdealHtFromBillings(int $nbFacturation): float
+    {
+        if ($nbFacturation < 100000) {
+            return $nbFacturation * 1.2;
+        }
+        if ($nbFacturation < 250000) {
+            return $nbFacturation * 1.0;
+        }
+        return 250000.0;
+    }
+
     private function calculateTimweBillingRate(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
     {
         try {
@@ -2555,13 +2587,14 @@ class DashboardService
                                 'active_sub' => $stat->active_subscriptions,
                                 'nb_facturation' => $stat->total_billings,
                                 'taux_facturation' => $stat->billing_rate,
-                                'revenu_ttc_local' => $stat->revenue_tnd,
-                                'revenu_ttc_usd' => $stat->revenue_usd,
-                                'revenu_ttc_tnd' => $stat->revenue_tnd
+                                'revenu_ttc_local' => $stat->total_billings * 3,
+                                'revenu_ttc_usd' => ($stat->total_billings * 3) * 0.343,
+                                'revenu_ttc_tnd' => $stat->total_billings * 3
                             ];
                         }
                     } else {
-                        // Pas de détail par offre, créer une ligne générale
+                        // Pas de détail par offre, créer une ligne générale — Revenu TTC = Nbfacturation × 3 DT
+                        $revenuTnd = $stat->total_billings * 3;
                         $dailyStats[] = [
                             'dimension' => $stat->stat_date->format('Y-m-d'),
                             'offre' => 'Timwe (Total)',
@@ -2572,9 +2605,9 @@ class DashboardService
                             'active_sub' => $stat->active_subscriptions,
                             'nb_facturation' => $stat->total_billings,
                             'taux_facturation' => $stat->billing_rate,
-                            'revenu_ttc_local' => $stat->revenue_tnd,
-                            'revenu_ttc_usd' => $stat->revenue_usd,
-                            'revenu_ttc_tnd' => $stat->revenue_tnd
+                            'revenu_ttc_local' => $revenuTnd,
+                            'revenu_ttc_usd' => $revenuTnd * 0.343,
+                            'revenu_ttc_tnd' => $revenuTnd
                         ];
                     }
                 }
@@ -2771,15 +2804,13 @@ class DashboardService
                         $phone = 'client_id:' . $billing->client_id;
                     }
                     
-                    // Compter uniquement les numéros uniques (comme dans les CSV)
+                    // Une seule facturation et un seul revenu par numéro unique par jour (aligné Diagnostic : 1836×3 = 5508 TND)
                     if (!isset($billedPhonesByDay[$date][$phone])) {
                         $billedPhonesByDay[$date][$phone] = true;
                         $billingsByDay[$date]++;
+                        // Revenu = 1 fois par client facturé (totalCharged en millimes → TND)
+                        $revenueByDay[$date] += $totalCharged / 1000;
                     }
-                    
-                    // Le montant est toujours trouvé car totalCharged > 0 est garanti
-                    // On somme tous les totalCharged même si c'est le même client (revenu total)
-                    $revenueByDay[$date] += $totalCharged;
                 }
                 
                 // Récupérer le count avant de libérer la mémoire
@@ -2874,9 +2905,8 @@ class DashboardService
                 // Taux de facturation
                 $tauxFacturation = $activeSubs > 0 ? round(($nbFacturation / $activeSubs) * 100, 2) : 0;
                 
-                // Revenu TTC réel depuis les transactions (en TND)
-                $revenuTTC = $revenueByDay[$dateStr] ?? 0;
-                // Conversion USD (taux approximatif 1 USD = 2.915 TND, donc 1 TND = 0.343 USD)
+                // Revenu TTC (TND) = Nbfacturation × 3 DT (prix abonnement) — formule explicite
+                $revenuTTC = $nbFacturation * 3;
                 $revenuTTCUSD = $revenuTTC * 0.343;
                 
                 $revSimchurn = $simchurnRevenueByDay[$dateStr] ?? 0;
@@ -3497,9 +3527,7 @@ class DashboardService
             $grouped[$monthKey]['total_nb_facturation'] += floatval($stat['nb_facturation'] ?? 0);
             $grouped[$monthKey]['sum_taux_facturation'] += floatval($stat['taux_facturation'] ?? 0);
             
-            // Sommer le revenu TTC qui est déjà dans les stats quotidiennes (en TND)
-            $grouped[$monthKey]['total_revenu_ttc_tnd'] += floatval($stat['revenu_ttc_tnd'] ?? 0);
-            
+            // Revenu TTC sera recalculé en fin de mois par formule (total_nb_facturation * 3)
             $grouped[$monthKey]['days_count']++;
             
             // Pour active_sub, on prend le dernier jour du mois
@@ -3513,20 +3541,19 @@ class DashboardService
                 $month['total_taux_facturation'] = $month['sum_taux_facturation'] / $month['days_count'];
             }
             
-            // 3. Calculer le CA BigDeal HT selon les règles du contrat
+            // Revenu TTC (TND) = Nbfacturation × 3 DT (formule explicite)
+            $month['total_revenu_ttc_tnd'] = $month['total_nb_facturation'] * 3;
+
+            // CA BigDeal HT = Nbfacturation × prix selon paliers du contrat
             $nbFacturation = $month['total_nb_facturation'];
-            
             if ($nbFacturation < 100000) {
-                // Moins de 100K : 1.2 DT HT par facturation
                 $month['ca_bigdeal_ht'] = $nbFacturation * 1.2;
             } elseif ($nbFacturation >= 100000 && $nbFacturation < 250000) {
-                // Entre 100K et 250K : 1.0 DT HT par facturation
                 $month['ca_bigdeal_ht'] = $nbFacturation * 1.0;
             } else {
-                // 250K et plus : plafonné à 250K DT HT
                 $month['ca_bigdeal_ht'] = 250000;
             }
-            
+
             // Formater le label avec le nombre de jours
             $month['display_label'] = $month['month_label'] . ' (' . $month['days_count'] . ')';
             
