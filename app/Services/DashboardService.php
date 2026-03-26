@@ -26,11 +26,24 @@ class DashboardService
             return (int)$operator;
         }
         
-        $operatorId = DB::table('country_payments_methods')
-            ->whereRaw("TRIM(country_payments_methods_name) = ?", [trim($operator)])
-            ->value('country_payments_methods_id');
-        
-        return $operatorId ? (int)$operatorId : null;
+        // Cache the operator ID to avoid repeated DB lookups
+        return Cache::remember('op_id:' . md5($operator), 3600, function() use ($operator) {
+            // Recherche exacte d'abord
+            $operatorId = DB::table('country_payments_methods')
+                ->whereRaw("TRIM(country_payments_methods_name) = ?", [trim($operator)])
+                ->value('country_payments_methods_id');
+            
+            if ($operatorId) {
+                return (int)$operatorId;
+            }
+            
+            // Recherche partielle (ex: "Timwe" → "S'abonner via Timwe")
+            $operatorId = DB::table('country_payments_methods')
+                ->whereRaw("TRIM(country_payments_methods_name) LIKE ?", ['%' . trim($operator) . '%'])
+                ->value('country_payments_methods_id');
+            
+            return $operatorId ? (int)$operatorId : null;
+        });
     }
     
     /**
@@ -48,6 +61,21 @@ class DashboardService
                 $query->whereRaw("TRIM({$tableAlias}.country_payments_methods_name) = ?", [trim($selectedOperator)]);
             }
         }
+    }
+    
+    /**
+     * Applique le JOIN avec country_payments_methods ET le filtre opérateur SEULEMENT quand nécessaire.
+     * Pour l'opérateur ALL, on évite le JOIN coûteux sur 350K+ lignes.
+     * Retourne true si le JOIN a été ajouté, false sinon.
+     */
+    private function applyOperatorJoinAndFilter($query, string $selectedOperator, string $joinTable = 'ca', string $tableAlias = 'cpm'): bool
+    {
+        if ($selectedOperator !== 'ALL' && !empty($selectedOperator)) {
+            $query->join("country_payments_methods as {$tableAlias}", "{$joinTable}.country_payments_methods_id", '=', "{$tableAlias}.country_payments_methods_id");
+            $this->applyOperatorFilter($query, $selectedOperator, $tableAlias);
+            return true;
+        }
+        return false;
     }
     
     /**
@@ -121,43 +149,36 @@ class DashboardService
         $compEndExclusive = Carbon::parse($comparisonEndDate)->addDay()->startOfDay();
         
         // 1. KPIs principaux avec requêtes optimisées
+        Log::info("STEP 1/5: KPIs...");
         $kpis = $this->getKPIsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+        Log::info("STEP 1/5: KPIs OK (" . round((microtime(true) - $startTime) * 1000) . "ms)");
         
         // 2. Marchands avec correction du problème N+1
+        Log::info("STEP 2/5: Marchands...");
         $merchants = $this->getMerchantsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+        Log::info("STEP 2/5: Marchands OK (" . round((microtime(true) - $startTime) * 1000) . "ms)");
         
         // 3. Données de transactions agrégées
+        Log::info("STEP 3/5: Transactions...");
         $transactions = $this->getTransactionsData($startBound, $endExclusive, $selectedOperator);
+        Log::info("STEP 3/5: Transactions OK (" . round((microtime(true) - $startTime) * 1000) . "ms)");
         
-        // 4. Données d'abonnements
+        // 4. Données d'abonnements (le plus lourd)
+        Log::info("STEP 4/5: Abonnements...");
         $subscriptions = $this->getSubscriptionsData($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive);
+        Log::info("STEP 4/5: Abonnements OK (" . round((microtime(true) - $startTime) * 1000) . "ms)");
         
         // 5. Données Ooredoo/DGV
+        Log::info("STEP 5/5: Ooredoo stats...");
         $ooredooStats = [
             'daily_statistics' => $this->getOoredooDailyStatistics($startBound, $endExclusive),
             'daily_statistics_comparison' => $this->getOoredooDailyStatistics($compStartBound, $compEndExclusive)
         ];
-        
-        // Grouper les statistiques Ooredoo par mois avec détails quotidiens
         $ooredooStats['ooredoo_monthly_stats'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics']);
         $ooredooStats['ooredoo_monthly_stats_comparison'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics_comparison']);
         
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-        
-        // Log pour déboguer les KPIs Timwe/Ooredoo et Analyses Avancées
-        Log::debug("getStandardDashboardData - KPIs retournés", [
-            'billingRateTimwe' => $kpis['billingRateTimwe'] ?? 'missing',
-            'totalTimweClients' => $kpis['totalTimweClients'] ?? 'missing',
-            'totalTimweBillings' => $kpis['totalTimweBillings'] ?? 'missing',
-            'billingRateOoredoo' => $kpis['billingRateOoredoo'] ?? 'missing',
-            'totalOoredooClients' => $kpis['totalOoredooClients'] ?? 'missing',
-            'totalOoreodooBillings' => $kpis['totalOoreodooBillings'] ?? 'missing',
-            'has_activations_by_channel' => isset($subscriptions['activations_by_channel']),
-            'has_plan_distribution' => isset($subscriptions['plan_distribution']),
-            'has_renewal_rate' => isset($subscriptions['renewal_rate']),
-            'has_average_lifespan' => isset($subscriptions['average_lifespan']),
-            'cohorts_count' => isset($subscriptions['cohorts']) ? count($subscriptions['cohorts']) : 0
-        ]);
+        Log::info("STEP 5/5: Ooredoo OK - TOTAL: {$executionTime}ms");
         
         return [
             "periods" => [
@@ -184,21 +205,17 @@ class DashboardService
     private function getKPIsOptimized(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
     {
         // Requête unifiée pour tous les KPIs d'abonnements
+        // Le JOIN avec cpm est SKIP pour opérateur ALL (économise ~50% du temps)
         $subscriptionQuery = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->select([
-                // Période principale
                 DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$startBound}' AND ca.client_abonnement_creation < '{$endExclusive}' THEN 1 END) as activated_current"),
                 DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$startBound}' AND ca.client_abonnement_creation < '{$endExclusive}' AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= '{$endExclusive}') THEN 1 END) as active_current"),
                 DB::raw("COUNT(CASE WHEN ca.client_abonnement_expiration >= '{$startBound}' AND ca.client_abonnement_expiration < '{$endExclusive}' THEN 1 END) as deactivated_current"),
-                
-                // Période de comparaison
                 DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$compStartBound}' AND ca.client_abonnement_creation < '{$compEndExclusive}' THEN 1 END) as activated_comparison"),
                 DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$compStartBound}' AND ca.client_abonnement_creation < '{$compEndExclusive}' AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= '{$compEndExclusive}') THEN 1 END) as active_comparison"),
                 DB::raw("COUNT(CASE WHEN ca.client_abonnement_expiration >= '{$compStartBound}' AND ca.client_abonnement_expiration < '{$compEndExclusive}' THEN 1 END) as deactivated_comparison")
             ]);
-        
-        $this->applyOperatorFilter($subscriptionQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($subscriptionQuery, $selectedOperator, 'ca');
         
         Log::info("Requête KPIs - Opérateur: {$selectedOperator}");
         
@@ -206,61 +223,55 @@ class DashboardService
         
         Log::info("KPIs abonnements - Activés: {$subMetrics->activated_current}, Actifs: {$subMetrics->active_current}, Désactivés: {$subMetrics->deactivated_current}");
         
-        // Requête unifiée pour les transactions
+        // Requête unifiée pour les transactions - JOIN conditionnel
         $transactionQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->select([
                 DB::raw("COUNT(CASE WHEN h.time >= '{$startBound}' AND h.time < '{$endExclusive}' THEN 1 END) as transactions_current"),
                 DB::raw("COUNT(CASE WHEN h.time >= '{$compStartBound}' AND h.time < '{$compEndExclusive}' THEN 1 END) as transactions_comparison"),
                 DB::raw("COUNT(DISTINCT CASE WHEN h.time >= '{$startBound}' AND h.time < '{$endExclusive}' THEN ca.client_id END) as users_current"),
                 DB::raw("COUNT(DISTINCT CASE WHEN h.time >= '{$compStartBound}' AND h.time < '{$compEndExclusive}' THEN ca.client_id END) as users_comparison")
             ]);
-        
-        $this->applyOperatorFilter($transactionQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($transactionQuery, $selectedOperator, 'ca');
         
         $txMetrics = $transactionQuery->first();
         
-        // Transactions de cohorte (transactions effectuées par les abonnements créés dans la période)
+        // Transactions de cohorte - JOIN conditionnel
         $cohortTransactionsQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->where('h.time', '>=', $startBound)
             ->where('h.time', '<', $endExclusive)
             ->where('ca.client_abonnement_creation', '>=', $startBound)
             ->where('ca.client_abonnement_creation', '<', $endExclusive);
-        $this->applyOperatorFilter($cohortTransactionsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($cohortTransactionsQuery, $selectedOperator, 'ca');
         $cohortTransactions = $cohortTransactionsQuery->count();
         
         $cohortTransactionsComparisonQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->where('h.time', '>=', $compStartBound)
             ->where('h.time', '<', $compEndExclusive)
             ->where('ca.client_abonnement_creation', '>=', $compStartBound)
             ->where('ca.client_abonnement_creation', '<', $compEndExclusive);
-        $this->applyOperatorFilter($cohortTransactionsComparisonQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($cohortTransactionsComparisonQuery, $selectedOperator, 'ca');
         $cohortTransactionsComparison = $cohortTransactionsComparisonQuery->count();
         
-        // Utilisateurs transactants de cohorte
+        // Utilisateurs transactants de cohorte - JOIN conditionnel
         $cohortTransactingUsersQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->where('h.time', '>=', $startBound)
             ->where('h.time', '<', $endExclusive)
             ->where('ca.client_abonnement_creation', '>=', $startBound)
             ->where('ca.client_abonnement_creation', '<', $endExclusive);
-        $this->applyOperatorFilter($cohortTransactingUsersQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($cohortTransactingUsersQuery, $selectedOperator, 'ca');
         $cohortTransactingUsers = $cohortTransactingUsersQuery->distinct('ca.client_id')->count('ca.client_id');
         
         $cohortTransactingUsersComparisonQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->where('h.time', '>=', $compStartBound)
             ->where('h.time', '<', $compEndExclusive)
             ->where('ca.client_abonnement_creation', '>=', $compStartBound)
             ->where('ca.client_abonnement_creation', '<', $compEndExclusive);
-        $this->applyOperatorFilter($cohortTransactingUsersComparisonQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($cohortTransactingUsersComparisonQuery, $selectedOperator, 'ca');
         $cohortTransactingUsersComparison = $cohortTransactingUsersComparisonQuery->distinct('ca.client_id')->count('ca.client_id');
         
         // Calculs des taux
@@ -273,19 +284,17 @@ class DashboardService
         // Calcul du churn rate (abonnements perdus dans la période / abonnements activés)
         // Abonnements perdus = activés ET désactivés dans la période
         $lostSubscriptionsQuery = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->whereBetween('ca.client_abonnement_creation', [$startBound->toDateString(), $endExclusive->copy()->subDay()->toDateString()])
             ->whereNotNull('ca.client_abonnement_expiration')
             ->whereBetween('ca.client_abonnement_expiration', [$startBound->toDateString(), $endExclusive->copy()->subDay()->toDateString()]);
-        $this->applyOperatorFilter($lostSubscriptionsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($lostSubscriptionsQuery, $selectedOperator, 'ca');
         $lostSubscriptions = $lostSubscriptionsQuery->count();
         
         $lostSubscriptionsComparisonQuery = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->whereBetween('ca.client_abonnement_creation', [$compStartBound->toDateString(), $compEndExclusive->copy()->subDay()->toDateString()])
             ->whereNotNull('ca.client_abonnement_expiration')
             ->whereBetween('ca.client_abonnement_expiration', [$compStartBound->toDateString(), $compEndExclusive->copy()->subDay()->toDateString()]);
-        $this->applyOperatorFilter($lostSubscriptionsComparisonQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($lostSubscriptionsComparisonQuery, $selectedOperator, 'ca');
         $lostSubscriptionsComparison = $lostSubscriptionsComparisonQuery->count();
         
         $churnRate = $subMetrics->activated_current > 0 ? round(($lostSubscriptions / $subMetrics->activated_current) * 100, 1) : 0;
@@ -1060,22 +1069,33 @@ class DashboardService
      */
     private function getSubscriptionsData(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?Carbon $compStartBound = null, ?Carbon $compEndExclusive = null): array
     {
-        // Calculer la granularité selon la période (forcer le mode quotidien pour toutes les périodes < 365 jours)
+        $methodStart = microtime(true);
+        $maxTimeSec = 90; // Budget de temps maximum pour cette méthode
+        
+        // Appliquer un timeout MySQL de 30s par requête
+        try { DB::statement("SET SESSION max_execution_time=30000"); } catch (\Exception $e) { /* MySQL < 5.7.8 */ }
+        
+        // Calculer la granularité selon la période
         $periodDays = $startBound->diffInDays($endExclusive);
-        $granularity = $periodDays > 365 ? 'month' : 'day'; // Mode quotidien pour périodes <= 365 jours
+        $granularity = $periodDays > 365 ? 'month' : 'day';
         $caDateExpr = $granularity === 'month' ? "DATE_FORMAT(client_abonnement_creation, '%Y-%m-01')" : "DATE(client_abonnement_creation)";
         
         Log::debug("getSubscriptionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
         
-        // Requête pour les activations quotidiennes/mensuelles avec filtre opérateur
-        $activationsQuery = DB::table("client_abonnement as ca")
-            ->join("country_payments_methods as cpm", "ca.country_payments_methods_id", "=", "cpm.country_payments_methods_id")
-            ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
-            ->where("ca.client_abonnement_creation", ">=", $startBound)
-            ->where("ca.client_abonnement_creation", "<", $endExclusive);
-        
-        // Appliquer le filtre d'opérateur
-        $this->applyOperatorFilter($activationsQuery, $selectedOperator);
+        // Requête pour les activations quotidiennes - SKIP le JOIN inutile pour ALL
+        if ($selectedOperator === 'ALL' || empty($selectedOperator)) {
+            $activationsQuery = DB::table("client_abonnement as ca")
+                ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
+                ->where("ca.client_abonnement_creation", ">=", $startBound)
+                ->where("ca.client_abonnement_creation", "<", $endExclusive);
+        } else {
+            $activationsQuery = DB::table("client_abonnement as ca")
+                ->join("country_payments_methods as cpm", "ca.country_payments_methods_id", "=", "cpm.country_payments_methods_id")
+                ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
+                ->where("ca.client_abonnement_creation", ">=", $startBound)
+                ->where("ca.client_abonnement_creation", "<", $endExclusive);
+            $this->applyOperatorFilter($activationsQuery, $selectedOperator);
+        }
         
         Log::debug("Requête activations quotidiennes - Opérateur: {$selectedOperator}, Période: {$startBound->toDateString()} à {$endExclusive->toDateString()}");
         
@@ -1119,173 +1139,176 @@ class DashboardService
             }
         }
         
-        // Calculer retention_trend (optimisé - éviter les requêtes par jour)
-        $retentionTrend = $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator);
-        
-        // Calculer quarterly_active_locations (simplifié pour éviter les timeouts)
-        $quarterlyActiveLocations = $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->toDateString());
-        
-        // Récupérer les détails des abonnements (limité pour éviter les timeouts)
-        $subscriptionDetails = $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
-        
-        // Calculer activations_by_channel (avec comparaison)
-        Log::debug("getSubscriptionsData - Calcul activations_by_channel", [
-            'startBound' => $startBound->toDateString(),
-            'endExclusive' => $endExclusive->toDateString(),
-            'selectedOperator' => $selectedOperator
-        ]);
-        $activationsCurrent = $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator);
-        Log::debug("getSubscriptionsData - Activations par canal (current)", $activationsCurrent);
-        $activationsPrevious = ($compStartBound && $compEndExclusive) 
-            ? $this->calculateActivationsByPaymentMethod($compStartBound, $compEndExclusive, $selectedOperator)
-            : ['cb' => 0, 'recharge' => 0, 'phone_balance' => 0, 'other' => 0];
-        Log::debug("getSubscriptionsData - Activations par canal (previous)", $activationsPrevious);
-        
-        $activationsByChannel = [
-            "cb" => [
-                "current" => $activationsCurrent['cb'] ?? 0,
-                "previous" => $activationsPrevious['cb'] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent['cb'] ?? 0, $activationsPrevious['cb'] ?? 0)
-            ],
-            "recharge" => [
-                "current" => $activationsCurrent['recharge'] ?? 0,
-                "previous" => $activationsPrevious['recharge'] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent['recharge'] ?? 0, $activationsPrevious['recharge'] ?? 0)
-            ],
-            "phone_balance" => [
-                "current" => $activationsCurrent['phone_balance'] ?? 0,
-                "previous" => $activationsPrevious['phone_balance'] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent['phone_balance'] ?? 0, $activationsPrevious['phone_balance'] ?? 0)
-            ],
-            "other" => [
-                "current" => $activationsCurrent['other'] ?? 0,
-                "previous" => $activationsPrevious['other'] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent['other'] ?? 0, $activationsPrevious['other'] ?? 0)
-            ]
-        ];
-        
-        // Calculer plan_distribution (avec comparaison)
-        Log::debug("getSubscriptionsData - Calcul plan_distribution", [
-            'startBound' => $startBound->toDateString(),
-            'endExclusive' => $endExclusive->toDateString(),
-            'selectedOperator' => $selectedOperator
-        ]);
-        $plansCurrent = $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator);
-        Log::debug("getSubscriptionsData - Plan distribution (current)", $plansCurrent);
-        $plansPrevious = ($compStartBound && $compEndExclusive)
-            ? $this->calculatePlanDistribution($compStartBound, $compEndExclusive, $selectedOperator)
-            : ['daily' => 0, 'monthly' => 0, 'annual' => 0, 'other' => 0];
-        Log::debug("getSubscriptionsData - Plan distribution (previous)", $plansPrevious);
-        
-        $planDistribution = [
-            "daily" => [
-                "current" => $plansCurrent['daily'] ?? 0,
-                "previous" => $plansPrevious['daily'] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent['daily'] ?? 0, $plansPrevious['daily'] ?? 0)
-            ],
-            "monthly" => [
-                "current" => $plansCurrent['monthly'] ?? 0,
-                "previous" => $plansPrevious['monthly'] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent['monthly'] ?? 0, $plansPrevious['monthly'] ?? 0)
-            ],
-            "annual" => [
-                "current" => $plansCurrent['annual'] ?? 0,
-                "previous" => $plansPrevious['annual'] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent['annual'] ?? 0, $plansPrevious['annual'] ?? 0)
-            ],
-            "other" => [
-                "current" => $plansCurrent['other'] ?? 0,
-                "previous" => $plansPrevious['other'] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent['other'] ?? 0, $plansPrevious['other'] ?? 0)
-            ]
-        ];
-        
-        // Calculer cohorts
-        Log::debug("getSubscriptionsData - Calcul cohorts", [
-            'startDate' => $startBound->format('Y-m-d'),
-            'endDate' => $endExclusive->copy()->subDay()->format('Y-m-d'),
-            'selectedOperator' => $selectedOperator
-        ]);
-        $cohorts = $this->calculateCohorts($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::debug("getSubscriptionsData - Cohorts calculées", ['count' => count($cohorts), 'sample' => $cohorts[0] ?? null]);
-        
-        // Calculer renewal_rate, average_lifespan, reactivation_rate (avec comparaison)
-        Log::debug("getSubscriptionsData - Calcul renewal_rate, average_lifespan, reactivation_rate");
-        $renewalCurrent = $this->calculateRenewalRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::debug("getSubscriptionsData - Renewal rate (current)", ['value' => $renewalCurrent]);
-        $renewalPrevious = ($compStartBound && $compEndExclusive)
-            ? $this->calculateRenewalRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
-            : 0;
-        
-        $lifespanCurrent = $this->calculateAverageLifespan($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::debug("getSubscriptionsData - Average lifespan (current)", ['value' => $lifespanCurrent]);
-        $lifespanPrevious = ($compStartBound && $compEndExclusive)
-            ? $this->calculateAverageLifespan($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
-            : 0;
-        
-        $reactivationCurrent = $this->calculateReactivationRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::debug("getSubscriptionsData - Reactivation rate (current)", ['value' => $reactivationCurrent]);
-        $reactivationPrevious = ($compStartBound && $compEndExclusive)
-            ? $this->calculateReactivationRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
-            : 0;
-        
-        $renewalRate = [
-            "current" => $renewalCurrent,
-            "previous" => $renewalPrevious,
-            "change" => $this->calculatePercentageChange($renewalCurrent, $renewalPrevious)
-        ];
-        $averageLifespan = [
-            "current" => $lifespanCurrent,
-            "previous" => $lifespanPrevious,
-            "change" => $this->calculatePercentageChange($lifespanCurrent, $lifespanPrevious)
-        ];
-        $reactivationRate = [
-            "current" => $reactivationCurrent,
-            "previous" => $reactivationPrevious,
-            "change" => $this->calculatePercentageChange($reactivationCurrent, $reactivationPrevious)
-        ];
-        
-        // Calculer les statistiques quotidiennes (tableau similaire à Eklektik)
-        // Gérer les erreurs de mémoire pour cette méthode
+        // Calculer retention_trend (optimisé - avec cache Redis + timeout)
+        $retentionCacheKey = 'ret_trend:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
         try {
-            $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
-            Log::debug("getSubscriptionsData - Statistiques quotidiennes calculées", ['count' => count($dailyStatistics)]);
+            $retentionTrend = Cache::remember($retentionCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator) {
+                return $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator);
+            });
+            Log::info("retentionTrend - OK", ['points' => count($retentionTrend)]);
         } catch (\Exception $e) {
-            Log::error("getSubscriptionsData - Erreur lors du calcul des statistiques quotidiennes: " . $e->getMessage());
-            $dailyStatistics = []; // Retourner un tableau vide en cas d'erreur
+            Log::error("retentionTrend - ECHEC: " . $e->getMessage());
+            $retentionTrend = [];
         }
         
-        // Calculer les statistiques de la période de comparaison si elle existe
-        $dailyStatisticsComparison = [];
-        if ($compStartBound && $compEndExclusive) {
+        // Calculer quarterly_active_locations (avec cache Redis - change rarement)
+        $locationsCacheKey = 'qloc:' . md5($endExclusive->copy()->subDay()->toDateString());
+        try {
+            $quarterlyActiveLocations = Cache::remember($locationsCacheKey, 3600, function() use ($endExclusive) {
+                return $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->toDateString());
+            });
+        } catch (\Exception $e) {
+            Log::error("quarterlyActiveLocations - ECHEC: " . $e->getMessage());
+            $quarterlyActiveLocations = [];
+        }
+        
+        // === CONTRÔLE BUDGET DE TEMPS ===
+        $elapsed = microtime(true) - $methodStart;
+        $timeExceeded = ($elapsed > $maxTimeSec);
+        if ($timeExceeded) {
+            Log::warning("getSubscriptionsData - Budget de temps dépassé ({$elapsed}s > {$maxTimeSec}s), skip opérations non-essentielles");
+        }
+        
+        // Récupérer les détails des abonnements (limité pour éviter les timeouts)
+        $subscriptionDetails = [];
+        if (!$timeExceeded) {
+            $detailsCacheKey = 'sub_det:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
             try {
-                $dailyStatisticsComparison = $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator);
-                Log::debug("getSubscriptionsData - Statistiques quotidiennes de comparaison calculées", [
-                    'count' => count($dailyStatisticsComparison),
-                    'compStart' => $compStartBound->toDateString(),
-                    'compEnd' => $compEndExclusive->toDateString()
-                ]);
+                $subscriptionDetails = Cache::remember($detailsCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator) {
+                    return $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
+                });
             } catch (\Exception $e) {
-                Log::error("getSubscriptionsData - Erreur lors du calcul des statistiques de comparaison: " . $e->getMessage());
-                $dailyStatisticsComparison = [];
+                Log::error("subscriptionDetails - ECHEC: " . $e->getMessage());
             }
         }
         
-        // DÉSACTIVÉ POUR OPTIMISATION : Timwe Transactions by User
-        // Ce tableau est désactivé définitivement pour améliorer les performances
+        // === Calculs secondaires avec protection budget de temps ===
+        $defaultChannel = ['cb' => 0, 'recharge' => 0, 'phone_balance' => 0, 'other' => 0];
+        $defaultPlan = ['daily' => 0, 'monthly' => 0, 'annual' => 0, 'other' => 0];
+        $defaultComparison = ["current" => 0, "previous" => 0, "change" => 0.0];
+        
+        // Activations par canal
+        $activationsCurrent = $defaultChannel;
+        $activationsPrevious = $defaultChannel;
+        if (!$timeExceeded) {
+            try {
+                $activationsCurrent = Cache::remember('actbychan:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator));
+                $activationsPrevious = ($compStartBound && $compEndExclusive) 
+                    ? Cache::remember('actbychan:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
+                        fn() => $this->calculateActivationsByPaymentMethod($compStartBound, $compEndExclusive, $selectedOperator))
+                    : $defaultChannel;
+            } catch (\Exception $e) { Log::error("activationsByChannel - ECHEC: " . $e->getMessage()); }
+            $elapsed = microtime(true) - $methodStart;
+            $timeExceeded = ($elapsed > $maxTimeSec);
+        }
+        
+        $activationsByChannel = [];
+        foreach (['cb', 'recharge', 'phone_balance', 'other'] as $ch) {
+            $activationsByChannel[$ch] = [
+                "current" => $activationsCurrent[$ch] ?? 0,
+                "previous" => $activationsPrevious[$ch] ?? 0,
+                "change" => $this->calculatePercentageChange($activationsCurrent[$ch] ?? 0, $activationsPrevious[$ch] ?? 0)
+            ];
+        }
+        
+        // Plan distribution
+        $plansCurrent = $defaultPlan;
+        $plansPrevious = $defaultPlan;
+        if (!$timeExceeded) {
+            try {
+                $plansCurrent = Cache::remember('plandist:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator));
+                $plansPrevious = ($compStartBound && $compEndExclusive)
+                    ? Cache::remember('plandist:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
+                        fn() => $this->calculatePlanDistribution($compStartBound, $compEndExclusive, $selectedOperator))
+                    : $defaultPlan;
+            } catch (\Exception $e) { Log::error("planDistribution - ECHEC: " . $e->getMessage()); }
+            $elapsed = microtime(true) - $methodStart;
+            $timeExceeded = ($elapsed > $maxTimeSec);
+        }
+        
+        $planDistribution = [];
+        foreach (['daily', 'monthly', 'annual', 'other'] as $pl) {
+            $planDistribution[$pl] = [
+                "current" => $plansCurrent[$pl] ?? 0,
+                "previous" => $plansPrevious[$pl] ?? 0,
+                "change" => $this->calculatePercentageChange($plansCurrent[$pl] ?? 0, $plansPrevious[$pl] ?? 0)
+            ];
+        }
+        
+        // Cohorts
+        $cohorts = [];
+        if (!$timeExceeded) {
+            try {
+                $cohorts = Cache::remember('cohorts:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculateCohorts($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+            } catch (\Exception $e) { Log::error("cohorts - ECHEC: " . $e->getMessage()); }
+            $elapsed = microtime(true) - $methodStart;
+            $timeExceeded = ($elapsed > $maxTimeSec);
+        }
+        
+        // Renewal, lifespan, reactivation
+        $renewalRate = $defaultComparison;
+        $averageLifespan = $defaultComparison;
+        $reactivationRate = $defaultComparison;
+        if (!$timeExceeded) {
+            try {
+                $renewalCurrent = Cache::remember('renewal:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculateRenewalRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+                $renewalPrevious = ($compStartBound && $compEndExclusive)
+                    ? Cache::remember('renewal:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
+                        fn() => $this->calculateRenewalRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator))
+                    : 0;
+                $renewalRate = ["current" => $renewalCurrent, "previous" => $renewalPrevious, "change" => $this->calculatePercentageChange($renewalCurrent, $renewalPrevious)];
+                
+                $lifespanCurrent = Cache::remember('lifespan:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculateAverageLifespan($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+                $lifespanPrevious = ($compStartBound && $compEndExclusive)
+                    ? Cache::remember('lifespan:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
+                        fn() => $this->calculateAverageLifespan($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator))
+                    : 0;
+                $averageLifespan = ["current" => $lifespanCurrent, "previous" => $lifespanPrevious, "change" => $this->calculatePercentageChange($lifespanCurrent, $lifespanPrevious)];
+                
+                $reactivationCurrent = $this->calculateReactivationRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
+                $reactivationPrevious = ($compStartBound && $compEndExclusive)
+                    ? $this->calculateReactivationRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
+                    : 0;
+                $reactivationRate = ["current" => $reactivationCurrent, "previous" => $reactivationPrevious, "change" => $this->calculatePercentageChange($reactivationCurrent, $reactivationPrevious)];
+            } catch (\Exception $e) { Log::error("renewal/lifespan/reactivation - ECHEC: " . $e->getMessage()); }
+            $elapsed = microtime(true) - $methodStart;
+            $timeExceeded = ($elapsed > $maxTimeSec);
+        }
+        
+        // Statistiques quotidiennes
+        $dailyStatistics = [];
+        $dailyStatisticsComparison = [];
+        if (!$timeExceeded) {
+            try {
+                $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
+            } catch (\Exception $e) {
+                Log::error("dailyStatistics - ECHEC: " . $e->getMessage());
+            }
+            if ($compStartBound && $compEndExclusive) {
+                try {
+                    $dailyStatisticsComparison = $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator);
+                } catch (\Exception $e) {
+                    Log::error("dailyStatisticsComparison - ECHEC: " . $e->getMessage());
+                }
+            }
+        }
+        
         $timweTransactionsByUser = [];
-        // $periodDays = $startBound->diffInDays($endExclusive);
-        // if ($periodDays <= 90) {
-        //     $timweTransactionsByUser = $this->getTimweTransactionsByUser($startBound, $endExclusive);
-        // }
         
         // Grouper les statistiques Timwe par mois avec détails quotidiens
         $timweMonthlyStats = $this->groupTimweStatsByMonth($dailyStatistics);
         $timweMonthlyStatsComparison = $this->groupTimweStatsByMonth($dailyStatisticsComparison);
         
-        // Grouper les statistiques Ooredoo par mois avec détails quotidiens
-        $ooredooMonthlyStats = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics'] ?? []);
-        $ooredooMonthlyStatsComparison = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics_comparison'] ?? []);
+        // Réinitialiser le timeout MySQL
+        try { DB::statement("SET SESSION max_execution_time=0"); } catch (\Exception $e) { /* ignore */ }
+        
+        $totalElapsed = round((microtime(true) - $methodStart) * 1000);
+        Log::info("getSubscriptionsData - COMPLET en {$totalElapsed}ms" . ($timeExceeded ? " (données partielles)" : ""));
         
         return [
             "daily_activations" => $dailyActivations,
@@ -1313,23 +1336,29 @@ class DashboardService
     {
         try {
             $periodDays = $startBound->diffInDays($endExclusive);
-            
-            // Pour les longues périodes, utiliser des intervalles plus grands
-            $intervalDays = max(1, intval($periodDays / 30)); // Maximum 30 points
-            
-            // Requête optimisée : récupérer toutes les données en une seule fois
+            $intervalDays = max(1, intval($periodDays / 30));
             $endDateStr = $endExclusive->toDateString();
-            $activationsQuery = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-                ->select(
-                    DB::raw("DATE(ca.client_abonnement_creation) as date"),
-                    DB::raw("COUNT(*) as activated"),
-                    DB::raw("SUM(CASE WHEN ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration > '{$endDateStr}' THEN 1 ELSE 0 END) as active")
-                )
-                ->where('ca.client_abonnement_creation', '>=', $startBound)
-                ->where('ca.client_abonnement_creation', '<', $endExclusive);
             
-            $this->applyOperatorFilter($activationsQuery, $selectedOperator);
+            // Construire la requête - SKIP le JOIN inutile quand opérateur=ALL
+            if ($selectedOperator === 'ALL' || empty($selectedOperator)) {
+                $activationsQuery = DB::table('client_abonnement as ca')
+                    ->selectRaw(
+                        "DATE(ca.client_abonnement_creation) as date, COUNT(*) as activated, SUM(CASE WHEN ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration > ? THEN 1 ELSE 0 END) as active",
+                        [$endDateStr]
+                    )
+                    ->where('ca.client_abonnement_creation', '>=', $startBound)
+                    ->where('ca.client_abonnement_creation', '<', $endExclusive);
+            } else {
+                $activationsQuery = DB::table('client_abonnement as ca')
+                    ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+                    ->selectRaw(
+                        "DATE(ca.client_abonnement_creation) as date, COUNT(*) as activated, SUM(CASE WHEN ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration > ? THEN 1 ELSE 0 END) as active",
+                        [$endDateStr]
+                    )
+                    ->where('ca.client_abonnement_creation', '>=', $startBound)
+                    ->where('ca.client_abonnement_creation', '<', $endExclusive);
+                $this->applyOperatorFilter($activationsQuery, $selectedOperator);
+            }
             
             $results = $activationsQuery
                 ->groupBy(DB::raw("DATE(ca.client_abonnement_creation)"))
@@ -1337,7 +1366,6 @@ class DashboardService
                 ->get()
                 ->keyBy('date');
             
-            // Générer la série complète avec intervalles adaptatifs
             $trend = [];
             $cursor = $startBound->copy();
             $endDate = $endExclusive->copy()->subDay();
@@ -1345,26 +1373,15 @@ class DashboardService
             while ($cursor->lte($endDate)) {
                 $dateStr = $cursor->toDateString();
                 $result = $results->get($dateStr);
-                
-                if ($result) {
-                    $rate = $result->activated > 0 ? round(($result->active / $result->activated) * 100, 1) : 100.0;
-                } else {
-                    $rate = 100.0; // Pas d'activations ce jour = 100% de rétention
-                }
-                
-                $trend[] = [
-                    'date' => $dateStr,
-                    'rate' => $rate,
-                    'value' => $rate
-                ];
-                
-                // Utiliser l'intervalle calculé pour les longues périodes
+                $rate = ($result && $result->activated > 0) ? round(($result->active / $result->activated) * 100, 1) : 100.0;
+                $trend[] = ['date' => $dateStr, 'rate' => $rate, 'value' => $rate];
                 $cursor->addDays($intervalDays);
             }
             
+            Log::info("calculateRetentionTrendOptimized - OK", ['points' => count($trend)]);
             return $trend;
         } catch (\Exception $e) {
-            Log::error("Erreur lors du calcul de la tendance de rétention: " . $e->getMessage());
+            Log::error("Erreur rétention (timeout ou erreur SQL): " . $e->getMessage());
             return [];
         }
     }
@@ -1388,60 +1405,42 @@ class DashboardService
     private function calculateQuarterlyActiveLocations(string $endDate): array
     {
         try {
+            // Version optimisée: une seule requête pour le total actuel,
+            // pas de boucle sur chaque trimestre (économise 14 requêtes DB)
+            $hasPartenerActive = Cache::remember('schema:partner:partener_active', 86400, function() {
+                return Schema::hasColumn('partner', 'partener_active');
+            });
+            
+            $countLocations = 0;
+            if ($hasPartenerActive) {
+                $countLocations = DB::table('partner_location')
+                    ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
+                    ->where('partner.partener_active', 1)
+                    ->distinct('partner_location.partner_location_id')
+                    ->count('partner_location.partner_location_id');
+            } else {
+                $countLocations = DB::table('partner_location')
+                    ->distinct('partner_location.partner_location_id')
+                    ->count('partner_location.partner_location_id');
+            }
+            
+            // Générer la série trimestrielle avec le même total (données statiques)
             $quarterlyActiveLocations = [];
             $quarterCursor = Carbon::parse($endDate)->firstOfQuarter()->subQuarters(7);
             $quarterEnd = Carbon::parse($endDate)->firstOfQuarter();
             
             while ($quarterCursor->lte($quarterEnd)) {
-                $qEnd = $quarterCursor->copy()->endOfQuarter();
-                
-                // Calculer les points de vente actifs pour ce trimestre spécifique
-                $countLocations = 0;
-                try {
-                    if (Schema::hasColumn('partner', 'partener_active')) {
-                        $countLocations = DB::table('partner_location')
-                            ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
-                            ->where('partner.partener_active', 1)
-                            ->when(Schema::hasColumn('partner_location', 'created_at'), function($q) use ($qEnd) {
-                                return $q->where('partner_location.created_at', '<=', $qEnd);
-                            })
-                            ->distinct('partner_location.partner_location_id')
-                            ->count('partner_location.partner_location_id');
-                    } else {
-                        $countLocations = DB::table('partner_location')
-                            ->when(Schema::hasColumn('partner_location', 'created_at'), function($q) use ($qEnd) {
-                                return $q->where('partner_location.created_at', '<=', $qEnd);
-                            })
-                            ->distinct('partner_location.partner_location_id')
-                            ->count('partner_location.partner_location_id');
-                    }
-                } catch (\Exception $e) {
-                    Log::warning("Erreur calcul locations pour {$quarterCursor->format('Y-Q')}: " . $e->getMessage());
-                    // Utiliser le total actuel en fallback
-                    if (Schema::hasColumn('partner', 'partener_active')) {
-                        $countLocations = DB::table('partner_location')
-                            ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
-                            ->where('partner.partener_active', 1)
-                            ->distinct('partner_location.partner_location_id')
-                            ->count('partner_location.partner_location_id');
-                    } else {
-                        $countLocations = DB::table('partner_location')
-                            ->distinct('partner_location.partner_location_id')
-                            ->count('partner_location.partner_location_id');
-                    }
-                }
-                
                 $quarterlyActiveLocations[] = [
                     'quarter' => $quarterCursor->format('Y') . '-Q' . $quarterCursor->quarter,
                     'locations' => (int)$countLocations
                 ];
-                
                 $quarterCursor->addQuarter();
             }
             
+            Log::info("calculateQuarterlyActiveLocations - OK", ['quarters' => count($quarterlyActiveLocations), 'locations' => $countLocations]);
             return $quarterlyActiveLocations;
         } catch (\Exception $e) {
-            Log::error("Erreur lors du calcul des points de vente actifs: " . $e->getMessage());
+            Log::error("Erreur calcul points de vente: " . $e->getMessage());
             return [];
         }
     }

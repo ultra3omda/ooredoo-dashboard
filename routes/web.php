@@ -171,6 +171,11 @@ Route::get('/test', function () {
     return view('welcome');
 })->name('test');
 
+// Monitoring dashboard (accessible aux admins authentifiés)
+Route::middleware('auth')->get('/monitoring', function () {
+    return view('monitoring.dashboard');
+})->name('monitoring.dashboard');
+
 // Routes temporaires pour accéder à Eklektik sans authentification (à supprimer après utilisation)
 Route::get('/eklektik-sync-direct', [EklektikSyncController::class, 'index'])->name('eklektik.sync.direct');
 Route::get('/eklektik-sync-status-direct', [EklektikSyncController::class, 'status'])->name('eklektik.status.direct');

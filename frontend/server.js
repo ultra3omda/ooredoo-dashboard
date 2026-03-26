@@ -4,8 +4,8 @@ const httpProxy = require('http-proxy');
 const proxy = httpProxy.createProxyServer({
   target: 'http://127.0.0.1:8002',
   changeOrigin: true,
-  timeout: 120000,
-  proxyTimeout: 120000,
+  timeout: 300000,
+  proxyTimeout: 300000,
 });
 
 proxy.on('error', (err, req, res) => {

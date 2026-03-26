@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class DataControllerOptimized extends Controller
@@ -60,8 +61,17 @@ class DataControllerOptimized extends Controller
             $data['api_execution_time_ms'] = $totalTime;
             $data['optimized_version'] = true;
             
-            Log::info("Données récupérées avec succès en {$totalTime}ms");
-            Log::info("Source: " . ($data['data_source'] ?? 'inconnu'));
+            // Enregistrer pour le monitoring
+            $cacheHit = ($data['cache_mode'] ?? '') === 'standard_subcached' && $totalTime < 5000;
+            $history = Cache::get('monitoring:api_history', []);
+            $history[] = [
+                'endpoint' => '/api/dashboard/data',
+                'time_ms' => $totalTime,
+                'cache_hit' => $cacheHit,
+                'operator' => $params['operator'] ?? 'unknown',
+                'timestamp' => now()->toISOString(),
+            ];
+            Cache::put('monitoring:api_history', array_slice($history, -100), 3600);
             
             return response()->json($data);
             

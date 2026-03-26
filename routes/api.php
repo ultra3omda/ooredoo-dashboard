@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DataControllerOptimized;
 use App\Http\Controllers\Api\EklektikController;
 use App\Http\Controllers\Api\EklektikStatsController;
 use App\Http\Controllers\Api\EklektikDashboardController;
+use App\Http\Controllers\Api\MonitoringController;
 
 /*
 |--------------------------------------------------------------------------
@@ -81,3 +82,9 @@ Route::prefix('eklektik-dashboard')->name('api.eklektik-dashboard.')->group(func
 if (file_exists(base_path('routes/api_optimized.php'))) {
     require base_path('routes/api_optimized.php');
 }
+
+// Monitoring API routes
+Route::prefix('monitoring')->name('api.monitoring.')->group(function () {
+    Route::get('/dashboard', [MonitoringController::class, 'dashboard'])->name('dashboard');
+    Route::post('/record', [MonitoringController::class, 'recordApiTime'])->name('record');
+});

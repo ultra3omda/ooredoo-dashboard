@@ -47,6 +47,13 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/ooredoo-stats.log'));
+            
+            // Cache warmup dashboard - Toutes les 10 minutes
+            $schedule->command('dashboard:warmup --operator=ALL')
+                ->everyTenMinutes()
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/dashboard-warmup.log'));
     }
 
     /**
