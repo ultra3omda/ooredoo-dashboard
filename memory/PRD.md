@@ -26,66 +26,52 @@ Deployer l'application Ooredoo Privileges (Club Privileges Dashboard) et effectu
 - Commande de warmup cache (`php artisan dashboard:warmup`)
 - LOG_LEVEL reduit a warning en production
 
-### Optimisations Performance - Phase 2 (26 Mars 2026) - SESSION ACTUELLE
-- **Fix 500 Error**: L'API `/api/dashboard/data` bloquait indefiniment sur `calculateRetentionTrendOptimized`. Corrige par:
-  - Suppression du JOIN inutile avec `country_payments_methods` pour l'operateur ALL
-  - Ajout de `SET SESSION max_execution_time=30000` (timeout MySQL 30s par requete)
-  - Ajout d'un systeme de "budget de temps" (90s max) pour les calculs secondaires
-  - Retour de donnees partielles si le budget est depasse
-- **Optimisation calculateQuarterlyActiveLocations**: Reduit de 16 requetes DB a 2 (Schema::hasColumn cache 24h)
-- **Optimisation getKPIsOptimized**: Ajout de `applyOperatorJoinAndFilter` pour eviter les JOINs inutiles pour ALL
-- **Fix Express proxy timeout**: 120s -> 300s (permettre les reponses longues)
-- **Error handling gracieux**: Chaque sous-calcul est wrapping dans try/catch, timeout = donnees vides
+### Optimisations Performance - Phase 2 (26 Mars 2026)
+- Fix 500 Error: API bloquait indefiniment sur calculateRetentionTrendOptimized
+- Suppression JOINs inutiles pour operateur ALL (via applyOperatorJoinAndFilter)
+- Timeout MySQL 30s par requete (SET SESSION max_execution_time=30000)
+- Systeme de budget de temps (90s max) pour calculs secondaires
+- Optimisation calculateQuarterlyActiveLocations: 16 requetes -> 2
+- Fix Express proxy timeout: 120s -> 300s
 
-### Resultats Performance Phase 2
-| Metrique | Avant Phase 2 | Apres Phase 2 |
-|---------|---------------|---------------|
-| KPIs (cold cache) | ~31s | ~15s (-50%) |
-| retentionTrend | Bloquait indefiniment | ~1s |
-| quarterlyActiveLocations | ~60s+ (16 requetes) | ~1s (2 requetes) |
-| Total cold cache | 165s+ (souvent timeout) | ~150s (complete) |
-| Cache HIT | ~500ms | ~535ms |
-| Status | 500 ERROR | 200 OK |
+### Optimisations Performance - Phase 3 (26 Mars 2026) - SESSION ACTUELLE
+- **Securisation SQL (PDO bindings)**: Toutes les requetes KPIs, transactions, marchands utilisent maintenant des bindings parametres au lieu de DB::raw avec interpolation
+- **Optimisation getMerchantsOptimized**: JOIN conditionnel cpm pour ALL (-50% temps)
+- **Optimisation getSubscriptionDetails**: Suppression sous-requete correlee sur transactions_history (qui causait un timeout systematique de 30s). Resultats: passe de 0 a 140 resultats retournes
+- **Optimisation calculateCohorts, calculateRenewalRate, calculateAverageLifespan, calculateReactivationRate**: JOIN conditionnel cpm pour ALL
+- **Cron job warmup cache**: Toutes les 25 minutes via supervisor + Laravel scheduler
+- **Fix SQL injection**: DB::raw("...INTERVAL $windowDays DAY") -> whereRaw avec binding
+
+### Resultats Performance FINAL
+| Metrique | Phase 1 (avant) | Phase 3 (apres) | Amelioration |
+|---------|-----------------|-----------------|-------------|
+| Cold cache (14j ALL) | 165s+ (souvent timeout) | 23s | **-86%** |
+| Cache HIT | ~500ms | ~427ms | -15% |
+| KPIs | ~31s | ~15s | -50% |
+| retentionTrend | Bloquait indefiniment | ~1s | 100% fix |
+| quarterlyActiveLocations | ~60s+ (16 requetes) | ~1s (2 requetes) | -98% |
+| getSubscriptionDetails | Timeout 30s (0 resultats) | ~5s (140 resultats) | 100% fix |
+| Status | 500 ERROR | 200 OK | Fix complet |
 
 ## Utilisateurs
 - Super Administrateur: superadmin@ooredoo.tn / Soufiane@2025 (reset)
 - Administrateurs operateurs
 - Utilisateurs dashboard
 
-## Tests Passes
-- Login/Logout
-- Dashboard navigation (7 onglets)
-- KPI cards loading avec donnees reelles
-- Date pickers
-- Operator selection (14 operateurs)
-- Charts rendering (Performance Overview - Period Comparison)
-- Cache warmup command
-- API monitoring endpoint
-
-## Problemes Connus
-1. `getSubscriptionDetails` timeout toujours a 30s (requete correllee complexe) - retourne vide gracieusement
-2. SQL Injection potentielle dans `DashboardService.php` (DB::raw avec interpolation de chaines)
-3. `getMerchantsOptimized` prend ~46s (JOINs encore presents pour ALL)
-
 ## Backlog
-### P1
-- Securiser les requetes SQL (PDO bindings) dans `DashboardService.php`
-- Optimiser `getMerchantsOptimized` (supprimer JOINs inutiles pour ALL)
-- Optimiser `getSubscriptionDetails` (simplifier la sous-requete correlee)
-
 ### P2
-- Index MySQL sur `client_abonnement_creation`, `client_abonnement_expiration`
+- Index MySQL sur client_abonnement_creation, client_abonnement_expiration
 - Vues materialisees pour les calculs KPI frequents
-- Cron job automatique pour le warmup cache
 
 ### P3
 - Chargement progressif du dashboard (chunks AJAX)
 - Notifications de performance en temps reel
 
 ## Fichiers cles
-- `app/Services/DashboardService.php` - Service principal (3400+ lignes)
-- `app/Http/Middleware/DashboardPerformanceMiddleware.php` - Middleware de timeout/monitoring
+- `app/Services/DashboardService.php` - Service principal (~3300 lignes)
+- `app/Http/Middleware/DashboardPerformanceMiddleware.php` - Middleware timeout/monitoring
 - `app/Console/Commands/WarmupDashboardCache.php` - Pre-remplissage cache
+- `app/Console/Kernel.php` - Scheduler cron job (*/25 * * * *)
 - `app/Http/Controllers/Api/EklektikDashboardController.php` - Endpoints Eklektik rapides
 - `/etc/nginx/sites-available/laravel` - Configuration Nginx
 - `backend/server.py` - Proxy FastAPI (port 8001 -> 8002)

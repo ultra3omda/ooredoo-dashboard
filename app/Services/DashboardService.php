@@ -204,17 +204,24 @@ class DashboardService
      */
     private function getKPIsOptimized(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
     {
-        // Requête unifiée pour tous les KPIs d'abonnements
-        // Le JOIN avec cpm est SKIP pour opérateur ALL (économise ~50% du temps)
+        // Requête unifiée pour tous les KPIs d'abonnements avec PDO bindings sécurisés
         $subscriptionQuery = DB::table('client_abonnement as ca')
-            ->select([
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$startBound}' AND ca.client_abonnement_creation < '{$endExclusive}' THEN 1 END) as activated_current"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$startBound}' AND ca.client_abonnement_creation < '{$endExclusive}' AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= '{$endExclusive}') THEN 1 END) as active_current"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_expiration >= '{$startBound}' AND ca.client_abonnement_expiration < '{$endExclusive}' THEN 1 END) as deactivated_current"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$compStartBound}' AND ca.client_abonnement_creation < '{$compEndExclusive}' THEN 1 END) as activated_comparison"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$compStartBound}' AND ca.client_abonnement_creation < '{$compEndExclusive}' AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= '{$compEndExclusive}') THEN 1 END) as active_comparison"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_expiration >= '{$compStartBound}' AND ca.client_abonnement_expiration < '{$compEndExclusive}' THEN 1 END) as deactivated_comparison")
-            ]);
+            ->selectRaw(
+                "COUNT(CASE WHEN ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation < ? THEN 1 END) as activated_current,
+                 COUNT(CASE WHEN ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation < ? AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= ?) THEN 1 END) as active_current,
+                 COUNT(CASE WHEN ca.client_abonnement_expiration >= ? AND ca.client_abonnement_expiration < ? THEN 1 END) as deactivated_current,
+                 COUNT(CASE WHEN ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation < ? THEN 1 END) as activated_comparison,
+                 COUNT(CASE WHEN ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation < ? AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= ?) THEN 1 END) as active_comparison,
+                 COUNT(CASE WHEN ca.client_abonnement_expiration >= ? AND ca.client_abonnement_expiration < ? THEN 1 END) as deactivated_comparison",
+                [
+                    $startBound, $endExclusive,
+                    $startBound, $endExclusive, $endExclusive,
+                    $startBound, $endExclusive,
+                    $compStartBound, $compEndExclusive,
+                    $compStartBound, $compEndExclusive, $compEndExclusive,
+                    $compStartBound, $compEndExclusive
+                ]
+            );
         $this->applyOperatorJoinAndFilter($subscriptionQuery, $selectedOperator, 'ca');
         
         Log::info("Requête KPIs - Opérateur: {$selectedOperator}");
@@ -223,15 +230,16 @@ class DashboardService
         
         Log::info("KPIs abonnements - Activés: {$subMetrics->activated_current}, Actifs: {$subMetrics->active_current}, Désactivés: {$subMetrics->deactivated_current}");
         
-        // Requête unifiée pour les transactions - JOIN conditionnel
+        // Requête unifiée pour les transactions - JOIN conditionnel + PDO bindings
         $transactionQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->select([
-                DB::raw("COUNT(CASE WHEN h.time >= '{$startBound}' AND h.time < '{$endExclusive}' THEN 1 END) as transactions_current"),
-                DB::raw("COUNT(CASE WHEN h.time >= '{$compStartBound}' AND h.time < '{$compEndExclusive}' THEN 1 END) as transactions_comparison"),
-                DB::raw("COUNT(DISTINCT CASE WHEN h.time >= '{$startBound}' AND h.time < '{$endExclusive}' THEN ca.client_id END) as users_current"),
-                DB::raw("COUNT(DISTINCT CASE WHEN h.time >= '{$compStartBound}' AND h.time < '{$compEndExclusive}' THEN ca.client_id END) as users_comparison")
-            ]);
+            ->selectRaw(
+                "COUNT(CASE WHEN h.time >= ? AND h.time < ? THEN 1 END) as transactions_current,
+                 COUNT(CASE WHEN h.time >= ? AND h.time < ? THEN 1 END) as transactions_comparison,
+                 COUNT(DISTINCT CASE WHEN h.time >= ? AND h.time < ? THEN ca.client_id END) as users_current,
+                 COUNT(DISTINCT CASE WHEN h.time >= ? AND h.time < ? THEN ca.client_id END) as users_comparison",
+                [$startBound, $endExclusive, $compStartBound, $compEndExclusive, $startBound, $endExclusive, $compStartBound, $compEndExclusive]
+            );
         $this->applyOperatorJoinAndFilter($transactionQuery, $selectedOperator, 'ca');
         
         $txMetrics = $transactionQuery->first();
@@ -455,28 +463,26 @@ class DashboardService
      */
     private function calculateMerchantKPIs(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator, int $transactionsCurrent, int $transactionsComparison): array
     {
-        // Marchands actifs dans la période principale
+        // Marchands actifs dans la période principale - JOIN cpm conditionnel
         $activeMerchantsQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
             ->join('partner as pt', 'p.partner_id', '=', 'pt.partner_id')
             ->where('h.time', '>=', $startBound)
             ->where('h.time', '<', $endExclusive)
             ->whereNotNull('h.promotion_id');
-        $this->applyOperatorFilter($activeMerchantsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($activeMerchantsQuery, $selectedOperator, 'ca');
         $activeMerchants = $activeMerchantsQuery->distinct('pt.partner_id')->count('pt.partner_id');
         
         // Marchands actifs dans la période de comparaison
         $activeMerchantsComparisonQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
             ->join('partner as pt', 'p.partner_id', '=', 'pt.partner_id')
             ->where('h.time', '>=', $compStartBound)
             ->where('h.time', '<', $compEndExclusive)
             ->whereNotNull('h.promotion_id');
-        $this->applyOperatorFilter($activeMerchantsComparisonQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($activeMerchantsComparisonQuery, $selectedOperator, 'ca');
         $activeMerchantsComparison = $activeMerchantsComparisonQuery->distinct('pt.partner_id')->count('pt.partner_id');
         
         // Total partenaires actifs
@@ -561,27 +567,24 @@ class DashboardService
      */
     private function getMerchantsOptimized(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
     {
-        // Requête unifiée pour éviter le N+1
+        // Requête unifiée pour éviter le N+1 - JOIN cpm conditionnel pour ALL
         $merchantsQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
             ->join('partner as pt', 'p.partner_id', '=', 'pt.partner_id')
-            ->select([
-                'pt.partner_name as name',
-                'pt.partner_id',
-                // Transactions période principale
-                DB::raw("COUNT(CASE WHEN h.time >= '{$startBound}' AND h.time < '{$endExclusive}' THEN 1 END) as current"),
-                // Transactions période comparaison
-                DB::raw("COUNT(CASE WHEN h.time >= '{$compStartBound}' AND h.time < '{$compEndExclusive}' THEN 1 END) as previous")
-            ])
+            ->selectRaw(
+                "pt.partner_name as name, pt.partner_id,
+                 COUNT(CASE WHEN h.time >= ? AND h.time < ? THEN 1 END) as `current`,
+                 COUNT(CASE WHEN h.time >= ? AND h.time < ? THEN 1 END) as previous",
+                [$startBound, $endExclusive, $compStartBound, $compEndExclusive]
+            )
             ->whereNotNull('h.promotion_id');
         
-        $this->applyOperatorFilter($merchantsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($merchantsQuery, $selectedOperator, 'ca');
         
         $merchants = $merchantsQuery
             ->groupBy('pt.partner_name', 'pt.partner_id')
-            ->having('current', '>', 0) // Seulement les marchands actifs
+            ->having('current', '>', 0)
             ->orderBy('current', 'DESC')
             ->limit(50)
             ->get();
@@ -893,16 +896,14 @@ class DashboardService
         
         Log::debug("getTransactionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
         
-        // Transactions agrégées par jour ou par mois selon la période
+        // Transactions agrégées par jour ou par mois - JOIN cpm conditionnel
         $transactionsQuery = DB::table("history as h")
             ->join("client_abonnement as ca", "h.client_abonnement_id", "=", "ca.client_abonnement_id")
-            ->join("country_payments_methods as cpm", "ca.country_payments_methods_id", "=", "cpm.country_payments_methods_id")
             ->select(DB::raw("$historyDateExpr as date"), DB::raw("COUNT(*) as transactions"), DB::raw("COUNT(DISTINCT ca.client_id) as users"))
             ->where("h.time", ">=", $startBound)
             ->where("h.time", "<", $endExclusive);
         
-        // Appliquer le filtre d'opérateur
-        $this->applyOperatorFilter($transactionsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($transactionsQuery, $selectedOperator, 'ca');
         
         $transactionsRaw = $transactionsQuery
             ->groupBy(DB::raw($historyDateExpr))
@@ -1452,53 +1453,21 @@ class DashboardService
     {
         try {
             $periodDays = $startBound->diffInDays($endExclusive);
-            
-            // Limiter à 1000 résultats maximum pour éviter les timeouts
             $limit = min(1000, max(100, intval($periodDays * 10)));
             
-            // Subquery optimisée pour récupérer la première transaction de chaque client
-            $firstTransactionSubquery = DB::table('transactions_history as th1')
-                ->select([
-                    'th1.client_id',
-                    'th1.result',
-                    'th1.created_at'
-                ])
-                ->whereRaw('th1.created_at = (
-                    SELECT MIN(th2.created_at) 
-                    FROM transactions_history th2 
-                    WHERE th2.client_id = th1.client_id 
-                    AND (th2.status LIKE "%TIMWE_RENEWED_NOTIF%" OR th2.status LIKE "%TIMWE_CHARGE_DELIVERED%")
-                )')
-                ->where(function($q) {
-                    $q->where('th1.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                      ->orWhere('th1.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
-                });
-            
+            // Requête simplifiée SANS la sous-requête corrélée sur transactions_history
+            // (c'était la cause du timeout de 30s)
             $query = DB::table('client_abonnement as ca')
                 ->leftJoin('client as c', 'ca.client_id', '=', 'c.client_id')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-                // LEFT JOIN optimisé avec la subquery pour récupérer les transactions en une seule requête
-                ->leftJoinSub($firstTransactionSubquery, 'ft', function($join) {
-                    $join->on('ca.client_id', '=', 'ft.client_id');
-                })
                 ->select([
                     'ca.client_id',
                     'c.client_prenom as first_name',
                     'c.client_nom as last_name',
                     'c.client_telephone as phone',
-                    'cpm.country_payments_methods_name as operator',
                     'ca.client_abonnement_creation as activation_date',
                     'ca.client_abonnement_expiration as end_date',
-                    'ft.result as transaction_result', // Ajouter le résultat de la transaction
                     DB::raw("CASE 
-                        -- Pour Timwe : 3 jours = Trial, ~30 jours = Mensuel
-                        WHEN LOWER(TRIM(cpm.country_payments_methods_name)) LIKE '%timwe%' THEN
-                            CASE 
-                                WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) = 3 THEN 'Trial'
-                                WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) BETWEEN 20 AND 40 THEN 'Mensuel'
-                                ELSE 'Mensuel'
-                            END
-                        -- Autres opérateurs : logique par durée
+                        WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) <= 3 THEN 'Trial'
                         WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) = 1 THEN 'Journalier'
                         WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) BETWEEN 20 AND 40 THEN 'Mensuel'
                         WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) >= 330 THEN 'Annuel'
@@ -1506,97 +1475,38 @@ class DashboardService
                     END as plan")
                 ])
                 ->where(function($q) use ($startBound, $endExclusive) {
-                    // Afficher les abonnements créés dans la période OU actifs à la fin de la période
                     $q->where(function($subQ) use ($startBound, $endExclusive) {
                         $subQ->where('ca.client_abonnement_creation', '>=', $startBound)
                              ->where('ca.client_abonnement_creation', '<', $endExclusive);
                     })
                     ->orWhere(function($subQ) use ($endExclusive) {
-                        // Abonnements actifs (expiration NULL ou >= endExclusive)
-                        $subQ->where(function($activeQ) use ($endExclusive) {
-                            $activeQ->whereNull('ca.client_abonnement_expiration')
-                                    ->orWhere('ca.client_abonnement_expiration', '>=', $endExclusive);
-                        });
+                        $subQ->whereNull('ca.client_abonnement_expiration')
+                             ->orWhere('ca.client_abonnement_expiration', '>=', $endExclusive);
                     });
                 });
             
-            $this->applyOperatorFilter($query, $selectedOperator);
+            // Ajouter le nom opérateur + JOIN conditionnel
+            if ($selectedOperator !== 'ALL' && !empty($selectedOperator)) {
+                $query->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id');
+                $query->addSelect('cpm.country_payments_methods_name as operator');
+                $this->applyOperatorFilter($query, $selectedOperator);
+            } else {
+                $query->addSelect(DB::raw("(SELECT cpm2.country_payments_methods_name FROM country_payments_methods cpm2 WHERE cpm2.country_payments_methods_id = ca.country_payments_methods_id LIMIT 1) as operator"));
+            }
             
-            // Compter le total avec une estimation pour les grandes tables (optimisation)
             $totalCount = $query->count();
             
-            Log::info("getSubscriptionDetails - Total abonnements trouvés", [
-                'totalCount' => $totalCount,
-                'operator' => $selectedOperator,
-                'period' => $startBound->toDateString() . ' - ' . $endExclusive->copy()->subDay()->toDateString()
+            Log::info("getSubscriptionDetails - Total abonnements", [
+                'totalCount' => $totalCount, 'operator' => $selectedOperator
             ]);
             
-            // Limiter les résultats
             $results = $query->orderByDesc('ca.client_abonnement_creation')->limit($limit)->get();
             
-            // PPID constants pour Timwe
-            $billingPpid = env('TIMWE_BILLING_PPID', '63980');
-            $trial3DaysPpid = env('TIMWE_FREE_TRIAL_PPID_3_DAYS', '63981');
-            $trial30DaysPpid = env('TIMWE_FREE_TRIAL_PPID_30_DAYS', '63982');
-            
-            // Convertir en tableau et déterminer le plan basé sur pricepointId ET la durée
-            // Les transactions sont déjà récupérées via le LEFT JOIN optimisé
-            $dataArray = $results->map(function($item) use ($billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
-                // Convertir l'objet stdClass en tableau associatif
+            $dataArray = $results->map(function($item) {
                 $array = (array)$item;
-                // S'assurer que client_id est présent même si null
-                if (!isset($array['client_id'])) {
-                    $array['client_id'] = null;
-                }
-                
-                // Pour Timwe, déterminer le plan basé sur pricepointId ET la durée de l'abonnement
-                $operator = $array['operator'] ?? '';
-                $activationDate = $array['activation_date'] ?? null;
-                $endDate = $array['end_date'] ?? null;
-                $transactionResult = $array['transaction_result'] ?? null;
-                
-                if (stripos($operator, 'timwe') !== false && $activationDate && $endDate) {
-                    // Calculer la durée de l'abonnement
-                    $duration = Carbon::parse($activationDate)->diffInDays(Carbon::parse($endDate));
-                    
-                    // Extraire le PPID de la transaction (déjà récupérée via JOIN)
-                    if ($transactionResult) {
-                        $ppid = $this->extractPricepointId($transactionResult);
-                        
-                        // Logique finale : PRIORITÉ à la DURÉE (3j ET 30j) puis PPID
-                        // 1. Durée = 3 jours → TOUJOURS Trial gratuit
-                        // 2. Durée ≈ 30 jours → TOUJOURS Mensuel payant (peu importe PPID)
-                        // 3. Autres durées → Utiliser le PPID pour déterminer
-                        
-                        if ($duration === 3) {
-                            // Durée = 3 jours → TOUJOURS Trial gratuit
-                            $array['plan'] = 'Trial';
-                        } elseif ($duration >= 20 && $duration <= 40) {
-                            // Durée ≈ 30 jours → TOUJOURS Mensuel payant (peu importe PPID)
-                            $array['plan'] = 'Mensuel';
-                        } elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
-                            // PPID Trial pour autres durées → Trial gratuit
-                            $array['plan'] = 'Trial';
-                        } elseif ($ppid === $billingPpid) {
-                            // PPID Billing pour autres durées → Mensuel payant
-                            $array['plan'] = 'Mensuel';
-                        } else {
-                            // PPID inconnu → fallback sur Trial
-                            $array['plan'] = 'Trial';
-                        }
-                    }
-                }
-                
-                // Retirer transaction_result du tableau final (pas besoin de l'envoyer au frontend)
-                unset($array['transaction_result']);
-                
+                if (!isset($array['client_id'])) $array['client_id'] = null;
                 return $array;
             })->toArray();
-            
-            Log::info("getSubscriptionDetails - Données retournées", [
-                'count' => count($dataArray),
-                'sample_client_id' => $dataArray[0]['client_id'] ?? 'N/A' ?? null
-            ]);
             
             return [
                 'data' => $dataArray,
@@ -1609,7 +1519,7 @@ class DashboardService
                 ]
             ];
         } catch (\Exception $e) {
-            Log::error("Erreur lors de la récupération des détails des abonnements: " . $e->getMessage());
+            Log::error("Erreur getSubscriptionDetails: " . $e->getMessage());
             return [
                 'data' => [],
                 'meta' => [
@@ -2926,10 +2836,9 @@ class DashboardService
                 $monthEnd = $cohortMonth->copy()->endOfMonth();
                 
                 $query = DB::table('client_abonnement as ca')
-                    ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                     ->whereBetween('ca.client_abonnement_creation', [$monthStart, $monthEnd]);
                 
-                $this->applyOperatorFilter($query, $operatorFilter);
+                $this->applyOperatorJoinAndFilter($query, $operatorFilter, 'ca');
                 
                 $totalSubscribers = $query->count();
                 
@@ -2981,10 +2890,8 @@ class DashboardService
             $endCarbon = Carbon::parse($endDate)->endOfDay();
             
             $expiredQuery = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->whereBetween('ca.client_abonnement_expiration', [$startDate, $endCarbon]);
-            
-            $this->applyOperatorFilter($expiredQuery, $operatorFilter);
+            $this->applyOperatorJoinAndFilter($expiredQuery, $operatorFilter, 'ca');
             
             $expiredSubscriptions = $expiredQuery->count();
             if ($expiredSubscriptions == 0) return 0;
@@ -2992,13 +2899,11 @@ class DashboardService
             $windowDays = 60; // fenêtre de renouvellement
             
             $renewedQuery = DB::table('client_abonnement as ca1')
-                ->join('country_payments_methods as cpm1', 'ca1.country_payments_methods_id', '=', 'cpm1.country_payments_methods_id')
                 ->join('client_abonnement as ca2', 'ca1.client_id', '=', 'ca2.client_id')
                 ->whereBetween('ca1.client_abonnement_expiration', [$startDate, $endCarbon])
                 ->where('ca2.client_abonnement_creation', '>', DB::raw('ca1.client_abonnement_expiration'))
-                ->where('ca2.client_abonnement_creation', '<=', DB::raw("DATE_ADD(ca1.client_abonnement_expiration, INTERVAL $windowDays DAY)"));
-            
-            $this->applyOperatorFilter($renewedQuery, $operatorFilter, 'cpm1');
+                ->whereRaw("ca2.client_abonnement_creation <= DATE_ADD(ca1.client_abonnement_expiration, INTERVAL ? DAY)", [$windowDays]);
+            $this->applyOperatorJoinAndFilter($renewedQuery, $operatorFilter, 'ca1');
             
             $renewedSubscriptions = $renewedQuery->distinct('ca1.client_abonnement_id')->count();
             
@@ -3018,11 +2923,9 @@ class DashboardService
             $endCarbon = Carbon::parse($endDate)->endOfDay();
             
             $query = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->where('ca.client_abonnement_creation', '>=', $startDate)
                 ->where('ca.client_abonnement_creation', '<=', $endCarbon);
-            
-            $this->applyOperatorFilter($query, $operatorFilter);
+            $this->applyOperatorJoinAndFilter($query, $operatorFilter, 'ca');
             
             $subscriptions = $query->select('ca.client_abonnement_creation', 'ca.client_abonnement_expiration')->get();
             if ($subscriptions->count() == 0) return 0;
@@ -3051,10 +2954,8 @@ class DashboardService
             
             // Clients qui ont eu un abonnement expiré avant la période
             $expiredBeforePeriod = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->where('ca.client_abonnement_expiration', '<', $startDate);
-            
-            $this->applyOperatorFilter($expiredBeforePeriod, $operatorFilter);
+            $this->applyOperatorJoinAndFilter($expiredBeforePeriod, $operatorFilter, 'ca');
             
             $expiredClients = $expiredBeforePeriod->distinct('ca.client_id')->pluck('ca.client_id');
             
@@ -3070,12 +2971,10 @@ class DashboardService
             
             // Clients réactivés pendant la période
             $reactivatedQuery = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->whereIn('ca.client_id', $expiredClients)
                 ->where('ca.client_abonnement_creation', '>=', $startDate)
                 ->where('ca.client_abonnement_creation', '<=', $endCarbon);
-            
-            $this->applyOperatorFilter($reactivatedQuery, $operatorFilter);
+            $this->applyOperatorJoinAndFilter($reactivatedQuery, $operatorFilter, 'ca');
             
             $reactivatedClients = $reactivatedQuery->distinct('ca.client_id')->count();
             

@@ -48,9 +48,9 @@ class Kernel extends ConsoleKernel
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/ooredoo-stats.log'));
             
-            // Cache warmup dashboard - Toutes les 10 minutes
+            // Cache warmup dashboard - Toutes les 25 minutes (éviter cold cache)
             $schedule->command('dashboard:warmup --operator=ALL')
-                ->everyTenMinutes()
+                ->cron('*/25 * * * *')
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/dashboard-warmup.log'));
