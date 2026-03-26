@@ -145,7 +145,7 @@ class DashboardService
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
         
         // Log pour déboguer les KPIs Timwe/Ooredoo et Analyses Avancées
-        Log::info("getStandardDashboardData - KPIs retournés", [
+        Log::debug("getStandardDashboardData - KPIs retournés", [
             'billingRateTimwe' => $kpis['billingRateTimwe'] ?? 'missing',
             'totalTimweClients' => $kpis['totalTimweClients'] ?? 'missing',
             'totalTimweBillings' => $kpis['totalTimweBillings'] ?? 'missing',
@@ -644,7 +644,7 @@ class DashboardService
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
         
         // Log pour déboguer les KPIs Timwe et Analyses Avancées
-        Log::info("getOptimizedDashboardData - KPIs retournés", [
+        Log::debug("getOptimizedDashboardData - KPIs retournés", [
             'billingRateTimwe' => $kpis['billingRateTimwe'] ?? 'missing',
             'totalTimweClients' => $kpis['totalTimweClients'] ?? 'missing',
             'totalTimweBillings' => $kpis['totalTimweBillings'] ?? 'missing',
@@ -882,7 +882,7 @@ class DashboardService
         $granularity = $periodDays > 365 ? 'month' : 'day'; // Mode quotidien pour périodes <= 365 jours
         $historyDateExpr = $granularity === 'month' ? "DATE_FORMAT(h.time, '%Y-%m-01')" : "DATE(h.time)";
         
-        Log::info("getTransactionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
+        Log::debug("getTransactionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
         
         // Transactions agrégées par jour ou par mois selon la période
         $transactionsQuery = DB::table("history as h")
@@ -902,7 +902,7 @@ class DashboardService
             ->keyBy('date')
             ->toArray();
         
-        Log::info("Transactions raw - Nombre de dates: " . count($transactionsRaw) . ", Exemple de clés: " . implode(', ', array_slice(array_keys($transactionsRaw), 0, 5)));
+        Log::debug("Transactions raw - Nombre de dates: " . count($transactionsRaw) . ", Exemple de clés: " . implode(', ', array_slice(array_keys($transactionsRaw), 0, 5)));
         
         // Générer la série complète avec intervalle adaptatif
         $startDate = $startBound->copy();
@@ -1065,7 +1065,7 @@ class DashboardService
         $granularity = $periodDays > 365 ? 'month' : 'day'; // Mode quotidien pour périodes <= 365 jours
         $caDateExpr = $granularity === 'month' ? "DATE_FORMAT(client_abonnement_creation, '%Y-%m-01')" : "DATE(client_abonnement_creation)";
         
-        Log::info("getSubscriptionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
+        Log::debug("getSubscriptionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
         
         // Requête pour les activations quotidiennes/mensuelles avec filtre opérateur
         $activationsQuery = DB::table("client_abonnement as ca")
@@ -1077,7 +1077,7 @@ class DashboardService
         // Appliquer le filtre d'opérateur
         $this->applyOperatorFilter($activationsQuery, $selectedOperator);
         
-        Log::info("Requête activations quotidiennes - Opérateur: {$selectedOperator}, Période: {$startBound->toDateString()} à {$endExclusive->toDateString()}");
+        Log::debug("Requête activations quotidiennes - Opérateur: {$selectedOperator}, Période: {$startBound->toDateString()} à {$endExclusive->toDateString()}");
         
         $activationsRaw = $activationsQuery
             ->groupBy(DB::raw($caDateExpr))
@@ -1086,7 +1086,7 @@ class DashboardService
             ->keyBy('date')
             ->toArray();
         
-        Log::info("Activations trouvées: " . count($activationsRaw) . " jours/mois avec données");
+        Log::debug("Activations trouvées: " . count($activationsRaw) . " jours/mois avec données");
         
         // Générer la série complète avec toutes les dates
         $startDate = $startBound->copy();
@@ -1129,17 +1129,17 @@ class DashboardService
         $subscriptionDetails = $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
         
         // Calculer activations_by_channel (avec comparaison)
-        Log::info("getSubscriptionsData - Calcul activations_by_channel", [
+        Log::debug("getSubscriptionsData - Calcul activations_by_channel", [
             'startBound' => $startBound->toDateString(),
             'endExclusive' => $endExclusive->toDateString(),
             'selectedOperator' => $selectedOperator
         ]);
         $activationsCurrent = $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator);
-        Log::info("getSubscriptionsData - Activations par canal (current)", $activationsCurrent);
+        Log::debug("getSubscriptionsData - Activations par canal (current)", $activationsCurrent);
         $activationsPrevious = ($compStartBound && $compEndExclusive) 
             ? $this->calculateActivationsByPaymentMethod($compStartBound, $compEndExclusive, $selectedOperator)
             : ['cb' => 0, 'recharge' => 0, 'phone_balance' => 0, 'other' => 0];
-        Log::info("getSubscriptionsData - Activations par canal (previous)", $activationsPrevious);
+        Log::debug("getSubscriptionsData - Activations par canal (previous)", $activationsPrevious);
         
         $activationsByChannel = [
             "cb" => [
@@ -1165,17 +1165,17 @@ class DashboardService
         ];
         
         // Calculer plan_distribution (avec comparaison)
-        Log::info("getSubscriptionsData - Calcul plan_distribution", [
+        Log::debug("getSubscriptionsData - Calcul plan_distribution", [
             'startBound' => $startBound->toDateString(),
             'endExclusive' => $endExclusive->toDateString(),
             'selectedOperator' => $selectedOperator
         ]);
         $plansCurrent = $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator);
-        Log::info("getSubscriptionsData - Plan distribution (current)", $plansCurrent);
+        Log::debug("getSubscriptionsData - Plan distribution (current)", $plansCurrent);
         $plansPrevious = ($compStartBound && $compEndExclusive)
             ? $this->calculatePlanDistribution($compStartBound, $compEndExclusive, $selectedOperator)
             : ['daily' => 0, 'monthly' => 0, 'annual' => 0, 'other' => 0];
-        Log::info("getSubscriptionsData - Plan distribution (previous)", $plansPrevious);
+        Log::debug("getSubscriptionsData - Plan distribution (previous)", $plansPrevious);
         
         $planDistribution = [
             "daily" => [
@@ -1201,30 +1201,30 @@ class DashboardService
         ];
         
         // Calculer cohorts
-        Log::info("getSubscriptionsData - Calcul cohorts", [
+        Log::debug("getSubscriptionsData - Calcul cohorts", [
             'startDate' => $startBound->format('Y-m-d'),
             'endDate' => $endExclusive->copy()->subDay()->format('Y-m-d'),
             'selectedOperator' => $selectedOperator
         ]);
         $cohorts = $this->calculateCohorts($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::info("getSubscriptionsData - Cohorts calculées", ['count' => count($cohorts), 'sample' => $cohorts[0] ?? null]);
+        Log::debug("getSubscriptionsData - Cohorts calculées", ['count' => count($cohorts), 'sample' => $cohorts[0] ?? null]);
         
         // Calculer renewal_rate, average_lifespan, reactivation_rate (avec comparaison)
-        Log::info("getSubscriptionsData - Calcul renewal_rate, average_lifespan, reactivation_rate");
+        Log::debug("getSubscriptionsData - Calcul renewal_rate, average_lifespan, reactivation_rate");
         $renewalCurrent = $this->calculateRenewalRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::info("getSubscriptionsData - Renewal rate (current)", ['value' => $renewalCurrent]);
+        Log::debug("getSubscriptionsData - Renewal rate (current)", ['value' => $renewalCurrent]);
         $renewalPrevious = ($compStartBound && $compEndExclusive)
             ? $this->calculateRenewalRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
             : 0;
         
         $lifespanCurrent = $this->calculateAverageLifespan($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::info("getSubscriptionsData - Average lifespan (current)", ['value' => $lifespanCurrent]);
+        Log::debug("getSubscriptionsData - Average lifespan (current)", ['value' => $lifespanCurrent]);
         $lifespanPrevious = ($compStartBound && $compEndExclusive)
             ? $this->calculateAverageLifespan($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
             : 0;
         
         $reactivationCurrent = $this->calculateReactivationRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::info("getSubscriptionsData - Reactivation rate (current)", ['value' => $reactivationCurrent]);
+        Log::debug("getSubscriptionsData - Reactivation rate (current)", ['value' => $reactivationCurrent]);
         $reactivationPrevious = ($compStartBound && $compEndExclusive)
             ? $this->calculateReactivationRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
             : 0;
@@ -1249,7 +1249,7 @@ class DashboardService
         // Gérer les erreurs de mémoire pour cette méthode
         try {
             $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
-            Log::info("getSubscriptionsData - Statistiques quotidiennes calculées", ['count' => count($dailyStatistics)]);
+            Log::debug("getSubscriptionsData - Statistiques quotidiennes calculées", ['count' => count($dailyStatistics)]);
         } catch (\Exception $e) {
             Log::error("getSubscriptionsData - Erreur lors du calcul des statistiques quotidiennes: " . $e->getMessage());
             $dailyStatistics = []; // Retourner un tableau vide en cas d'erreur
@@ -1260,7 +1260,7 @@ class DashboardService
         if ($compStartBound && $compEndExclusive) {
             try {
                 $dailyStatisticsComparison = $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator);
-                Log::info("getSubscriptionsData - Statistiques quotidiennes de comparaison calculées", [
+                Log::debug("getSubscriptionsData - Statistiques quotidiennes de comparaison calculées", [
                     'count' => count($dailyStatisticsComparison),
                     'compStart' => $compStartBound->toDateString(),
                     'compEnd' => $compEndExclusive->toDateString()
