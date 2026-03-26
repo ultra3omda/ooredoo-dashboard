@@ -162,7 +162,12 @@ class DashboardService
             
             if (!$current) return null;
             
-            // Active subscriptions = snapshot du dernier jour
+            // active_current = abonnements activés dans la période ET encore actifs à la fin
+            // Requête légère (~200ms) car utilise l'index sur client_abonnement_creation
+            $activeCurrent = $this->queryActivatedStillActive($startBound, $endExclusive, $operatorId);
+            $activeComp = $this->queryActivatedStillActive($compStartBound, $compEndExclusive, $operatorId);
+            
+            // active_snapshot = total abonnements actifs à la fin de la période (pour conversion rate)
             $activeCurrentSnapshot = DB::table('dashboard_daily_stats')
                 ->where('stat_date', $endDate)
                 ->where(function ($q) use ($operatorId) {
@@ -179,12 +184,12 @@ class DashboardService
                 })
                 ->value('active_snapshot') ?? 0;
             
-            // Calculs des taux
-            $retentionRate = $current['activated'] > 0 ? round(($activeCurrentSnapshot / $current['activated']) * 100, 1) : 0;
-            $retentionRateComp = ($comparison['activated'] ?? 0) > 0 ? round(($activeCompSnapshot / $comparison['activated']) * 100, 1) : 0;
+            // Calculs des taux avec les bonnes métriques
+            $retentionRate = $current['activated'] > 0 ? round(($activeCurrent / $current['activated']) * 100, 1) : 0;
+            $retentionRateComp = ($comparison['activated'] ?? 0) > 0 ? round(($activeComp / $comparison['activated']) * 100, 1) : 0;
             
-            $conversionRate = $activeCurrentSnapshot > 0 ? round(($current['transacting_users'] / $activeCurrentSnapshot) * 100, 1) : 0;
-            $conversionRateComp = $activeCompSnapshot > 0 ? round((($comparison['transacting_users'] ?? 0) / $activeCompSnapshot) * 100, 1) : 0;
+            $conversionRate = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 1) : 0;
+            $conversionRateComp = $activeComp > 0 ? round((($comparison['transacting_users'] ?? 0) / $activeComp) * 100, 1) : 0;
             
             $churnRate = $current['activated'] > 0 ? round(($current['lost'] / $current['activated']) * 100, 1) : 0;
             $churnRateComp = ($comparison['activated'] ?? 0) > 0 ? round((($comparison['lost'] ?? 0) / $comparison['activated']) * 100, 1) : 0;
@@ -192,8 +197,8 @@ class DashboardService
             $txPerUser = $current['transacting_users'] > 0 ? round($current['transactions'] / $current['transacting_users'], 1) : 0;
             $txPerUserComp = ($comparison['transacting_users'] ?? 0) > 0 ? round($comparison['transactions'] / $comparison['transacting_users'], 1) : 0;
             
-            $convRatePeriod = $activeCurrentSnapshot > 0 ? round(($current['transacting_users'] / $activeCurrentSnapshot) * 100, 2) : 0;
-            $convRatePeriodComp = $activeCompSnapshot > 0 ? round((($comparison['transacting_users'] ?? 0) / $activeCompSnapshot) * 100, 2) : 0;
+            $convRatePeriod = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 2) : 0;
+            $convRatePeriodComp = $activeComp > 0 ? round((($comparison['transacting_users'] ?? 0) / $activeComp) * 100, 2) : 0;
             
             // Marchands actifs ratio
             $totalActivePartnersDB = Cache::remember('total_active_partners', 3600, function() {
@@ -224,9 +229,9 @@ class DashboardService
                     "change" => $this->calculatePercentageChange($current['activated'], $comparison['activated'] ?? 0)
                 ],
                 "activeSubscriptions" => [
-                    "current" => $activeCurrentSnapshot,
-                    "previous" => $activeCompSnapshot,
-                    "change" => $this->calculatePercentageChange($activeCurrentSnapshot, $activeCompSnapshot)
+                    "current" => $activeCurrent,
+                    "previous" => $activeComp,
+                    "change" => $this->calculatePercentageChange($activeCurrent, $activeComp)
                 ],
                 "deactivatedSubscriptions" => [
                     "current" => $current['deactivated'],
@@ -349,6 +354,25 @@ class DashboardService
             Log::warning("Fallback raw SQL: materialized read failed: " . $e->getMessage());
             return null;
         }
+    }
+    
+    /**
+     * Requête légère: nombre d'abonnements activés dans la période ET encore actifs
+     * Utilise l'index sur client_abonnement_creation (~200ms)
+     */
+    private function queryActivatedStillActive(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): int
+    {
+        $query = DB::table('client_abonnement as ca')
+            ->where('ca.client_abonnement_creation', '>=', $startBound)
+            ->where('ca.client_abonnement_creation', '<', $endExclusive)
+            ->where(function ($q) use ($endExclusive) {
+                $q->whereNull('ca.client_abonnement_expiration')
+                  ->orWhere('ca.client_abonnement_expiration', '>=', $endExclusive);
+            });
+        if ($operatorId !== null) {
+            $query->where('ca.country_payments_methods_id', $operatorId);
+        }
+        return $query->count();
     }
     
     /**

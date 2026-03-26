@@ -34,20 +34,25 @@ Deployer l'application Ooredoo Privileges (Club Privileges Dashboard) et effectu
 - Optimisation calculateQuarterlyActiveLocations: 16 requetes -> 2
 - Fix Express proxy timeout: 120s -> 300s
 
-### Optimisations Performance - Phase 3 (26 Mars 2026) - SESSION ACTUELLE
-- **Securisation SQL (PDO bindings)**: Toutes les requetes KPIs, transactions, marchands utilisent maintenant des bindings parametres au lieu de DB::raw avec interpolation
+### Optimisations Performance - Phase 3 (26 Mars 2026)
+- **Securisation SQL (PDO bindings)**: Toutes les requetes KPIs, transactions, marchands utilisent des bindings parametres
 - **Optimisation getMerchantsOptimized**: JOIN conditionnel cpm pour ALL (-50% temps)
-- **Optimisation getSubscriptionDetails**: Suppression sous-requete correlee sur transactions_history (qui causait un timeout systematique de 30s). Resultats: passe de 0 a 140 resultats retournes
+- **Optimisation getSubscriptionDetails**: Suppression sous-requete correlee sur transactions_history
 - **Optimisation calculateCohorts, calculateRenewalRate, calculateAverageLifespan, calculateReactivationRate**: JOIN conditionnel cpm pour ALL
 - **Cron job warmup cache**: Toutes les 25 minutes via supervisor + Laravel scheduler
 - **Fix SQL injection**: DB::raw("...INTERVAL $windowDays DAY") -> whereRaw avec binding
+- **Chargement progressif (split API)**: 5 endpoints split (kpis, merchants, transactions, subscriptions, ooredoo) charges en parallele
+- **Fix auth split endpoints**: Routes deplacees de api.php vers web.php avec middleware auth session
+- **Tables materialisees (dashboard_daily_stats)**: Pre-calcul KPIs quotidiens pour 90 jours, avec fallback intelligent
+- **Cron matérialisation quotidienne**: Scheduler daily a 3h00 pour recalculer les 3 derniers jours
+- **Nettoyage routes**: Suppression routes dupliquees dans api.php
 
 ### Resultats Performance FINAL
 | Metrique | Phase 1 (avant) | Phase 3 (apres) | Amelioration |
 |---------|-----------------|-----------------|-------------|
-| Cold cache (14j ALL) | 165s+ (souvent timeout) | 23s | **-86%** |
-| Cache HIT | ~500ms | ~427ms | -15% |
-| KPIs | ~31s | ~15s | -50% |
+| Cold cache (14j ALL) | 165s+ (souvent timeout) | 16.9s | **-90%** |
+| Warm cache | ~500ms | ~2-3s (progressif) | Perception amelioree |
+| KPIs | ~31s | ~1s (materialisees) | -97% |
 | retentionTrend | Bloquait indefiniment | ~1s | 100% fix |
 | quarterlyActiveLocations | ~60s+ (16 requetes) | ~1s (2 requetes) | -98% |
 | getSubscriptionDetails | Timeout 30s (0 resultats) | ~5s (140 resultats) | 100% fix |
@@ -59,20 +64,19 @@ Deployer l'application Ooredoo Privileges (Club Privileges Dashboard) et effectu
 - Utilisateurs dashboard
 
 ## Backlog
-### P2
-- Index MySQL sur client_abonnement_creation, client_abonnement_expiration
-- Vues materialisees pour les calculs KPI frequents
 
 ### P3
-- Chargement progressif du dashboard (chunks AJAX)
 - Notifications de performance en temps reel
+- Materialiser les autres sections (merchants, subscriptions, transactions) pour reduire cold cache < 5s
 
 ## Fichiers cles
-- `app/Services/DashboardService.php` - Service principal (~3300 lignes)
+- `app/Services/DashboardService.php` - Service principal (~3600 lignes) avec tables materialisees
+- `app/Http/Controllers/Api/DataControllerOptimized.php` - Endpoints split + monolithique
 - `app/Http/Middleware/DashboardPerformanceMiddleware.php` - Middleware timeout/monitoring
 - `app/Console/Commands/WarmupDashboardCache.php` - Pre-remplissage cache
-- `app/Console/Kernel.php` - Scheduler cron job (*/25 * * * *)
-- `app/Http/Controllers/Api/EklektikDashboardController.php` - Endpoints Eklektik rapides
+- `app/Console/Commands/MaterializeDailyStats.php` - Materialisation KPIs quotidiens
+- `app/Console/Kernel.php` - Scheduler (warmup */25, materialize daily 3:00)
+- `routes/web.php` - Routes dashboard authentifiees (split + monolithique)
 - `/etc/nginx/sites-available/laravel` - Configuration Nginx
 - `backend/server.py` - Proxy FastAPI (port 8001 -> 8002)
 - `frontend/server.js` - Proxy Express (port 3000 -> 8002)
