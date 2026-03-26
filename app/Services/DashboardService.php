@@ -97,6 +97,39 @@ class DashboardService
     /**
      * Génère une clé de cache optimisée (sans user_id pour partage)
      */
+    // ==========================================
+    // METHODES PUBLIQUES POUR ENDPOINTS SPLIT
+    // ==========================================
+    public function getKPIsOptimizedPublic(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
+    {
+        return $this->getKPIsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+    }
+    
+    public function getMerchantsOptimizedPublic(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
+    {
+        return $this->getMerchantsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+    }
+    
+    public function getTransactionsDataPublic(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
+    {
+        return $this->getTransactionsData($startBound, $endExclusive, $selectedOperator);
+    }
+    
+    public function getSubscriptionsDataPublic(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?Carbon $compStartBound = null, ?Carbon $compEndExclusive = null): array
+    {
+        return $this->getSubscriptionsData($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive);
+    }
+    
+    public function getOoredooDailyStatisticsPublic(Carbon $startBound, Carbon $endExclusive): array
+    {
+        return $this->getOoredooDailyStatistics($startBound, $endExclusive);
+    }
+    
+    public function groupOoredooStatsByMonthPublic(array $dailyStats): array
+    {
+        return $this->groupOoredooStatsByMonth($dailyStats);
+    }
+    
     private function generateCacheKey(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $operator): string
     {
         $keyData = [

@@ -5370,11 +5370,10 @@
 
     // Load dashboard data with simple loading
     async function loadDashboardData() {
-      let timeoutId = null;
-      
       try {
-        // Show simple loading
+        // Show progressive loading
         showLoading();
+        updateProgressiveStatus('Initialisation...', 0);
         
         // Get date values for both periods
         const startDate = document.getElementById('start-date').value;
@@ -5382,128 +5381,219 @@
         const comparisonStartDate = document.getElementById('comparison-start-date').value;
         const comparisonEndDate = document.getElementById('comparison-end-date').value;
         
-        // Get selected operators (multi-select)
+        // Get selected operators
         const selectedOperator = selectedOperators.includes('ALL') || selectedOperators.length === 0 
           ? 'ALL' 
           : selectedOperators.length === 1 
             ? selectedOperators[0] 
             : selectedOperators.join(',');
         
-        // Build API URL with date parameters
-        let apiUrl = '/api/dashboard/data';
+        // Build params
         const params = new URLSearchParams();
-        
         if (startDate && endDate) {
           params.append('start_date', startDate);
           params.append('end_date', endDate);
         }
-        
         if (comparisonStartDate && comparisonEndDate) {
           params.append('comparison_start_date', comparisonStartDate);
           params.append('comparison_end_date', comparisonEndDate);
         }
-        
         if (selectedOperator) {
           params.append('operator', selectedOperator);
         }
-        
-        if (params.toString()) {
-          apiUrl += '?' + params.toString();
-        }
+        const queryString = params.toString();
         
         const startTime = performance.now();
         
-        // Add timeout to prevent hanging - Augmenté à 3 minutes pour permettre le calcul des Analyses Avancées
-        const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes timeout pour longues périodes
+        // Essayer d'abord le chargement progressif (split endpoints)
+        // Si un endpoint echoue, on fallback sur le monolithique
+        const sections = [
+          { name: 'kpis', url: `/api/dashboard/split/kpis?${queryString}`, label: 'KPIs', weight: 20 },
+          { name: 'merchants', url: `/api/dashboard/split/merchants?${queryString}`, label: 'Marchands', weight: 25 },
+          { name: 'transactions', url: `/api/dashboard/split/transactions?${queryString}`, label: 'Transactions', weight: 15 },
+          { name: 'subscriptions', url: `/api/dashboard/split/subscriptions?${queryString}`, label: 'Abonnements', weight: 30 },
+          { name: 'ooredoo_stats', url: `/api/dashboard/split/ooredoo?${queryString}`, label: 'Ooredoo', weight: 10 }
+        ];
         
-        const response = await fetch(apiUrl, {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
+        let completedWeight = 0;
+        let sectionResults = {};
+        let hasAnyData = false;
+        
+        // Lancer TOUTES les requetes en parallele
+        const fetchPromises = sections.map(section => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 180000);
+          
+          return fetch(section.url, {
+            signal: controller.signal,
+            headers: { 'Accept': 'application/json' }
+          })
+          .then(async (response) => {
+            clearTimeout(timeoutId);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const json = await response.json();
+            
+            // Mise a jour progressive
+            completedWeight += section.weight;
+            updateProgressiveStatus(`${section.label} charge!`, completedWeight);
+            
+            sectionResults[section.name] = json;
+            hasAnyData = true;
+            
+            // Mettre a jour la section correspondante immediatement
+            updateDashboardSection(section.name, json);
+            
+            return { section: section.name, success: true, data: json };
+          })
+          .catch(err => {
+            clearTimeout(timeoutId);
+            console.warn(`Section ${section.name} echec:`, err.message);
+            completedWeight += section.weight;
+            updateProgressiveStatus(`${section.label} - fallback...`, completedWeight);
+            return { section: section.name, success: false, error: err.message };
+          });
         });
         
-        clearTimeout(timeoutId);
+        // Attendre que TOUTES les sections soient chargees
+        const results = await Promise.all(fetchPromises);
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
         const loadTime = performance.now() - startTime;
-        
-        console.log('✅ Dashboard data loaded successfully:', {
+        console.log('Dashboard progressif:', {
           operator: selectedOperator,
-          hasKPIs: !!data.kpis,
-          hasCharts: !!data.subscriptions,
           loadTime: `${loadTime.toFixed(0)}ms`,
-          optimizationMode: data.optimization_mode || 'normal'
+          sections: results.map(r => `${r.section}: ${r.success ? 'OK' : 'FAIL'}`)
         });
         
-        // Debug: Vérifier les KPIs Timwe et Analyses Avancées
-        if (data.kpis) {
-          console.log('📊 KPIs Timwe:', {
-            billingRateTimwe: data.kpis.billingRateTimwe,
-            totalTimweClients: data.kpis.totalTimweClients,
-            totalTimweBillings: data.kpis.totalTimweBillings
+        // Si le chargement progressif a echoue pour toutes les sections, fallback monolithique
+        if (!hasAnyData) {
+          console.warn('Fallback sur endpoint monolithique...');
+          updateProgressiveStatus('Chargement complet...', 50);
+          const fallbackController = new AbortController();
+          const fallbackTimeout = setTimeout(() => fallbackController.abort(), 180000);
+          
+          const response = await fetch(`/api/dashboard/data?${queryString}`, {
+            signal: fallbackController.signal,
+            headers: { 'Accept': 'application/json' }
           });
+          clearTimeout(fallbackTimeout);
+          
+          if (response.ok) {
+            const data = await response.json();
+            updateDashboard(data);
+          } else {
+            throw new Error(`Fallback echoue: HTTP ${response.status}`);
+          }
         }
-        if (data.subscriptions) {
-          console.log('📊 Analyses Avancées:', {
-            activations_by_channel: data.subscriptions.activations_by_channel,
-            plan_distribution: data.subscriptions.plan_distribution,
-            renewal_rate: data.subscriptions.renewal_rate,
-            average_lifespan: data.subscriptions.average_lifespan,
-            cohorts: data.subscriptions.cohorts?.length || 0
-          });
-        }
-
-        // Masquer le message d'optimisation
+        
+        // Masquer le chargement
         hideOptimizationMessage();
-        
-        // Show performance indicator if fast load (likely from cache)
         updatePerformanceIndicator(loadTime);
-        
-        // Show immediate notification
-        const operatorLabel = selectedOperator === 'ALL' ? 'globales' : selectedOperator;
-        
-        // Update dashboard and hide loading simultaneously
-        updateDashboard(data);
         hideLoading();
         
-        // Progress bar now working correctly
-        
-        // Show success notification after everything is updated
+        const operatorLabel = selectedOperator === 'ALL' ? 'globales' : selectedOperator;
         setTimeout(() => {
-        showNotification(`✅ Données ${operatorLabel} mises à jour!`, 'success');
+          showNotification(`Donnees ${operatorLabel} mises a jour! (${(loadTime/1000).toFixed(1)}s)`, 'success');
         }, 100);
-
-        // Émettre un événement global pour que les modules (ex: Eklektik) se resynchronisent
+        
         try {
-          const evt = new CustomEvent('dashboard:refreshed');
-          window.dispatchEvent(evt);
-        } catch (e) {
-          console.warn('CustomEvent not supported, Eklektik may not auto-refresh');
-        }
+          window.dispatchEvent(new CustomEvent('dashboard:refreshed'));
+        } catch (e) {}
         
       } catch (error) {
-        clearTimeout(timeoutId); // Clean up timeout
         console.error('Error loading dashboard data:', error);
         hideLoading();
         
-        // Try to show fallback data instead of complete failure
         if (error.name === 'AbortError') {
-          showNotification('⏱️ Délai d\'attente dépassé - Chargement des données de démonstration', 'warning');
-          loadFallbackData();
-          updateDashboard(dashboardData);
+          showNotification('Delai d\'attente depasse - Chargement des donnees de demonstration', 'warning');
         } else {
-          showNotification('❌ Erreur de connexion: ' + error.message, 'error');
-          // Still try fallback
-          loadFallbackData();
-          updateDashboard(dashboardData);
+          showNotification('Erreur de connexion: ' + error.message, 'error');
         }
+        loadFallbackData();
+        updateDashboard(dashboardData);
+      }
+    }
+    
+    // Mise a jour progressive du statut de chargement
+    function updateProgressiveStatus(message, percent) {
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) {
+        const statusEl = overlay.querySelector('.loading-status');
+        const progressBar = overlay.querySelector('.progress-fill');
+        if (statusEl) statusEl.textContent = message;
+        if (progressBar) progressBar.style.width = percent + '%';
+      }
+    }
+    
+    // Mettre a jour UNE section du dashboard quand elle arrive
+    function updateDashboardSection(sectionName, json) {
+      if (!json || !json.success) return;
+      try {
+        // Initialiser le store global
+        if (!window._dashboardData) {
+          window._dashboardData = {
+            periods: {
+              primary: (document.getElementById('start-date')?.value || '') + ' - ' + (document.getElementById('end-date')?.value || ''),
+              comparison: ''
+            },
+            kpis: {},
+            merchants: [],
+            categoryDistribution: [],
+            transactions: {},
+            subscriptions: {},
+            ooredoo_stats: {},
+            insights: []
+          };
+        }
+        
+        switch(sectionName) {
+          case 'kpis':
+            if (json.data) {
+              window._dashboardData.kpis = json.data;
+              // Mettre a jour les cartes KPI immediatement
+              dashboardData = window._dashboardData;
+              updateKPIs(json.data);
+            }
+            break;
+          case 'merchants':
+            if (json.data) {
+              window._dashboardData.merchants = json.data;
+              window._dashboardData.categoryDistribution = json.categoryDistribution || [];
+              dashboardData = window._dashboardData;
+              updateMerchantKPIs(json.data, window._dashboardData.kpis);
+            }
+            break;
+          case 'transactions':
+            if (json.data) {
+              window._dashboardData.transactions = json.data;
+              dashboardData = window._dashboardData;
+              // Redessiner les graphiques avec les donnees de transactions
+              if (typeof updateCharts === 'function') {
+                try { updateCharts(window._dashboardData); } catch(e) {}
+              }
+            }
+            break;
+          case 'subscriptions':
+            if (json.data) {
+              window._dashboardData.subscriptions = json.data;
+              dashboardData = window._dashboardData;
+              // Mettre a jour les graphiques et tables d'abonnements
+              if (typeof updateCharts === 'function') {
+                try { updateCharts(window._dashboardData); } catch(e) {}
+              }
+              if (typeof updateTables === 'function') {
+                try { updateTables(window._dashboardData); } catch(e) {}
+              }
+            }
+            break;
+          case 'ooredoo_stats':
+            if (json.data) {
+              window._dashboardData.ooredoo_stats = json.data;
+              dashboardData = window._dashboardData;
+            }
+            break;
+        }
+      } catch(e) {
+        console.warn(`Erreur mise a jour section ${sectionName}:`, e);
       }
     }
     
@@ -5535,7 +5625,10 @@
       overlay.innerHTML = `
         <div class="loading-spinner">
           <div class="spinner"></div>
-          <div style="margin-top: 15px; font-weight: 500;">Chargement des données...</div>
+          <div class="loading-status" style="margin-top: 15px; font-weight: 500;">Chargement des donnees...</div>
+          <div style="margin-top: 10px; width: 200px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden;">
+            <div class="progress-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 2px; transition: width 0.5s ease;"></div>
+          </div>
         </div>
       `;
 

@@ -33,6 +33,13 @@ Route::prefix('dashboard')->name('api.dashboard.')->group(function () {
     Route::get('/subscriptions/{clientId}', [DataControllerOptimized::class, 'getUserSubscriptions'])->name('user.subscriptions');
     Route::get('/operators', [DataController::class, 'getUserOperators'])->name('operators');
     Route::get('/partners', [DataController::class, 'getPartnersList'])->name('partners');
+    // Endpoints split pour chargement progressif
+    Route::get('/split/kpis', [DataControllerOptimized::class, 'getKpisSplit'])->name('split.kpis');
+    Route::get('/split/merchants', [DataControllerOptimized::class, 'getMerchantsSplit'])->name('split.merchants');
+    Route::get('/split/transactions', [DataControllerOptimized::class, 'getTransactionsSplit'])->name('split.transactions');
+    Route::get('/split/subscriptions', [DataControllerOptimized::class, 'getSubscriptionsSplit'])->name('split.subscriptions');
+    Route::get('/split/ooredoo', [DataControllerOptimized::class, 'getOoredooStatsSplit'])->name('split.ooredoo');
+    // Legacy endpoints
     Route::get('/kpis', [DataController::class, 'getKpis'])->name('kpis');
     Route::get('/merchants', [DataController::class, 'getMerchants'])->name('merchants');
     Route::get('/transactions', [DataController::class, 'getTransactions'])->name('transactions');
