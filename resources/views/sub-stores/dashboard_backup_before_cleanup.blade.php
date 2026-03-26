@@ -1124,7 +1124,7 @@
                     </a>
                 @endif
                 
-                <form action="{{ route('auth.logout') }}" method="POST" style="display: inline;">
+                <form action="{{ route('logout') }}" method="POST" style="display: inline;">
                     @csrf
             <button type="submit" class="logout-btn" onclick="return confirm('Êtes-vous sûr de vouloir vous déconnecter ?')">
               Déconnexion

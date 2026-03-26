@@ -3,10 +3,16 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\InvitationController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\EklektikCronController;
+use App\Http\Controllers\Admin\TimweDiagnosticController;
+use App\Http\Controllers\Admin\TimweDiagnosticApiController;
+use App\Http\Controllers\Admin\MLDashboardController;
+use App\Http\Controllers\Admin\EklektikSyncTrackingController;
+use App\Http\Controllers\Admin\ClubPrivilegesSyncController;
 use App\Http\Controllers\SubStoreController;
 use App\Http\Controllers\Api\DataController;
 use App\Http\Controllers\Api\DataControllerOptimized;
@@ -143,6 +149,52 @@ Route::middleware('auth')->group(function () {
             Route::post('/eklektik-cron/test', [EklektikCronController::class, 'testCron'])->name('eklektik-cron.test');
             Route::post('/eklektik-cron/run', [EklektikCronController::class, 'runCron'])->name('eklektik-cron.run');
             Route::post('/eklektik-cron/reset', [EklektikCronController::class, 'resetToDefault'])->name('eklektik-cron.reset');
+        });
+
+        // Diagnostic Timwe (nom de route admin.timwe-diagnostic pour le bouton du dashboard)
+        Route::get('/timwe-diagnostic', [TimweDiagnosticController::class, 'index'])->name('timwe-diagnostic');
+        Route::get('/timwe-diagnostic/data', [TimweDiagnosticController::class, 'getDiagnosticData'])->name('timwe-diagnostic.data');
+        Route::get('/timwe-diagnostic/phone/{phone}/transactions', [TimweDiagnosticController::class, 'getPhoneTransactions'])->name('timwe-diagnostic.phone.transactions');
+        Route::get('/timwe-diagnostic/export', [TimweDiagnosticController::class, 'exportCsv'])->name('timwe-diagnostic.export');
+        // API rapide (endpoints séparés, < 200 ms)
+        Route::prefix('timwe-diagnostic/api')->name('timwe-diagnostic.api.')->group(function () {
+            Route::get('/summary', [TimweDiagnosticApiController::class, 'summary'])->name('summary');
+            Route::get('/funnel-kpis', [TimweDiagnosticApiController::class, 'funnelKpis'])->name('funnel-kpis');
+            Route::get('/delivery', [TimweDiagnosticApiController::class, 'delivery'])->name('delivery');
+            Route::get('/phones', [TimweDiagnosticApiController::class, 'phones'])->name('phones');
+            Route::get('/phones/{phone}/delivery-codes', [TimweDiagnosticApiController::class, 'phoneDeliveryCodes'])->name('phones.delivery-codes');
+            Route::get('/recent', [TimweDiagnosticApiController::class, 'recent'])->name('recent');
+            Route::match(['get', 'post'], '/lifetime', [TimweDiagnosticApiController::class, 'lifetime'])->name('lifetime');
+            Route::get('/billing-rate-evolution', [TimweDiagnosticApiController::class, 'billingRateEvolution'])->name('billing-rate-evolution');
+        });
+
+        // === ML DASHBOARD ROUTES === 
+        Route::prefix('ml-dashboard')->name('ml.')->group(function () {
+            Route::get('/', [MLDashboardController::class, 'index'])->name('dashboard');
+            Route::get('/data', [MLDashboardController::class, 'getDashboardData'])->name('data');
+            Route::post('/predict', [MLDashboardController::class, 'predictClient'])->name('predict');
+            Route::get('/client/{clientId}', [MLDashboardController::class, 'getClientDetails'])->name('client.details');
+            Route::post('/recommendations/generate', [MLDashboardController::class, 'generateRecommendations'])->name('recommendations.generate');
+            Route::post('/recommendations/status', [MLDashboardController::class, 'updateRecommendationStatus'])->name('recommendations.status');
+            Route::post('/recommendations/simulate', [MLDashboardController::class, 'simulateRecommendationImpact'])->name('recommendations.simulate');
+            Route::post('/features/extract', [MLDashboardController::class, 'extractFeatures'])->name('features.extract');
+            Route::post('/train', [MLDashboardController::class, 'trainModel'])->name('train');
+            Route::post('/ab-test/start', [MLDashboardController::class, 'startABTest'])->name('ab-test.start');
+            Route::get('/ab-test/results/{testId}', [MLDashboardController::class, 'getABTestResults'])->name('ab-test.results');
+            Route::post('/ab-test/{testId}/end', [MLDashboardController::class, 'endABTest'])->name('ab-test.end');
+        });
+
+        // === AI AGENT ROUTES ===
+        Route::prefix('ai-agent')->name('ai-agent.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\AIAgentController::class, 'index'])->name('index');
+            Route::post('/ask', [\App\Http\Controllers\Admin\AIAgentController::class, 'ask'])->name('ask');
+            Route::get('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'getConversation'])->name('conversation');
+            Route::patch('/conversation/{sessionId}/title', [\App\Http\Controllers\Admin\AIAgentController::class, 'updateConversationTitle'])->name('conversation.title');
+            Route::delete('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'deleteConversation'])->name('conversation.delete');
+            Route::get('/conversations', [\App\Http\Controllers\Admin\AIAgentController::class, 'getRecentConversations'])->name('conversations');
+            Route::get('/sessions', [\App\Http\Controllers\Admin\AIAgentController::class, 'getRecentSessions'])->name('sessions');
+            Route::get('/test', [\App\Http\Controllers\Admin\AIAgentController::class, 'test'])->name('test');
+            Route::get('/stats', [\App\Http\Controllers\Admin\AIAgentController::class, 'getStats'])->name('stats');
         });
         
         // Gestion des Synchronisations Eklektik (Super Admin seulement)

@@ -2046,6 +2046,10 @@
       <button class="nav-tab" onclick="showTab('eklektik')">📞 Eklektik</button>
       @endif
       <button class="nav-tab" onclick="showTab('comparison')">Comparison</button>
+      @if(Auth::user()->isSuperAdmin())
+      <button class="nav-tab" onclick="showTab('ai-agent')">Agent IA</button>
+      <button class="nav-tab" onclick="window.location.href='{{ route('admin.timwe-diagnostic') }}'">Diagnostic Timwe</button>
+      @endif
       <!-- <button class="nav-tab" onclick="showTab('insights')">Insights</button> -->
     </div>
 
@@ -2080,6 +2084,17 @@
       // (les données se chargent en une seule fois au démarrage ou via le bouton d'actualisation)
       if (tabName === 'eklektik') {
         console.log('📞 Onglet Eklektik activé (sans rechargement des données)');
+      }
+      
+      // Masquer la section dates / périodes sur l'onglet Agent IA
+      var filtersBar = document.querySelector('.filters-bar, .date-filters, [class*="filter"]');
+      if (filtersBar) {
+        filtersBar.style.display = (tabName === 'ai-agent') ? 'none' : '';
+      }
+      
+      // Charger l'historique des conversations Agent IA dès l'ouverture de l'onglet
+      if (tabName === 'ai-agent' && typeof initializeAIDashboard === 'function') {
+        initializeAIDashboard();
       }
       
       // Resize charts when tab becomes visible
@@ -3082,6 +3097,111 @@
           <div class="chart-container">
             <canvas id="comparisonChart"></canvas>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Agent IA (Style ChatGPT avec Sidebar) -->
+    @if(Auth::user()->isSuperAdmin())
+    <div id="ai-agent" class="tab-content">
+      <div style="display: flex; gap: 16px; height: 650px;">
+        
+        <!-- Sidebar Historique -->
+        <div class="ai-sidebar" style="width: 280px; background: #f7f7f8; border-radius: 12px; border: 1px solid #e5e7eb; display: flex; flex-direction: column;">
+          <div style="padding: 16px; border-bottom: 1px solid #e5e7eb; background: white; border-radius: 12px 12px 0 0;">
+            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px;">
+              <h6 style="margin: 0; font-weight: 600; color: #374151;">Conversations</h6>
+              <button onclick="newAIConversationNow()" style="background: #6366f1; border: none; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">+ Nouveau Chat</button>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button onclick="saveCurrentConversation()" style="background: #10b981; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">Sauver</button>
+              <button onclick="loadConversationDialog()" style="background: #f59e0b; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">Charger</button>
+              <button onclick="clearAllConversations()" style="background: #ef4444; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">Vider</button>
+            </div>
+          </div>
+          <div id="aiConversationsList" style="flex: 1; overflow-y: auto; padding: 8px;">
+            <div class="ai-conversation-item active" data-session="current" style="padding: 12px; margin: 4px 0; background: white; border-radius: 8px; border-left: 3px solid #6366f1; cursor: pointer;">
+              <div style="font-size: 0.85rem; font-weight: 500; color: #374151;">Conversation Actuelle</div>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Juste maintenant</div>
+            </div>
+          </div>
+          <div style="padding: 12px; border-top: 1px solid #e5e7eb; background: #f9fafb; border-radius: 0 0 12px 0;">
+            <div style="font-size: 0.75rem; color: #6b7280; text-align: center;">
+              Session : <code id="aiSessionSidebar" style="font-size: 0.7rem;">nouvelle</code><br>
+              Expert ML
+            </div>
+          </div>
+        </div>
+
+        <!-- Zone de Chat Principale -->
+        <div class="ai-chat-container" style="flex: 1; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column;">
+          <div class="ai-header" style="padding: 16px 24px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border-radius: 12px 12px 0 0;">
+            <div style="display: flex; justify-content: between; align-items: center;">
+              <div>
+                <h5 style="margin: 0; font-weight: 600;">Assistant IA Expert ML</h5>
+                <small style="opacity: 0.9;">Recommandations instantanees</small>
+              </div>
+              <button onclick="newAIConversationNow()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">+ Nouveau</button>
+            </div>
+          </div>
+
+          <div id="aiMessagesZone" style="flex: 1; overflow-y: auto; padding: 0;">
+            <div class="ai-welcome-msg" style="padding: 24px; background: #f9fafb; border-bottom: 1px solid #f0f0f0;">
+              <div style="max-width: 800px;">
+                <p style="margin: 0 0 12px 0; color: #374151; font-size: 1rem;">
+                  <strong>Salut ! Je suis votre expert IA.</strong> Posez-moi n'importe quelle question sur vos donnees ML et strategies de pricing.
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px;">
+                  <button onclick="askAIQuestion('Quel est le taux de succes actuel ?')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer;">Taux de succes actuel ?</button>
+                  <button onclick="askAIQuestion('Compare quotidien 0.3 TND vs mensuel 3.0 TND')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer;">ROI quotidien vs mensuel</button>
+                  <button onclick="askAIQuestion('Quelle strategie pour les clients High Risk ?')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer;">Strategie High Risk ?</button>
+                  <button onclick="askAIQuestion('Explique les top 5 features ML les plus importantes')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer;">Top features ML</button>
+                </div>
+              </div>
+            </div>
+            <div id="aiMessagesContainer" style="padding: 0; min-height: 200px;"></div>
+            <div id="aiTypingIndicator" style="display: none; padding: 16px 24px;">
+              <div style="display: flex; align-items: center; color: #6b7280;">
+                <div style="display: flex; gap: 4px; margin-right: 8px;">
+                  <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot1 1.4s infinite;"></div>
+                  <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot2 1.4s infinite;"></div>
+                  <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot3 1.4s infinite;"></div>
+                </div>
+                <span style="font-style: italic; font-size: 0.9rem;">Agent IA analyse vos donnees...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ai-input-zone" style="padding: 16px 24px; background: white; border-top: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+            <div style="display: flex; align-items: end; gap: 8px; max-width: 100%; position: relative;">
+              <div style="flex: 1; position: relative;">
+                <textarea id="aiQuestionInput" placeholder="Posez votre question..." style="width: 100%; min-height: 44px; max-height: 120px; padding: 12px 50px 12px 16px; border: 2px solid #e5e7eb; border-radius: 22px; font-size: 1rem; resize: none; outline: none; font-family: inherit;" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIQuestionNow();}"></textarea>
+                <button id="aiSendBtn" onclick="sendAIQuestionNow()" style="position: absolute; right: 8px; bottom: 6px; width: 32px; height: 32px; background: #6366f1; border: none; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer;">&#10148;</button>
+              </div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 8px;">
+              <label for="aiProviderSelectDashboard" style="color: #9ca3af; font-size: 0.8rem; margin: 0;">Modele :</label>
+              <select id="aiProviderSelectDashboard" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e7eb; color: #374151; min-width: 160px;">
+                <option value="openai">OpenAI (GPT)</option>
+                <option value="anthropic">Claude (Anthropic)</option>
+                <option value="gemini">Gemini (Google)</option>
+              </select>
+              <small style="color: #9ca3af; font-size: 0.8rem;">Session <code id="aiCurrentSession" style="font-size: 0.75rem; color: #6366f1;">nouvelle</code></small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    @endif
+
+    <!-- Modal pour nommer la conversation Agent IA -->
+    <div id="aiRenameModal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.4); align-items: center; justify-content: center;">
+      <div style="background: white; border-radius: 12px; padding: 24px; min-width: 360px; max-width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+        <div style="font-weight: 600; font-size: 1.1rem; color: #374151; margin-bottom: 12px;">Nommer la conversation</div>
+        <input type="text" id="aiRenameModalInput" placeholder="Nom de la conversation" style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem; margin-bottom: 16px; box-sizing: border-box;">
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" id="aiRenameModalCancel" style="padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 8px; background: #f9fafb; color: #374151; cursor: pointer; font-size: 0.9rem;">Annuler</button>
+          <button type="button" id="aiRenameModalOk" style="padding: 8px 16px; border: none; border-radius: 8px; background: #6366f1; color: white; cursor: pointer; font-size: 0.9rem;">OK</button>
         </div>
       </div>
     </div>
@@ -9541,7 +9661,305 @@
     #clientTransactionsModal table tbody tr {
       transition: background-color 0.2s;
     }
+
+    /* Agent IA Styles (ChatGPT-like avec Sidebar) */
+    .ai-conversation-item {
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+    .ai-conversation-item:hover {
+      background: #f3f4f6 !important;
+      border-color: #d1d5db;
+    }
+    .ai-conversation-item.active {
+      border-left-color: #6366f1 !important;
+      background: white !important;
+    }
+    .ai-sidebar button:hover {
+      opacity: 0.8;
+      transform: translateY(-1px);
+    }
+    .ai-message-user {
+      padding: 16px 24px;
+      background: white;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .ai-message-assistant {
+      padding: 16px 24px; 
+      background: #f7f7f8;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .ai-message-content {
+      max-width: 100%;
+      line-height: 1.6;
+      color: #374151;
+    }
+    .ai-message-user .ai-message-content {
+      font-weight: 500;
+    }
+    .ai-suggestion-simple:hover {
+      background: #e5e7eb !important;
+      border-color: #d1d5db !important;
+    }
+    #aiSendBtn:hover {
+      background: #4f46e5;
+      transform: scale(1.05);
+    }
+    #aiSendBtn:disabled {
+      background: #d1d5db;
+      cursor: not-allowed;
+      transform: none;
+    }
+    @keyframes ai-dot1 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
+    @keyframes ai-dot2 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
+    @keyframes ai-dot3 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
+    .ai-dot1 { animation-delay: 0ms; }
+    .ai-dot2 { animation-delay: 150ms; }
+    .ai-dot3 { animation-delay: 300ms; }
   </style>
+
+  <script>
+    // ===== AGENT IA STYLE CHATGPT =====
+    let aiSessionDashboard = null;
+    let aiConversationsFromApi = [];
+    let aiDashboardInitialized = false;
+
+    function initializeAIDashboard() {
+      if (aiDashboardInitialized) { loadConversationsFromDatabase(); return; }
+      aiDashboardInitialized = true;
+      aiSessionDashboard = generateAIUUID();
+      const sessionEl = document.getElementById('aiCurrentSession');
+      const sidebarSessionEl = document.getElementById('aiSessionSidebar');
+      if (sessionEl) sessionEl.textContent = aiSessionDashboard.substr(0, 8);
+      if (sidebarSessionEl) sidebarSessionEl.textContent = aiSessionDashboard.substr(0, 8);
+      loadConversationsFromDatabase();
+      updateConversationsSidebar();
+      const aiInput = document.getElementById('aiQuestionInput');
+      if (aiInput) {
+        aiInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
+      }
+      window.addEventListener('beforeunload', function() { saveCurrentConversationAuto(); });
+      const renameModal = document.getElementById('aiRenameModal');
+      const renameInput = document.getElementById('aiRenameModalInput');
+      const renameOk = document.getElementById('aiRenameModalOk');
+      const renameCancel = document.getElementById('aiRenameModalCancel');
+      if (renameOk) renameOk.addEventListener('click', submitRenameConversation);
+      if (renameCancel) renameCancel.addEventListener('click', closeRenameModal);
+      if (renameInput) renameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); submitRenameConversation(); } if (e.key === 'Escape') closeRenameModal(); });
+      if (renameModal) renameModal.addEventListener('click', function(e) { if (e.target === renameModal) closeRenameModal(); });
+    }
+
+    function loadConversationsFromDatabase() {
+      fetch('/admin/ai-agent/conversations', { headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
+      .then(r => r.json()).then(data => { if (data.success && data.conversations) { aiConversationsFromApi = data.conversations; updateConversationsSidebar(); } })
+      .catch(() => { aiConversationsFromApi = []; });
+    }
+
+    function renameCurrentConversation() {
+      if (!aiSessionDashboard) { showNotification('Aucune conversation active', 'error'); return; }
+      const currentFromApi = aiConversationsFromApi.find(c => c.session_id === aiSessionDashboard);
+      const modal = document.getElementById('aiRenameModal');
+      const input = document.getElementById('aiRenameModalInput');
+      if (!modal || !input) return;
+      input.value = currentFromApi && currentFromApi.title ? currentFromApi.title : '';
+      modal.style.display = 'flex';
+      input.focus(); input.select();
+    }
+
+    function closeRenameModal() { const modal = document.getElementById('aiRenameModal'); if (modal) modal.style.display = 'none'; }
+
+    function submitRenameConversation() {
+      const input = document.getElementById('aiRenameModalInput');
+      const title = input && input.value ? input.value.trim() : '';
+      if (!title) { showNotification('Saisissez un nom', 'error'); return; }
+      if (!aiSessionDashboard) return;
+      closeRenameModal();
+      fetch('/admin/ai-agent/conversation/' + aiSessionDashboard + '/title', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ title: title }) })
+      .then(r => r.json()).then(data => { if (data.success) { loadConversationsFromDatabase(); updateConversationsSidebar(aiSessionDashboard); showNotification('Conversation nommee : ' + data.title, 'success'); } else { showNotification('Erreur lors de la mise a jour', 'error'); } })
+      .catch(() => showNotification('Erreur reseau', 'error'));
+    }
+
+    function loadConversationFromApi(sessionId) {
+      fetch('/admin/ai-agent/conversation/' + sessionId, { headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
+      .then(r => r.json()).then(data => {
+        if (!data.success || !data.messages) { showNotification('Impossible de charger la conversation', 'error'); return; }
+        document.getElementById('aiMessagesContainer').innerHTML = '';
+        data.messages.forEach(m => appendAIMessageFromHistory(m.type, m.message));
+        aiSessionDashboard = sessionId;
+        document.getElementById('aiCurrentSession').textContent = sessionId.substr(0, 8);
+        document.getElementById('aiSessionSidebar').textContent = sessionId.substr(0, 8);
+        updateConversationsSidebar(sessionId);
+        showNotification('Conversation chargee', 'success');
+      }).catch(() => showNotification('Erreur chargement', 'error'));
+    }
+
+    function askAIQuestion(question) { document.getElementById('aiQuestionInput').value = question; sendAIQuestionNow(); }
+
+    function newAIConversationNow() {
+      saveCurrentConversationAuto();
+      aiSessionDashboard = generateAIUUID();
+      document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
+      document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8);
+      document.getElementById('aiMessagesContainer').innerHTML = '';
+      updateConversationsSidebar();
+      showNotification('Nouvelle conversation', 'success');
+    }
+
+    function saveCurrentConversation() {
+      const messages = document.getElementById('aiMessagesContainer').children;
+      if (messages.length === 0) { showNotification('Aucune conversation a sauvegarder', 'error'); return; }
+      const title = prompt('Nom de la conversation :', 'Conversation ML ' + new Date().toLocaleString('fr-FR', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}));
+      if (!title) return;
+      const conversation = { id: aiSessionDashboard, title: title, messages: Array.from(messages).map(msg => ({ type: msg.classList.contains('ai-message-user') ? 'user' : 'assistant', content: msg.querySelector('.ai-message-content').innerHTML })), created_at: new Date().toISOString(), session_id: aiSessionDashboard };
+      let savedConversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      savedConversations.unshift(conversation);
+      if (savedConversations.length > 20) savedConversations = savedConversations.slice(0, 20);
+      localStorage.setItem('aiConversations', JSON.stringify(savedConversations));
+      updateConversationsSidebar();
+      showNotification('Conversation "' + title + '" sauvegardee', 'success');
+    }
+
+    function saveCurrentConversationAuto() {
+      const messages = document.getElementById('aiMessagesContainer');
+      if (!messages || messages.children.length === 0) return;
+      const autoTitle = 'Auto - ' + new Date().toLocaleString('fr-FR', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+      const conversation = { id: aiSessionDashboard + '_auto', title: autoTitle, messages: Array.from(messages.children).map(msg => ({ type: msg.classList.contains('ai-message-user') ? 'user' : 'assistant', content: msg.querySelector('.ai-message-content') ? msg.querySelector('.ai-message-content').innerHTML : '' })), created_at: new Date().toISOString(), session_id: aiSessionDashboard, auto_saved: true };
+      let savedConversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      savedConversations.unshift(conversation);
+      localStorage.setItem('aiConversations', JSON.stringify(savedConversations.slice(0, 20)));
+    }
+
+    function loadConversation(conversationId) {
+      const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      const conversation = conversations.find(c => c.id === conversationId);
+      if (!conversation) { showNotification('Conversation non trouvee', 'error'); return; }
+      document.getElementById('aiMessagesContainer').innerHTML = '';
+      conversation.messages.forEach(msg => appendAIMessageFromHistory(msg.type, msg.content));
+      aiSessionDashboard = conversation.session_id;
+      document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
+      document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8);
+      updateConversationsSidebar(conversationId);
+      showNotification('Conversation "' + conversation.title + '" chargee', 'success');
+    }
+
+    function appendAIMessageFromHistory(type, content) {
+      const container = document.getElementById('aiMessagesContainer');
+      if (!container) return;
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'ai-message-' + type;
+      messageDiv.innerHTML = content.includes('ai-message-content') ? content : '<div style="display: flex; gap: 12px; align-items: flex-start;"><div style="width: 30px; height: 30px; background: ' + (type === 'user' ? '#6366f1' : '#10b981') + '; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">' + (type === 'user' ? 'U' : 'IA') + '</div><div class="ai-message-content" style="flex: 1; padding-top: 4px;">' + content + '</div></div>';
+      container.appendChild(messageDiv);
+      scrollAIToBottom();
+    }
+
+    function updateConversationsSidebar(activeId) {
+      const container = document.getElementById('aiConversationsList');
+      if (!container) return;
+      const isCurrentActive = !activeId || activeId === aiSessionDashboard;
+      const currentFromApi = aiConversationsFromApi.find(c => c.session_id === aiSessionDashboard);
+      const currentTitle = currentFromApi ? (currentFromApi.title || 'Conversation Actuelle') : 'Conversation Actuelle';
+      container.innerHTML = '';
+      const currentDiv = document.createElement('div');
+      currentDiv.className = 'ai-conversation-item' + (isCurrentActive ? ' active' : '');
+      currentDiv.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isCurrentActive ? 'white' : '#f9fafb') + '; border-radius: 8px; border-left: 3px solid ' + (isCurrentActive ? '#6366f1' : 'transparent') + '; cursor: pointer;';
+      currentDiv.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;" onclick="selectCurrentConversation()"><div style="font-size: 0.85rem; font-weight: 500; color: #374151;">' + currentTitle + '</div></div><button type="button" onclick="event.stopPropagation(); renameCurrentConversation();" style="background: #6366f1; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Nommer</button></div>';
+      container.appendChild(currentDiv);
+      aiConversationsFromApi.forEach(function(conv) {
+        if (conv.session_id === aiSessionDashboard) return;
+        const isActive = activeId === conv.session_id;
+        const title = (conv.title || 'Sans titre');
+        const item = document.createElement('div');
+        item.className = 'ai-conversation-item' + (isActive ? ' active' : '');
+        item.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isActive ? 'white' : '#f9fafb') + '; border-radius: 8px; border-left: 3px solid ' + (isActive ? '#6366f1' : 'transparent') + '; cursor: pointer;';
+        item.innerHTML = '<div style="font-size: 0.8rem; font-weight: 500; color: #374151;">' + title + '</div>';
+        item.onclick = function() { loadConversationFromApi(conv.session_id); };
+        container.appendChild(item);
+      });
+    }
+
+    function deleteConversationFromApi(sessionId) {
+      if (!sessionId || !confirm('Supprimer cette conversation ?')) return;
+      fetch('/admin/ai-agent/conversation/' + encodeURIComponent(sessionId), { method: 'DELETE', headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
+      .then(r => r.json()).then(data => {
+        if (data.success) { if (aiSessionDashboard === sessionId) { aiSessionDashboard = generateAIUUID(); document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8); document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8); document.getElementById('aiMessagesContainer').innerHTML = ''; } loadConversationsFromDatabase(); updateConversationsSidebar(); showNotification('Conversation supprimee', 'success'); }
+      }).catch(() => showNotification('Erreur reseau', 'error'));
+    }
+
+    function selectCurrentConversation() { updateConversationsSidebar(); }
+
+    function loadConversationDialog() {
+      const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      if (conversations.length === 0) { showNotification('Aucune conversation sauvegardee', 'error'); return; }
+      const options = conversations.map((c, i) => (i + 1) + '. ' + c.title).join('\n');
+      const choice = prompt('Choisissez une conversation :\n\n' + options + '\n\nEntrez le numero :');
+      if (choice && !isNaN(choice) && choice > 0 && choice <= conversations.length) loadConversation(conversations[choice - 1].id);
+    }
+
+    function deleteConversation(conversationId) {
+      if (!confirm('Supprimer cette conversation ?')) return;
+      let conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      conversations = conversations.filter(c => c.id !== conversationId);
+      localStorage.setItem('aiConversations', JSON.stringify(conversations));
+      updateConversationsSidebar();
+    }
+
+    function clearAllConversations() {
+      if (!confirm('Supprimer toutes les conversations ?')) return;
+      localStorage.removeItem('aiConversations');
+      updateConversationsSidebar();
+    }
+
+    function sendAIQuestionNow() {
+      const input = document.getElementById('aiQuestionInput');
+      const question = input.value.trim();
+      const sendBtn = document.getElementById('aiSendBtn');
+      if (!question) { showNotification('Veuillez saisir une question', 'error'); return; }
+      if (!aiSessionDashboard) { aiSessionDashboard = generateAIUUID(); document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8); }
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.style.background = '#d1d5db'; }
+      if (input) input.disabled = true;
+      appendAIMessage('user', question);
+      input.value = '';
+      document.getElementById('aiTypingIndicator').style.display = 'block';
+      scrollAIToBottom();
+      fetch('/admin/ai-agent/ask', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ question: question, session_id: aiSessionDashboard, provider: (document.getElementById('aiProviderSelectDashboard') && document.getElementById('aiProviderSelectDashboard').value) || 'openai' }) })
+      .then(response => { if (!response.ok) throw new Error('HTTP ' + response.status); const ct = response.headers.get('content-type'); if (!ct || !ct.includes('application/json')) return response.text().then(html => { throw new Error('Serveur a renvoye du HTML au lieu de JSON'); }); return response.json(); })
+      .then(data => {
+        document.getElementById('aiTypingIndicator').style.display = 'none';
+        if (data.success) { appendAIMessage('assistant', data.message); if (data.session_id) { aiSessionDashboard = data.session_id; document.getElementById('aiCurrentSession').textContent = data.session_id.substr(0, 8); document.getElementById('aiSessionSidebar').textContent = data.session_id.substr(0, 8); } loadConversationsFromDatabase(); }
+        else { appendAIMessage('assistant', 'Erreur: ' + (data.error || 'Verifiez la configuration API')); }
+      })
+      .catch(error => { document.getElementById('aiTypingIndicator').style.display = 'none'; appendAIMessage('assistant', 'Erreur reseau ou configuration. Verifiez les cles API dans .env'); })
+      .finally(() => { if (sendBtn) { sendBtn.disabled = false; sendBtn.style.background = '#6366f1'; } if (input) { input.disabled = false; input.focus(); } });
+    }
+
+    function appendAIMessage(type, content) {
+      const container = document.getElementById('aiMessagesContainer');
+      if (!container) return;
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'ai-message-' + type;
+      if (type === 'user') {
+        messageDiv.innerHTML = '<div style="display: flex; gap: 12px; align-items: flex-start;"><div style="width: 30px; height: 30px; background: #6366f1; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">U</div><div class="ai-message-content" style="flex: 1; padding-top: 4px;">' + content + '</div></div>';
+      } else {
+        messageDiv.innerHTML = '<div style="display: flex; gap: 12px; align-items: flex-start;"><div style="width: 30px; height: 30px; background: #10b981; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">IA</div><div class="ai-message-content" style="flex: 1; padding-top: 4px;">' + formatAIMessage(content) + '</div></div>';
+      }
+      container.appendChild(messageDiv);
+      scrollAIToBottom();
+    }
+
+    function formatAIMessage(content) {
+      let formatted = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/`([^`]+)`/g, '<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-family:monospace;color:#e11d48;">$1</code>').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+      return '<div style="line-height: 1.6;">' + formatted + '</div>';
+    }
+
+    function scrollAIToBottom() {
+      const container = document.getElementById('aiMessagesZone');
+      if (container) container.scrollTop = container.scrollHeight;
+    }
+
+    function generateAIUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
+    }
+  </script>
 
 </body>
 </html>

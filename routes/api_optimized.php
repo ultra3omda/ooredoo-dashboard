@@ -145,12 +145,6 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])
         })->name('api.dashboard.maintenance.optimize');
     });
 
-// Route de fallback pour la compatibilité
-Route::get('/dashboard/data', function (Request $request) {
-    return response()->json([
-        'message' => 'Cette route est dépréciée. Utilisez /api/dashboard/v2/data',
-        'new_endpoint' => '/api/dashboard/v2/data',
-        'migration_guide' => 'Voir la documentation pour migrer vers la version optimisée'
-    ], 301);
-})->name('api.dashboard.deprecated');
+// Route /api/dashboard/data dépréciée supprimée : elle renvoyait 301 et bloquait le chargement.
+// Utiliser la route dans web.php (auth + session) ou api.php.
 

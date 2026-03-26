@@ -40,6 +40,14 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/timwe-stats.log'));
+
+            // Calcul du diagnostic Timwe quotidien - Chaque jour à 2h35 du matin
+            $yesterday = \Carbon\Carbon::yesterday()->format('Y-m-d');
+            $schedule->command("timwe:diagnostic-backfill --start-date={$yesterday} --end-date={$yesterday} --force")
+                ->dailyAt('02:35')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/timwe-diagnostic.log'));
             
             // Calcul des statistiques Ooredoo/DGV quotidiennes - Chaque jour à 2h45 du matin
             $schedule->command('ooredoo:update-daily-stats')
@@ -61,6 +69,40 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/dashboard-materialize.log'));
+
+            // Cache intelligent (contexte agent IA, KPIs, features ML) - Tous les jours à 6h
+            $schedule->command('cache:warmup')
+                ->dailyAt('06:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/cache-warmup.log'));
+
+            // ============================================================
+            // SYSTÈME ML INCRÉMENTAL - Architecture optimisée
+            // ============================================================
+
+            // Ingestion incrémentale des transactions vers tx_daily_agg
+            $schedule->command('ml:tx-daily-ingest --batch-size=100000 --max-batches=5')
+                ->everyFiveMinutes()
+                ->withoutOverlapping(30)
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-ingest.log'));
+
+            // Construction des features ML 90 jours depuis les agrégats
+            $schedule->command('ml:build-90d-features --chunk=2000')
+                ->everyTwoHours()
+                ->withoutOverlapping(60)
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-features-90d.log'));
+
+            // Maintenance et nettoyage des agrégats (rétention 120 jours)
+            $schedule->command('ml:tx-daily-maintenance --retention-days=120 --vacuum')
+                ->weekly()
+                ->sundays()
+                ->at('04:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-maintenance.log'));
     }
 
     /**

@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('eklektik_stats_daily')) {
+            return;
+        }
         Schema::create('eklektik_stats_daily', function (Blueprint $table) {
             $table->id();
             $table->date('date');

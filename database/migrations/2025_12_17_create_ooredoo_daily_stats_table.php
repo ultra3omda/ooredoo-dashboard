@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('ooredoo_daily_stats')) {
+            return;
+        }
         Schema::create('ooredoo_daily_stats', function (Blueprint $table) {
             $table->id();
             $table->date('stat_date')->unique()->comment('Date des statistiques');
