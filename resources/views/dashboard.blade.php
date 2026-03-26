@@ -3182,9 +3182,9 @@
             <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 8px;">
               <label for="aiProviderSelectDashboard" style="color: #9ca3af; font-size: 0.8rem; margin: 0;">Modele :</label>
               <select id="aiProviderSelectDashboard" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e7eb; color: #374151; min-width: 160px;">
-                <option value="openai">OpenAI (GPT)</option>
+                <option value="gemini" selected>Gemini 2.5 Flash (Rapide)</option>
+                <option value="openai">OpenAI GPT-4 (Detaille)</option>
                 <option value="anthropic">Claude (Anthropic)</option>
-                <option value="gemini">Gemini (Google)</option>
               </select>
               <small style="color: #9ca3af; font-size: 0.8rem;">Session <code id="aiCurrentSession" style="font-size: 0.75rem; color: #6366f1;">nouvelle</code></small>
             </div>
