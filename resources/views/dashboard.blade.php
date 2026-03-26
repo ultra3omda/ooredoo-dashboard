@@ -2014,18 +2014,14 @@
             @endif
             <a href="{{ route('password.change') }}" class="admin-btn" style="display:block; margin:8px;">🔒 Mot de passe</a>
             @if(Auth::user()->canAccessSubStoresDashboard())
-            <a href="{{ route('sub-stores.dashboard', ['storeType' => 'eklektik']) }}" class="admin-btn" style="display:block; margin:8px;">🏪 Sub-Stores</a>
+            <a href="{{ route('sub-stores.dashboard') }}" class="admin-btn" style="display:block; margin:8px;">🏪 Sub-Stores</a>
             @endif
             @if(Auth::user()->canAccessEklektikConfig())
             <a href="{{ route('admin.eklektik-cron') }}" class="admin-btn" style="display:block; margin:8px;">⚙️ Configuration Eklektik</a>
-            <a href="{{ route('admin.eklektik.sync.tracking') }}" class="admin-btn" style="display:block; margin:8px;">🔄 Gestion des Synchronisations</a>
-            <a href="{{ route('admin.eklektik.sync.tracking') }}" class="admin-btn" style="display:block; margin:8px;">📈 Suivi des Synchronisations</a>
+            <a href="{{ route('admin.eklektik.sync') }}" class="admin-btn" style="display:block; margin:8px;">🔄 Gestion des Synchronisations</a>
+            <a href="{{ route('admin.eklektik.sync-tracking') }}" class="admin-btn" style="display:block; margin:8px;">📈 Suivi des Synchronisations</a>
             @endif
-            @if(Auth::user()->isSuperAdmin())
-            <a href="{{ route('admin.ml.dashboard') }}" class="admin-btn" style="display:block; margin:8px; background: linear-gradient(45deg, #667eea 0%, #764ba2 100%); color: white; font-weight: bold;">🤖 ML Dashboard</a>
-            @endif
-            
-            <form action="{{ route('logout') }}" method="POST" style="display:block; margin:8px;">
+            <form action="{{ route('auth.logout') }}" method="POST" style="display:block; margin:8px;">
               @csrf
               <button type="submit" class="logout-btn" style="width:100%;" onclick="return confirm('Êtes-vous sûr de vouloir vous déconnecter ?')">Déconnexion</button>
             </form>
@@ -2051,8 +2047,8 @@
       @endif
       <button class="nav-tab" onclick="showTab('comparison')">Comparison</button>
       @if(Auth::user()->isSuperAdmin())
-      <button class="nav-tab" onclick="showTab('ai-agent')">🤖 Agent IA</button>
-      <button class="nav-tab" onclick="window.location.href='{{ route('admin.timwe-diagnostic') }}'">🩺 Diagnostic Timwe</button>
+      <button class="nav-tab" onclick="showTab('ai-agent')">Agent IA</button>
+      <button class="nav-tab" onclick="window.location.href='{{ route('admin.timwe-diagnostic') }}'">Diagnostic Timwe</button>
       @endif
       <!-- <button class="nav-tab" onclick="showTab('insights')">Insights</button> -->
     </div>
@@ -2078,30 +2074,27 @@
 
       // Add active class to clicked tab
       event.target.classList.add('active');
-
-      // Masquer la section dates / périodes sur l'onglet Agent IA
-      const filtersBar = document.querySelector('.enhanced-filters-bar');
-      if (filtersBar) {
-        filtersBar.style.display = (tabName === 'ai-agent') ? 'none' : '';
-      }
-
-      // Charger l'historique des conversations Agent IA dès l'ouverture de l'onglet
-      if (tabName === 'ai-agent' && typeof initializeAIDashboard === 'function') {
-        initializeAIDashboard();
-      }
       
       // Auto-scroll to center active tab on mobile
       if (typeof centerActiveTab === 'function') {
         centerActiveTab(event.target);
       }
       
-      // Charger les données Eklektik et les graphiques à l'ouverture de l'onglet
+      // Ne pas recharger les données Eklektik à chaque visite d'onglet
+      // (les données se chargent en une seule fois au démarrage ou via le bouton d'actualisation)
       if (tabName === 'eklektik') {
-        if (typeof loadEklektikData === 'function') loadEklektikData();
-        // Charger les graphiques Eklektik après que l'onglet soit visible (canvas avec dimensions)
-        if (typeof window.loadEklektikCharts === 'function') {
-          setTimeout(function() { window.loadEklektikCharts(); }, 400);
-        }
+        console.log('📞 Onglet Eklektik activé (sans rechargement des données)');
+      }
+      
+      // Masquer la section dates / périodes sur l'onglet Agent IA
+      var filtersBar = document.querySelector('.filters-bar, .date-filters, [class*="filter"]');
+      if (filtersBar) {
+        filtersBar.style.display = (tabName === 'ai-agent') ? 'none' : '';
+      }
+      
+      // Charger l'historique des conversations Agent IA dès l'ouverture de l'onglet
+      if (tabName === 'ai-agent' && typeof initializeAIDashboard === 'function') {
+        initializeAIDashboard();
       }
       
       // Resize charts when tab becomes visible
@@ -2743,84 +2736,86 @@
       </div>
     </div>
 
-    <!-- Tab Eklektik (même structure que Timwe / Ooredoo) -->
+    <!-- Tab 5: Eklektik Integration -->
     @if(Auth::user()->canViewEklektikSection())
     <div id="eklektik" class="tab-content">
 
-      <!-- KPIs Eklektik - 2 lignes comme Timwe/Ooredoo -->
+
+      <!-- Statistiques Eklektik KPIs - 8 KPIs sur 2 lignes -->
       <div class="grid">
+        <!-- Première ligne - 4 KPIs -->
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Revenus TTC <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus totaux TTC générés via Eklektik">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-revenue-ttc">—</div>
-          <div class="kpi-delta" id="eklektik-revenue-ttc-delta">—</div>
+          <div class="kpi-value" id="eklektik-revenue-ttc">Loading...</div>
+          <div class="kpi-delta" id="eklektik-revenue-ttc-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Revenus HT <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus hors taxes calculés selon les formules par opérateur">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-revenue-ht">—</div>
-          <div class="kpi-delta" id="eklektik-revenue-ht-delta">—</div>
+          <div class="kpi-value" id="eklektik-revenue-ht">Loading...</div>
+          <div class="kpi-delta" id="eklektik-revenue-ht-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">CA BigDeal <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Chiffre d'affaires BigDeal (part des revenus)">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-ca-bigdeal">—</div>
-          <div class="kpi-delta" id="eklektik-ca-bigdeal-delta">—</div>
+          <div class="kpi-value" id="eklektik-ca-bigdeal">Loading...</div>
+          <div class="kpi-delta" id="eklektik-ca-bigdeal-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Active Subs <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre d'abonnés actifs">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-active-subs">—</div>
-          <div class="kpi-delta" id="eklektik-active-subs-delta">—</div>
+          <div class="kpi-value" id="eklektik-active-subs">Loading...</div>
+          <div class="kpi-delta" id="eklektik-active-subs-delta">Loading...</div>
         </div>
       </div>
 
       <div class="grid">
+        <!-- Deuxième ligne - 4 KPIs -->
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Nouveaux Abonnements <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nouveaux abonnements créés">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-new-subscriptions">—</div>
-          <div class="kpi-delta" id="eklektik-new-subscriptions-delta">—</div>
+          <div class="kpi-value" id="eklektik-new-subscriptions">Loading...</div>
+          <div class="kpi-delta" id="eklektik-new-subscriptions-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Désabonnements <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de désabonnements">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-unsubscriptions">—</div>
-          <div class="kpi-delta" id="eklektik-unsubscriptions-delta">—</div>
+          <div class="kpi-value" id="eklektik-unsubscriptions">Loading...</div>
+          <div class="kpi-delta" id="eklektik-unsubscriptions-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Simchurn <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Perte d'abonnés (Simchurn)">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-simchurn">—</div>
-          <div class="kpi-delta" id="eklektik-simchurn-delta">—</div>
+          <div class="kpi-value" id="eklektik-simchurn">Loading...</div>
+          <div class="kpi-delta" id="eklektik-simchurn-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
           <div class="kpi-title">Abonnements Facturés <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total d'abonnements facturés">ⓘ</span></div>
-          <div class="kpi-value" id="eklektik-facturation">—</div>
-          <div class="kpi-delta" id="eklektik-facturation-delta">—</div>
+          <div class="kpi-value" id="eklektik-facturation">Loading...</div>
+          <div class="kpi-delta" id="eklektik-facturation-delta">Loading...</div>
         </div>
       </div>
 
-      <!-- Statistiques Eklektik (graphiques) - même style que "Statistiques Quotidiennes Timwe" -->
+      <!-- Graphiques Eklektik - Utilisation du composant optimisé -->
       <div class="grid">
         <div class="card" style="grid-column: span 12;">
           <div class="chart-title">
-            📊 Statistiques Eklektik
-            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Graphiques et indicateurs Eklektik sur la période sélectionnée">ⓘ</span>
+            📊 Graphiques Eklektik Optimisés
+            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Graphiques Eklektik optimisés pour éliminer le sautillement">ⓘ</span>
           </div>
+          {{-- Utiliser le composant graphiques Eklektik --}}
           <x-eklektik-charts />
         </div>
       </div>
 
-      <!-- Répartition par Opérateur - même style carte que Timwe/Ooredoo -->
       <div class="grid">
-        <div class="card" style="grid-column: span 12;">
+        <div class="card" style="grid-column: span 6;">
           <div class="chart-title">
-            📊 Répartition par Opérateur
-            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Détails des statistiques par opérateur Eklektik">ⓘ</span>
+            📊 Statistiques par Opérateur
+            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Détails des statistiques par opérateur">ⓘ</span>
           </div>
-          <div class="table-container" style="max-height: 320px; overflow-y: auto;">
-            <div id="eklektik-operators-stats" style="padding: 0;">
-              <div class="text-center" style="padding: 24px; color: var(--muted);">
-                <span class="loading-spinner">Chargement...</span>
-              </div>
+          <div id="eklektik-operators-stats" style="max-height: 200px; overflow-y: auto;">
+            <div class="text-center" style="padding: 20px;">
+              <i class="fas fa-spinner fa-spin"></i> Chargement...
             </div>
           </div>
         </div>
       </div>
+
 
     </div>
     @endif
@@ -3106,160 +3101,103 @@
       </div>
     </div>
 
-    <!-- Tab 6: Agent IA (Style ChatGPT avec Sidebar) -->
+    <!-- Tab: Agent IA (Style ChatGPT avec Sidebar) -->
+    @if(Auth::user()->isSuperAdmin())
     <div id="ai-agent" class="tab-content">
       <div style="display: flex; gap: 16px; height: 650px;">
         
-        <!-- Sidebar Historique (Style ChatGPT) -->
+        <!-- Sidebar Historique -->
         <div class="ai-sidebar" style="width: 280px; background: #f7f7f8; border-radius: 12px; border: 1px solid #e5e7eb; display: flex; flex-direction: column;">
-          
-          <!-- Header Sidebar -->
           <div style="padding: 16px; border-bottom: 1px solid #e5e7eb; background: white; border-radius: 12px 12px 0 0;">
             <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px;">
-              <h6 style="margin: 0; font-weight: 600; color: #374151;">💬 Conversations</h6>
-              <button onclick="newAIConversationNow()" style="background: #6366f1; border: none; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
-                ➕ Nouveau Chat
-              </button>
+              <h6 style="margin: 0; font-weight: 600; color: #374151;">Conversations</h6>
+              <button onclick="newAIConversationNow()" style="background: #6366f1; border: none; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">+ Nouveau Chat</button>
             </div>
             <div style="display: flex; gap: 6px;">
-              <button onclick="saveCurrentConversation()" style="background: #10b981; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-                💾 Sauver
-              </button>
-              <button onclick="loadConversationDialog()" style="background: #f59e0b; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-                📂 Charger
-              </button>
-              <button onclick="clearAllConversations()" style="background: #ef4444; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-                🗑️ Vider
-              </button>
+              <button onclick="saveCurrentConversation()" style="background: #10b981; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">Sauver</button>
+              <button onclick="loadConversationDialog()" style="background: #f59e0b; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">Charger</button>
+              <button onclick="clearAllConversations()" style="background: #ef4444; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">Vider</button>
             </div>
           </div>
-          
-          <!-- Liste des Conversations -->
           <div id="aiConversationsList" style="flex: 1; overflow-y: auto; padding: 8px;">
             <div class="ai-conversation-item active" data-session="current" style="padding: 12px; margin: 4px 0; background: white; border-radius: 8px; border-left: 3px solid #6366f1; cursor: pointer;">
-              <div style="font-size: 0.85rem; font-weight: 500; color: #374151;">💬 Conversation Actuelle</div>
+              <div style="font-size: 0.85rem; font-weight: 500; color: #374151;">Conversation Actuelle</div>
               <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Juste maintenant</div>
             </div>
-            
-            <!-- Les conversations sauvegardées apparaîtront ici -->
           </div>
-          
-          <!-- Info Sidebar -->
           <div style="padding: 12px; border-top: 1px solid #e5e7eb; background: #f9fafb; border-radius: 0 0 12px 0;">
             <div style="font-size: 0.75rem; color: #6b7280; text-align: center;">
               Session : <code id="aiSessionSidebar" style="font-size: 0.7rem;">nouvelle</code><br>
-              Expert ML • 85k clients • 36 features
+              Expert ML
             </div>
           </div>
-          
         </div>
 
         <!-- Zone de Chat Principale -->
         <div class="ai-chat-container" style="flex: 1; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column;">
-        
-        <!-- Header minimaliste -->
-        <div class="ai-header" style="padding: 16px 24px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border-radius: 12px 12px 0 0;">
-          <div style="display: flex; justify-content: between; align-items: center;">
-            <div>
-              <h5 style="margin: 0; font-weight: 600;">🤖 Assistant IA Expert ML</h5>
-              <small style="opacity: 0.9;">85k clients • 36 features • Recommandations instantanées</small>
+          <div class="ai-header" style="padding: 16px 24px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border-radius: 12px 12px 0 0;">
+            <div style="display: flex; justify-content: between; align-items: center;">
+              <div>
+                <h5 style="margin: 0; font-weight: 600;">Assistant IA Expert ML</h5>
+                <small style="opacity: 0.9;">Recommandations instantanees</small>
+              </div>
+              <button onclick="newAIConversationNow()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">+ Nouveau</button>
             </div>
-            <button onclick="newAIConversationNow()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">
-              ➕ Nouveau
-            </button>
           </div>
-        </div>
 
-        <!-- Zone de messages (style ChatGPT) -->
-        <div id="aiMessagesZone" style="flex: 1; overflow-y: auto; padding: 0;">
-          
-          <!-- Message de bienvenue -->
-          <div class="ai-welcome-msg" style="padding: 24px; background: #f9fafb; border-bottom: 1px solid #f0f0f0;">
-            <div style="max-width: 800px;">
-              <p style="margin: 0 0 12px 0; color: #374151; font-size: 1rem;">
-                <strong>👋 Salut ! Je suis votre expert IA.</strong> Posez-moi n'importe quelle question sur vos données ML et stratégies de pricing.
-              </p>
-              <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px;">
-                <button onclick="askAIQuestion('Quel est le taux de succès actuel ?')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer; transition: all 0.2s;">
-                  Taux de succès actuel ?
-                </button>
-                <button onclick="askAIQuestion('Compare quotidien 0.3 TND vs mensuel 3.0 TND')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer; transition: all 0.2s;">
-                  ROI quotidien vs mensuel
-                </button>
-                <button onclick="askAIQuestion('Quelle stratégie pour les 29k clients High Risk ?')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer; transition: all 0.2s;">
-                  Stratégie High Risk ?
-                </button>
-                <button onclick="askAIQuestion('Explique les top 5 features ML les plus importantes')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer; transition: all 0.2s;">
-                  Top features ML
-                </button>
+          <div id="aiMessagesZone" style="flex: 1; overflow-y: auto; padding: 0;">
+            <div class="ai-welcome-msg" style="padding: 24px; background: #f9fafb; border-bottom: 1px solid #f0f0f0;">
+              <div style="max-width: 800px;">
+                <p style="margin: 0 0 12px 0; color: #374151; font-size: 1rem;">
+                  <strong>Salut ! Je suis votre expert IA.</strong> Posez-moi n'importe quelle question sur vos donnees ML et strategies de pricing.
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px;">
+                  <button onclick="askAIQuestion('Quel est le taux de succes actuel ?')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer;">Taux de succes actuel ?</button>
+                  <button onclick="askAIQuestion('Compare quotidien 0.3 TND vs mensuel 3.0 TND')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer;">ROI quotidien vs mensuel</button>
+                  <button onclick="askAIQuestion('Quelle strategie pour les clients High Risk ?')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer;">Strategie High Risk ?</button>
+                  <button onclick="askAIQuestion('Explique les top 5 features ML les plus importantes')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; padding: 6px 12px; font-size: 0.9rem; color: #374151; cursor: pointer;">Top features ML</button>
+                </div>
+              </div>
+            </div>
+            <div id="aiMessagesContainer" style="padding: 0; min-height: 200px;"></div>
+            <div id="aiTypingIndicator" style="display: none; padding: 16px 24px;">
+              <div style="display: flex; align-items: center; color: #6b7280;">
+                <div style="display: flex; gap: 4px; margin-right: 8px;">
+                  <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot1 1.4s infinite;"></div>
+                  <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot2 1.4s infinite;"></div>
+                  <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot3 1.4s infinite;"></div>
+                </div>
+                <span style="font-style: italic; font-size: 0.9rem;">Agent IA analyse vos donnees...</span>
               </div>
             </div>
           </div>
 
-          <!-- Zone des conversations -->
-          <div id="aiMessagesContainer" style="padding: 0; min-height: 200px;">
-            <!-- Les messages apparaîtront ici -->
-          </div>
-
-          <!-- Indicateur de frappe ChatGPT style -->
-          <div id="aiTypingIndicator" style="display: none; padding: 16px 24px;">
-            <div style="display: flex; align-items: center; color: #6b7280;">
-              <div style="display: flex; gap: 4px; margin-right: 8px;">
-                <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot1 1.4s infinite;"></div>
-                <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot2 1.4s infinite;"></div>
-                <div style="width: 6px; height: 6px; background: #6b7280; border-radius: 50%; animation: ai-dot3 1.4s infinite;"></div>
+          <div class="ai-input-zone" style="padding: 16px 24px; background: white; border-top: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+            <div style="display: flex; align-items: end; gap: 8px; max-width: 100%; position: relative;">
+              <div style="flex: 1; position: relative;">
+                <textarea id="aiQuestionInput" placeholder="Posez votre question..." style="width: 100%; min-height: 44px; max-height: 120px; padding: 12px 50px 12px 16px; border: 2px solid #e5e7eb; border-radius: 22px; font-size: 1rem; resize: none; outline: none; font-family: inherit;" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIQuestionNow();}"></textarea>
+                <button id="aiSendBtn" onclick="sendAIQuestionNow()" style="position: absolute; right: 8px; bottom: 6px; width: 32px; height: 32px; background: #6366f1; border: none; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer;">&#10148;</button>
               </div>
-              <span style="font-style: italic; font-size: 0.9rem;">Agent IA analyse vos données...</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 8px;">
+              <label for="aiProviderSelectDashboard" style="color: #9ca3af; font-size: 0.8rem; margin: 0;">Modele :</label>
+              <select id="aiProviderSelectDashboard" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e7eb; color: #374151; min-width: 160px;">
+                <option value="openai">OpenAI (GPT)</option>
+                <option value="anthropic">Claude (Anthropic)</option>
+                <option value="gemini">Gemini (Google)</option>
+              </select>
+              <small style="color: #9ca3af; font-size: 0.8rem;">Session <code id="aiCurrentSession" style="font-size: 0.75rem; color: #6366f1;">nouvelle</code></small>
             </div>
           </div>
-
         </div>
-
-        <!-- Zone de saisie (style ChatGPT) -->
-        <div class="ai-input-zone" style="padding: 16px 24px; background: white; border-top: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
-          <div style="display: flex; align-items: end; gap: 8px; max-width: 100%; position: relative;">
-            <div style="flex: 1; position: relative;">
-              <textarea id="aiQuestionInput" 
-                       placeholder="Posez votre question (ex: Compare les 3 stratégies de pricing...)"
-                       style="width: 100%; min-height: 44px; max-height: 120px; padding: 12px 50px 12px 16px; 
-                              border: 2px solid #e5e7eb; border-radius: 22px; font-size: 1rem; 
-                              resize: none; outline: none; font-family: inherit;"
-                       rows="1"
-                       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIQuestionNow();}"></textarea>
-              <button id="aiSendBtn" 
-                      onclick="sendAIQuestionNow()"
-                      style="position: absolute; right: 8px; bottom: 6px; width: 32px; height: 32px; 
-                             background: #6366f1; border: none; border-radius: 50%; color: white; 
-                             display: flex; align-items: center; justify-content: center; cursor: pointer;
-                             transition: all 0.2s;">
-                ➤
-              </button>
-            </div>
-          </div>
-          
-          <!-- Modèle / Fournisseur + Session -->
-          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 8px;">
-            <label for="aiProviderSelectDashboard" style="color: #9ca3af; font-size: 0.8rem; margin: 0;">🤖 Modèle :</label>
-            <select id="aiProviderSelectDashboard" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e7eb; color: #374151; min-width: 160px;">
-              <option value="openai">OpenAI (GPT)</option>
-              <option value="anthropic">Claude (Anthropic)</option>
-              <option value="gemini">Gemini (Google)</option>
-            </select>
-            <small style="color: #9ca3af; font-size: 0.8rem;">
-              Session <code id="aiCurrentSession" style="font-size: 0.75rem; color: #6366f1;">nouvelle</code> • 
-              Expert ML avec 85k clients analysés
-            </small>
-          </div>
-        </div>
-
-      </div>
       </div>
     </div>
+    @endif
 
-    <!-- Modal fluide pour nommer la conversation Agent IA -->
+    <!-- Modal pour nommer la conversation Agent IA -->
     <div id="aiRenameModal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.4); align-items: center; justify-content: center;">
-      <div class="ai-rename-modal-box" style="background: white; border-radius: 12px; padding: 24px; min-width: 360px; max-width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
-        <div style="font-weight: 600; font-size: 1.1rem; color: #374151; margin-bottom: 12px;">✏️ Nommer la conversation</div>
+      <div style="background: white; border-radius: 12px; padding: 24px; min-width: 360px; max-width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+        <div style="font-weight: 600; font-size: 1.1rem; color: #374151; margin-bottom: 12px;">Nommer la conversation</div>
         <input type="text" id="aiRenameModalInput" placeholder="Nom de la conversation" style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem; margin-bottom: 16px; box-sizing: border-box;">
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
           <button type="button" id="aiRenameModalCancel" style="padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 8px; background: #f9fafb; color: #374151; cursor: pointer; font-size: 0.9rem;">Annuler</button>
@@ -3268,7 +3206,7 @@
       </div>
     </div>
 
-    <!-- Tab 7: Insights (Hidden) -->
+    <!-- Tab 6: Insights (Hidden) -->
     <!--
     <div id="insights" class="tab-content">
       <div class="insights-grid">
@@ -3402,44 +3340,50 @@
       }
     });
 
-    // Fonction pour afficher les états de chargement des KPIs Eklektik (ids = eklektik-*)
+    // Fonction pour afficher les états de chargement des KPIs
     function showEklektikStatsLoading() {
       const elements = [
-        'eklektik-revenue-ttc', 'eklektik-revenue-ht', 'eklektik-ca-bigdeal', 'eklektik-active-subs',
-        'eklektik-new-subscriptions', 'eklektik-unsubscriptions', 'eklektik-simchurn', 'eklektik-facturation'
+        'kpi-revenue-ttc',
+        'kpi-revenue-ht',
+        'kpi-ca-bigdeal',
+        'kpi-bigdeal-percentage'
       ];
+
       elements.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = '<span class="loading-spinner">🔄</span>';
+        const element = document.getElementById(id);
+        if (element) {
+          element.innerHTML = '<div class="loading-spinner">🔄</div>';
+        }
       });
     }
 
-    // Fonction pour afficher les erreurs des KPIs Eklektik
+    // Fonction pour afficher les erreurs des KPIs
     function showEklektikStatsError() {
       const elements = [
-        'eklektik-revenue-ttc', 'eklektik-revenue-ht', 'eklektik-ca-bigdeal', 'eklektik-active-subs',
-        'eklektik-new-subscriptions', 'eklektik-unsubscriptions', 'eklektik-simchurn', 'eklektik-facturation'
+        'kpi-revenue-ttc',
+        'kpi-revenue-ht',
+        'kpi-ca-bigdeal',
+        'kpi-bigdeal-percentage'
       ];
+
       elements.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = '<span class="error-text">—</span>';
+        const element = document.getElementById(id);
+        if (element) {
+          element.innerHTML = '<span class="error-text">❌ Erreur</span>';
+        }
       });
     }
 
-    // Charger les données Eklektik (utilise la période principale du dashboard si disponible)
+    // Charger les données Eklektik (sera définie plus tard)
     async function loadEklektikData() {
       console.log('🔄 Chargement des données Eklektik...');
+
+      // Afficher l'état de chargement
       showEklektikStatsLoading();
 
-      const startEl = document.getElementById('start-date');
-      const endEl = document.getElementById('end-date');
-      let kpisUrl = '/api/eklektik-dashboard/kpis';
-      if (startEl?.value && endEl?.value) {
-        kpisUrl += '?start_date=' + encodeURIComponent(startEl.value) + '&end_date=' + encodeURIComponent(endEl.value);
-      }
-
       try {
-        const kpisResponse = await fetch(kpisUrl, { credentials: 'same-origin' });
+        // Charger les KPIs
+        const kpisResponse = await fetch('/api/eklektik-dashboard/kpis');
         const kpisData = await kpisResponse.json();
 
         if (kpisData.success) {
@@ -3449,12 +3393,8 @@
           showEklektikStatsError();
         }
 
-        // Charger les statistiques par opérateur (même période)
-        let distUrl = '/api/eklektik-dashboard/revenue-distribution';
-        if (startEl?.value && endEl?.value) {
-          distUrl += '?start_date=' + encodeURIComponent(startEl.value) + '&end_date=' + encodeURIComponent(endEl.value);
-        }
-        const operatorsResponse = await fetch(distUrl, { credentials: 'same-origin' });
+        // Charger les statistiques par opérateur
+        const operatorsResponse = await fetch('/api/eklektik-dashboard/revenue-distribution');
         const operatorsData = await operatorsResponse.json();
 
         if (operatorsData.success) {
@@ -3469,36 +3409,36 @@
       }
     }
 
-    // Mettre à jour l'affichage des statistiques Eklektik (API retourne un objet plat : total_revenue_ttc, etc.)
+    // Mettre à jour l'affichage des statistiques Eklektik
     function updateEklektikStatsDisplay(data) {
       console.log('📊 Mise à jour des KPIs Eklektik:', data);
-      if (!data) return;
 
-      const fmt = (v) => (v !== undefined && v !== null ? formatNumber(v) : '0');
-      const set = (id, value, suffix = ' TND') => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = (value !== undefined && value !== null ? formatNumber(value) : '0') + suffix;
-      };
-      const setInt = (id, value) => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = (value !== undefined && value !== null ? formatNumber(Math.round(value)) : '0');
-      };
+      // Mettre à jour les éléments KPI avec les données
+      if (data && data.kpis) {
+        // Revenue TTC
+        const revenueTtcElement = document.getElementById('kpi-revenue-ttc');
+        if (revenueTtcElement && data.kpis.total_revenue_ttc !== undefined) {
+          revenueTtcElement.innerHTML = formatNumber(data.kpis.total_revenue_ttc) + ' €';
+        }
 
-      set('eklektik-revenue-ttc', data.total_revenue_ttc, ' TND');
-      set('eklektik-revenue-ht', data.total_revenue_ht, ' TND');
-      set('eklektik-ca-bigdeal', data.total_ca_bigdeal, ' TND');
-      setInt('eklektik-active-subs', data.total_active_subscribers);
-      setInt('eklektik-new-subscriptions', data.total_new_subscriptions);
-      setInt('eklektik-unsubscriptions', data.total_unsubscriptions);
-      setInt('eklektik-simchurn', data.total_simchurn);
-      setInt('eklektik-facturation', data.total_facturation);
+        // Revenue HT
+        const revenueHtElement = document.getElementById('kpi-revenue-ht');
+        if (revenueHtElement && data.kpis.total_revenue_ht !== undefined) {
+          revenueHtElement.innerHTML = formatNumber(data.kpis.total_revenue_ht) + ' €';
+        }
 
-      // Deltas (comparaison) : afficher "—" si non fournis par l'API
-      ['eklektik-revenue-ttc-delta', 'eklektik-revenue-ht-delta', 'eklektik-ca-bigdeal-delta', 'eklektik-active-subs-delta',
-       'eklektik-new-subscriptions-delta', 'eklektik-unsubscriptions-delta', 'eklektik-simchurn-delta', 'eklektik-facturation-delta'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && !data.delta_period) el.textContent = '—';
-      });
+        // CA BigDeal
+        const caBigdealElement = document.getElementById('kpi-ca-bigdeal');
+        if (caBigdealElement && data.kpis.total_facturation !== undefined) {
+          caBigdealElement.innerHTML = formatNumber(data.kpis.total_facturation) + ' €';
+        }
+
+        // Pourcentage BigDeal
+        const bigdealPercentageElement = document.getElementById('kpi-bigdeal-percentage');
+        if (bigdealPercentageElement && data.kpis.bigdeal_percentage !== undefined) {
+          bigdealPercentageElement.innerHTML = data.kpis.bigdeal_percentage.toFixed(1) + '%';
+        }
+      }
     }
 
     // Mobile-optimized chart options with enhanced 5-breakpoint system
@@ -3701,19 +3641,27 @@
         console.error('❌ Chart.js non chargé');
       }
 
+      // Charger les données Eklektik une seule fois au démarrage
+      try {
+        if (typeof loadEklektikData === 'function') {
+          await loadEklektikData();
+        }
+        if (typeof loadEklektikCharts === 'function') {
+          setTimeout(() => loadEklektikCharts(), 150);
+        }
+      } catch (e) {
+        console.warn('Eklektik initial load skipped:', e);
+      }
+      
       setDefaultDates();
       updateDateRange();
       initializeDashboard();
       
-      // Charger les données Eklektik APRÈS le dashboard (non-bloquant)
-      // Ne pas charger automatiquement pour éviter les doubles chargements
-      // L'utilisateur peut charger Eklektik manuellement via l'onglet
-      
       // Initialize mobile navigation
       initializeMobileNavigation();
       
-      // ❌ Auto-refresh désactivé (demande utilisateur)
-      // setInterval(loadDashboardData, 5 * 60 * 1000);
+      // Auto-refresh every 5 minutes
+      setInterval(loadDashboardData, 5 * 60 * 1000);
       
       // Initialize keyboard shortcuts
       initializeKeyboardShortcuts();
@@ -5540,24 +5488,12 @@
       });
     }
 
-    // Variable pour éviter les chargements multiples simultanés
-    let isLoadingDashboard = false;
-    
-    // Load dashboard data with progressive loading
+    // Load dashboard data with simple loading
     async function loadDashboardData() {
-      // Empêcher les chargements multiples simultanés
-      if (isLoadingDashboard) {
-        console.log('⏸️ Chargement déjà en cours, ignoré');
-        return;
-      }
-      
-      isLoadingDashboard = true;
-      let timeoutId = null;
-      
       try {
-        // Show simple loading
+        // Show progressive loading
         showLoading();
-        showProgressiveLoading();
+        updateProgressiveStatus('Initialisation...', 0);
         
         // Get date values for both periods
         const startDate = document.getElementById('start-date').value;
@@ -5565,216 +5501,219 @@
         const comparisonStartDate = document.getElementById('comparison-start-date').value;
         const comparisonEndDate = document.getElementById('comparison-end-date').value;
         
-        // Get selected operators (multi-select)
+        // Get selected operators
         const selectedOperator = selectedOperators.includes('ALL') || selectedOperators.length === 0 
           ? 'ALL' 
           : selectedOperators.length === 1 
             ? selectedOperators[0] 
             : selectedOperators.join(',');
         
-        // Calculer la période en jours
-        const startDateObj = new Date(startDate);
-        const endDateObj = new Date(endDate);
-        const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24));
-        
-        // Build API URL (route /api/dashboard/data - web.php avec auth middleware)
-        let apiUrl = '/api/dashboard/data';
+        // Build params
         const params = new URLSearchParams();
-        
         if (startDate && endDate) {
           params.append('start_date', startDate);
           params.append('end_date', endDate);
         }
-        
         if (comparisonStartDate && comparisonEndDate) {
           params.append('comparison_start_date', comparisonStartDate);
           params.append('comparison_end_date', comparisonEndDate);
         }
-        
         if (selectedOperator) {
           params.append('operator', selectedOperator);
         }
-        
-        // Mode light automatique pour périodes > 90 jours
-        const shouldUseLightMode = periodDays > 90;
-        if (shouldUseLightMode) {
-          params.append('light', 'true');
-          console.log(`⚡ Mode light activé automatiquement pour période de ${periodDays} jours`);
-        }
+        const queryString = params.toString();
         
         const startTime = performance.now();
         
-        // OPTIMISATION: Charger directement les données complètes (avec cache Redis, c'est rapide)
-        updateProgressiveLoading('Chargement des données...', 30);
+        // Essayer d'abord le chargement progressif (split endpoints)
+        // Si un endpoint echoue, on fallback sur le monolithique
+        const sections = [
+          { name: 'kpis', url: `/api/dashboard/split/kpis?${queryString}`, label: 'KPIs', weight: 20 },
+          { name: 'merchants', url: `/api/dashboard/split/merchants?${queryString}`, label: 'Marchands', weight: 25 },
+          { name: 'transactions', url: `/api/dashboard/split/transactions?${queryString}`, label: 'Transactions', weight: 15 },
+          { name: 'subscriptions', url: `/api/dashboard/split/subscriptions?${queryString}`, label: 'Abonnements', weight: 30 },
+          { name: 'ooredoo_stats', url: `/api/dashboard/split/ooredoo?${queryString}`, label: 'Ooredoo', weight: 10 }
+        ];
         
-        const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 150000); // 2.5 minutes timeout (augmenté pour périodes jusqu'à 2 ans)
+        let completedWeight = 0;
+        let sectionResults = {};
+        let hasAnyData = false;
         
-        // Charger les données complètes (le cache Redis devrait rendre ça rapide)
-        const response = await fetch(apiUrl + '?' + params.toString(), {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          credentials: 'same-origin'
+        // Lancer TOUTES les requetes en parallele
+        const fetchPromises = sections.map(section => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 180000);
+          
+          return fetch(section.url, {
+            signal: controller.signal,
+            headers: { 'Accept': 'application/json' }
+          })
+          .then(async (response) => {
+            clearTimeout(timeoutId);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const json = await response.json();
+            
+            // Mise a jour progressive
+            completedWeight += section.weight;
+            updateProgressiveStatus(`${section.label} charge!`, completedWeight);
+            
+            sectionResults[section.name] = json;
+            hasAnyData = true;
+            
+            // Mettre a jour la section correspondante immediatement
+            updateDashboardSection(section.name, json);
+            
+            return { section: section.name, success: true, data: json };
+          })
+          .catch(err => {
+            clearTimeout(timeoutId);
+            console.warn(`Section ${section.name} echec:`, err.message);
+            completedWeight += section.weight;
+            updateProgressiveStatus(`${section.label} - fallback...`, completedWeight);
+            return { section: section.name, success: false, error: err.message };
+          });
         });
         
-        clearTimeout(timeoutId);
+        // Attendre que TOUTES les sections soient chargees
+        const results = await Promise.all(fetchPromises);
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
         const loadTime = performance.now() - startTime;
-        
-        console.log('✅ Dashboard data loaded successfully:', {
+        console.log('Dashboard progressif:', {
           operator: selectedOperator,
-          hasKPIs: !!data.kpis,
-          hasCharts: !!data.subscriptions,
           loadTime: `${loadTime.toFixed(0)}ms`,
-          lightMode: data.light_mode || false
+          sections: results.map(r => `${r.section}: ${r.success ? 'OK' : 'FAIL'}`)
         });
         
-        // Si c'est en mode light, charger les sections manquantes
-        if (data.light_mode) {
-          updateProgressiveLoading('Chargement des sections avancées...', 60);
+        // Si le chargement progressif a echoue pour toutes les sections, fallback monolithique
+        if (!hasAnyData) {
+          console.warn('Fallback sur endpoint monolithique...');
+          updateProgressiveStatus('Chargement complet...', 50);
+          const fallbackController = new AbortController();
+          const fallbackTimeout = setTimeout(() => fallbackController.abort(), 180000);
           
-          const baseParams = params.toString();
-          const heavyEndpoints = [
-            { name: 'subscriptions-details', url: `/api/dashboard/subscriptions-details?${baseParams}`, key: 'subscriptions' },
-            { name: 'cohorts', url: `/api/dashboard/cohorts?${baseParams}`, key: 'cohorts' },
-            { name: 'transactions', url: `/api/dashboard/transactions-separate?${baseParams}`, key: 'transactions' }
-          ];
-          
-          // Charger en parallèle avec gestion d'erreur individuelle
-          const heavyPromises = heavyEndpoints.map(async (endpoint, index) => {
-            try {
-              updateProgressiveLoading(`Chargement ${endpoint.name}...`, 60 + (index + 1) * 10);
-              
-              const heavyResponse = await fetch(endpoint.url, {
-                headers: {
-                  'Accept': 'application/json',
-                  'Content-Type': 'application/json',
-                  'X-Requested-With': 'XMLHttpRequest'
-                },
-                credentials: 'same-origin'
-              });
-              
-              if (!heavyResponse.ok) {
-                throw new Error(`HTTP ${heavyResponse.status} pour ${endpoint.name}`);
-              }
-              
-              const result = await heavyResponse.json();
-              
-              return { key: endpoint.key, data: result.data || result, success: true };
-            } catch (error) {
-              console.warn(`⚠️ Erreur chargement ${endpoint.name}:`, error);
-              return { key: endpoint.key, data: null, success: false, error: error.message };
-            }
+          const response = await fetch(`/api/dashboard/data?${queryString}`, {
+            signal: fallbackController.signal,
+            headers: { 'Accept': 'application/json' }
           });
+          clearTimeout(fallbackTimeout);
           
-          const heavyResults = await Promise.all(heavyPromises);
-          
-          // Fusionner les résultats
-          heavyResults.forEach(result => {
-            if (result.success && result.data) {
-              if (result.key === 'subscriptions') {
-                data.subscriptions = {
-                  ...(data.subscriptions || {}),
-                  details: result.data,
-                  ...result.data
-                };
-              } else if (result.key === 'cohorts') {
-                if (!data.subscriptions) data.subscriptions = {};
-                data.subscriptions.cohorts = result.data;
-              } else if (result.key === 'transactions') {
-                data.transactions = result.data;
-              }
-            }
-          });
+          if (response.ok) {
+            const data = await response.json();
+            updateDashboard(data);
+          } else {
+            throw new Error(`Fallback echoue: HTTP ${response.status}`);
+          }
         }
         
-        // Masquer le message d'optimisation
+        // Masquer le chargement
         hideOptimizationMessage();
-        
-        // Show performance indicator avec métadonnées
-        updatePerformanceIndicator(loadTime, data);
-        
-        // Update dashboard and hide loading simultaneously
-        updateProgressiveLoading('Finalisation...', 95);
-        updateDashboard(data);
+        updatePerformanceIndicator(loadTime);
         hideLoading();
-        hideProgressiveLoading();
         
-        // Show success notification
         const operatorLabel = selectedOperator === 'ALL' ? 'globales' : selectedOperator;
-        
         setTimeout(() => {
-          showNotification(`✅ Données ${operatorLabel} mises à jour! (${loadTime.toFixed(0)}ms)`, 'success');
+          showNotification(`Donnees ${operatorLabel} mises a jour! (${(loadTime/1000).toFixed(1)}s)`, 'success');
         }, 100);
-
-        // NE PAS émettre l'événement dashboard:refreshed pour éviter les rechargements en cascade
-        // Les modules Eklektik se chargeront indépendamment
+        
+        try {
+          window.dispatchEvent(new CustomEvent('dashboard:refreshed'));
+        } catch (e) {}
         
       } catch (error) {
-        clearTimeout(timeoutId);
         console.error('Error loading dashboard data:', error);
         hideLoading();
-        hideProgressiveLoading();
         
-        // Try to show fallback data instead of complete failure
         if (error.name === 'AbortError') {
-          showNotification('⏱️ Délai d\'attente dépassé - Chargement des données de démonstration', 'warning');
-          loadFallbackData();
-          updateDashboard(dashboardData);
+          showNotification('Delai d\'attente depasse - Chargement des donnees de demonstration', 'warning');
         } else {
-          showNotification('❌ Erreur de connexion: ' + error.message, 'error');
-          loadFallbackData();
-          updateDashboard(dashboardData);
+          showNotification('Erreur de connexion: ' + error.message, 'error');
         }
-      } finally {
-        // Toujours réinitialiser le flag à la fin
-        isLoadingDashboard = false;
+        loadFallbackData();
+        updateDashboard(dashboardData);
       }
     }
     
-    // Gestion du chargement progressif
-    let progressiveLoadingElement = null;
-    
-    function showProgressiveLoading() {
-      // Créer l'élément de progression s'il n'existe pas
-      if (!progressiveLoadingElement) {
-        progressiveLoadingElement = document.createElement('div');
-        progressiveLoadingElement.id = 'progressive-loading';
-        progressiveLoadingElement.innerHTML = `
-          <div style="position: fixed; top: 80px; right: 20px; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10000; min-width: 250px;">
-            <div style="font-weight: 600; margin-bottom: 8px; color: #1f2937;">Chargement progressif</div>
-            <div id="progressive-loading-text" style="font-size: 13px; color: #6b7280; margin-bottom: 8px;">Initialisation...</div>
-            <div style="background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden;">
-              <div id="progressive-loading-bar" style="background: linear-gradient(90deg, #3b82f6, #8b5cf6); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(progressiveLoadingElement);
-      }
-      progressiveLoadingElement.style.display = 'block';
-    }
-    
-    function updateProgressiveLoading(text, percent) {
-      if (progressiveLoadingElement) {
-        const textEl = progressiveLoadingElement.querySelector('#progressive-loading-text');
-        const barEl = progressiveLoadingElement.querySelector('#progressive-loading-bar');
-        if (textEl) textEl.textContent = text;
-        if (barEl) barEl.style.width = Math.min(100, Math.max(0, percent)) + '%';
+    // Mise a jour progressive du statut de chargement
+    function updateProgressiveStatus(message, percent) {
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) {
+        const statusEl = overlay.querySelector('.loading-status');
+        const progressBar = overlay.querySelector('.progress-fill');
+        if (statusEl) statusEl.textContent = message;
+        if (progressBar) progressBar.style.width = percent + '%';
       }
     }
     
-    function hideProgressiveLoading() {
-      if (progressiveLoadingElement) {
-        progressiveLoadingElement.style.display = 'none';
+    // Mettre a jour UNE section du dashboard quand elle arrive
+    function updateDashboardSection(sectionName, json) {
+      if (!json || !json.success) return;
+      try {
+        // Initialiser le store global
+        if (!window._dashboardData) {
+          window._dashboardData = {
+            periods: {
+              primary: (document.getElementById('start-date')?.value || '') + ' - ' + (document.getElementById('end-date')?.value || ''),
+              comparison: ''
+            },
+            kpis: {},
+            merchants: [],
+            categoryDistribution: [],
+            transactions: {},
+            subscriptions: {},
+            ooredoo_stats: {},
+            insights: []
+          };
+        }
+        
+        switch(sectionName) {
+          case 'kpis':
+            if (json.data) {
+              window._dashboardData.kpis = json.data;
+              // Mettre a jour les cartes KPI immediatement
+              dashboardData = window._dashboardData;
+              updateKPIs(json.data);
+            }
+            break;
+          case 'merchants':
+            if (json.data) {
+              window._dashboardData.merchants = json.data;
+              window._dashboardData.categoryDistribution = json.categoryDistribution || [];
+              dashboardData = window._dashboardData;
+              updateMerchantKPIs(json.data, window._dashboardData.kpis);
+            }
+            break;
+          case 'transactions':
+            if (json.data) {
+              window._dashboardData.transactions = json.data;
+              dashboardData = window._dashboardData;
+              // Redessiner les graphiques avec les donnees de transactions
+              if (typeof updateCharts === 'function') {
+                try { updateCharts(window._dashboardData); } catch(e) {}
+              }
+            }
+            break;
+          case 'subscriptions':
+            if (json.data) {
+              window._dashboardData.subscriptions = json.data;
+              dashboardData = window._dashboardData;
+              // Mettre a jour les graphiques et tables d'abonnements
+              if (typeof updateCharts === 'function') {
+                try { updateCharts(window._dashboardData); } catch(e) {}
+              }
+              if (typeof updateTables === 'function') {
+                try { updateTables(window._dashboardData); } catch(e) {}
+              }
+            }
+            break;
+          case 'ooredoo_stats':
+            if (json.data) {
+              window._dashboardData.ooredoo_stats = json.data;
+              dashboardData = window._dashboardData;
+            }
+            break;
+        }
+      } catch(e) {
+        console.warn(`Erreur mise a jour section ${sectionName}:`, e);
       }
     }
     
@@ -5806,7 +5745,10 @@
       overlay.innerHTML = `
         <div class="loading-spinner">
           <div class="spinner"></div>
-          <div style="margin-top: 15px; font-weight: 500;">Chargement des données...</div>
+          <div class="loading-status" style="margin-top: 15px; font-weight: 500;">Chargement des donnees...</div>
+          <div style="margin-top: 10px; width: 200px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden;">
+            <div class="progress-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 2px; transition: width 0.5s ease;"></div>
+          </div>
         </div>
       `;
 
@@ -5924,65 +5866,44 @@
       });
     }
 
-    function updatePerformanceIndicator(loadTime, data = null) {
+    function updatePerformanceIndicator(loadTime) {
       const indicator = document.getElementById('performance-indicator');
       if (!indicator) return;
       
-      // Calculer la période pour l'affichage
-      const startDate = document.getElementById('start-date')?.value;
-      const endDate = document.getElementById('end-date')?.value;
-      let periodDays = 0;
-      if (startDate && endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-      }
-      
-      // Déterminer la source des données
-      const isFromCache = data?._cache_meta || loadTime < 500;
-      const isStale = data?._cache_meta?.is_stale === true;
-      const dataType = data?._cache_meta?.data_type || 'standard';
-      
       if (loadTime < 500) {
-        // Excellent - Cache
+        // Fast load - likely from cache
         indicator.style.display = 'flex';
-        const cacheText = isStale ? '📦 Cache (stale)' : periodDays > 0 ? `📦 Cache (${periodDays}j)` : '📦 Cache';
-        indicator.querySelector('.performance-text').textContent = cacheText;
+        indicator.querySelector('.performance-text').textContent = 'Cache ⚡';
         indicator.style.background = 'rgba(16, 185, 129, 0.1)';
         indicator.style.borderColor = 'rgba(16, 185, 129, 0.3)';
         indicator.style.color = '#059669';
         
+        // Hide after 3 seconds
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 5000);
-      } else if (loadTime < 3000) {
-        // Bon - Optimisé
+        }, 3000);
+      } else if (loadTime < 2000) {
+        // Medium load
         indicator.style.display = 'flex';
-        const optimizedText = periodDays > 0 
-          ? `${Math.round(loadTime)}ms (${periodDays}j)` 
-          : `${Math.round(loadTime)}ms (optimisé)`;
-        indicator.querySelector('.performance-text').textContent = optimizedText;
+        indicator.querySelector('.performance-text').textContent = `${Math.round(loadTime)}ms`;
         indicator.style.background = 'rgba(245, 158, 11, 0.1)';
         indicator.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         indicator.style.color = '#d97706';
         
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 4000);
+        }, 2000);
       } else {
-        // Lent - Longue période
+        // Slow load
         indicator.style.display = 'flex';
-        const slowText = periodDays > 0 
-          ? `${Math.round(loadTime / 1000)}s (${periodDays}j)` 
-          : `${Math.round(loadTime / 1000)}s`;
-        indicator.querySelector('.performance-text').textContent = slowText;
+        indicator.querySelector('.performance-text').textContent = 'Lent';
         indicator.style.background = 'rgba(239, 68, 68, 0.1)';
         indicator.style.borderColor = 'rgba(239, 68, 68, 0.3)';
         indicator.style.color = '#dc2626';
         
         setTimeout(() => {
           indicator.style.display = 'none';
-        }, 6000);
+        }, 4000);
       }
     }
     
@@ -6339,38 +6260,14 @@
         document.getElementById('comparison-end-date').value = comparisonEndDate.toISOString().split('T')[0];
         
         updateDateRange();
-        // Ne pas charger automatiquement - l'utilisateur doit cliquer sur "Actualiser"
+        loadDashboardData();
       }
     }
 
-    // Debounce timer pour les changements de dates
-    let dateChangeDebounceTimer = null;
-    
-    // Update date range display avec debouncing
+    // Update date range display
     function updateDateRange() {
       const startDate = document.getElementById('start-date').value;
       const endDate = document.getElementById('end-date').value;
-      
-      // Calculer la période
-      let periodDays = 0;
-      if (startDate && endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-      }
-      
-      // Debounce de 800ms sur les changements de dates
-      clearTimeout(dateChangeDebounceTimer);
-      dateChangeDebounceTimer = setTimeout(() => {
-        if (periodDays > 0) {
-          console.log(`✅ Dates mises à jour (${periodDays}j) - Cliquez sur "Actualiser" pour charger`);
-          // Si l'onglet Eklektik est actif, recharger ses données (KPIs + répartition opérateurs)
-          if (document.getElementById('eklektik')?.classList.contains('active') && typeof loadEklektikData === 'function') {
-            loadEklektikData();
-            if (typeof window.loadEklektikCharts === 'function') setTimeout(window.loadEklektikCharts, 500);
-          }
-        }
-      }, 800);
       
       if (startDate && endDate) {
         const start = new Date(startDate);
@@ -6527,32 +6424,6 @@
 
     // Update dashboard with data - optimized for performance
     function updateDashboard(data) {
-      // Normaliser les données pour compatibilité mode light/complet
-      // En mode light, timwe_stats et ooredoo_stats sont au niveau racine
-      // En mode complet, elles sont dans subscriptions
-      if (data.light_mode) {
-        // Mode light : normaliser la structure
-        if (data.timwe_stats && !data.subscriptions) {
-          data.subscriptions = {};
-        }
-        if (data.timwe_stats) {
-          data.subscriptions.timwe_monthly_stats = data.timwe_stats.timwe_monthly_stats || [];
-          data.subscriptions.timwe_monthly_stats_comparison = data.timwe_stats.timwe_monthly_stats_comparison || [];
-          data.subscriptions.daily_statistics = data.timwe_stats.daily_statistics || [];
-        }
-        if (data.ooredoo_stats) {
-          // ooredoo_stats est déjà au bon endroit
-        }
-      } else {
-        // Mode complet : s'assurer que les données sont bien structurées
-        if (!data.subscriptions) {
-          data.subscriptions = {};
-        }
-        if (!data.ooredoo_stats) {
-          data.ooredoo_stats = {};
-        }
-      }
-      
       // Store globally FIRST so dependent functions can safely read it
       dashboardData = data;
 
@@ -6583,18 +6454,7 @@
 
     // Update KPI values
     function updateKPIs(kpis) {
-      const normalizeKPI = (obj) => {
-        // Si c'est un objet avec current, l'utiliser tel quel
-        if (obj && typeof obj.current !== 'undefined') {
-          return obj;
-        }
-        // Si c'est un nombre simple, le convertir en objet
-        if (typeof obj === 'number') {
-          return { current: obj, previous: 0, change: 0 };
-        }
-        // Sinon retourner 0
-        return { current: 0, previous: 0, change: 0 };
-      };
+      const normalizeKPI = (obj) => (obj && typeof obj.current !== 'undefined') ? obj : { current: 0, previous: 0, change: 0 };
       
       // Overview KPIs
       updateKPI('activatedSubscriptions', normalizeKPI(kpis?.activatedSubscriptions));
@@ -6622,16 +6482,14 @@
       // Taux de churn doit utiliser la valeur churnRate
       updateKPI('sub-retentionRateTrue', normalizeKPI(kpis?.churnRate), '%');
       
-      // Timwe Tab KPIs (super admin uniquement) - afficher dès qu'on a des stats ou des KPIs
-      const timweStats = dashboardData?.timwe_stats?.timwe_monthly_stats || dashboardData?.subscriptions?.timwe_monthly_stats;
-      if (kpis?.billingRateTimwe || timweStats) {
+      // Timwe Tab KPIs (super admin uniquement)
+      if (kpis?.billingRateTimwe) {
         updateKPI('timwe-billing-rate', normalizeKPI(kpis?.billingRateTimwe), '%');
         updateKPI('timwe-total-billings', normalizeKPI(kpis?.totalTimweBillings));
         
         // Récupérer les statistiques mensuelles groupées Timwe depuis les données du dashboard
-        // Support mode light (timwe_stats au niveau racine) et mode complet (subscriptions.timwe_monthly_stats)
-        if (timweStats) {
-          updateTimweStatisticsTable(timweStats);
+        if (dashboardData && dashboardData.subscriptions && dashboardData.subscriptions.timwe_monthly_stats) {
+          updateTimweStatisticsTable(dashboardData.subscriptions.timwe_monthly_stats);
           
           // DÉSACTIVÉ POUR OPTIMISATION: Tableau des transactions Timwe par utilisateur
           // if (dashboardData.subscriptions.timwe_transactions_by_user) {
@@ -6641,8 +6499,8 @@
           // }
           
           // Calculer les KPIs agrégés avec comparaison (depuis les données mensuelles)
-          const monthlyStats = timweStats || [];
-          const monthlyStatsComparison = dashboardData?.timwe_stats?.timwe_monthly_stats_comparison || dashboardData?.subscriptions?.timwe_monthly_stats_comparison || [];
+          const monthlyStats = dashboardData.subscriptions.timwe_monthly_stats || [];
+          const monthlyStatsComparison = dashboardData.subscriptions.timwe_monthly_stats_comparison || [];
           
           const totals = calculateTimweTotals(monthlyStats);
           const comparisonTotals = monthlyStatsComparison.length > 0 
@@ -6694,24 +6552,16 @@
             change: comparisonTotals ? calculateChange(totals.simchurnRevenue, comparisonTotals.simchurnRevenue) : 0
           }, ' TND');
           
-          // Alignement Diagnostic : Revenu TTC et CA BigDeal depuis le même total_billed que NOMBRE FACTURATION
-          const revenueFromDiagnostic = kpis?.timwe_revenue_ttc_tnd;
-          const caBigdealFromDiagnostic = kpis?.timwe_ca_bigdeal_ht;
-          const revenueTndCurrent = revenueFromDiagnostic != null ? revenueFromDiagnostic.current : totals.revenueTnd;
-          const revenueTndPrevious = revenueFromDiagnostic != null ? revenueFromDiagnostic.previous : (comparisonTotals?.revenueTnd ?? 0);
-          const caBigdealCurrent = caBigdealFromDiagnostic != null ? caBigdealFromDiagnostic.current : totals.caBigdealHt;
-          const caBigdealPrevious = caBigdealFromDiagnostic != null ? caBigdealFromDiagnostic.previous : (comparisonTotals?.caBigdealHt ?? 0);
-          
           updateKPI('timwe-revenue-tnd', {
-            current: formatNumber(revenueTndCurrent, 3),
-            previous: formatNumber(revenueTndPrevious, 3),
-            change: comparisonTotals ? calculateChange(revenueTndCurrent, revenueTndPrevious) : 0
+            current: formatNumber(totals.revenueTnd, 3),
+            previous: comparisonTotals ? formatNumber(comparisonTotals.revenueTnd, 3) : 0,
+            change: comparisonTotals ? calculateChange(totals.revenueTnd, comparisonTotals.revenueTnd) : 0
           }, ' TND');
           
           updateKPI('timwe-revenue-usd', {
-            current: formatNumber(caBigdealCurrent, 3),
-            previous: formatNumber(caBigdealPrevious, 3),
-            change: comparisonTotals ? calculateChange(caBigdealCurrent, caBigdealPrevious) : 0
+            current: formatNumber(totals.caBigdealHt, 3),
+            previous: comparisonTotals ? formatNumber(comparisonTotals.caBigdealHt, 3) : 0,
+            change: comparisonTotals ? calculateChange(totals.caBigdealHt, comparisonTotals.caBigdealHt) : 0
           }, ' TND');
           
           // Calculer le nombre de jours de la période pour normaliser l'ARPU
@@ -6744,16 +6594,17 @@
             change: netGrowthRateComparison !== null ? calculateChange(netGrowthRate, netGrowthRateComparison) : 0
           }, '%');
           
-          // ARPU et Revenu moyen/facturation basés sur le même revenu que Revenu TTC (aligné diagnostic)
+          // ARPU mensuel normalisé (30 jours)
+          // Formule : (Revenu Total / Active Subs) * (30 / Nombre de jours)
           const arpuValue = totals.activeSubsEndOfPeriod > 0 
-            ? (revenueTndCurrent / totals.activeSubsEndOfPeriod) * (30 / periodDays)
+            ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays)
             : 0;
           const arpuFormatted = formatNumber(arpuValue, 3);
           
           updateKPI('timwe-arpu', { current: arpuFormatted, previous: 0, change: 0 }, ' TND');
           
           const avgBillingValue = kpis?.totalTimweBillings?.current > 0 
-            ? revenueTndCurrent / kpis.totalTimweBillings.current
+            ? totals.revenueTnd / kpis.totalTimweBillings.current
             : 0;
           const avgBillingFormatted = formatNumber(avgBillingValue, 3);
           updateKPI('timwe-avg-billing-revenue', { current: avgBillingFormatted, previous: 0, change: 0 }, ' TND');
@@ -6994,16 +6845,6 @@
     }
 
     const points = (data.subscriptions && data.subscriptions.quarterly_active_locations) ? data.subscriptions.quarterly_active_locations : [];
-    
-    if (!points || points.length === 0) {
-      // Afficher un message si pas de données
-      const parent = ctx.parentElement;
-      if (parent) {
-        parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
-      }
-      return;
-    }
-    
     const labels = points.map(p => p.quarter);
     const values = points.map(p => p.locations);
 
@@ -7188,21 +7029,26 @@
       
       // Use real daily activations data from backend
       const dailyActivations = data.subscriptions?.daily_activations || [];
-      
-      console.log('📊 Daily Activations data:', dailyActivations.length, 'entries', dailyActivations.slice(0, 3));
-      
-      if (!dailyActivations || dailyActivations.length === 0) {
-        // Afficher un message si pas de données
-        const parent = ctx.parentElement;
-        if (parent) {
-          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
+      // Build a continuous date range (align X axis with other charts)
+      const dateToValue = new Map();
+      const parseISO = (s) => new Date(s + 'T00:00:00');
+      dailyActivations.forEach(it => {
+        if (it && it.date) {
+          dateToValue.set(it.date, Number(it.activations || 0));
         }
-        return;
+      });
+
+      const sortedDates = Array.from(dateToValue.keys()).sort();
+      if (sortedDates.length === 0) return;
+      const start = parseISO(sortedDates[0]);
+      const end = parseISO(sortedDates[sortedDates.length - 1]);
+      const days = [];
+      const dailyData = [];
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const iso = d.toISOString().slice(0, 10);
+        days.push(iso);
+        dailyData.push(dateToValue.has(iso) ? dateToValue.get(iso) : 0);
       }
-      
-      // Pour les longues périodes (données mensuelles), utiliser directement les données sans interpolation
-      const days = dailyActivations.map(it => it.date);
-      const dailyData = dailyActivations.map(it => Number(it.activations || 0));
       
       charts.subscriptionTrend = new Chart(ctx, {
         type: 'line',
@@ -7248,17 +7094,32 @@
       // Use real retention trend data from backend
       const retentionTrend = data.subscriptions?.retention_trend || [];
       
-      console.log('📊 Retention Trend data:', retentionTrend?.length, 'entries', retentionTrend?.slice(0, 3));
-      
       if (!retentionTrend || retentionTrend.length === 0) {
         // Afficher un message si pas de données
         ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
         return;
       }
       
-      // Utiliser directement les données sans transformation complexe
-      const days = retentionTrend.map(it => it.date || it.period);
-      const retentionData = retentionTrend.map(it => Number((it.value ?? it.rate ?? 0) || 0));
+      // Aligner les dates avec le graphe Daily Activated Subscriptions
+      const mapDateToValue = new Map();
+      retentionTrend.forEach(it => {
+        if (it && (it.date || it.period)) {
+          const dateKey = it.date || it.period;
+          const value = Number((it.value ?? it.rate ?? 0) || 0);
+          mapDateToValue.set(dateKey, value);
+        }
+      });
+      
+      const sorted = Array.from(mapDateToValue.keys()).sort();
+      if (sorted.length === 0) {
+        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
+        return;
+      }
+      
+      // Utiliser directement les dates des données plutôt que de générer tous les jours
+      // Cela évite d'avoir beaucoup de valeurs nulles
+      const days = sorted;
+      const retentionData = sorted.map(date => mapDateToValue.get(date));
       
       charts.retention = new Chart(ctx, {
         type: 'line',
@@ -7313,8 +7174,6 @@
       
       // Use real daily transactions data from backend
       const dailyTransactions = data.transactions?.daily_volume || [];
-      
-      console.log('📊 Daily Volume data:', dailyTransactions?.length, 'entries', dailyTransactions?.slice(0, 3));
       
       if (!dailyTransactions || dailyTransactions.length === 0) {
         // Afficher un message si pas de données
@@ -7377,8 +7236,6 @@
       
       // Use real daily transactions data from backend to extract users
       const dailyTransactions = data.transactions?.daily_volume || [];
-      
-      console.log('📊 Transacting Users data:', dailyTransactions?.length, 'entries');
       
       if (!dailyTransactions || dailyTransactions.length === 0) {
         // Afficher un message si pas de données
@@ -7628,16 +7485,6 @@
       const phoneVal = (activations.phone_balance && typeof activations.phone_balance === 'object') ? (activations.phone_balance.current ?? 0) : (activations.phone_balance ?? 0);
       const otherVal = (activations.other && typeof activations.other === 'object') ? (activations.other.current ?? 0) : (activations.other ?? 0);
 
-      const total = cbVal + rechargeVal + phoneVal + otherVal;
-      if (total === 0) {
-        // Afficher un message si pas de données
-        const parent = ctx.parentElement;
-        if (parent) {
-          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
-        }
-        return;
-      }
-
       console.log('📊 Activations By Channel Chart:', { activations, cbVal, rechargeVal, phoneVal, otherVal });
 
       charts.activationsByChannel = new Chart(ctx, {
@@ -7682,16 +7529,6 @@
       const monthlyVal = (plans.monthly && typeof plans.monthly === 'object') ? (plans.monthly.current ?? 0) : (plans.monthly ?? 0);
       const annualVal = (plans.annual && typeof plans.annual === 'object') ? (plans.annual.current ?? 0) : (plans.annual ?? 0);
       const otherPlanVal = (plans.other && typeof plans.other === 'object') ? (plans.other.current ?? 0) : (plans.other ?? 0);
-      
-      const total = dailyVal + monthlyVal + annualVal + otherPlanVal;
-      if (total === 0) {
-        // Afficher un message si pas de données
-        const parent = ctx.parentElement;
-        if (parent) {
-          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
-        }
-        return;
-      }
       
       console.log('📊 Plan Distribution Chart:', { plans, dailyVal, monthlyVal, annualVal, otherPlanVal });
       
@@ -9443,7 +9280,10 @@
           const activationDate = sub.activation_date ? (typeof sub.activation_date === 'string' ? sub.activation_date.substring(0, 10) : sub.activation_date) : '-';
           const endDate = sub.end_date ? (typeof sub.end_date === 'string' ? sub.end_date.substring(0, 10) : sub.end_date) : '-';
           const status = sub.status || 'Inconnu';
-          const price = sub.price ? parseFloat(sub.price).toFixed(2) + ' TND' : '-';
+          // ⭐ CORRECTION: Les plans Trial sont gratuits
+          const price = (plan === 'Trial' || parseFloat(sub.price) === 0) 
+            ? '<span style="color: var(--success); font-weight: 600;">Gratuit</span>' 
+            : (sub.price ? parseFloat(sub.price).toFixed(2) + ' TND' : '-');
           
           const statusBadge = status === 'Actif' ? 
             '<span style="background: var(--success); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Actif</span>' :
@@ -9827,17 +9667,14 @@
       transition: all 0.2s;
       border: 1px solid transparent;
     }
-
     .ai-conversation-item:hover {
       background: #f3f4f6 !important;
       border-color: #d1d5db;
     }
-
     .ai-conversation-item.active {
       border-left-color: #6366f1 !important;
       background: white !important;
     }
-
     .ai-sidebar button:hover {
       opacity: 0.8;
       transform: translateY(-1px);
@@ -9847,49 +9684,35 @@
       background: white;
       border-bottom: 1px solid #f0f0f0;
     }
-
     .ai-message-assistant {
       padding: 16px 24px; 
       background: #f7f7f8;
       border-bottom: 1px solid #f0f0f0;
     }
-
     .ai-message-content {
       max-width: 100%;
       line-height: 1.6;
       color: #374151;
     }
-
     .ai-message-user .ai-message-content {
       font-weight: 500;
     }
-
     .ai-suggestion-simple:hover {
       background: #e5e7eb !important;
       border-color: #d1d5db !important;
     }
-
-    #aiInputChatGPT:focus {
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-    }
-
-    #aiSendChatGPT:hover {
+    #aiSendBtn:hover {
       background: #4f46e5;
       transform: scale(1.05);
     }
-
-    #aiSendChatGPT:disabled {
+    #aiSendBtn:disabled {
       background: #d1d5db;
       cursor: not-allowed;
       transform: none;
     }
-
-    /* Animations pour typing indicator */
     @keyframes ai-dot1 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
     @keyframes ai-dot2 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
     @keyframes ai-dot3 { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } }
-
     .ai-dot1 { animation-delay: 0ms; }
     .ai-dot2 { animation-delay: 150ms; }
     .ai-dot3 { animation-delay: 300ms; }
@@ -9902,591 +9725,239 @@
     let aiDashboardInitialized = false;
 
     function initializeAIDashboard() {
-      console.log('🤖 Initialisation Agent IA...');
-      if (aiDashboardInitialized) {
-        loadConversationsFromDatabase();
-        return;
-      }
+      if (aiDashboardInitialized) { loadConversationsFromDatabase(); return; }
       aiDashboardInitialized = true;
       aiSessionDashboard = generateAIUUID();
       const sessionEl = document.getElementById('aiCurrentSession');
       const sidebarSessionEl = document.getElementById('aiSessionSidebar');
-      if (sessionEl) {
-        sessionEl.textContent = aiSessionDashboard.substr(0, 8);
-      }
-      if (sidebarSessionEl) {
-        sidebarSessionEl.textContent = aiSessionDashboard.substr(0, 8);
-      }
-      
+      if (sessionEl) sessionEl.textContent = aiSessionDashboard.substr(0, 8);
+      if (sidebarSessionEl) sidebarSessionEl.textContent = aiSessionDashboard.substr(0, 8);
       loadConversationsFromDatabase();
       updateConversationsSidebar();
-      
-      // Auto-resize textarea seulement
       const aiInput = document.getElementById('aiQuestionInput');
       if (aiInput) {
-        aiInput.addEventListener('input', function() {
-          this.style.height = 'auto';
-          this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-        });
+        aiInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
       }
-      
-      window.addEventListener('beforeunload', function() {
-        saveCurrentConversationAuto();
-      });
-
-      // Modal renommer : boutons et fermeture
+      window.addEventListener('beforeunload', function() { saveCurrentConversationAuto(); });
       const renameModal = document.getElementById('aiRenameModal');
       const renameInput = document.getElementById('aiRenameModalInput');
       const renameOk = document.getElementById('aiRenameModalOk');
       const renameCancel = document.getElementById('aiRenameModalCancel');
       if (renameOk) renameOk.addEventListener('click', submitRenameConversation);
       if (renameCancel) renameCancel.addEventListener('click', closeRenameModal);
-      if (renameInput) renameInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); submitRenameConversation(); }
-        if (e.key === 'Escape') closeRenameModal();
-      });
-      if (renameModal) renameModal.addEventListener('click', function(e) {
-        if (e.target === renameModal) closeRenameModal();
-      });
-      
-      console.log('✅ Agent IA initialisé');
+      if (renameInput) renameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); submitRenameConversation(); } if (e.key === 'Escape') closeRenameModal(); });
+      if (renameModal) renameModal.addEventListener('click', function(e) { if (e.target === renameModal) closeRenameModal(); });
     }
 
     function loadConversationsFromDatabase() {
-      fetch('/admin/ai-agent/conversations', {
-        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.conversations) {
-          aiConversationsFromApi = data.conversations;
-          updateConversationsSidebar();
-        }
-      })
+      fetch('/admin/ai-agent/conversations', { headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
+      .then(r => r.json()).then(data => { if (data.success && data.conversations) { aiConversationsFromApi = data.conversations; updateConversationsSidebar(); } })
       .catch(() => { aiConversationsFromApi = []; });
     }
 
     function renameCurrentConversation() {
-      if (!aiSessionDashboard) {
-        showNotification('❌ Aucune conversation active', 'error');
-        return;
-      }
+      if (!aiSessionDashboard) { showNotification('Aucune conversation active', 'error'); return; }
       const currentFromApi = aiConversationsFromApi.find(c => c.session_id === aiSessionDashboard);
       const modal = document.getElementById('aiRenameModal');
       const input = document.getElementById('aiRenameModalInput');
       if (!modal || !input) return;
       input.value = currentFromApi && currentFromApi.title ? currentFromApi.title : '';
       modal.style.display = 'flex';
-      input.focus();
-      input.select();
+      input.focus(); input.select();
     }
 
-    function closeRenameModal() {
-      const modal = document.getElementById('aiRenameModal');
-      if (modal) modal.style.display = 'none';
-    }
+    function closeRenameModal() { const modal = document.getElementById('aiRenameModal'); if (modal) modal.style.display = 'none'; }
 
     function submitRenameConversation() {
       const input = document.getElementById('aiRenameModalInput');
       const title = input && input.value ? input.value.trim() : '';
-      if (!title) {
-        showNotification('❌ Saisissez un nom', 'error');
-        return;
-      }
+      if (!title) { showNotification('Saisissez un nom', 'error'); return; }
       if (!aiSessionDashboard) return;
       closeRenameModal();
-      fetch('/admin/ai-agent/conversation/' + aiSessionDashboard + '/title', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: JSON.stringify({ title: title })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          loadConversationsFromDatabase();
-          updateConversationsSidebar(aiSessionDashboard);
-          showNotification('✅ Conversation nommée : ' + data.title, 'success');
-        } else {
-          showNotification('❌ Erreur lors de la mise à jour', 'error');
-        }
-      })
-      .catch(() => showNotification('❌ Erreur réseau', 'error'));
+      fetch('/admin/ai-agent/conversation/' + aiSessionDashboard + '/title', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ title: title }) })
+      .then(r => r.json()).then(data => { if (data.success) { loadConversationsFromDatabase(); updateConversationsSidebar(aiSessionDashboard); showNotification('Conversation nommee : ' + data.title, 'success'); } else { showNotification('Erreur lors de la mise a jour', 'error'); } })
+      .catch(() => showNotification('Erreur reseau', 'error'));
     }
 
     function loadConversationFromApi(sessionId) {
-      fetch('/admin/ai-agent/conversation/' + sessionId, {
-        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (!data.success || !data.messages) {
-          showNotification('❌ Impossible de charger la conversation', 'error');
-          return;
-        }
+      fetch('/admin/ai-agent/conversation/' + sessionId, { headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
+      .then(r => r.json()).then(data => {
+        if (!data.success || !data.messages) { showNotification('Impossible de charger la conversation', 'error'); return; }
         document.getElementById('aiMessagesContainer').innerHTML = '';
         data.messages.forEach(m => appendAIMessageFromHistory(m.type, m.message));
         aiSessionDashboard = sessionId;
         document.getElementById('aiCurrentSession').textContent = sessionId.substr(0, 8);
         document.getElementById('aiSessionSidebar').textContent = sessionId.substr(0, 8);
         updateConversationsSidebar(sessionId);
-        showNotification('📂 Conversation chargée', 'success');
-      })
-      .catch(() => showNotification('❌ Erreur chargement', 'error'));
+        showNotification('Conversation chargee', 'success');
+      }).catch(() => showNotification('Erreur chargement', 'error'));
     }
 
-    // === FONCTIONS DIRECTES (SANS EVENT LISTENERS) ===
-    
-    function askAIQuestion(question) {
-      console.log('💡 Question suggérée:', question);
-      document.getElementById('aiQuestionInput').value = question;
-      sendAIQuestionNow();
-    }
-    
+    function askAIQuestion(question) { document.getElementById('aiQuestionInput').value = question; sendAIQuestionNow(); }
+
     function newAIConversationNow() {
-      console.log('🔄 Nouvelle conversation directe');
-      
-      // Sauvegarder la conversation actuelle si elle a des messages
       saveCurrentConversationAuto();
-      
-      // Nouvelle session
       aiSessionDashboard = generateAIUUID();
       document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
       document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8);
       document.getElementById('aiMessagesContainer').innerHTML = '';
-      
-      // Mettre à jour la sidebar
       updateConversationsSidebar();
-      
-      showNotification('🤖 Nouvelle conversation', 'success');
+      showNotification('Nouvelle conversation', 'success');
     }
 
-    // === GESTION HISTORIQUE CONVERSATIONS ===
-    
     function saveCurrentConversation() {
       const messages = document.getElementById('aiMessagesContainer').children;
-      if (messages.length === 0) {
-        showNotification('❌ Aucune conversation à sauvegarder', 'error');
-        return;
-      }
-      
+      if (messages.length === 0) { showNotification('Aucune conversation a sauvegarder', 'error'); return; }
       const title = prompt('Nom de la conversation :', 'Conversation ML ' + new Date().toLocaleString('fr-FR', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}));
       if (!title) return;
-      
-      const conversation = {
-        id: aiSessionDashboard,
-        title: title,
-        messages: Array.from(messages).map(msg => ({
-          type: msg.classList.contains('ai-message-user') ? 'user' : 'assistant',
-          content: msg.querySelector('.ai-message-content').innerHTML
-        })),
-        created_at: new Date().toISOString(),
-        session_id: aiSessionDashboard
-      };
-      
-      // Sauvegarder dans localStorage
+      const conversation = { id: aiSessionDashboard, title: title, messages: Array.from(messages).map(msg => ({ type: msg.classList.contains('ai-message-user') ? 'user' : 'assistant', content: msg.querySelector('.ai-message-content').innerHTML })), created_at: new Date().toISOString(), session_id: aiSessionDashboard };
       let savedConversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
       savedConversations.unshift(conversation);
-      
-      // Garder max 20 conversations
-      if (savedConversations.length > 20) {
-        savedConversations = savedConversations.slice(0, 20);
-      }
-      
+      if (savedConversations.length > 20) savedConversations = savedConversations.slice(0, 20);
       localStorage.setItem('aiConversations', JSON.stringify(savedConversations));
-      
       updateConversationsSidebar();
-      showNotification(`💾 Conversation "${title}" sauvegardée`, 'success');
+      showNotification('Conversation "' + title + '" sauvegardee', 'success');
     }
 
     function saveCurrentConversationAuto() {
-      const messages = document.getElementById('aiMessagesContainer').children;
-      if (messages.length > 0) {
-        const autoTitle = 'Auto - ' + new Date().toLocaleString('fr-FR', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
-        
-        const conversation = {
-          id: aiSessionDashboard + '_auto',
-          title: autoTitle,
-          messages: Array.from(messages).map(msg => ({
-            type: msg.classList.contains('ai-message-user') ? 'user' : 'assistant',
-            content: msg.querySelector('.ai-message-content').innerHTML
-          })),
-          created_at: new Date().toISOString(),
-          session_id: aiSessionDashboard,
-          auto_saved: true
-        };
-        
-        let savedConversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
-        savedConversations.unshift(conversation);
-        localStorage.setItem('aiConversations', JSON.stringify(savedConversations.slice(0, 20)));
-      }
+      const messages = document.getElementById('aiMessagesContainer');
+      if (!messages || messages.children.length === 0) return;
+      const autoTitle = 'Auto - ' + new Date().toLocaleString('fr-FR', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+      const conversation = { id: aiSessionDashboard + '_auto', title: autoTitle, messages: Array.from(messages.children).map(msg => ({ type: msg.classList.contains('ai-message-user') ? 'user' : 'assistant', content: msg.querySelector('.ai-message-content') ? msg.querySelector('.ai-message-content').innerHTML : '' })), created_at: new Date().toISOString(), session_id: aiSessionDashboard, auto_saved: true };
+      let savedConversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+      savedConversations.unshift(conversation);
+      localStorage.setItem('aiConversations', JSON.stringify(savedConversations.slice(0, 20)));
     }
 
     function loadConversation(conversationId) {
       const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
       const conversation = conversations.find(c => c.id === conversationId);
-      
-      if (!conversation) {
-        showNotification('❌ Conversation non trouvée', 'error');
-        return;
-      }
-      
-      // Charger la conversation
+      if (!conversation) { showNotification('Conversation non trouvee', 'error'); return; }
       document.getElementById('aiMessagesContainer').innerHTML = '';
-      
-      conversation.messages.forEach(msg => {
-        appendAIMessageFromHistory(msg.type, msg.content);
-      });
-      
-      // Mettre à jour session
+      conversation.messages.forEach(msg => appendAIMessageFromHistory(msg.type, msg.content));
       aiSessionDashboard = conversation.session_id;
       document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
       document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8);
-      
-      // Mettre à jour sidebar
       updateConversationsSidebar(conversationId);
-      
-      showNotification(`📂 Conversation "${conversation.title}" chargée`, 'success');
+      showNotification('Conversation "' + conversation.title + '" chargee', 'success');
     }
 
     function appendAIMessageFromHistory(type, content) {
       const container = document.getElementById('aiMessagesContainer');
       if (!container) return;
-      
       const messageDiv = document.createElement('div');
-      messageDiv.className = `ai-message-${type}`;
-      messageDiv.innerHTML = content.includes('ai-message-content') ? content : `
-        <div style="display: flex; gap: 12px; align-items: flex-start;">
-          <div style="width: 30px; height: 30px; background: ${type === 'user' ? '#6366f1' : '#10b981'}; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">
-            ${type === 'user' ? 'U' : '🤖'}
-          </div>
-          <div class="ai-message-content" style="flex: 1; padding-top: 4px;">
-            ${content}
-          </div>
-        </div>
-      `;
-      
+      messageDiv.className = 'ai-message-' + type;
+      messageDiv.innerHTML = content.includes('ai-message-content') ? content : '<div style="display: flex; gap: 12px; align-items: flex-start;"><div style="width: 30px; height: 30px; background: ' + (type === 'user' ? '#6366f1' : '#10b981') + '; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">' + (type === 'user' ? 'U' : 'IA') + '</div><div class="ai-message-content" style="flex: 1; padding-top: 4px;">' + content + '</div></div>';
       container.appendChild(messageDiv);
       scrollAIToBottom();
     }
 
-    function updateConversationsSidebar(activeId = null) {
+    function updateConversationsSidebar(activeId) {
       const container = document.getElementById('aiConversationsList');
+      if (!container) return;
       const isCurrentActive = !activeId || activeId === aiSessionDashboard;
       const currentFromApi = aiConversationsFromApi.find(c => c.session_id === aiSessionDashboard);
-      const currentTitle = currentFromApi ? (currentFromApi.title || '💬 Conversation Actuelle') : '💬 Conversation Actuelle';
-
+      const currentTitle = currentFromApi ? (currentFromApi.title || 'Conversation Actuelle') : 'Conversation Actuelle';
       container.innerHTML = '';
-
-      // Bloc "Conversation Actuelle" avec bouton Nommer (sans dates)
       const currentDiv = document.createElement('div');
       currentDiv.className = 'ai-conversation-item' + (isCurrentActive ? ' active' : '');
-      currentDiv.setAttribute('data-session', 'current');
       currentDiv.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isCurrentActive ? 'white' : '#f9fafb') + '; border-radius: 8px; border-left: 3px solid ' + (isCurrentActive ? '#6366f1' : 'transparent') + '; cursor: pointer;';
-      currentDiv.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;"><div style="font-size: 0.85rem; font-weight: 500; color: #374151;">' + currentTitle.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div></div><button type="button" title="Nommer cette conversation" style="background: #6366f1; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; white-space: nowrap; flex-shrink: 0;">✏️ Nommer</button></div>';
-      currentDiv.querySelector('div[style="flex: 1; min-width: 0;"]').onclick = selectCurrentConversation;
-      currentDiv.querySelector('button').onclick = function(e) { e.stopPropagation(); renameCurrentConversation(); };
+      currentDiv.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;" onclick="selectCurrentConversation()"><div style="font-size: 0.85rem; font-weight: 500; color: #374151;">' + currentTitle + '</div></div><button type="button" onclick="event.stopPropagation(); renameCurrentConversation();" style="background: #6366f1; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Nommer</button></div>';
       container.appendChild(currentDiv);
-
-      // Conversations depuis l'API (sans dates, avec bouton supprimer)
-      aiConversationsFromApi.forEach(conv => {
+      aiConversationsFromApi.forEach(function(conv) {
         if (conv.session_id === aiSessionDashboard) return;
         const isActive = activeId === conv.session_id;
-        const title = (conv.title || 'Sans titre').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const title = (conv.title || 'Sans titre');
         const item = document.createElement('div');
         item.className = 'ai-conversation-item' + (isActive ? ' active' : '');
-        item.setAttribute('data-session', conv.session_id);
         item.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isActive ? 'white' : '#f9fafb') + '; border-radius: 8px; border-left: 3px solid ' + (isActive ? '#6366f1' : 'transparent') + '; cursor: pointer;';
-        item.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;"><div style="font-size: 0.8rem; font-weight: 500; color: #374151;">' + title + '</div></div><button type="button" title="Supprimer cette conversation" style="background: transparent; border: none; color: #ef4444; font-size: 0.85rem; cursor: pointer; padding: 2px; flex-shrink: 0;">🗑️</button></div>';
-        item.querySelector('button').onclick = function(e) { e.stopPropagation(); deleteConversationFromApi(conv.session_id); };
+        item.innerHTML = '<div style="font-size: 0.8rem; font-weight: 500; color: #374151;">' + title + '</div>';
         item.onclick = function() { loadConversationFromApi(conv.session_id); };
-        container.appendChild(item);
-      });
-
-      // Conversations sauvegardées localement (sans dates, avec supprimer)
-      const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
-      conversations.forEach(conv => {
-        const isActive = activeId === conv.id;
-        const firstMessage = conv.messages.find(m => m.type === 'user')?.content || 'Conversation';
-        const preview = firstMessage.replace(/<[^>]*>/g, '').substring(0, 50) + (firstMessage.length > 50 ? '...' : '');
-        const item = document.createElement('div');
-        item.className = 'ai-conversation-item' + (isActive ? ' active' : '');
-        item.setAttribute('data-session', conv.id);
-        item.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isActive ? 'white' : '#f9fafb') + '; border-radius: 8px; border-left: 3px solid ' + (isActive ? '#6366f1' : 'transparent') + '; cursor: pointer;';
-        item.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;"><div style="font-size: 0.8rem; font-weight: 500; color: #374151;">' + (conv.title || '').replace(/</g, '&lt;') + '</div><div style="font-size: 0.75rem; color: #6b7280; line-height: 1.3; margin-top: 2px;">' + preview.replace(/</g, '&lt;') + '</div></div><button type="button" title="Supprimer" style="background: transparent; border: none; color: #ef4444; font-size: 0.85rem; cursor: pointer; padding: 2px; flex-shrink: 0;">🗑️</button></div>';
-        item.querySelector('button').onclick = function(e) { e.stopPropagation(); deleteConversation(conv.id); };
-        item.onclick = function() { loadConversation(conv.id); };
         container.appendChild(item);
       });
     }
 
     function deleteConversationFromApi(sessionId) {
       if (!sessionId || !confirm('Supprimer cette conversation ?')) return;
-      fetch('/admin/ai-agent/conversation/' + encodeURIComponent(sessionId), {
-        method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          if (aiSessionDashboard === sessionId) {
-            aiSessionDashboard = generateAIUUID();
-            document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
-            document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8);
-            document.getElementById('aiMessagesContainer').innerHTML = '';
-          }
-          loadConversationsFromDatabase();
-          updateConversationsSidebar();
-          showNotification('🗑️ Conversation supprimée', 'success');
-        } else {
-          showNotification('❌ Erreur lors de la suppression', 'error');
-        }
-      })
-      .catch(() => showNotification('❌ Erreur réseau', 'error'));
+      fetch('/admin/ai-agent/conversation/' + encodeURIComponent(sessionId), { method: 'DELETE', headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
+      .then(r => r.json()).then(data => {
+        if (data.success) { if (aiSessionDashboard === sessionId) { aiSessionDashboard = generateAIUUID(); document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8); document.getElementById('aiSessionSidebar').textContent = aiSessionDashboard.substr(0, 8); document.getElementById('aiMessagesContainer').innerHTML = ''; } loadConversationsFromDatabase(); updateConversationsSidebar(); showNotification('Conversation supprimee', 'success'); }
+      }).catch(() => showNotification('Erreur reseau', 'error'));
     }
 
-    function selectCurrentConversation() {
-      // Retourner à la conversation actuelle
-      updateConversationsSidebar();
-    }
+    function selectCurrentConversation() { updateConversationsSidebar(); }
 
     function loadConversationDialog() {
       const conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
-      
-      if (conversations.length === 0) {
-        showNotification('❌ Aucune conversation sauvegardée', 'error');
-        return;
-      }
-      
-      const options = conversations.map((c, i) => `${i + 1}. ${c.title} (${new Date(c.created_at).toLocaleDateString('fr-FR')})`).join('\n');
-      const choice = prompt(`Choisissez une conversation à charger :\n\n${options}\n\nEntrez le numéro :`);
-      
-      if (choice && !isNaN(choice) && choice > 0 && choice <= conversations.length) {
-        loadConversation(conversations[choice - 1].id);
-      }
+      if (conversations.length === 0) { showNotification('Aucune conversation sauvegardee', 'error'); return; }
+      const options = conversations.map((c, i) => (i + 1) + '. ' + c.title).join('\n');
+      const choice = prompt('Choisissez une conversation :\n\n' + options + '\n\nEntrez le numero :');
+      if (choice && !isNaN(choice) && choice > 0 && choice <= conversations.length) loadConversation(conversations[choice - 1].id);
     }
 
     function deleteConversation(conversationId) {
       if (!confirm('Supprimer cette conversation ?')) return;
-      
       let conversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
       conversations = conversations.filter(c => c.id !== conversationId);
       localStorage.setItem('aiConversations', JSON.stringify(conversations));
-      
       updateConversationsSidebar();
-      showNotification('🗑️ Conversation supprimée', 'success');
     }
 
     function clearAllConversations() {
-      if (!confirm('Supprimer toutes les conversations sauvegardées ?')) return;
-      
+      if (!confirm('Supprimer toutes les conversations ?')) return;
       localStorage.removeItem('aiConversations');
       updateConversationsSidebar();
-      showNotification('🗑️ Toutes les conversations supprimées', 'success');
     }
 
     function sendAIQuestionNow() {
-      console.log('📤 Envoi direct question IA');
-      
       const input = document.getElementById('aiQuestionInput');
       const question = input.value.trim();
       const sendBtn = document.getElementById('aiSendBtn');
-      
-      console.log('Question à envoyer:', question);
-      
-      if (!question) {
-        console.log('❌ Question vide');
-        showNotification('❌ Veuillez saisir une question', 'error');
-        return;
-      }
-      
-      if (!aiSessionDashboard) {
-        aiSessionDashboard = generateAIUUID();
-        document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8);
-      }
-      
-      // Désactiver bouton
-      if (sendBtn) {
-        sendBtn.disabled = true;
-        sendBtn.style.background = '#d1d5db';
-      }
-      if (input) {
-        input.disabled = true;
-      }
-      
-      // Afficher question utilisateur
+      if (!question) { showNotification('Veuillez saisir une question', 'error'); return; }
+      if (!aiSessionDashboard) { aiSessionDashboard = generateAIUUID(); document.getElementById('aiCurrentSession').textContent = aiSessionDashboard.substr(0, 8); }
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.style.background = '#d1d5db'; }
+      if (input) input.disabled = true;
       appendAIMessage('user', question);
       input.value = '';
-      
-      // Afficher indicateur
       document.getElementById('aiTypingIndicator').style.display = 'block';
       scrollAIToBottom();
-      
-      // Appel API avec gestion des erreurs détaillée
-      console.log('🌐 Appel vers /admin/ai-agent/ask avec session:', aiSessionDashboard);
-      
-      fetch('/admin/ai-agent/ask', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: JSON.stringify({
-          question: question,
-          session_id: aiSessionDashboard,
-          provider: (document.getElementById('aiProviderSelectDashboard') && document.getElementById('aiProviderSelectDashboard').value) || 'openai'
-        })
-      })
-      .then(response => {
-        console.log('📨 Réponse reçue:', response.status, response.statusText);
-        
-        if (!response.ok) {
-          console.error('❌ Erreur HTTP:', response.status);
-          throw new Error('HTTP ' + response.status + ': ' + response.statusText);
-        }
-        
-        const contentType = response.headers.get('content-type');
-        console.log('📄 Content-Type:', contentType);
-        
-        if (!contentType || !contentType.includes('application/json')) {
-          console.error('❌ Réponse non-JSON reçue');
-          // Lire le HTML d'erreur pour diagnostic
-          return response.text().then(html => {
-            console.error('HTML reçu:', html.substring(0, 500));
-            throw new Error('Serveur a renvoyé du HTML au lieu de JSON - Vérifiez les routes et middleware');
-          });
-        }
-        
-        return response.json();
-      })
+      fetch('/admin/ai-agent/ask', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ question: question, session_id: aiSessionDashboard, provider: (document.getElementById('aiProviderSelectDashboard') && document.getElementById('aiProviderSelectDashboard').value) || 'openai' }) })
+      .then(response => { if (!response.ok) throw new Error('HTTP ' + response.status); const ct = response.headers.get('content-type'); if (!ct || !ct.includes('application/json')) return response.text().then(html => { throw new Error('Serveur a renvoye du HTML au lieu de JSON'); }); return response.json(); })
       .then(data => {
-        console.log('📄 Données:', data);
         document.getElementById('aiTypingIndicator').style.display = 'none';
-        
-        if (data.success) {
-          appendAIMessage('assistant', data.message);
-          if (data.session_id) {
-            aiSessionDashboard = data.session_id;
-            const sessionEl = document.getElementById('aiCurrentSession');
-            const sidebarEl = document.getElementById('aiSessionSidebar');
-            if (sessionEl) sessionEl.textContent = data.session_id.substr(0, 8);
-            if (sidebarEl) sidebarEl.textContent = data.session_id.substr(0, 8);
-          }
-          loadConversationsFromDatabase();
-          showNotification('🤖 Réponse générée', 'success');
-        } else {
-          appendAIMessage('assistant', '❌ ' + (data.error || 'Erreur de configuration. Vérifiez OPENAI_API_KEY dans .env'));
-          showNotification('❌ ' + (data.error || 'Erreur configuration'), 'error');
-        }
+        if (data.success) { appendAIMessage('assistant', data.message); if (data.session_id) { aiSessionDashboard = data.session_id; document.getElementById('aiCurrentSession').textContent = data.session_id.substr(0, 8); document.getElementById('aiSessionSidebar').textContent = data.session_id.substr(0, 8); } loadConversationsFromDatabase(); }
+        else { appendAIMessage('assistant', 'Erreur: ' + (data.error || 'Verifiez la configuration API')); }
       })
-      .catch(error => {
-        console.error('❌ Erreur:', error);
-        document.getElementById('aiTypingIndicator').style.display = 'none';
-        appendAIMessage('assistant', '❌ Erreur réseau ou configuration. Vérifiez :\n\n1. OPENAI_API_KEY dans .env\n2. Tables agent IA créées\n3. Connexion internet');
-        showNotification('❌ Erreur réseau', 'error');
-      })
-      .finally(() => {
-        // Réactiver
-        if (sendBtn) {
-          sendBtn.disabled = false;
-          sendBtn.style.background = '#6366f1';
-        }
-        if (input) {
-          input.disabled = false;
-          input.focus();
-        }
-      });
+      .catch(error => { document.getElementById('aiTypingIndicator').style.display = 'none'; appendAIMessage('assistant', 'Erreur reseau ou configuration. Verifiez les cles API dans .env'); })
+      .finally(() => { if (sendBtn) { sendBtn.disabled = false; sendBtn.style.background = '#6366f1'; } if (input) { input.disabled = false; input.focus(); } });
     }
-
 
     function appendAIMessage(type, content) {
       const container = document.getElementById('aiMessagesContainer');
-      if (!container) {
-        console.error('Container aiMessagesContainer non trouvé');
-        return;
-      }
-      
-      console.log('📝 Ajout message:', type, content.substring(0, 50) + '...');
-      
+      if (!container) return;
       const messageDiv = document.createElement('div');
-      messageDiv.className = `ai-message-${type}`;
-      
+      messageDiv.className = 'ai-message-' + type;
       if (type === 'user') {
-        messageDiv.innerHTML = `
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <div style="width: 30px; height: 30px; background: #6366f1; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">
-              U
-            </div>
-            <div class="ai-message-content" style="flex: 1; padding-top: 4px;">
-              ${content}
-            </div>
-          </div>
-        `;
+        messageDiv.innerHTML = '<div style="display: flex; gap: 12px; align-items: flex-start;"><div style="width: 30px; height: 30px; background: #6366f1; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">U</div><div class="ai-message-content" style="flex: 1; padding-top: 4px;">' + content + '</div></div>';
       } else {
-        messageDiv.innerHTML = `
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <div style="width: 30px; height: 30px; background: #10b981; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">
-              🤖
-            </div>
-            <div class="ai-message-content" style="flex: 1; padding-top: 4px;">
-              ${formatAIMessage(content)}
-            </div>
-          </div>
-        `;
+        messageDiv.innerHTML = '<div style="display: flex; gap: 12px; align-items: flex-start;"><div style="width: 30px; height: 30px; background: #10b981; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; flex-shrink: 0;">IA</div><div class="ai-message-content" style="flex: 1; padding-top: 4px;">' + formatAIMessage(content) + '</div></div>';
       }
-      
       container.appendChild(messageDiv);
       scrollAIToBottom();
     }
 
     function formatAIMessage(content) {
-      // Format simple et propre comme ChatGPT
-      let formatted = content
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-family:monospace;color:#e11d48;">$1</code>')
-        .replace(/\n\n/g, '</p><p>')
-        .replace(/\n/g, '<br>');
-
-      // Tableaux simples
-      if (formatted.includes('|')) {
-        formatted = formatted.replace(/\|(.+?)\|/g, function(match, row) {
-          const cells = row.split('|').map(cell => cell.trim()).filter(cell => cell);
-          if (cells.length > 1) {
-            return '<tr>' + cells.map(cell => `<td style="padding:8px 12px; border-bottom:1px solid #e5e7eb; font-size:0.9rem;">${cell}</td>`).join('') + '</tr>';
-          }
-          return match;
-        });
-        
-        if (formatted.includes('<tr>')) {
-          formatted = '<table style="width:100%; margin:12px 0; border-collapse:collapse; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">' + formatted + '</table>';
-        }
-      }
-      
+      let formatted = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/`([^`]+)`/g, '<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-family:monospace;color:#e11d48;">$1</code>').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
       return '<div style="line-height: 1.6;">' + formatted + '</div>';
     }
 
     function scrollAIToBottom() {
       const container = document.getElementById('aiMessagesZone');
-      if (container) {
-        container.scrollTop = container.scrollHeight;
-      } else {
-        // Fallback
-        const fallback = document.getElementById('aiMessagesContainer');
-        if (fallback && fallback.parentElement) {
-          fallback.parentElement.scrollTop = fallback.parentElement.scrollHeight;
-        }
-      }
+      if (container) container.scrollTop = container.scrollHeight;
     }
 
     function generateAIUUID() {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-      });
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
     }
   </script>
 

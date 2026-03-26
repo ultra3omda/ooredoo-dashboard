@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
-use App\Services\DashboardCacheService;
 
 class DashboardService
 {
@@ -27,11 +26,24 @@ class DashboardService
             return (int)$operator;
         }
         
-        $operatorId = DB::table('country_payments_methods')
-            ->whereRaw("TRIM(country_payments_methods_name) = ?", [trim($operator)])
-            ->value('country_payments_methods_id');
-        
-        return $operatorId ? (int)$operatorId : null;
+        // Cache the operator ID to avoid repeated DB lookups
+        return Cache::remember('op_id:' . md5($operator), 3600, function() use ($operator) {
+            // Recherche exacte d'abord
+            $operatorId = DB::table('country_payments_methods')
+                ->whereRaw("TRIM(country_payments_methods_name) = ?", [trim($operator)])
+                ->value('country_payments_methods_id');
+            
+            if ($operatorId) {
+                return (int)$operatorId;
+            }
+            
+            // Recherche partielle (ex: "Timwe" → "S'abonner via Timwe")
+            $operatorId = DB::table('country_payments_methods')
+                ->whereRaw("TRIM(country_payments_methods_name) LIKE ?", ['%' . trim($operator) . '%'])
+                ->value('country_payments_methods_id');
+            
+            return $operatorId ? (int)$operatorId : null;
+        });
     }
     
     /**
@@ -49,6 +61,21 @@ class DashboardService
                 $query->whereRaw("TRIM({$tableAlias}.country_payments_methods_name) = ?", [trim($selectedOperator)]);
             }
         }
+    }
+    
+    /**
+     * Applique le JOIN avec country_payments_methods ET le filtre opérateur SEULEMENT quand nécessaire.
+     * Pour l'opérateur ALL, on évite le JOIN coûteux sur 350K+ lignes.
+     * Retourne true si le JOIN a été ajouté, false sinon.
+     */
+    private function applyOperatorJoinAndFilter($query, string $selectedOperator, string $joinTable = 'ca', string $tableAlias = 'cpm'): bool
+    {
+        if ($selectedOperator !== 'ALL' && !empty($selectedOperator)) {
+            $query->join("country_payments_methods as {$tableAlias}", "{$joinTable}.country_payments_methods_id", '=', "{$tableAlias}.country_payments_methods_id");
+            $this->applyOperatorFilter($query, $selectedOperator, $tableAlias);
+            return true;
+        }
+        return false;
     }
     
     /**
@@ -70,6 +97,349 @@ class DashboardService
     /**
      * Génère une clé de cache optimisée (sans user_id pour partage)
      */
+    // ==========================================
+    // METHODES PUBLIQUES POUR ENDPOINTS SPLIT
+    // ==========================================
+    public function getKPIsOptimizedPublic(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
+    {
+        // Essayer les données matérialisées d'abord (< 500ms vs 15s)
+        $materialized = $this->getKPIsFromMaterialized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+        if ($materialized !== null) {
+            Log::info("KPIs servis depuis les données matérialisées");
+            return $materialized;
+        }
+        return $this->getKPIsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+    }
+    
+    /**
+     * Récupère les KPIs depuis la table matérialisée dashboard_daily_stats.
+     * Retourne null si les données ne couvrent pas la période demandée.
+     */
+    private function getKPIsFromMaterialized(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): ?array
+    {
+        try {
+            if (!Schema::hasTable('dashboard_daily_stats')) {
+                return null;
+            }
+            
+            $operatorId = ($selectedOperator === 'ALL') ? null : ($this->getOperatorId($selectedOperator));
+            
+            // Vérifier couverture des données pour la période principale
+            $startDate = $startBound->toDateString();
+            $endDate = $endExclusive->copy()->subDay()->toDateString();
+            $compStartDate = $compStartBound->toDateString();
+            $compEndDate = $compEndExclusive->copy()->subDay()->toDateString();
+            
+            $coverageQuery = DB::table('dashboard_daily_stats')
+                ->where(function ($q) use ($operatorId) {
+                    if ($operatorId === null) {
+                        $q->whereNull('operator_id');
+                    } else {
+                        $q->where('operator_id', $operatorId);
+                    }
+                })
+                ->whereBetween('stat_date', [$startDate, $endDate]);
+            
+            $expectedDays = $startBound->diffInDays($endExclusive);
+            $actualDays = $coverageQuery->count();
+            
+            // Tolérer 1 jour manquant (aujourd'hui pas encore matérialisé)
+            $tolerance = ($endDate === Carbon::today()->toDateString()) ? 1 : 0;
+            if ($actualDays < ($expectedDays - $tolerance)) {
+                Log::info("Matérialisées: couverture insuffisante ({$actualDays}/{$expectedDays} jours, tolérance {$tolerance})");
+                return null;
+            }
+            
+            // Si aujourd'hui manque, ajuster endDate à hier
+            if ($tolerance > 0 && $actualDays < $expectedDays) {
+                $endDate = Carbon::yesterday()->toDateString();
+            }
+            
+            // Agréger période principale
+            $current = $this->aggregateMaterialized($startDate, $endDate, $operatorId);
+            // Agréger période de comparaison
+            $comparison = $this->aggregateMaterialized($compStartDate, $compEndDate, $operatorId);
+            
+            if (!$current) return null;
+            
+            // active_current = abonnements activés dans la période ET encore actifs à la fin
+            // Requête légère (~200ms) car utilise l'index sur client_abonnement_creation
+            $activeCurrent = $this->queryActivatedStillActive($startBound, $endExclusive, $operatorId);
+            $activeComp = $this->queryActivatedStillActive($compStartBound, $compEndExclusive, $operatorId);
+            
+            // active_snapshot = total abonnements actifs à la fin de la période (pour conversion rate)
+            $activeCurrentSnapshot = DB::table('dashboard_daily_stats')
+                ->where('stat_date', $endDate)
+                ->where(function ($q) use ($operatorId) {
+                    if ($operatorId === null) $q->whereNull('operator_id');
+                    else $q->where('operator_id', $operatorId);
+                })
+                ->value('active_snapshot') ?? 0;
+            
+            $activeCompSnapshot = DB::table('dashboard_daily_stats')
+                ->where('stat_date', $compEndDate)
+                ->where(function ($q) use ($operatorId) {
+                    if ($operatorId === null) $q->whereNull('operator_id');
+                    else $q->where('operator_id', $operatorId);
+                })
+                ->value('active_snapshot') ?? 0;
+            
+            // Calculs des taux avec les bonnes métriques
+            $retentionRate = $current['activated'] > 0 ? round(($activeCurrent / $current['activated']) * 100, 1) : 0;
+            $retentionRateComp = ($comparison['activated'] ?? 0) > 0 ? round(($activeComp / $comparison['activated']) * 100, 1) : 0;
+            
+            $conversionRate = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 1) : 0;
+            $conversionRateComp = $activeComp > 0 ? round((($comparison['transacting_users'] ?? 0) / $activeComp) * 100, 1) : 0;
+            
+            $churnRate = $current['activated'] > 0 ? round(($current['lost'] / $current['activated']) * 100, 1) : 0;
+            $churnRateComp = ($comparison['activated'] ?? 0) > 0 ? round((($comparison['lost'] ?? 0) / $comparison['activated']) * 100, 1) : 0;
+            
+            $txPerUser = $current['transacting_users'] > 0 ? round($current['transactions'] / $current['transacting_users'], 1) : 0;
+            $txPerUserComp = ($comparison['transacting_users'] ?? 0) > 0 ? round($comparison['transactions'] / $comparison['transacting_users'], 1) : 0;
+            
+            $convRatePeriod = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 2) : 0;
+            $convRatePeriodComp = $activeComp > 0 ? round((($comparison['transacting_users'] ?? 0) / $activeComp) * 100, 2) : 0;
+            
+            // Marchands actifs ratio
+            $totalActivePartnersDB = Cache::remember('total_active_partners', 3600, function() {
+                return DB::table('partner')->where('partener_active', 1)->count();
+            });
+            $totalMerchantsEverActive = Cache::remember('total_merchants_ever', 3600, function() {
+                return DB::table('history as h')
+                    ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
+                    ->distinct('p.partner_id')->count('p.partner_id');
+            });
+            
+            $activeMerchantRatio = $totalActivePartnersDB > 0 ? round(($current['active_merchants'] / $totalActivePartnersDB) * 100, 1) : 0;
+            $activeMerchantRatioComp = $totalActivePartnersDB > 0 ? round((($comparison['active_merchants'] ?? 0) / $totalActivePartnersDB) * 100, 1) : 0;
+            
+            $txPerMerchant = $current['active_merchants'] > 0 ? round($current['transactions'] / $current['active_merchants'], 1) : 0;
+            $txPerMerchantComp = ($comparison['active_merchants'] ?? 0) > 0 ? round($comparison['transactions'] / $comparison['active_merchants'], 1) : 0;
+            
+            // Billing rates - ces données ne sont PAS dans la table matérialisée, fallback
+            $billingRateTimweData = $this->calculateTimweBillingRate($startBound, $endExclusive, $selectedOperator);
+            $billingRateTimweCompData = $this->calculateTimweBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
+            $billingRateOoredooData = $this->calculateOoredooBillingRate($startBound, $endExclusive, $selectedOperator);
+            $billingRateOoredooCompData = $this->calculateOoredooBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
+
+            return [
+                "activatedSubscriptions" => [
+                    "current" => $current['activated'],
+                    "previous" => $comparison['activated'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['activated'], $comparison['activated'] ?? 0)
+                ],
+                "activeSubscriptions" => [
+                    "current" => $activeCurrent,
+                    "previous" => $activeComp,
+                    "change" => $this->calculatePercentageChange($activeCurrent, $activeComp)
+                ],
+                "deactivatedSubscriptions" => [
+                    "current" => $current['deactivated'],
+                    "previous" => $comparison['deactivated'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['deactivated'], $comparison['deactivated'] ?? 0)
+                ],
+                "periodDeactivated" => [
+                    "current" => $current['deactivated'],
+                    "previous" => $comparison['deactivated'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['deactivated'], $comparison['deactivated'] ?? 0)
+                ],
+                "cohortDeactivated" => [
+                    "current" => $current['lost'],
+                    "previous" => $comparison['lost'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['lost'], $comparison['lost'] ?? 0)
+                ],
+                "totalTransactions" => [
+                    "current" => $current['transactions'],
+                    "previous" => $comparison['transactions'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['transactions'], $comparison['transactions'] ?? 0)
+                ],
+                "cohortTransactions" => [
+                    "current" => $current['cohort_tx'],
+                    "previous" => $comparison['cohort_tx'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['cohort_tx'], $comparison['cohort_tx'] ?? 0)
+                ],
+                "transactingUsers" => [
+                    "current" => $current['transacting_users'],
+                    "previous" => $comparison['transacting_users'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['transacting_users'], $comparison['transacting_users'] ?? 0)
+                ],
+                "cohortTransactingUsers" => [
+                    "current" => $current['cohort_users'],
+                    "previous" => $comparison['cohort_users'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['cohort_users'], $comparison['cohort_users'] ?? 0)
+                ],
+                "retentionRate" => [
+                    "current" => $retentionRate,
+                    "previous" => $retentionRateComp,
+                    "change" => $this->calculatePercentageChange($retentionRate, $retentionRateComp)
+                ],
+                "retentionRateTrue" => [
+                    "current" => max(0, 100 - $churnRate),
+                    "previous" => max(0, 100 - $churnRateComp),
+                    "change" => $this->calculatePercentageChange(max(0, 100 - $churnRate), max(0, 100 - $churnRateComp))
+                ],
+                "conversionRate" => [
+                    "current" => $conversionRate,
+                    "previous" => $conversionRateComp,
+                    "change" => $this->calculatePercentageChange($conversionRate, $conversionRateComp)
+                ],
+                "churnRate" => [
+                    "current" => $churnRate,
+                    "previous" => $churnRateComp,
+                    "change" => $this->calculatePercentageChange($churnRate, $churnRateComp)
+                ],
+                "transactionsPerUser" => [
+                    "current" => $txPerUser,
+                    "previous" => $txPerUserComp,
+                    "change" => $this->calculatePercentageChange($txPerUser, $txPerUserComp)
+                ],
+                "conversionRatePeriod" => [
+                    "current" => $convRatePeriod,
+                    "previous" => $convRatePeriodComp,
+                    "change" => $this->calculatePercentageChange($convRatePeriod, $convRatePeriodComp)
+                ],
+                "activeMerchants" => [
+                    "current" => $current['active_merchants'],
+                    "previous" => $comparison['active_merchants'] ?? 0,
+                    "change" => $this->calculatePercentageChange($current['active_merchants'], $comparison['active_merchants'] ?? 0)
+                ],
+                "activeMerchantRatio" => [
+                    "current" => $activeMerchantRatio,
+                    "previous" => $activeMerchantRatioComp,
+                    "change" => $this->calculatePercentageChange($activeMerchantRatio, $activeMerchantRatioComp)
+                ],
+                "totalPartners" => $totalActivePartnersDB,
+                "totalActivePartnersDB" => $totalActivePartnersDB,
+                "totalLocationsActive" => 0,
+                "totalMerchantsEverActive" => $totalMerchantsEverActive,
+                "allTransactionsPeriod" => $current['transactions'],
+                "transactionsPerMerchant" => [
+                    "current" => $txPerMerchant,
+                    "previous" => $txPerMerchantComp,
+                    "change" => $this->calculatePercentageChange($txPerMerchant, $txPerMerchantComp)
+                ],
+                "billingRateTimwe" => [
+                    "current" => $billingRateTimweData['rate'],
+                    "previous" => $billingRateTimweCompData['rate'],
+                    "change" => $this->calculatePercentageChange($billingRateTimweData['rate'], $billingRateTimweCompData['rate'])
+                ],
+                "totalTimweClients" => [
+                    "current" => $billingRateTimweData['total_clients'],
+                    "previous" => $billingRateTimweCompData['total_clients'],
+                    "change" => $this->calculatePercentageChange($billingRateTimweData['total_clients'], $billingRateTimweCompData['total_clients'])
+                ],
+                "totalTimweBillings" => [
+                    "current" => $billingRateTimweData['total_billings'],
+                    "previous" => $billingRateTimweCompData['total_billings'],
+                    "change" => $this->calculatePercentageChange($billingRateTimweData['total_billings'], $billingRateTimweCompData['total_billings'])
+                ],
+                "billingRateOoredoo" => [
+                    "current" => $billingRateOoredooData['rate'],
+                    "previous" => $billingRateOoredooCompData['rate'],
+                    "change" => $this->calculatePercentageChange($billingRateOoredooData['rate'], $billingRateOoredooCompData['rate'])
+                ],
+                "totalOoredooClients" => [
+                    "current" => $billingRateOoredooData['total_clients'],
+                    "previous" => $billingRateOoredooCompData['total_clients'],
+                    "change" => $this->calculatePercentageChange($billingRateOoredooData['total_clients'], $billingRateOoredooCompData['total_clients'])
+                ],
+                "totalOoreodooBillings" => [
+                    "current" => $billingRateOoredooData['total_billings'],
+                    "previous" => $billingRateOoredooCompData['total_billings'],
+                    "change" => $this->calculatePercentageChange($billingRateOoredooData['total_billings'], $billingRateOoredooCompData['total_billings'])
+                ],
+                "_source" => "materialized"
+            ];
+        } catch (\Exception $e) {
+            Log::warning("Fallback raw SQL: materialized read failed: " . $e->getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Requête légère: nombre d'abonnements activés dans la période ET encore actifs
+     * Utilise l'index sur client_abonnement_creation (~200ms)
+     */
+    private function queryActivatedStillActive(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): int
+    {
+        $query = DB::table('client_abonnement as ca')
+            ->where('ca.client_abonnement_creation', '>=', $startBound)
+            ->where('ca.client_abonnement_creation', '<', $endExclusive)
+            ->where(function ($q) use ($endExclusive) {
+                $q->whereNull('ca.client_abonnement_expiration')
+                  ->orWhere('ca.client_abonnement_expiration', '>=', $endExclusive);
+            });
+        if ($operatorId !== null) {
+            $query->where('ca.country_payments_methods_id', $operatorId);
+        }
+        return $query->count();
+    }
+    
+    /**
+     * Agrège les métriques quotidiennes matérialisées pour une plage de dates
+     */
+    private function aggregateMaterialized(string $startDate, string $endDate, ?int $operatorId): ?array
+    {
+        $query = DB::table('dashboard_daily_stats')
+            ->where(function ($q) use ($operatorId) {
+                if ($operatorId === null) {
+                    $q->whereNull('operator_id');
+                } else {
+                    $q->where('operator_id', $operatorId);
+                }
+            })
+            ->whereBetween('stat_date', [$startDate, $endDate]);
+        
+        $agg = $query->selectRaw('
+            SUM(activated_count) as activated,
+            SUM(deactivated_count) as deactivated,
+            SUM(transactions_count) as transactions,
+            SUM(transacting_users) as transacting_users,
+            SUM(cohort_transactions) as cohort_tx,
+            SUM(cohort_transacting_users) as cohort_users,
+            SUM(active_merchants) as active_merchants,
+            SUM(lost_subscriptions) as lost
+        ')->first();
+        
+        if (!$agg || $agg->activated === null) return null;
+        
+        return [
+            'activated' => (int) $agg->activated,
+            'deactivated' => (int) $agg->deactivated,
+            'transactions' => (int) $agg->transactions,
+            'transacting_users' => (int) $agg->transacting_users,
+            'cohort_tx' => (int) $agg->cohort_tx,
+            'cohort_users' => (int) $agg->cohort_users,
+            'active_merchants' => (int) $agg->active_merchants,
+            'lost' => (int) $agg->lost,
+        ];
+    }
+    
+    public function getMerchantsOptimizedPublic(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
+    {
+        return $this->getMerchantsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+    }
+    
+    public function getTransactionsDataPublic(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
+    {
+        return $this->getTransactionsData($startBound, $endExclusive, $selectedOperator);
+    }
+    
+    public function getSubscriptionsDataPublic(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?Carbon $compStartBound = null, ?Carbon $compEndExclusive = null): array
+    {
+        return $this->getSubscriptionsData($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive);
+    }
+    
+    public function getOoredooDailyStatisticsPublic(Carbon $startBound, Carbon $endExclusive): array
+    {
+        return $this->getOoredooDailyStatistics($startBound, $endExclusive);
+    }
+    
+    public function groupOoredooStatsByMonthPublic(array $dailyStats): array
+    {
+        return $this->groupOoredooStatsByMonth($dailyStats);
+    }
+    
     private function generateCacheKey(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $operator): string
     {
         $keyData = [
@@ -92,23 +462,14 @@ class DashboardService
     {
         $startTime = microtime(true);
         
-        // Calcul de la période
+        // Calcul de la période et TTL adaptatif
         $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate));
+        $cacheTTL = $this->getCacheTTL($periodDays);
+        $cacheKey = $this->generateCacheKey($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator);
         
-        // Utiliser le nouveau service de cache Redis
-        $cacheService = app(DashboardCacheService::class);
-        $cacheKey = $cacheService->generateKey($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator, auth()->id());
+        Log::info("DashboardService: Période de {$periodDays} jours, TTL cache: {$cacheTTL}s, Opérateur: {$selectedOperator}");
         
-        // Détection intelligente des périodes
-        $dataType = match(true) {
-            $periodDays <= 30 => 'kpis',      // Mode complet pour périodes courtes
-            $periodDays <= 90 => 'standard',   // Mode optimisé pour périodes moyennes
-            default => 'heavy'                 // Mode ultra-optimisé pour longues périodes
-        };
-        
-        Log::info("🚀 DashboardService: Période de {$periodDays} jours, Opérateur: {$selectedOperator}, Type: {$dataType}");
-        
-        return $cacheService->remember($cacheKey, $periodDays, function () use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator, $periodDays, $startTime) {
+        return Cache::remember($cacheKey, $cacheTTL, function () use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator, $periodDays, $startTime) {
             
             if ($periodDays > 90) {
                 Log::info("Mode optimisé activé pour période longue");
@@ -116,193 +477,7 @@ class DashboardService
             }
             
             return $this->getStandardDashboardData($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedOperator, $startTime);
-        }, $dataType);
-    }
-    
-    /**
-     * Version légère : retourne seulement les KPIs essentiels (rapide)
-     * Inclut les données minimales nécessaires aux graphiques
-     */
-    public function getLightDashboardData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedOperator): array
-    {
-        $startTime = microtime(true);
-        
-        // Normalisation des dates
-        $startBound = Carbon::parse($startDate)->startOfDay();
-        $endExclusive = Carbon::parse($endDate)->addDay()->startOfDay();
-        $compStartBound = Carbon::parse($comparisonStartDate)->startOfDay();
-        $compEndExclusive = Carbon::parse($comparisonEndDate)->addDay()->startOfDay();
-        
-        // Seulement les KPIs essentiels (rapide)
-        $kpis = $this->getKPIsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
-        
-        // Marchands (rapide aussi)
-        $merchants = $this->getMerchantsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
-        
-        // ⚡ OPTIMISATION: Calculer les statistiques quotidiennes UNE SEULE FOIS
-        // et les réutiliser pour Timwe stats ET subscriptions
-        $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
-        $dailyStatisticsComparison = $compStartBound && $compEndExclusive 
-            ? $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator)
-            : [];
-        
-        // Données Timwe (réutilise les stats déjà calculées)
-        $timweStatsLight = [
-            'daily_statistics' => $dailyStatistics,
-            'daily_statistics_comparison' => $dailyStatisticsComparison
-        ];
-        $timweStatsLight['timwe_monthly_stats'] = $this->groupTimweStatsByMonth($dailyStatistics);
-        $timweStatsLight['timwe_monthly_stats_comparison'] = $this->groupTimweStatsByMonth($dailyStatisticsComparison);
-        
-        // Données Ooredoo (séparées car différente source)
-        $ooredooStatsLight = [
-            'daily_statistics' => $this->getOoredooDailyStatistics($startBound, $endExclusive),
-            'daily_statistics_comparison' => $compStartBound && $compEndExclusive
-                ? $this->getOoredooDailyStatistics($compStartBound, $compEndExclusive)
-                : []
-        ];
-        $ooredooStatsLight['ooredoo_monthly_stats'] = $this->groupOoredooStatsByMonth($ooredooStatsLight['daily_statistics']);
-        $ooredooStatsLight['ooredoo_monthly_stats_comparison'] = $this->groupOoredooStatsByMonth($ooredooStatsLight['daily_statistics_comparison']);
-        
-        // Données minimales pour les graphiques (passe les stats déjà calculées)
-        $subscriptionsLight = $this->getSubscriptionsDataLight($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive, $dailyStatistics, $dailyStatisticsComparison);
-        
-        Log::info("getLightDashboardData - subscriptionsLight", [
-            'daily_activations_count' => count($subscriptionsLight['daily_activations'] ?? []),
-            'retention_trend_count' => count($subscriptionsLight['retention_trend'] ?? []),
-            'activations_by_channel' => $subscriptionsLight['activations_by_channel'] ?? 'null',
-            'plan_distribution' => $subscriptionsLight['plan_distribution'] ?? 'null'
-        ]);
-        
-        // Transactions minimales (pour les graphiques)
-        $transactionsLight = $this->getTransactionsData($startBound, $endExclusive, $selectedOperator);
-        
-        Log::info("getLightDashboardData - transactionsLight", [
-            'daily_volume_count' => count($transactionsLight['daily_volume'] ?? []),
-            'sample' => array_slice($transactionsLight['daily_volume'] ?? [], 0, 2)
-        ]);
-        
-        $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-        
-        return [
-            "periods" => [
-                "primary" => Carbon::parse($startDate)->format("M j, Y") . " - " . Carbon::parse($endDate)->format("M j, Y"),
-                "comparison" => Carbon::parse($comparisonStartDate)->format("M j, Y") . " - " . Carbon::parse($comparisonEndDate)->format("M j, Y")
-            ],
-            "kpis" => $kpis,
-            "merchants" => $merchants['data'],
-            "categoryDistribution" => $merchants['categories'],
-            "insights" => $this->generateInsights($kpis, $merchants['data']),
-            "subscriptions" => $subscriptionsLight,
-            "transactions" => $transactionsLight,
-            "ooredoo_stats" => $ooredooStatsLight,
-            "timwe_stats" => $timweStatsLight,
-            "last_updated" => now()->toISOString(),
-            "data_source" => "light_mode",
-            "execution_time_ms" => $executionTime,
-            "light_mode" => true
-        ];
-    }
-    
-    /**
-     * Version légère de getSubscriptionsData - seulement les données nécessaires aux graphiques
-     * @param array|null $precomputedDailyStats Stats déjà calculées (évite les appels dupliqués)
-     * @param array|null $precomputedDailyStatsComparison Stats comparaison déjà calculées
-     */
-    private function getSubscriptionsDataLight(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?Carbon $compStartBound = null, ?Carbon $compEndExclusive = null, ?array $precomputedDailyStats = null, ?array $precomputedDailyStatsComparison = null): array
-    {
-        $periodDays = $startBound->diffInDays($endExclusive);
-        $granularity = $periodDays > 365 ? 'month' : 'day';
-        $caDateExpr = $granularity === 'month' ? "DATE_FORMAT(client_abonnement_creation, '%Y-%m-01')" : "DATE(client_abonnement_creation)";
-        
-        // Activations quotidiennes/mensuelles (rapide)
-        $activationsQuery = DB::table("client_abonnement as ca")
-            ->join("country_payments_methods as cpm", "ca.country_payments_methods_id", "=", "cpm.country_payments_methods_id")
-            ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
-            ->where("ca.client_abonnement_creation", ">=", $startBound)
-            ->where("ca.client_abonnement_creation", "<", $endExclusive);
-        
-        $this->applyOperatorFilter($activationsQuery, $selectedOperator);
-        
-        $activationsRaw = $activationsQuery
-            ->groupBy(DB::raw($caDateExpr))
-            ->orderBy("date")
-            ->get()
-            ->keyBy('date')
-            ->toArray();
-        
-        // Générer la série complète
-        $startDate = $startBound->copy();
-        $endDate = $endExclusive->copy()->subDay();
-        $dailyActivations = [];
-        
-        $current = $startDate->copy();
-        while ($current <= $endDate) {
-            $dateKey = $granularity === 'month' 
-                ? $current->format('Y-m-01') 
-                : $current->format('Y-m-d');
-            
-            $dailyActivations[] = [
-                'date' => $dateKey,
-                'activations' => isset($activationsRaw[$dateKey]) ? (int)$activationsRaw[$dateKey]->activations : 0
-            ];
-            
-            if ($granularity === 'month') {
-                $current->addMonth();
-            } else {
-                $current->addDay();
-            }
-        }
-        
-        // Retention trend (version simplifiée)
-        $retentionTrend = $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator);
-        
-        // Quarterly active locations (rapide) - utilise seulement la date de fin
-        $quarterlyActiveLocations = $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->format('Y-m-d'));
-        
-        // ⚡ OPTIMISATION: Utiliser les stats pré-calculées si disponibles
-        $dailyStatistics = $precomputedDailyStats ?? $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
-        $dailyStatisticsComparison = $precomputedDailyStatsComparison ?? ($compStartBound && $compEndExclusive 
-            ? $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator)
-            : []);
-        
-        // Calculer les données minimales pour les graphiques (rapide)
-        $activationsByChannel = $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator);
-        $planDistribution = $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator);
-        
-        return [
-            "daily_activations" => $dailyActivations,
-            "retention_trend" => $retentionTrend,
-            "quarterly_active_locations" => $quarterlyActiveLocations,
-            "daily_statistics" => $dailyStatistics,
-            "daily_statistics_comparison" => $dailyStatisticsComparison,
-            "activations_by_channel" => $activationsByChannel,
-            "plan_distribution" => $planDistribution,
-            // Sections lourdes à null (chargées séparément si nécessaire)
-            "details" => null,
-            "cohorts" => null,
-            "renewal_rate" => null,
-            "average_lifespan" => null,
-            "reactivation_rate" => null
-        ];
-    }
-    
-    /**
-     * Méthodes publiques pour les endpoints séparés
-     */
-    public function getSubscriptionDetailsPublic(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
-    {
-        return $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
-    }
-    
-    public function calculateCohortsPublic(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
-    {
-        return $this->calculateCohorts($startBound->toDateString(), $endExclusive->copy()->subDay()->toDateString(), $selectedOperator);
-    }
-    
-    public function getTransactionsDataPublic(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
-    {
-        return $this->getTransactionsData($startBound, $endExclusive, $selectedOperator);
+        });
     }
     
     /**
@@ -317,51 +492,36 @@ class DashboardService
         $compEndExclusive = Carbon::parse($comparisonEndDate)->addDay()->startOfDay();
         
         // 1. KPIs principaux avec requêtes optimisées
+        Log::info("STEP 1/5: KPIs...");
         $kpis = $this->getKPIsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+        Log::info("STEP 1/5: KPIs OK (" . round((microtime(true) - $startTime) * 1000) . "ms)");
         
         // 2. Marchands avec correction du problème N+1
+        Log::info("STEP 2/5: Marchands...");
         $merchants = $this->getMerchantsOptimized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator);
+        Log::info("STEP 2/5: Marchands OK (" . round((microtime(true) - $startTime) * 1000) . "ms)");
         
         // 3. Données de transactions agrégées
+        Log::info("STEP 3/5: Transactions...");
         $transactions = $this->getTransactionsData($startBound, $endExclusive, $selectedOperator);
+        Log::info("STEP 3/5: Transactions OK (" . round((microtime(true) - $startTime) * 1000) . "ms)");
         
-        // 4. Données d'abonnements
+        // 4. Données d'abonnements (le plus lourd)
+        Log::info("STEP 4/5: Abonnements...");
         $subscriptions = $this->getSubscriptionsData($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive);
+        Log::info("STEP 4/5: Abonnements OK (" . round((microtime(true) - $startTime) * 1000) . "ms)");
         
         // 5. Données Ooredoo/DGV
+        Log::info("STEP 5/5: Ooredoo stats...");
         $ooredooStats = [
             'daily_statistics' => $this->getOoredooDailyStatistics($startBound, $endExclusive),
             'daily_statistics_comparison' => $this->getOoredooDailyStatistics($compStartBound, $compEndExclusive)
         ];
-        
-        // Grouper les statistiques Ooredoo par mois avec détails quotidiens
         $ooredooStats['ooredoo_monthly_stats'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics']);
         $ooredooStats['ooredoo_monthly_stats_comparison'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics_comparison']);
         
-        // Timwe : au niveau racine pour que les onglets Timwe/Ooredoo affichent les données
-        $timweStats = [
-            'timwe_monthly_stats' => $subscriptions['timwe_monthly_stats'] ?? [],
-            'timwe_monthly_stats_comparison' => $subscriptions['timwe_monthly_stats_comparison'] ?? [],
-            'daily_statistics' => $subscriptions['daily_statistics'] ?? [],
-            'daily_statistics_comparison' => $subscriptions['daily_statistics_comparison'] ?? []
-        ];
-        
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-        
-        // Log pour déboguer les KPIs Timwe/Ooredoo et Analyses Avancées
-        Log::info("getStandardDashboardData - KPIs retournés", [
-            'billingRateTimwe' => $kpis['billingRateTimwe'] ?? 'missing',
-            'totalTimweClients' => $kpis['totalTimweClients'] ?? 'missing',
-            'totalTimweBillings' => $kpis['totalTimweBillings'] ?? 'missing',
-            'billingRateOoredoo' => $kpis['billingRateOoredoo'] ?? 'missing',
-            'totalOoredooClients' => $kpis['totalOoredooClients'] ?? 'missing',
-            'totalOoreodooBillings' => $kpis['totalOoreodooBillings'] ?? 'missing',
-            'has_activations_by_channel' => isset($subscriptions['activations_by_channel']),
-            'has_plan_distribution' => isset($subscriptions['plan_distribution']),
-            'has_renewal_rate' => isset($subscriptions['renewal_rate']),
-            'has_average_lifespan' => isset($subscriptions['average_lifespan']),
-            'cohorts_count' => isset($subscriptions['cohorts']) ? count($subscriptions['cohorts']) : 0
-        ]);
+        Log::info("STEP 5/5: Ooredoo OK - TOTAL: {$executionTime}ms");
         
         return [
             "periods" => [
@@ -374,7 +534,6 @@ class DashboardService
             "transactions" => $transactions,
             "subscriptions" => $subscriptions,
             "ooredoo_stats" => $ooredooStats,
-            "timwe_stats" => $timweStats,
             "insights" => $this->generateInsights($kpis, $merchants['data']),
             "last_updated" => now()->toISOString(),
             "data_source" => "optimized_database",
@@ -388,22 +547,25 @@ class DashboardService
      */
     private function getKPIsOptimized(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
     {
-        // Requête unifiée pour tous les KPIs d'abonnements
+        // Requête unifiée pour tous les KPIs d'abonnements avec PDO bindings sécurisés
         $subscriptionQuery = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-            ->select([
-                // Période principale
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$startBound}' AND ca.client_abonnement_creation < '{$endExclusive}' THEN 1 END) as activated_current"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$startBound}' AND ca.client_abonnement_creation < '{$endExclusive}' AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= '{$endExclusive}') THEN 1 END) as active_current"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_expiration >= '{$startBound}' AND ca.client_abonnement_expiration < '{$endExclusive}' THEN 1 END) as deactivated_current"),
-                
-                // Période de comparaison
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$compStartBound}' AND ca.client_abonnement_creation < '{$compEndExclusive}' THEN 1 END) as activated_comparison"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_creation >= '{$compStartBound}' AND ca.client_abonnement_creation < '{$compEndExclusive}' AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= '{$compEndExclusive}') THEN 1 END) as active_comparison"),
-                DB::raw("COUNT(CASE WHEN ca.client_abonnement_expiration >= '{$compStartBound}' AND ca.client_abonnement_expiration < '{$compEndExclusive}' THEN 1 END) as deactivated_comparison")
-            ]);
-        
-        $this->applyOperatorFilter($subscriptionQuery, $selectedOperator);
+            ->selectRaw(
+                "COUNT(CASE WHEN ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation < ? THEN 1 END) as activated_current,
+                 COUNT(CASE WHEN ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation < ? AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= ?) THEN 1 END) as active_current,
+                 COUNT(CASE WHEN ca.client_abonnement_expiration >= ? AND ca.client_abonnement_expiration < ? THEN 1 END) as deactivated_current,
+                 COUNT(CASE WHEN ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation < ? THEN 1 END) as activated_comparison,
+                 COUNT(CASE WHEN ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation < ? AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= ?) THEN 1 END) as active_comparison,
+                 COUNT(CASE WHEN ca.client_abonnement_expiration >= ? AND ca.client_abonnement_expiration < ? THEN 1 END) as deactivated_comparison",
+                [
+                    $startBound, $endExclusive,
+                    $startBound, $endExclusive, $endExclusive,
+                    $startBound, $endExclusive,
+                    $compStartBound, $compEndExclusive,
+                    $compStartBound, $compEndExclusive, $compEndExclusive,
+                    $compStartBound, $compEndExclusive
+                ]
+            );
+        $this->applyOperatorJoinAndFilter($subscriptionQuery, $selectedOperator, 'ca');
         
         Log::info("Requête KPIs - Opérateur: {$selectedOperator}");
         
@@ -411,61 +573,56 @@ class DashboardService
         
         Log::info("KPIs abonnements - Activés: {$subMetrics->activated_current}, Actifs: {$subMetrics->active_current}, Désactivés: {$subMetrics->deactivated_current}");
         
-        // Requête unifiée pour les transactions
+        // Requête unifiée pour les transactions - JOIN conditionnel + PDO bindings
         $transactionQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-            ->select([
-                DB::raw("COUNT(CASE WHEN h.time >= '{$startBound}' AND h.time < '{$endExclusive}' THEN 1 END) as transactions_current"),
-                DB::raw("COUNT(CASE WHEN h.time >= '{$compStartBound}' AND h.time < '{$compEndExclusive}' THEN 1 END) as transactions_comparison"),
-                DB::raw("COUNT(DISTINCT CASE WHEN h.time >= '{$startBound}' AND h.time < '{$endExclusive}' THEN ca.client_id END) as users_current"),
-                DB::raw("COUNT(DISTINCT CASE WHEN h.time >= '{$compStartBound}' AND h.time < '{$compEndExclusive}' THEN ca.client_id END) as users_comparison")
-            ]);
-        
-        $this->applyOperatorFilter($transactionQuery, $selectedOperator);
+            ->selectRaw(
+                "COUNT(CASE WHEN h.time >= ? AND h.time < ? THEN 1 END) as transactions_current,
+                 COUNT(CASE WHEN h.time >= ? AND h.time < ? THEN 1 END) as transactions_comparison,
+                 COUNT(DISTINCT CASE WHEN h.time >= ? AND h.time < ? THEN ca.client_id END) as users_current,
+                 COUNT(DISTINCT CASE WHEN h.time >= ? AND h.time < ? THEN ca.client_id END) as users_comparison",
+                [$startBound, $endExclusive, $compStartBound, $compEndExclusive, $startBound, $endExclusive, $compStartBound, $compEndExclusive]
+            );
+        $this->applyOperatorJoinAndFilter($transactionQuery, $selectedOperator, 'ca');
         
         $txMetrics = $transactionQuery->first();
         
-        // Transactions de cohorte (transactions effectuées par les abonnements créés dans la période)
+        // Transactions de cohorte - JOIN conditionnel
         $cohortTransactionsQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->where('h.time', '>=', $startBound)
             ->where('h.time', '<', $endExclusive)
             ->where('ca.client_abonnement_creation', '>=', $startBound)
             ->where('ca.client_abonnement_creation', '<', $endExclusive);
-        $this->applyOperatorFilter($cohortTransactionsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($cohortTransactionsQuery, $selectedOperator, 'ca');
         $cohortTransactions = $cohortTransactionsQuery->count();
         
         $cohortTransactionsComparisonQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->where('h.time', '>=', $compStartBound)
             ->where('h.time', '<', $compEndExclusive)
             ->where('ca.client_abonnement_creation', '>=', $compStartBound)
             ->where('ca.client_abonnement_creation', '<', $compEndExclusive);
-        $this->applyOperatorFilter($cohortTransactionsComparisonQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($cohortTransactionsComparisonQuery, $selectedOperator, 'ca');
         $cohortTransactionsComparison = $cohortTransactionsComparisonQuery->count();
         
-        // Utilisateurs transactants de cohorte
+        // Utilisateurs transactants de cohorte - JOIN conditionnel
         $cohortTransactingUsersQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->where('h.time', '>=', $startBound)
             ->where('h.time', '<', $endExclusive)
             ->where('ca.client_abonnement_creation', '>=', $startBound)
             ->where('ca.client_abonnement_creation', '<', $endExclusive);
-        $this->applyOperatorFilter($cohortTransactingUsersQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($cohortTransactingUsersQuery, $selectedOperator, 'ca');
         $cohortTransactingUsers = $cohortTransactingUsersQuery->distinct('ca.client_id')->count('ca.client_id');
         
         $cohortTransactingUsersComparisonQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->where('h.time', '>=', $compStartBound)
             ->where('h.time', '<', $compEndExclusive)
             ->where('ca.client_abonnement_creation', '>=', $compStartBound)
             ->where('ca.client_abonnement_creation', '<', $compEndExclusive);
-        $this->applyOperatorFilter($cohortTransactingUsersComparisonQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($cohortTransactingUsersComparisonQuery, $selectedOperator, 'ca');
         $cohortTransactingUsersComparison = $cohortTransactingUsersComparisonQuery->distinct('ca.client_id')->count('ca.client_id');
         
         // Calculs des taux
@@ -478,19 +635,17 @@ class DashboardService
         // Calcul du churn rate (abonnements perdus dans la période / abonnements activés)
         // Abonnements perdus = activés ET désactivés dans la période
         $lostSubscriptionsQuery = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->whereBetween('ca.client_abonnement_creation', [$startBound->toDateString(), $endExclusive->copy()->subDay()->toDateString()])
             ->whereNotNull('ca.client_abonnement_expiration')
             ->whereBetween('ca.client_abonnement_expiration', [$startBound->toDateString(), $endExclusive->copy()->subDay()->toDateString()]);
-        $this->applyOperatorFilter($lostSubscriptionsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($lostSubscriptionsQuery, $selectedOperator, 'ca');
         $lostSubscriptions = $lostSubscriptionsQuery->count();
         
         $lostSubscriptionsComparisonQuery = DB::table('client_abonnement as ca')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->whereBetween('ca.client_abonnement_creation', [$compStartBound->toDateString(), $compEndExclusive->copy()->subDay()->toDateString()])
             ->whereNotNull('ca.client_abonnement_expiration')
             ->whereBetween('ca.client_abonnement_expiration', [$compStartBound->toDateString(), $compEndExclusive->copy()->subDay()->toDateString()]);
-        $this->applyOperatorFilter($lostSubscriptionsComparisonQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($lostSubscriptionsComparisonQuery, $selectedOperator, 'ca');
         $lostSubscriptionsComparison = $lostSubscriptionsComparisonQuery->count();
         
         $churnRate = $subMetrics->activated_current > 0 ? round(($lostSubscriptions / $subMetrics->activated_current) * 100, 1) : 0;
@@ -628,24 +783,6 @@ class DashboardService
                 "previous" => $totalTimweBillingsComparison,
                 "change" => $this->calculatePercentageChange($totalTimweBillings, $totalTimweBillingsComparison)
             ],
-            // Revenu TTC et CA BigDeal alignés sur le diagnostic (même source que NOMBRE FACTURATION)
-            "timwe_revenue_ttc_tnd" => ($billingRateTimweData['source'] ?? null) === 'diagnostic'
-                ? [
-                    "current" => $totalTimweBillings * 3,
-                    "previous" => $totalTimweBillingsComparison * 3,
-                    "change" => $this->calculatePercentageChange($totalTimweBillings * 3, $totalTimweBillingsComparison * 3)
-                ]
-                : null,
-            "timwe_ca_bigdeal_ht" => ($billingRateTimweData['source'] ?? null) === 'diagnostic'
-                ? [
-                    "current" => $this->timweCaBigdealHtFromBillings($totalTimweBillings),
-                    "previous" => $this->timweCaBigdealHtFromBillings($totalTimweBillingsComparison),
-                    "change" => $this->calculatePercentageChange(
-                        $this->timweCaBigdealHtFromBillings($totalTimweBillings),
-                        $this->timweCaBigdealHtFromBillings($totalTimweBillingsComparison)
-                    )
-                ]
-                : null,
             "billingRateOoredoo" => [
                 "current" => $billingRateOoredoo,
                 "previous" => $billingRateOoredooComparison,
@@ -669,28 +806,26 @@ class DashboardService
      */
     private function calculateMerchantKPIs(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator, int $transactionsCurrent, int $transactionsComparison): array
     {
-        // Marchands actifs dans la période principale
+        // Marchands actifs dans la période principale - JOIN cpm conditionnel
         $activeMerchantsQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
             ->join('partner as pt', 'p.partner_id', '=', 'pt.partner_id')
             ->where('h.time', '>=', $startBound)
             ->where('h.time', '<', $endExclusive)
             ->whereNotNull('h.promotion_id');
-        $this->applyOperatorFilter($activeMerchantsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($activeMerchantsQuery, $selectedOperator, 'ca');
         $activeMerchants = $activeMerchantsQuery->distinct('pt.partner_id')->count('pt.partner_id');
         
         // Marchands actifs dans la période de comparaison
         $activeMerchantsComparisonQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
             ->join('partner as pt', 'p.partner_id', '=', 'pt.partner_id')
             ->where('h.time', '>=', $compStartBound)
             ->where('h.time', '<', $compEndExclusive)
             ->whereNotNull('h.promotion_id');
-        $this->applyOperatorFilter($activeMerchantsComparisonQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($activeMerchantsComparisonQuery, $selectedOperator, 'ca');
         $activeMerchantsComparison = $activeMerchantsComparisonQuery->distinct('pt.partner_id')->count('pt.partner_id');
         
         // Total partenaires actifs
@@ -775,27 +910,24 @@ class DashboardService
      */
     private function getMerchantsOptimized(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): array
     {
-        // Requête unifiée pour éviter le N+1
+        // Requête unifiée pour éviter le N+1 - JOIN cpm conditionnel pour ALL
         $merchantsQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
-            ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
             ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
             ->join('partner as pt', 'p.partner_id', '=', 'pt.partner_id')
-            ->select([
-                'pt.partner_name as name',
-                'pt.partner_id',
-                // Transactions période principale
-                DB::raw("COUNT(CASE WHEN h.time >= '{$startBound}' AND h.time < '{$endExclusive}' THEN 1 END) as current"),
-                // Transactions période comparaison
-                DB::raw("COUNT(CASE WHEN h.time >= '{$compStartBound}' AND h.time < '{$compEndExclusive}' THEN 1 END) as previous")
-            ])
+            ->selectRaw(
+                "pt.partner_name as name, pt.partner_id,
+                 COUNT(CASE WHEN h.time >= ? AND h.time < ? THEN 1 END) as `current`,
+                 COUNT(CASE WHEN h.time >= ? AND h.time < ? THEN 1 END) as previous",
+                [$startBound, $endExclusive, $compStartBound, $compEndExclusive]
+            )
             ->whereNotNull('h.promotion_id');
         
-        $this->applyOperatorFilter($merchantsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($merchantsQuery, $selectedOperator, 'ca');
         
         $merchants = $merchantsQuery
             ->groupBy('pt.partner_name', 'pt.partner_id')
-            ->having('current', '>', 0) // Seulement les marchands actifs
+            ->having('current', '>', 0)
             ->orderBy('current', 'DESC')
             ->limit(50)
             ->get();
@@ -854,28 +986,31 @@ class DashboardService
         // Récupérer les données d'abonnements avec activations quotidiennes
         $subscriptions = $this->getSubscriptionsData($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive);
         
-        // Ooredoo/DGV et Timwe : nécessaires pour les onglets (période longue)
+        // Ajouter les données Ooredoo/DGV (comme dans getStandardDashboardData)
         $ooredooStats = [
             'daily_statistics' => $this->getOoredooDailyStatistics($startBound, $endExclusive),
             'daily_statistics_comparison' => $this->getOoredooDailyStatistics($compStartBound, $compEndExclusive)
         ];
+        
+        // Grouper les statistiques Ooredoo par mois avec détails quotidiens
         $ooredooStats['ooredoo_monthly_stats'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics']);
         $ooredooStats['ooredoo_monthly_stats_comparison'] = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics_comparison']);
-        
-        $timweStats = [
-            'timwe_monthly_stats' => $subscriptions['timwe_monthly_stats'] ?? [],
-            'timwe_monthly_stats_comparison' => $subscriptions['timwe_monthly_stats_comparison'] ?? [],
-            'daily_statistics' => $subscriptions['daily_statistics'] ?? [],
-            'daily_statistics_comparison' => $subscriptions['daily_statistics_comparison'] ?? []
-        ];
         
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
         
         // Log pour déboguer les KPIs Timwe et Analyses Avancées
-        Log::info("getOptimizedDashboardData - KPIs retournés", [
+        Log::debug("getOptimizedDashboardData - KPIs retournés", [
             'billingRateTimwe' => $kpis['billingRateTimwe'] ?? 'missing',
+            'totalTimweClients' => $kpis['totalTimweClients'] ?? 'missing',
             'totalTimweBillings' => $kpis['totalTimweBillings'] ?? 'missing',
+            'billingRateOoredoo' => $kpis['billingRateOoredoo'] ?? 'missing',
+            'totalOoredooClients' => $kpis['totalOoredooClients'] ?? 'missing',
+            'totalOoreodooBillings' => $kpis['totalOoreodooBillings'] ?? 'missing',
+            'ooredoo_monthly_stats_count' => count($ooredooStats['ooredoo_monthly_stats'] ?? []),
             'has_activations_by_channel' => isset($subscriptions['activations_by_channel']),
+            'has_plan_distribution' => isset($subscriptions['plan_distribution']),
+            'has_renewal_rate' => isset($subscriptions['renewal_rate']),
+            'has_average_lifespan' => isset($subscriptions['average_lifespan']),
             'cohorts_count' => isset($subscriptions['cohorts']) ? count($subscriptions['cohorts']) : 0
         ]);
         
@@ -890,7 +1025,6 @@ class DashboardService
             "transactions" => $transactions,
             "subscriptions" => $subscriptions,
             "ooredoo_stats" => $ooredooStats,
-            "timwe_stats" => $timweStats,
             "insights" => [
                 "positive" => ["Mode optimisé activé pour période étendue"],
                 "challenges" => ["Analyse détaillée limitée pour optimiser les performances"],
@@ -1103,18 +1237,16 @@ class DashboardService
         $granularity = $periodDays > 365 ? 'month' : 'day'; // Mode quotidien pour périodes <= 365 jours
         $historyDateExpr = $granularity === 'month' ? "DATE_FORMAT(h.time, '%Y-%m-01')" : "DATE(h.time)";
         
-        Log::info("getTransactionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
+        Log::debug("getTransactionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
         
-        // Transactions agrégées par jour ou par mois selon la période
+        // Transactions agrégées par jour ou par mois - JOIN cpm conditionnel
         $transactionsQuery = DB::table("history as h")
             ->join("client_abonnement as ca", "h.client_abonnement_id", "=", "ca.client_abonnement_id")
-            ->join("country_payments_methods as cpm", "ca.country_payments_methods_id", "=", "cpm.country_payments_methods_id")
             ->select(DB::raw("$historyDateExpr as date"), DB::raw("COUNT(*) as transactions"), DB::raw("COUNT(DISTINCT ca.client_id) as users"))
             ->where("h.time", ">=", $startBound)
             ->where("h.time", "<", $endExclusive);
         
-        // Appliquer le filtre d'opérateur
-        $this->applyOperatorFilter($transactionsQuery, $selectedOperator);
+        $this->applyOperatorJoinAndFilter($transactionsQuery, $selectedOperator, 'ca');
         
         $transactionsRaw = $transactionsQuery
             ->groupBy(DB::raw($historyDateExpr))
@@ -1123,7 +1255,7 @@ class DashboardService
             ->keyBy('date')
             ->toArray();
         
-        Log::info("Transactions raw - Nombre de dates: " . count($transactionsRaw) . ", Exemple de clés: " . implode(', ', array_slice(array_keys($transactionsRaw), 0, 5)));
+        Log::debug("Transactions raw - Nombre de dates: " . count($transactionsRaw) . ", Exemple de clés: " . implode(', ', array_slice(array_keys($transactionsRaw), 0, 5)));
         
         // Générer la série complète avec intervalle adaptatif
         $startDate = $startBound->copy();
@@ -1281,24 +1413,35 @@ class DashboardService
      */
     private function getSubscriptionsData(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?Carbon $compStartBound = null, ?Carbon $compEndExclusive = null): array
     {
-        // Calculer la granularité selon la période (forcer le mode quotidien pour toutes les périodes < 365 jours)
+        $methodStart = microtime(true);
+        $maxTimeSec = 90; // Budget de temps maximum pour cette méthode
+        
+        // Appliquer un timeout MySQL de 30s par requête
+        try { DB::statement("SET SESSION max_execution_time=30000"); } catch (\Exception $e) { /* MySQL < 5.7.8 */ }
+        
+        // Calculer la granularité selon la période
         $periodDays = $startBound->diffInDays($endExclusive);
-        $granularity = $periodDays > 365 ? 'month' : 'day'; // Mode quotidien pour périodes <= 365 jours
+        $granularity = $periodDays > 365 ? 'month' : 'day';
         $caDateExpr = $granularity === 'month' ? "DATE_FORMAT(client_abonnement_creation, '%Y-%m-01')" : "DATE(client_abonnement_creation)";
         
-        Log::info("getSubscriptionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
+        Log::debug("getSubscriptionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
         
-        // Requête pour les activations quotidiennes/mensuelles avec filtre opérateur
-        $activationsQuery = DB::table("client_abonnement as ca")
-            ->join("country_payments_methods as cpm", "ca.country_payments_methods_id", "=", "cpm.country_payments_methods_id")
-            ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
-            ->where("ca.client_abonnement_creation", ">=", $startBound)
-            ->where("ca.client_abonnement_creation", "<", $endExclusive);
+        // Requête pour les activations quotidiennes - SKIP le JOIN inutile pour ALL
+        if ($selectedOperator === 'ALL' || empty($selectedOperator)) {
+            $activationsQuery = DB::table("client_abonnement as ca")
+                ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
+                ->where("ca.client_abonnement_creation", ">=", $startBound)
+                ->where("ca.client_abonnement_creation", "<", $endExclusive);
+        } else {
+            $activationsQuery = DB::table("client_abonnement as ca")
+                ->join("country_payments_methods as cpm", "ca.country_payments_methods_id", "=", "cpm.country_payments_methods_id")
+                ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
+                ->where("ca.client_abonnement_creation", ">=", $startBound)
+                ->where("ca.client_abonnement_creation", "<", $endExclusive);
+            $this->applyOperatorFilter($activationsQuery, $selectedOperator);
+        }
         
-        // Appliquer le filtre d'opérateur
-        $this->applyOperatorFilter($activationsQuery, $selectedOperator);
-        
-        Log::info("Requête activations quotidiennes - Opérateur: {$selectedOperator}, Période: {$startBound->toDateString()} à {$endExclusive->toDateString()}");
+        Log::debug("Requête activations quotidiennes - Opérateur: {$selectedOperator}, Période: {$startBound->toDateString()} à {$endExclusive->toDateString()}");
         
         $activationsRaw = $activationsQuery
             ->groupBy(DB::raw($caDateExpr))
@@ -1307,7 +1450,7 @@ class DashboardService
             ->keyBy('date')
             ->toArray();
         
-        Log::info("Activations trouvées: " . count($activationsRaw) . " jours/mois avec données");
+        Log::debug("Activations trouvées: " . count($activationsRaw) . " jours/mois avec données");
         
         // Générer la série complète avec toutes les dates
         $startDate = $startBound->copy();
@@ -1340,173 +1483,176 @@ class DashboardService
             }
         }
         
-        // Calculer retention_trend (optimisé - éviter les requêtes par jour)
-        $retentionTrend = $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator);
-        
-        // Calculer quarterly_active_locations (simplifié pour éviter les timeouts)
-        $quarterlyActiveLocations = $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->toDateString());
-        
-        // Récupérer les détails des abonnements (limité pour éviter les timeouts)
-        $subscriptionDetails = $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
-        
-        // Calculer activations_by_channel (avec comparaison)
-        Log::info("getSubscriptionsData - Calcul activations_by_channel", [
-            'startBound' => $startBound->toDateString(),
-            'endExclusive' => $endExclusive->toDateString(),
-            'selectedOperator' => $selectedOperator
-        ]);
-        $activationsCurrent = $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator);
-        Log::info("getSubscriptionsData - Activations par canal (current)", $activationsCurrent);
-        $activationsPrevious = ($compStartBound && $compEndExclusive) 
-            ? $this->calculateActivationsByPaymentMethod($compStartBound, $compEndExclusive, $selectedOperator)
-            : ['cb' => 0, 'recharge' => 0, 'phone_balance' => 0, 'other' => 0];
-        Log::info("getSubscriptionsData - Activations par canal (previous)", $activationsPrevious);
-        
-        $activationsByChannel = [
-            "cb" => [
-                "current" => $activationsCurrent['cb'] ?? 0,
-                "previous" => $activationsPrevious['cb'] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent['cb'] ?? 0, $activationsPrevious['cb'] ?? 0)
-            ],
-            "recharge" => [
-                "current" => $activationsCurrent['recharge'] ?? 0,
-                "previous" => $activationsPrevious['recharge'] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent['recharge'] ?? 0, $activationsPrevious['recharge'] ?? 0)
-            ],
-            "phone_balance" => [
-                "current" => $activationsCurrent['phone_balance'] ?? 0,
-                "previous" => $activationsPrevious['phone_balance'] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent['phone_balance'] ?? 0, $activationsPrevious['phone_balance'] ?? 0)
-            ],
-            "other" => [
-                "current" => $activationsCurrent['other'] ?? 0,
-                "previous" => $activationsPrevious['other'] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent['other'] ?? 0, $activationsPrevious['other'] ?? 0)
-            ]
-        ];
-        
-        // Calculer plan_distribution (avec comparaison)
-        Log::info("getSubscriptionsData - Calcul plan_distribution", [
-            'startBound' => $startBound->toDateString(),
-            'endExclusive' => $endExclusive->toDateString(),
-            'selectedOperator' => $selectedOperator
-        ]);
-        $plansCurrent = $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator);
-        Log::info("getSubscriptionsData - Plan distribution (current)", $plansCurrent);
-        $plansPrevious = ($compStartBound && $compEndExclusive)
-            ? $this->calculatePlanDistribution($compStartBound, $compEndExclusive, $selectedOperator)
-            : ['daily' => 0, 'monthly' => 0, 'annual' => 0, 'other' => 0];
-        Log::info("getSubscriptionsData - Plan distribution (previous)", $plansPrevious);
-        
-        $planDistribution = [
-            "daily" => [
-                "current" => $plansCurrent['daily'] ?? 0,
-                "previous" => $plansPrevious['daily'] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent['daily'] ?? 0, $plansPrevious['daily'] ?? 0)
-            ],
-            "monthly" => [
-                "current" => $plansCurrent['monthly'] ?? 0,
-                "previous" => $plansPrevious['monthly'] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent['monthly'] ?? 0, $plansPrevious['monthly'] ?? 0)
-            ],
-            "annual" => [
-                "current" => $plansCurrent['annual'] ?? 0,
-                "previous" => $plansPrevious['annual'] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent['annual'] ?? 0, $plansPrevious['annual'] ?? 0)
-            ],
-            "other" => [
-                "current" => $plansCurrent['other'] ?? 0,
-                "previous" => $plansPrevious['other'] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent['other'] ?? 0, $plansPrevious['other'] ?? 0)
-            ]
-        ];
-        
-        // Calculer cohorts
-        Log::info("getSubscriptionsData - Calcul cohorts", [
-            'startDate' => $startBound->format('Y-m-d'),
-            'endDate' => $endExclusive->copy()->subDay()->format('Y-m-d'),
-            'selectedOperator' => $selectedOperator
-        ]);
-        $cohorts = $this->calculateCohorts($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::info("getSubscriptionsData - Cohorts calculées", ['count' => count($cohorts), 'sample' => $cohorts[0] ?? null]);
-        
-        // Calculer renewal_rate, average_lifespan, reactivation_rate (avec comparaison)
-        Log::info("getSubscriptionsData - Calcul renewal_rate, average_lifespan, reactivation_rate");
-        $renewalCurrent = $this->calculateRenewalRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::info("getSubscriptionsData - Renewal rate (current)", ['value' => $renewalCurrent]);
-        $renewalPrevious = ($compStartBound && $compEndExclusive)
-            ? $this->calculateRenewalRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
-            : 0;
-        
-        $lifespanCurrent = $this->calculateAverageLifespan($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::info("getSubscriptionsData - Average lifespan (current)", ['value' => $lifespanCurrent]);
-        $lifespanPrevious = ($compStartBound && $compEndExclusive)
-            ? $this->calculateAverageLifespan($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
-            : 0;
-        
-        $reactivationCurrent = $this->calculateReactivationRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-        Log::info("getSubscriptionsData - Reactivation rate (current)", ['value' => $reactivationCurrent]);
-        $reactivationPrevious = ($compStartBound && $compEndExclusive)
-            ? $this->calculateReactivationRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
-            : 0;
-        
-        $renewalRate = [
-            "current" => $renewalCurrent,
-            "previous" => $renewalPrevious,
-            "change" => $this->calculatePercentageChange($renewalCurrent, $renewalPrevious)
-        ];
-        $averageLifespan = [
-            "current" => $lifespanCurrent,
-            "previous" => $lifespanPrevious,
-            "change" => $this->calculatePercentageChange($lifespanCurrent, $lifespanPrevious)
-        ];
-        $reactivationRate = [
-            "current" => $reactivationCurrent,
-            "previous" => $reactivationPrevious,
-            "change" => $this->calculatePercentageChange($reactivationCurrent, $reactivationPrevious)
-        ];
-        
-        // Calculer les statistiques quotidiennes (tableau similaire à Eklektik)
-        // Gérer les erreurs de mémoire pour cette méthode
+        // Calculer retention_trend (optimisé - avec cache Redis + timeout)
+        $retentionCacheKey = 'ret_trend:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
         try {
-            $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
-            Log::info("getSubscriptionsData - Statistiques quotidiennes calculées", ['count' => count($dailyStatistics)]);
+            $retentionTrend = Cache::remember($retentionCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator) {
+                return $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator);
+            });
+            Log::info("retentionTrend - OK", ['points' => count($retentionTrend)]);
         } catch (\Exception $e) {
-            Log::error("getSubscriptionsData - Erreur lors du calcul des statistiques quotidiennes: " . $e->getMessage());
-            $dailyStatistics = []; // Retourner un tableau vide en cas d'erreur
+            Log::error("retentionTrend - ECHEC: " . $e->getMessage());
+            $retentionTrend = [];
         }
         
-        // Calculer les statistiques de la période de comparaison si elle existe
-        $dailyStatisticsComparison = [];
-        if ($compStartBound && $compEndExclusive) {
+        // Calculer quarterly_active_locations (avec cache Redis - change rarement)
+        $locationsCacheKey = 'qloc:' . md5($endExclusive->copy()->subDay()->toDateString());
+        try {
+            $quarterlyActiveLocations = Cache::remember($locationsCacheKey, 3600, function() use ($endExclusive) {
+                return $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->toDateString());
+            });
+        } catch (\Exception $e) {
+            Log::error("quarterlyActiveLocations - ECHEC: " . $e->getMessage());
+            $quarterlyActiveLocations = [];
+        }
+        
+        // === CONTRÔLE BUDGET DE TEMPS ===
+        $elapsed = microtime(true) - $methodStart;
+        $timeExceeded = ($elapsed > $maxTimeSec);
+        if ($timeExceeded) {
+            Log::warning("getSubscriptionsData - Budget de temps dépassé ({$elapsed}s > {$maxTimeSec}s), skip opérations non-essentielles");
+        }
+        
+        // Récupérer les détails des abonnements (limité pour éviter les timeouts)
+        $subscriptionDetails = [];
+        if (!$timeExceeded) {
+            $detailsCacheKey = 'sub_det:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
             try {
-                $dailyStatisticsComparison = $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator);
-                Log::info("getSubscriptionsData - Statistiques quotidiennes de comparaison calculées", [
-                    'count' => count($dailyStatisticsComparison),
-                    'compStart' => $compStartBound->toDateString(),
-                    'compEnd' => $compEndExclusive->toDateString()
-                ]);
+                $subscriptionDetails = Cache::remember($detailsCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator) {
+                    return $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
+                });
             } catch (\Exception $e) {
-                Log::error("getSubscriptionsData - Erreur lors du calcul des statistiques de comparaison: " . $e->getMessage());
-                $dailyStatisticsComparison = [];
+                Log::error("subscriptionDetails - ECHEC: " . $e->getMessage());
             }
         }
         
-        // DÉSACTIVÉ POUR OPTIMISATION : Timwe Transactions by User
-        // Ce tableau est désactivé définitivement pour améliorer les performances
+        // === Calculs secondaires avec protection budget de temps ===
+        $defaultChannel = ['cb' => 0, 'recharge' => 0, 'phone_balance' => 0, 'other' => 0];
+        $defaultPlan = ['daily' => 0, 'monthly' => 0, 'annual' => 0, 'other' => 0];
+        $defaultComparison = ["current" => 0, "previous" => 0, "change" => 0.0];
+        
+        // Activations par canal
+        $activationsCurrent = $defaultChannel;
+        $activationsPrevious = $defaultChannel;
+        if (!$timeExceeded) {
+            try {
+                $activationsCurrent = Cache::remember('actbychan:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator));
+                $activationsPrevious = ($compStartBound && $compEndExclusive) 
+                    ? Cache::remember('actbychan:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
+                        fn() => $this->calculateActivationsByPaymentMethod($compStartBound, $compEndExclusive, $selectedOperator))
+                    : $defaultChannel;
+            } catch (\Exception $e) { Log::error("activationsByChannel - ECHEC: " . $e->getMessage()); }
+            $elapsed = microtime(true) - $methodStart;
+            $timeExceeded = ($elapsed > $maxTimeSec);
+        }
+        
+        $activationsByChannel = [];
+        foreach (['cb', 'recharge', 'phone_balance', 'other'] as $ch) {
+            $activationsByChannel[$ch] = [
+                "current" => $activationsCurrent[$ch] ?? 0,
+                "previous" => $activationsPrevious[$ch] ?? 0,
+                "change" => $this->calculatePercentageChange($activationsCurrent[$ch] ?? 0, $activationsPrevious[$ch] ?? 0)
+            ];
+        }
+        
+        // Plan distribution
+        $plansCurrent = $defaultPlan;
+        $plansPrevious = $defaultPlan;
+        if (!$timeExceeded) {
+            try {
+                $plansCurrent = Cache::remember('plandist:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator));
+                $plansPrevious = ($compStartBound && $compEndExclusive)
+                    ? Cache::remember('plandist:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
+                        fn() => $this->calculatePlanDistribution($compStartBound, $compEndExclusive, $selectedOperator))
+                    : $defaultPlan;
+            } catch (\Exception $e) { Log::error("planDistribution - ECHEC: " . $e->getMessage()); }
+            $elapsed = microtime(true) - $methodStart;
+            $timeExceeded = ($elapsed > $maxTimeSec);
+        }
+        
+        $planDistribution = [];
+        foreach (['daily', 'monthly', 'annual', 'other'] as $pl) {
+            $planDistribution[$pl] = [
+                "current" => $plansCurrent[$pl] ?? 0,
+                "previous" => $plansPrevious[$pl] ?? 0,
+                "change" => $this->calculatePercentageChange($plansCurrent[$pl] ?? 0, $plansPrevious[$pl] ?? 0)
+            ];
+        }
+        
+        // Cohorts
+        $cohorts = [];
+        if (!$timeExceeded) {
+            try {
+                $cohorts = Cache::remember('cohorts:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculateCohorts($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+            } catch (\Exception $e) { Log::error("cohorts - ECHEC: " . $e->getMessage()); }
+            $elapsed = microtime(true) - $methodStart;
+            $timeExceeded = ($elapsed > $maxTimeSec);
+        }
+        
+        // Renewal, lifespan, reactivation
+        $renewalRate = $defaultComparison;
+        $averageLifespan = $defaultComparison;
+        $reactivationRate = $defaultComparison;
+        if (!$timeExceeded) {
+            try {
+                $renewalCurrent = Cache::remember('renewal:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculateRenewalRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+                $renewalPrevious = ($compStartBound && $compEndExclusive)
+                    ? Cache::remember('renewal:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
+                        fn() => $this->calculateRenewalRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator))
+                    : 0;
+                $renewalRate = ["current" => $renewalCurrent, "previous" => $renewalPrevious, "change" => $this->calculatePercentageChange($renewalCurrent, $renewalPrevious)];
+                
+                $lifespanCurrent = Cache::remember('lifespan:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
+                    fn() => $this->calculateAverageLifespan($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+                $lifespanPrevious = ($compStartBound && $compEndExclusive)
+                    ? Cache::remember('lifespan:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
+                        fn() => $this->calculateAverageLifespan($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator))
+                    : 0;
+                $averageLifespan = ["current" => $lifespanCurrent, "previous" => $lifespanPrevious, "change" => $this->calculatePercentageChange($lifespanCurrent, $lifespanPrevious)];
+                
+                $reactivationCurrent = $this->calculateReactivationRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
+                $reactivationPrevious = ($compStartBound && $compEndExclusive)
+                    ? $this->calculateReactivationRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
+                    : 0;
+                $reactivationRate = ["current" => $reactivationCurrent, "previous" => $reactivationPrevious, "change" => $this->calculatePercentageChange($reactivationCurrent, $reactivationPrevious)];
+            } catch (\Exception $e) { Log::error("renewal/lifespan/reactivation - ECHEC: " . $e->getMessage()); }
+            $elapsed = microtime(true) - $methodStart;
+            $timeExceeded = ($elapsed > $maxTimeSec);
+        }
+        
+        // Statistiques quotidiennes
+        $dailyStatistics = [];
+        $dailyStatisticsComparison = [];
+        if (!$timeExceeded) {
+            try {
+                $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
+            } catch (\Exception $e) {
+                Log::error("dailyStatistics - ECHEC: " . $e->getMessage());
+            }
+            if ($compStartBound && $compEndExclusive) {
+                try {
+                    $dailyStatisticsComparison = $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator);
+                } catch (\Exception $e) {
+                    Log::error("dailyStatisticsComparison - ECHEC: " . $e->getMessage());
+                }
+            }
+        }
+        
         $timweTransactionsByUser = [];
-        // $periodDays = $startBound->diffInDays($endExclusive);
-        // if ($periodDays <= 90) {
-        //     $timweTransactionsByUser = $this->getTimweTransactionsByUser($startBound, $endExclusive);
-        // }
         
         // Grouper les statistiques Timwe par mois avec détails quotidiens
         $timweMonthlyStats = $this->groupTimweStatsByMonth($dailyStatistics);
         $timweMonthlyStatsComparison = $this->groupTimweStatsByMonth($dailyStatisticsComparison);
         
-        // Grouper les statistiques Ooredoo par mois avec détails quotidiens
-        $ooredooMonthlyStats = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics'] ?? []);
-        $ooredooMonthlyStatsComparison = $this->groupOoredooStatsByMonth($ooredooStats['daily_statistics_comparison'] ?? []);
+        // Réinitialiser le timeout MySQL
+        try { DB::statement("SET SESSION max_execution_time=0"); } catch (\Exception $e) { /* ignore */ }
+        
+        $totalElapsed = round((microtime(true) - $methodStart) * 1000);
+        Log::info("getSubscriptionsData - COMPLET en {$totalElapsed}ms" . ($timeExceeded ? " (données partielles)" : ""));
         
         return [
             "daily_activations" => $dailyActivations,
@@ -1534,23 +1680,29 @@ class DashboardService
     {
         try {
             $periodDays = $startBound->diffInDays($endExclusive);
-            
-            // Pour les longues périodes, utiliser des intervalles plus grands
-            $intervalDays = max(1, intval($periodDays / 30)); // Maximum 30 points
-            
-            // Requête optimisée : récupérer toutes les données en une seule fois
+            $intervalDays = max(1, intval($periodDays / 30));
             $endDateStr = $endExclusive->toDateString();
-            $activationsQuery = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
-                ->select(
-                    DB::raw("DATE(ca.client_abonnement_creation) as date"),
-                    DB::raw("COUNT(*) as activated"),
-                    DB::raw("SUM(CASE WHEN ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration > '{$endDateStr}' THEN 1 ELSE 0 END) as active")
-                )
-                ->where('ca.client_abonnement_creation', '>=', $startBound)
-                ->where('ca.client_abonnement_creation', '<', $endExclusive);
             
-            $this->applyOperatorFilter($activationsQuery, $selectedOperator);
+            // Construire la requête - SKIP le JOIN inutile quand opérateur=ALL
+            if ($selectedOperator === 'ALL' || empty($selectedOperator)) {
+                $activationsQuery = DB::table('client_abonnement as ca')
+                    ->selectRaw(
+                        "DATE(ca.client_abonnement_creation) as date, COUNT(*) as activated, SUM(CASE WHEN ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration > ? THEN 1 ELSE 0 END) as active",
+                        [$endDateStr]
+                    )
+                    ->where('ca.client_abonnement_creation', '>=', $startBound)
+                    ->where('ca.client_abonnement_creation', '<', $endExclusive);
+            } else {
+                $activationsQuery = DB::table('client_abonnement as ca')
+                    ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+                    ->selectRaw(
+                        "DATE(ca.client_abonnement_creation) as date, COUNT(*) as activated, SUM(CASE WHEN ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration > ? THEN 1 ELSE 0 END) as active",
+                        [$endDateStr]
+                    )
+                    ->where('ca.client_abonnement_creation', '>=', $startBound)
+                    ->where('ca.client_abonnement_creation', '<', $endExclusive);
+                $this->applyOperatorFilter($activationsQuery, $selectedOperator);
+            }
             
             $results = $activationsQuery
                 ->groupBy(DB::raw("DATE(ca.client_abonnement_creation)"))
@@ -1558,7 +1710,6 @@ class DashboardService
                 ->get()
                 ->keyBy('date');
             
-            // Générer la série complète avec intervalles adaptatifs
             $trend = [];
             $cursor = $startBound->copy();
             $endDate = $endExclusive->copy()->subDay();
@@ -1566,26 +1717,15 @@ class DashboardService
             while ($cursor->lte($endDate)) {
                 $dateStr = $cursor->toDateString();
                 $result = $results->get($dateStr);
-                
-                if ($result) {
-                    $rate = $result->activated > 0 ? round(($result->active / $result->activated) * 100, 1) : 100.0;
-                } else {
-                    $rate = 100.0; // Pas d'activations ce jour = 100% de rétention
-                }
-                
-                $trend[] = [
-                    'date' => $dateStr,
-                    'rate' => $rate,
-                    'value' => $rate
-                ];
-                
-                // Utiliser l'intervalle calculé pour les longues périodes
+                $rate = ($result && $result->activated > 0) ? round(($result->active / $result->activated) * 100, 1) : 100.0;
+                $trend[] = ['date' => $dateStr, 'rate' => $rate, 'value' => $rate];
                 $cursor->addDays($intervalDays);
             }
             
+            Log::info("calculateRetentionTrendOptimized - OK", ['points' => count($trend)]);
             return $trend;
         } catch (\Exception $e) {
-            Log::error("Erreur lors du calcul de la tendance de rétention: " . $e->getMessage());
+            Log::error("Erreur rétention (timeout ou erreur SQL): " . $e->getMessage());
             return [];
         }
     }
@@ -1609,60 +1749,42 @@ class DashboardService
     private function calculateQuarterlyActiveLocations(string $endDate): array
     {
         try {
+            // Version optimisée: une seule requête pour le total actuel,
+            // pas de boucle sur chaque trimestre (économise 14 requêtes DB)
+            $hasPartenerActive = Cache::remember('schema:partner:partener_active', 86400, function() {
+                return Schema::hasColumn('partner', 'partener_active');
+            });
+            
+            $countLocations = 0;
+            if ($hasPartenerActive) {
+                $countLocations = DB::table('partner_location')
+                    ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
+                    ->where('partner.partener_active', 1)
+                    ->distinct('partner_location.partner_location_id')
+                    ->count('partner_location.partner_location_id');
+            } else {
+                $countLocations = DB::table('partner_location')
+                    ->distinct('partner_location.partner_location_id')
+                    ->count('partner_location.partner_location_id');
+            }
+            
+            // Générer la série trimestrielle avec le même total (données statiques)
             $quarterlyActiveLocations = [];
             $quarterCursor = Carbon::parse($endDate)->firstOfQuarter()->subQuarters(7);
             $quarterEnd = Carbon::parse($endDate)->firstOfQuarter();
             
             while ($quarterCursor->lte($quarterEnd)) {
-                $qEnd = $quarterCursor->copy()->endOfQuarter();
-                
-                // Calculer les points de vente actifs pour ce trimestre spécifique
-                $countLocations = 0;
-                try {
-                    if (Schema::hasColumn('partner', 'partener_active')) {
-                        $countLocations = DB::table('partner_location')
-                            ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
-                            ->where('partner.partener_active', 1)
-                            ->when(Schema::hasColumn('partner_location', 'created_at'), function($q) use ($qEnd) {
-                                return $q->where('partner_location.created_at', '<=', $qEnd);
-                            })
-                            ->distinct('partner_location.partner_location_id')
-                            ->count('partner_location.partner_location_id');
-                    } else {
-                        $countLocations = DB::table('partner_location')
-                            ->when(Schema::hasColumn('partner_location', 'created_at'), function($q) use ($qEnd) {
-                                return $q->where('partner_location.created_at', '<=', $qEnd);
-                            })
-                            ->distinct('partner_location.partner_location_id')
-                            ->count('partner_location.partner_location_id');
-                    }
-                } catch (\Exception $e) {
-                    Log::warning("Erreur calcul locations pour {$quarterCursor->format('Y-Q')}: " . $e->getMessage());
-                    // Utiliser le total actuel en fallback
-                    if (Schema::hasColumn('partner', 'partener_active')) {
-                        $countLocations = DB::table('partner_location')
-                            ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
-                            ->where('partner.partener_active', 1)
-                            ->distinct('partner_location.partner_location_id')
-                            ->count('partner_location.partner_location_id');
-                    } else {
-                        $countLocations = DB::table('partner_location')
-                            ->distinct('partner_location.partner_location_id')
-                            ->count('partner_location.partner_location_id');
-                    }
-                }
-                
                 $quarterlyActiveLocations[] = [
                     'quarter' => $quarterCursor->format('Y') . '-Q' . $quarterCursor->quarter,
                     'locations' => (int)$countLocations
                 ];
-                
                 $quarterCursor->addQuarter();
             }
             
+            Log::info("calculateQuarterlyActiveLocations - OK", ['quarters' => count($quarterlyActiveLocations), 'locations' => $countLocations]);
             return $quarterlyActiveLocations;
         } catch (\Exception $e) {
-            Log::error("Erreur lors du calcul des points de vente actifs: " . $e->getMessage());
+            Log::error("Erreur calcul points de vente: " . $e->getMessage());
             return [];
         }
     }
@@ -1674,30 +1796,21 @@ class DashboardService
     {
         try {
             $periodDays = $startBound->diffInDays($endExclusive);
-            
-            // Limiter à 1000 résultats maximum pour éviter les timeouts
             $limit = min(1000, max(100, intval($periodDays * 10)));
             
+            // Requête simplifiée SANS la sous-requête corrélée sur transactions_history
+            // (c'était la cause du timeout de 30s)
             $query = DB::table('client_abonnement as ca')
                 ->leftJoin('client as c', 'ca.client_id', '=', 'c.client_id')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->select([
                     'ca.client_id',
                     'c.client_prenom as first_name',
                     'c.client_nom as last_name',
                     'c.client_telephone as phone',
-                    'cpm.country_payments_methods_name as operator',
                     'ca.client_abonnement_creation as activation_date',
                     'ca.client_abonnement_expiration as end_date',
                     DB::raw("CASE 
-                        -- Pour Timwe : 3 jours = Trial, ~30 jours = Mensuel
-                        WHEN LOWER(TRIM(cpm.country_payments_methods_name)) LIKE '%timwe%' THEN
-                            CASE 
-                                WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) = 3 THEN 'Trial'
-                                WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) BETWEEN 20 AND 40 THEN 'Mensuel'
-                                ELSE 'Mensuel'
-                            END
-                        -- Autres opérateurs : logique par durée
+                        WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) <= 3 THEN 'Trial'
                         WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) = 1 THEN 'Journalier'
                         WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) BETWEEN 20 AND 40 THEN 'Mensuel'
                         WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) >= 330 THEN 'Annuel'
@@ -1705,127 +1818,43 @@ class DashboardService
                     END as plan")
                 ])
                 ->where(function($q) use ($startBound, $endExclusive) {
-                    // Afficher les abonnements créés dans la période OU actifs à la fin de la période
                     $q->where(function($subQ) use ($startBound, $endExclusive) {
                         $subQ->where('ca.client_abonnement_creation', '>=', $startBound)
                              ->where('ca.client_abonnement_creation', '<', $endExclusive);
                     })
                     ->orWhere(function($subQ) use ($endExclusive) {
-                        // Abonnements actifs (expiration NULL ou >= endExclusive)
-                        $subQ->where(function($activeQ) use ($endExclusive) {
-                            $activeQ->whereNull('ca.client_abonnement_expiration')
-                                    ->orWhere('ca.client_abonnement_expiration', '>=', $endExclusive);
-                        });
+                        $subQ->whereNull('ca.client_abonnement_expiration')
+                             ->orWhere('ca.client_abonnement_expiration', '>=', $endExclusive);
                     });
                 });
             
-            $this->applyOperatorFilter($query, $selectedOperator);
+            // Ajouter le nom opérateur + JOIN conditionnel
+            if ($selectedOperator !== 'ALL' && !empty($selectedOperator)) {
+                $query->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id');
+                $query->addSelect('cpm.country_payments_methods_name as operator');
+                $this->applyOperatorFilter($query, $selectedOperator);
+            } else {
+                $query->addSelect(DB::raw("(SELECT cpm2.country_payments_methods_name FROM country_payments_methods cpm2 WHERE cpm2.country_payments_methods_id = ca.country_payments_methods_id LIMIT 1) as operator"));
+            }
             
-            // OPTIMISATION: Ne pas compter le total si on limite les résultats (gain de temps)
-            // Le count() sur 80k+ lignes est très lent et inutile si on limite à 140
-            // Compter seulement si vraiment nécessaire (pour l'UI pagination)
-            $totalCount = null; // Désactivé pour améliorer les performances
+            $totalCount = $query->count();
             
-            // Limiter les résultats directement (beaucoup plus rapide)
+            Log::info("getSubscriptionDetails - Total abonnements", [
+                'totalCount' => $totalCount, 'operator' => $selectedOperator
+            ]);
+            
             $results = $query->orderByDesc('ca.client_abonnement_creation')->limit($limit)->get();
             
-            Log::info("getSubscriptionDetails - Abonnements récupérés", [
-                'returnedCount' => $results->count(),
-                'operator' => $selectedOperator,
-                'period' => $startBound->toDateString() . ' - ' . $endExclusive->copy()->subDay()->toDateString()
-            ]);
-            
-            // PPID constants pour Timwe
-            $billingPpid = env('TIMWE_BILLING_PPID', '63980');
-            $trial3DaysPpid = env('TIMWE_FREE_TRIAL_PPID_3_DAYS', '63981');
-            $trial30DaysPpid = env('TIMWE_FREE_TRIAL_PPID_30_DAYS', '63982');
-            
-            // Pour chaque abonnement Timwe, récupérer le pricepointId depuis transactions_history
-            $clientAbonnementIds = $results->pluck('client_abonnement_id')->toArray();
-            $clientIds = $results->pluck('client_id')->unique()->toArray();
-            
-            // Récupérer les transactions pour déterminer le pricepointId
-            $transactions = DB::table('transactions_history')
-                ->whereIn('client_id', $clientIds)
-                ->where(function($q) {
-                    $q->where('status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                      ->orWhere('status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
-                })
-                ->select('client_id', 'result', 'created_at')
-                ->orderBy('created_at', 'asc')
-                ->get()
-                ->groupBy('client_id')
-                ->map(function($clientTransactions) {
-                    // Prendre la première transaction pour chaque client
-                    return $clientTransactions->first();
-                });
-            
-            // Convertir en tableau et déterminer le plan basé sur la DURÉE (prioritaire) puis pricepointId
-            $dataArray = $results->map(function($item) use ($transactions, $billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
-                // Convertir l'objet stdClass en tableau associatif
+            $dataArray = $results->map(function($item) {
                 $array = (array)$item;
-                // S'assurer que client_id est présent même si null
-                if (!isset($array['client_id'])) {
-                    $array['client_id'] = null;
-                }
-                
-                // Calculer la durée de cet abonnement spécifique
-                // ⚠️ Les champs sont: activation_date (start) et end_date (end)
-                $activationDate = $array['activation_date'] ?? null;
-                $endDate = $array['end_date'] ?? null;
-                $duration = 0;
-                
-                if ($activationDate && $endDate) {
-                    try {
-                        $start = Carbon::parse($activationDate);
-                        $end = Carbon::parse($endDate);
-                        $duration = $start->diffInDays($end);
-                    } catch (\Exception $e) {
-                        $duration = 0;
-                    }
-                }
-                
-                $operator = $array['operator'] ?? '';
-                
-                // ⭐ LOGIQUE CORRIGÉE: PRIORITÉ à la DURÉE
-                // 1. Durée = 3 jours (1-5) → TOUJOURS Trial gratuit (0 TND)
-                // 2. Durée ≈ 30 jours (20-40) → TOUJOURS Mensuel payant (3 TND)
-                // 3. Autres durées → Utiliser le PPID
-                
-                if ($duration >= 1 && $duration <= 5) {
-                    // Durée courte (1-5 jours) = Trial gratuit
-                    $array['plan'] = 'Trial';
-                    $array['price'] = 0;
-                } elseif ($duration >= 20 && $duration <= 40) {
-                    // Durée ~30 jours = Mensuel payant
-                    $array['plan'] = 'Mensuel';
-                    // Garder le prix de la DB (3 TND)
-                } elseif (stripos($operator, 'timwe') !== false && isset($array['client_id'])) {
-                    // Pour autres durées Timwe, utiliser le PPID
-                    $clientTransaction = $transactions->get($array['client_id']);
-                    if ($clientTransaction && $clientTransaction->result) {
-                        $ppid = $this->extractPricepointId($clientTransaction->result);
-                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
-                            $array['plan'] = 'Trial';
-                            $array['price'] = 0;
-                        } elseif ($ppid === $billingPpid) {
-                            $array['plan'] = 'Mensuel';
-                        }
-                    }
-                }
-                
+                if (!isset($array['client_id'])) $array['client_id'] = null;
                 return $array;
             })->toArray();
-            
-            Log::info("getSubscriptionDetails - Données retournées", [
-                'count' => count($dataArray),
-                'sample_client_id' => $dataArray[0]['client_id'] ?? 'N/A' ?? null
-            ]);
             
             return [
                 'data' => $dataArray,
                 'meta' => [
-                    'total_count' => $totalCount ?? $results->count(), // Utiliser le count des résultats si totalCount n'est pas disponible
+                    'total_count' => $totalCount,
                     'displayed_count' => $results->count(),
                     'limit' => $limit,
                     'execution_time_ms' => 0,
@@ -1833,7 +1862,7 @@ class DashboardService
                 ]
             ];
         } catch (\Exception $e) {
-            Log::error("Erreur lors de la récupération des détails des abonnements: " . $e->getMessage());
+            Log::error("Erreur getSubscriptionDetails: " . $e->getMessage());
             return [
                 'data' => [],
                 'meta' => [
@@ -1886,6 +1915,43 @@ class DashboardService
             
         } catch (\Exception $e) {
             return null;
+        }
+    }
+    
+    /**
+     * Extrait le totalCharged depuis le champ result JSON
+     * 
+     * @param string|null $result JSON string du champ result
+     * @return float Le montant totalCharged ou 0 si non trouvé
+     */
+    private function extractTotalCharged($result): float
+    {
+        if (empty($result)) {
+            return 0.0;
+        }
+        
+        try {
+            $data = is_string($result) ? json_decode($result, true) : $result;
+            if (!$data || !is_array($data)) {
+                return 0.0;
+            }
+            
+            // Chercher totalCharged directement
+            if (isset($data['totalCharged']) && is_numeric($data['totalCharged'])) {
+                return floatval($data['totalCharged']);
+            }
+            
+            // Chercher dans des variantes
+            $variants = ['total_charged', 'totalCharged', 'totalChargedAmount', 'chargedAmount'];
+            foreach ($variants as $variant) {
+                if (isset($data[$variant]) && is_numeric($data[$variant])) {
+                    return floatval($data[$variant]);
+                }
+            }
+            
+            return 0.0;
+        } catch (\Exception $e) {
+            return 0.0;
         }
     }
     
@@ -1944,47 +2010,6 @@ class DashboardService
     }
     
     /**
-     * Extrait le totalCharged du champ result JSON
-     * 
-     * @param string|null $result JSON string du champ result
-     * @return float Le totalCharged en millimes (0 si non trouvé)
-     */
-    private function extractTotalCharged($result): float
-    {
-        if (empty($result)) {
-            return 0.0;
-        }
-        
-        try {
-            $data = is_string($result) ? json_decode($result, true) : $result;
-            if (!$data || !is_array($data)) {
-                return 0.0;
-            }
-            
-            // Chercher totalCharged dans différentes structures possibles
-            $fields = ['totalCharged', 'total_charged', 'totalChargedAmount', 'charged_amount'];
-            
-            foreach ($fields as $field) {
-                if (isset($data[$field])) {
-                    return floatval($data[$field]);
-                }
-            }
-            
-            // Chercher dans des structures imbriquées
-            if (isset($data['response']['totalCharged'])) {
-                return floatval($data['response']['totalCharged']);
-            }
-            if (isset($data['data']['totalCharged'])) {
-                return floatval($data['data']['totalCharged']);
-            }
-            
-            return 0.0;
-        } catch (\Exception $e) {
-            return 0.0;
-        }
-    }
-    
-    /**
      * Calcule le taux de facturation Timwe uniquement pour les utilisateurs Timwe
      * Basé sur client_abonnement (source principale) et transactions_history (pour vérifier les facturations)
      * 
@@ -1998,69 +2023,12 @@ class DashboardService
      * 
      * @return array ['rate' => float, 'total_clients' => int, 'billed_clients' => int, 'total_billings' => int]
      */
-    /**
-     * CA BigDeal HT (TND) = Nbfacturation × prix selon paliers du contrat.
-     */
-    private function timweCaBigdealHtFromBillings(int $nbFacturation): float
-    {
-        if ($nbFacturation < 100000) {
-            return $nbFacturation * 1.2;
-        }
-        if ($nbFacturation < 250000) {
-            return $nbFacturation * 1.0;
-        }
-        return 250000.0;
-    }
-
     private function calculateTimweBillingRate(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
     {
         try {
-            // PRIORITÉ : Utiliser les tables de diagnostic Timwe (mêmes données que la page Diagnostic)
-            $startDate = $startBound->format('Y-m-d');
-            $endDate = $endExclusive->copy()->subDay()->format('Y-m-d');
-            
-            // Vérifier si les données existent dans timwe_diagnostic_daily_summary
-            $hasDiagnosticData = DB::table('timwe_diagnostic_daily_summary')
-                ->whereBetween('stat_date', [$startDate, $endDate])
-                ->exists();
-            
-            if ($hasDiagnosticData) {
-                // Utiliser les données de diagnostic (ALIGNEMENT AVEC LE DIAGNOSTIC TIMWE)
-                $summary = DB::table('timwe_diagnostic_daily_summary')
-                    ->whereBetween('stat_date', [$startDate, $endDate])
-                    ->selectRaw('
-                        COALESCE(SUM(total_transactions), 0) as total_transactions,
-                        COALESCE(SUM(total_billed), 0) as total_billed,
-                        COALESCE(SUM(total_revenue_tnd), 0) as total_revenue_tnd
-                    ')
-                    ->first();
-                
-                $uniquePhones = DB::table('timwe_diagnostic_daily_phone')
-                    ->whereBetween('stat_date', [$startDate, $endDate])
-                    ->selectRaw('COUNT(DISTINCT client_telephone) as count')
-                    ->value('count');
-                
-                $totalAttempts = (int) ($summary->total_transactions ?? 0);
-                $totalBilled = (int) ($summary->total_billed ?? 0);
-                $totalRevenue = (float) ($summary->total_revenue_tnd ?? 0);
-                
-                // BILLING RATE GLOBAL = (total_billed / total_attempts) × 100
-                // EXACTEMENT la même formule que le Diagnostic Timwe (ligne 196 de TimweDiagnosticApiService)
-                $billingRate = $totalAttempts > 0 ? round(($totalBilled / $totalAttempts) * 100, 2) : 0;
-                
-                return [
-                    'rate' => $billingRate,
-                    'total_clients' => $uniquePhones, // Numéros uniques
-                    'billed_clients' => $totalBilled, // Total facturé
-                    'total_billings' => $totalBilled, // Même valeur
-                    'total_revenue' => $totalRevenue, // Revenu TND
-                    'total_attempts' => $totalAttempts, // Tentatives totales
-                    'source' => 'diagnostic' // Indicateur de la source
-                ];
-            }
-            
-            // Fallback : Essayer timwe_daily_stats (ancien cache)
-            $stats = TimweDailyStat::getStatsForPeriod($startBound, $endExclusive->copy()->subDay());
+            // Essayer d'utiliser la table de cache d'abord
+            $endDate = $endExclusive->copy()->subDay(); // endExclusive -1 jour pour avoir la vraie fin
+            $stats = TimweDailyStat::getStatsForPeriod($startBound, $endDate);
 
             if ($stats->isNotEmpty()) {
                 // Utiliser les données de la table de cache
@@ -2069,24 +2037,26 @@ class DashboardService
                 return [
                     'rate' => $lastDayStat->billing_rate,
                     'total_clients' => $lastDayStat->total_clients,
-                    'billed_clients' => 0,
-                    'total_billings' => $stats->sum('total_billings'),
-                    'source' => 'timwe_daily_stats'
+                    'billed_clients' => 0, // Non utilisé dans l'interface
+                    'total_billings' => $stats->sum('total_billings')
                 ];
             }
 
-            // Si pas de données dans le cache, vérifier la période
+            // Si pas de données dans le cache, retourner 0 et loguer un avertissement
             $periodDays = $startBound->diffInDays($endExclusive);
+            Log::warning("calculateTimweBillingRate - Aucune donnée dans le cache", [
+                'period_days' => $periodDays,
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d'),
+                'suggestion' => 'Exécuter: php artisan timwe:calculate-historical --from=' . $startBound->format('Y-m-d') . ' --to=' . $endDate->format('Y-m-d')
+            ]);
             
-            // Pour les périodes > 90 jours, ne pas calculer (trop long)
-            if ($periodDays > 90) {
-                return [
-                    'rate' => 0.0,
-                    'total_clients' => 0,
-                    'billed_clients' => 0,
-                    'total_billings' => 0
-                ];
-            }
+            return [
+                'rate' => 0.0,
+                'total_clients' => 0,
+                'billed_clients' => 0,
+                'total_billings' => 0
+            ];
             
             
             // PPID constants
@@ -2167,18 +2137,15 @@ class DashboardService
                 ->select('th.client_id', 'th.result', 'th.transaction_history_id')
                 ->get();
             
-            // Filtrer les transactions avec pricepointId = 63980, mnoDeliveryCode = DELIVERED ET totalCharged > 0
-            // CORRECTION: Ajouter la condition totalCharged > 0 pour être sûr que c'est une facturation réelle
+            // Filtrer les transactions avec pricepointId = 63980 (billing) ET mnoDeliveryCode = DELIVERED
             $billedClientIds = [];
             $totalBillings = 0;
             foreach ($transactions as $transaction) {
                 $ppid = $this->extractPricepointId($transaction->result);
                 $isDelivered = $this->isTransactionDelivered($transaction->result);
-                $totalCharged = $this->extractTotalCharged($transaction->result);
                 
-                // Seules les transactions avec pricepointId = 63980, mnoDeliveryCode = DELIVERED ET totalCharged > 0 sont comptées
-                // Logiquement totalCharged devrait être = 3000 millimes (3 TND) pour une facturation
-                if ($ppid === $billingPpid && $isDelivered && $totalCharged > 0) {
+                // Seules les transactions avec pricepointId = 63980 ET mnoDeliveryCode = DELIVERED sont comptées
+                if ($ppid === $billingPpid && $isDelivered) {
                     // Compter le client comme facturé (une seule fois par client)
                     $billedClientIds[$transaction->client_id] = true;
                     // Compter le nombre total de facturations
@@ -2243,6 +2210,21 @@ class DashboardService
         try {
             Log::info("getUserSubscriptions - Début", ['client_id' => $clientId]);
             
+            // PPID constants pour Timwe
+            $billingPpid = env('TIMWE_BILLING_PPID', '63980');
+            $trial3DaysPpid = env('TIMWE_FREE_TRIAL_PPID_3_DAYS', '63981');
+            $trial30DaysPpid = env('TIMWE_FREE_TRIAL_PPID_30_DAYS', '63982');
+            
+            // Subquery optimisée pour récupérer toutes les transactions du client
+            $transactionsSubquery = DB::table('transactions_history')
+                ->select(['result', 'created_at'])
+                ->where('client_id', $clientId)
+                ->where(function($q) {
+                    $q->where('status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
+                      ->orWhere('status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+                })
+                ->orderBy('created_at', 'asc');
+            
             $subscriptions = DB::table('client_abonnement as ca')
                 ->leftJoin('client as c', 'ca.client_id', '=', 'c.client_id')
                 ->leftJoin('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
@@ -2283,68 +2265,62 @@ class DashboardService
                 ->orderByDesc('ca.client_abonnement_creation')
                 ->get();
             
-            // PPID constants pour Timwe
-            $billingPpid = env('TIMWE_BILLING_PPID', '63980');
-            $trial3DaysPpid = env('TIMWE_FREE_TRIAL_PPID_3_DAYS', '63981');
-            $trial30DaysPpid = env('TIMWE_FREE_TRIAL_PPID_30_DAYS', '63982');
+            // Récupérer les transactions pour déterminer le pricepointId (une seule fois pour tous les abonnements)
+            $transactions = $transactionsSubquery->get();
             
-            // Récupérer les transactions pour déterminer le pricepointId
-            $transactions = DB::table('transactions_history')
-                ->where('client_id', $clientId)
-                ->where(function($q) {
-                    $q->where('status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                      ->orWhere('status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
-                })
-                ->select('result', 'created_at')
-                ->orderBy('created_at', 'asc')
-                ->get();
-            
-            // Corriger le plan basé sur la DURÉE (prioritaire) puis pricepointId
+            // Corriger le plan basé sur pricepointId pour chaque abonnement Timwe
+            // ET corriger le prix pour les plans Trial (doit être 0)
             $subscriptionsArray = $subscriptions->map(function($subscription) use ($transactions, $billingPpid, $trial3DaysPpid, $trial30DaysPpid) {
                 $subArray = (array)$subscription;
                 $operator = $subArray['operator'] ?? '';
-                
-                // Calculer la durée de cet abonnement spécifique
-                // ⚠️ Les champs sont: activation_date (start) et end_date (end)
                 $activationDate = $subArray['activation_date'] ?? null;
                 $endDate = $subArray['end_date'] ?? null;
-                $duration = 0;
                 
-                if ($activationDate && $endDate) {
-                    try {
-                        $start = Carbon::parse($activationDate);
-                        $end = Carbon::parse($endDate);
-                        $duration = $start->diffInDays($end);
-                    } catch (\Exception $e) {
-                        $duration = 0;
-                    }
-                }
-                
-                // ⭐ LOGIQUE CORRIGÉE: PRIORITÉ à la DURÉE
-                // 1. Durée = 3 jours (1-5) → TOUJOURS Trial gratuit (0 TND)
-                // 2. Durée ≈ 30 jours (20-40) → TOUJOURS Mensuel payant (3 TND)
-                // 3. Autres durées → Utiliser le PPID
-                
-                if ($duration >= 1 && $duration <= 5) {
-                    // Durée courte (1-5 jours) = Trial gratuit
-                    $subArray['plan'] = 'Trial';
-                    $subArray['price'] = 0;
-                } elseif ($duration >= 20 && $duration <= 40) {
-                    // Durée ~30 jours = Mensuel payant
-                    $subArray['plan'] = 'Mensuel';
-                    // Garder le prix de la DB (3 TND)
-                } elseif (stripos($operator, 'timwe') !== false && $transactions->isNotEmpty()) {
-                    // Pour autres durées Timwe, utiliser le PPID
-                    $firstTransaction = $transactions->first();
-                    if ($firstTransaction && $firstTransaction->result) {
-                        $ppid = $this->extractPricepointId($firstTransaction->result);
-                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                // Pour Timwe, déterminer le plan basé sur pricepointId ET la durée de l'abonnement
+                if (stripos($operator, 'timwe') !== false && $transactions->isNotEmpty() && $activationDate && $endDate) {
+                    // Calculer la durée de l'abonnement
+                    $duration = Carbon::parse($activationDate)->diffInDays(Carbon::parse($endDate));
+                    
+                    // Trouver la transaction la plus proche de la date d'activation
+                    $relevantTransaction = $transactions->sortBy(function($t) use ($activationDate) {
+                        return abs(Carbon::parse($t->created_at)->diffInSeconds(Carbon::parse($activationDate)));
+                    })->first();
+                    
+                    if ($relevantTransaction && $relevantTransaction->result) {
+                        $ppid = $this->extractPricepointId($relevantTransaction->result);
+                        
+                        // Logique finale : PRIORITÉ à la DURÉE (3j ET 30j) puis PPID
+                        // 1. Durée = 3 jours → TOUJOURS Trial gratuit
+                        // 2. Durée ≈ 30 jours → TOUJOURS Mensuel payant (peu importe PPID)
+                        //    → Un cycle de 30j est un abonnement Mensuel complet
+                        // 3. Autres durées → Utiliser le PPID pour déterminer
+                        
+                        if ($duration === 3) {
+                            // Durée = 3 jours → TOUJOURS Trial gratuit
+                            $subArray['plan'] = 'Trial';
+                            $subArray['price'] = 0;
+                        } elseif ($duration >= 20 && $duration <= 40) {
+                            // Durée ≈ 30 jours → TOUJOURS Mensuel payant (peu importe PPID)
+                            $subArray['plan'] = 'Mensuel';
+                            // Prix reste celui de la base de données (3 DT)
+                        } elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) {
+                            // PPID Trial pour autres durées → Trial gratuit
                             $subArray['plan'] = 'Trial';
                             $subArray['price'] = 0;
                         } elseif ($ppid === $billingPpid) {
+                            // PPID Billing pour autres durées → Mensuel payant
                             $subArray['plan'] = 'Mensuel';
+                        } else {
+                            // PPID inconnu → fallback sur Trial
+                            $subArray['plan'] = 'Trial';
+                            $subArray['price'] = 0;
                         }
                     }
+                }
+                
+                // ⭐ CORRECTION DU PRIX : Les plans Trial sont toujours gratuits (0 TND)
+                if (isset($subArray['plan']) && $subArray['plan'] === 'Trial') {
+                    $subArray['price'] = 0;
                 }
                 
                 return $subArray;
@@ -2381,32 +2357,48 @@ class DashboardService
         try {
             // Essayer d'utiliser la table de cache d'abord
             $endDate = $endExclusive->copy()->subDay();
+            
+            Log::info("calculateOoredooBillingRate - DÉBUT", [
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d')
+            ]);
+            
             $stats = \App\Models\OoredooDailyStat::getStatsForPeriod($startBound, $endDate);
+
+            Log::info("calculateOoredooBillingRate - Stats récupérées", [
+                'count' => $stats->count()
+            ]);
 
             if ($stats->isNotEmpty()) {
                 // Utiliser les données de la table de cache
                 $lastDayStat = $stats->last();
                 
-                return [
+                $result = [
                     'rate' => $lastDayStat->billing_rate,
                     'total_clients' => $lastDayStat->total_clients,
                     'billed_clients' => 0,
                     'total_billings' => $stats->sum('total_billings')
                 ];
+                
+                Log::info("calculateOoredooBillingRate - RETOUR avec données", $result);
+                return $result;
             }
 
-            // Si pas de données dans le cache, vérifier la période
+            // Si pas de données dans le cache, retourner 0 et loguer un avertissement
             $periodDays = $startBound->diffInDays($endExclusive);
+            Log::warning("calculateOoredooBillingRate - Aucune donnée dans le cache", [
+                'period_days' => $periodDays,
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d'),
+                'suggestion' => 'Exécuter: php artisan ooredoo:calculate-historical --start-date=' . $startBound->format('Y-m-d') . ' --end-date=' . $endDate->format('Y-m-d')
+            ]);
             
-            // Pour les périodes > 90 jours, ne pas calculer (trop long)
-            if ($periodDays > 90) {
-                return [
-                    'rate' => 0.0,
-                    'total_clients' => 0,
-                    'billed_clients' => 0,
-                    'total_billings' => 0
-                ];
-            }
+            return [
+                'rate' => 0.0,
+                'total_clients' => 0,
+                'billed_clients' => 0,
+                'total_billings' => 0
+            ];
 
             // Récupérer les IDs d'opérateurs Ooredoo
             $ooredooOperatorIds = DB::table('country_payments_methods')
@@ -2473,6 +2465,7 @@ class DashboardService
 
     /**
      * Récupère les statistiques quotidiennes Ooredoo/DGV pour affichage dans le tableau
+     * OPTIMISATION: Les données sont pré-calculées dans ooredoo_daily_stats, pas de timeout
      */
     private function getOoredooDailyStatistics(Carbon $startBound, Carbon $endExclusive): array
     {
@@ -2480,23 +2473,22 @@ class DashboardService
             $endDate = $endExclusive->copy()->subDay();
             $periodDays = $startBound->diffInDays($endDate) + 1;
             
-            // Pour les TRÈS longues périodes (> 730 jours), limiter à 730 jours max
-            // Note: Les données viennent de la table de cache ooredoo_daily_stats, donc la lecture est rapide
-            if ($periodDays > 730) {
-                Log::info("getOoredooDailyStatistics - Période très longue détectée, limitation à 730 jours", [
-                    'period_days' => $periodDays,
-                    'original_start' => $startBound->format('Y-m-d'),
-                    'original_end' => $endDate->format('Y-m-d')
-                ]);
-                $startBound = $endDate->copy()->subDays(729); // 730 jours max (2 ans)
-            }
+            Log::info("getOoredooDailyStatistics - Récupération depuis cache", [
+                'period_days' => $periodDays,
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d')
+            ]);
             
+            // Récupération depuis la table de cache - pas de limitation de période
+            // Les données sont pré-calculées quotidiennement via les commandes artisan
             $stats = \App\Models\OoredooDailyStat::getStatsForPeriod($startBound, $endDate);
 
             if ($stats->isEmpty()) {
+                Log::warning("getOoredooDailyStatistics - Aucune donnée trouvée, exécuter: php artisan ooredoo:calculate-historical");
                 return [];
             }
 
+            Log::info("getOoredooDailyStatistics - Stats récupérées: " . $stats->count() . " jours");
             return $stats->toArray();
             
         } catch (\Exception $e) {
@@ -2529,26 +2521,24 @@ class DashboardService
             $endDate = $endExclusive->copy()->subDay();
             $periodDays = $startBound->diffInDays($endDate) + 1;
             
-            // Pour les TRÈS longues périodes (> 730 jours), limiter à 730 jours max
-            // Note: Les données viennent de la table de cache timwe_daily_stats, donc la lecture est rapide
-            if ($periodDays > 730) {
-                Log::info("getDailyStatistics - Période très longue détectée, limitation à 730 jours", [
-                    'period_days' => $periodDays,
-                    'original_start' => $startBound->format('Y-m-d'),
-                    'original_end' => $endDate->format('Y-m-d')
-                ]);
-                $startBound = $endDate->copy()->subDays(729); // 730 jours max (2 ans)
-                $periodDays = 730;
-            }
+            Log::info("getDailyStatistics - Récupération depuis cache Timwe", [
+                'period_days' => $periodDays,
+                'start' => $startBound->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d')
+            ]);
             
+            // Récupération depuis la table de cache - pas de limitation de période
             $stats = TimweDailyStat::getStatsForPeriod($startBound, $endDate);
             $missingDays = $periodDays - $stats->count();
             
             // Seulement calculer les jours manquants si :
             // 1. Il y a moins de 7 jours manquants
             // 2. La période totale est < 30 jours
-            // 3. Pas en mode optimisé (pas déjà forcé à 90 jours)
             if ($missingDays > 0 && $missingDays <= 7 && $periodDays <= 30) {
+                Log::info("getDailyStatistics - Calcul des jours manquants", [
+                    'missing_days' => $missingDays
+                ]);
+                
                 // Calculer les jours manquants silencieusement
                 $existingDates = $stats->pluck('stat_date')->map(function($date) {
                     return $date->format('Y-m-d');
@@ -2564,6 +2554,13 @@ class DashboardService
                 
                 // Recharger les stats après calcul
                 $stats = TimweDailyStat::getStatsForPeriod($startBound, $endDate);
+            } elseif ($missingDays > 0) {
+                Log::warning("getDailyStatistics - Données Timwe incomplètes", [
+                    'missing_days' => $missingDays,
+                    'found_days' => $stats->count(),
+                    'expected_days' => $periodDays,
+                    'suggestion' => 'Exécuter: php artisan timwe:calculate-historical --from=' . $startBound->format('Y-m-d') . ' --to=' . $endDate->format('Y-m-d') . ' --force'
+                ]);
             }
 
             if ($stats->isNotEmpty()) {
@@ -2587,14 +2584,13 @@ class DashboardService
                                 'active_sub' => $stat->active_subscriptions,
                                 'nb_facturation' => $stat->total_billings,
                                 'taux_facturation' => $stat->billing_rate,
-                                'revenu_ttc_local' => $stat->total_billings * 3,
-                                'revenu_ttc_usd' => ($stat->total_billings * 3) * 0.343,
-                                'revenu_ttc_tnd' => $stat->total_billings * 3
+                                'revenu_ttc_local' => $stat->revenue_tnd,
+                                'revenu_ttc_usd' => $stat->revenue_usd,
+                                'revenu_ttc_tnd' => $stat->revenue_tnd
                             ];
                         }
                     } else {
-                        // Pas de détail par offre, créer une ligne générale — Revenu TTC = Nbfacturation × 3 DT
-                        $revenuTnd = $stat->total_billings * 3;
+                        // Pas de détail par offre, créer une ligne générale
                         $dailyStats[] = [
                             'dimension' => $stat->stat_date->format('Y-m-d'),
                             'offre' => 'Timwe (Total)',
@@ -2605,9 +2601,9 @@ class DashboardService
                             'active_sub' => $stat->active_subscriptions,
                             'nb_facturation' => $stat->total_billings,
                             'taux_facturation' => $stat->billing_rate,
-                            'revenu_ttc_local' => $revenuTnd,
-                            'revenu_ttc_usd' => $revenuTnd * 0.343,
-                            'revenu_ttc_tnd' => $revenuTnd
+                            'revenu_ttc_local' => $stat->revenue_tnd,
+                            'revenu_ttc_usd' => $stat->revenue_usd,
+                            'revenu_ttc_tnd' => $stat->revenue_tnd
                         ];
                     }
                 }
@@ -2724,10 +2720,8 @@ class DashboardService
             }
             
             // 4. Facturations par jour - OPTIMISÉ : Traiter par chunks pour éviter la saturation mémoire
-            // CORRECTION: Compter les NUMÉROS UNIQUES par jour (comme dans les CSV generate_timwe_daily_unique_numbers.php)
             $billingsByDay = [];
             $revenueByDay = [];
-            $billedPhonesByDay = []; // Pour tracker les numéros uniques par jour (par téléphone)
             
             // Récupérer les transactions par chunks pour éviter la saturation mémoire
             $chunkSize = 500; // Réduire la taille des chunks
@@ -2735,22 +2729,23 @@ class DashboardService
             $lastId = 0;
             
             while ($hasMore) {
-                // CORRECTION: Utiliser la même logique que generate_timwe_daily_unique_numbers.php
-                // Joindre directement avec 'client' (pas 'client_abonnement') pour récupérer le téléphone
                 $billingsChunk = DB::table('transactions_history as th')
-                    ->join('client as c', 'th.client_id', '=', 'c.client_id')
+                    ->join('client_abonnement as ca', 'th.client_id', '=', 'ca.client_id')
+                    ->leftJoin('abonnement_tarifs as at', 'ca.tarif_id', '=', 'at.abonnement_tarifs_id')
+                    ->whereIn('ca.country_payments_methods_id', $timweOperatorIds)
                     ->whereBetween('th.created_at', [$startBound, $endExclusive->copy()->subSecond()])
                     ->where('th.transaction_history_id', '>', $lastId)
                     ->where(function($q) {
                         $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                          ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+                          ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%')
+                          ->orWhere('th.status', 'LIKE', '%RENEWED%')
+                          ->orWhere('th.status', 'LIKE', '%CHARGE_DELIVERED%');
                     })
                     ->select(
                         'th.transaction_history_id',
-                        'th.client_id',
                         DB::raw('DATE(th.created_at) as date'),
                         'th.result',
-                        'c.client_telephone'
+                        'at.abonnement_tarifs_prix as tarif_prix'
                     )
                     ->orderBy('th.transaction_history_id', 'asc')
                     ->limit($chunkSize);
@@ -2773,43 +2768,22 @@ class DashboardService
                 foreach ($billingsRaw as $billing) {
                     $lastId = $billing->transaction_history_id;
                     
-                    if (empty($billing->result)) {
-                        continue;
-                    }
+                    $ppid = $this->extractPricepointId($billing->result);
+                    $isDelivered = $this->isTransactionDelivered($billing->result);
                     
-                    $result = json_decode($billing->result, true);
-                    if (!is_array($result)) {
-                        continue;
-                    }
+                    // Seules les transactions avec pricepointId = 63980 ET mnoDeliveryCode = DELIVERED ET totalCharged > 0
+                    $totalCharged = $this->extractTotalCharged($billing->result);
                     
-                    $ppid = $result['pricepointId'] ?? null;
-                    $delivery = $result['mnoDeliveryCode'] ?? null;
-                    $totalCharged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
-                    
-                    // Même logique que le script : pricepointId = billingPpid, mnoDeliveryCode = DELIVERED, totalCharged > 0
-                    if ((string)$ppid !== (string)$billingPpid || $delivery !== 'DELIVERED' || $totalCharged <= 0) {
-                        continue;
-                    }
-                    
-                    $date = Carbon::parse($billing->date)->format('Y-m-d');
-                    if (!isset($billingsByDay[$date])) {
-                        $billingsByDay[$date] = 0;
-                        $revenueByDay[$date] = 0;
-                        $billedPhonesByDay[$date] = []; // Initialiser le tableau pour ce jour
-                    }
-                    
-                    // CORRECTION: Utiliser le téléphone comme clé unique (comme dans le script)
-                    $phone = trim((string)($billing->client_telephone ?? ''));
-                    if ($phone === '') {
-                        $phone = 'client_id:' . $billing->client_id;
-                    }
-                    
-                    // Une seule facturation et un seul revenu par numéro unique par jour (aligné Diagnostic : 1836×3 = 5508 TND)
-                    if (!isset($billedPhonesByDay[$date][$phone])) {
-                        $billedPhonesByDay[$date][$phone] = true;
+                    if ($ppid === $billingPpid && $isDelivered && $totalCharged > 0) {
+                        $date = Carbon::parse($billing->date)->format('Y-m-d');
+                        if (!isset($billingsByDay[$date])) {
+                            $billingsByDay[$date] = 0;
+                            $revenueByDay[$date] = 0;
+                        }
                         $billingsByDay[$date]++;
-                        // Revenu = 1 fois par client facturé (totalCharged en millimes → TND)
-                        $revenueByDay[$date] += $totalCharged / 1000;
+                        
+                        // Le montant est toujours trouvé car totalCharged > 0 est garanti
+                        $revenueByDay[$date] += $totalCharged;
                     }
                 }
                 
@@ -2905,8 +2879,9 @@ class DashboardService
                 // Taux de facturation
                 $tauxFacturation = $activeSubs > 0 ? round(($nbFacturation / $activeSubs) * 100, 2) : 0;
                 
-                // Revenu TTC (TND) = Nbfacturation × 3 DT (prix abonnement) — formule explicite
-                $revenuTTC = $nbFacturation * 3;
+                // Revenu TTC réel depuis les transactions (en TND)
+                $revenuTTC = $revenueByDay[$dateStr] ?? 0;
+                // Conversion USD (taux approximatif 1 USD = 2.915 TND, donc 1 TND = 0.343 USD)
                 $revenuTTCUSD = $revenuTTC * 0.343;
                 
                 $revSimchurn = $simchurnRevenueByDay[$dateStr] ?? 0;
@@ -3204,10 +3179,9 @@ class DashboardService
                 $monthEnd = $cohortMonth->copy()->endOfMonth();
                 
                 $query = DB::table('client_abonnement as ca')
-                    ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                     ->whereBetween('ca.client_abonnement_creation', [$monthStart, $monthEnd]);
                 
-                $this->applyOperatorFilter($query, $operatorFilter);
+                $this->applyOperatorJoinAndFilter($query, $operatorFilter, 'ca');
                 
                 $totalSubscribers = $query->count();
                 
@@ -3259,10 +3233,8 @@ class DashboardService
             $endCarbon = Carbon::parse($endDate)->endOfDay();
             
             $expiredQuery = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->whereBetween('ca.client_abonnement_expiration', [$startDate, $endCarbon]);
-            
-            $this->applyOperatorFilter($expiredQuery, $operatorFilter);
+            $this->applyOperatorJoinAndFilter($expiredQuery, $operatorFilter, 'ca');
             
             $expiredSubscriptions = $expiredQuery->count();
             if ($expiredSubscriptions == 0) return 0;
@@ -3270,13 +3242,11 @@ class DashboardService
             $windowDays = 60; // fenêtre de renouvellement
             
             $renewedQuery = DB::table('client_abonnement as ca1')
-                ->join('country_payments_methods as cpm1', 'ca1.country_payments_methods_id', '=', 'cpm1.country_payments_methods_id')
                 ->join('client_abonnement as ca2', 'ca1.client_id', '=', 'ca2.client_id')
                 ->whereBetween('ca1.client_abonnement_expiration', [$startDate, $endCarbon])
                 ->where('ca2.client_abonnement_creation', '>', DB::raw('ca1.client_abonnement_expiration'))
-                ->where('ca2.client_abonnement_creation', '<=', DB::raw("DATE_ADD(ca1.client_abonnement_expiration, INTERVAL $windowDays DAY)"));
-            
-            $this->applyOperatorFilter($renewedQuery, $operatorFilter, 'cpm1');
+                ->whereRaw("ca2.client_abonnement_creation <= DATE_ADD(ca1.client_abonnement_expiration, INTERVAL ? DAY)", [$windowDays]);
+            $this->applyOperatorJoinAndFilter($renewedQuery, $operatorFilter, 'ca1');
             
             $renewedSubscriptions = $renewedQuery->distinct('ca1.client_abonnement_id')->count();
             
@@ -3296,11 +3266,9 @@ class DashboardService
             $endCarbon = Carbon::parse($endDate)->endOfDay();
             
             $query = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->where('ca.client_abonnement_creation', '>=', $startDate)
                 ->where('ca.client_abonnement_creation', '<=', $endCarbon);
-            
-            $this->applyOperatorFilter($query, $operatorFilter);
+            $this->applyOperatorJoinAndFilter($query, $operatorFilter, 'ca');
             
             $subscriptions = $query->select('ca.client_abonnement_creation', 'ca.client_abonnement_expiration')->get();
             if ($subscriptions->count() == 0) return 0;
@@ -3329,14 +3297,12 @@ class DashboardService
             
             // Clients qui ont eu un abonnement expiré avant la période
             $expiredBeforePeriod = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->where('ca.client_abonnement_expiration', '<', $startDate);
+            $this->applyOperatorJoinAndFilter($expiredBeforePeriod, $operatorFilter, 'ca');
             
-            $this->applyOperatorFilter($expiredBeforePeriod, $operatorFilter);
+            $expiredClients = $expiredBeforePeriod->distinct('ca.client_id')->pluck('ca.client_id');
             
-            // OPTIMISATION: Compter d'abord avant de charger tous les IDs (beaucoup plus rapide)
-            $expiredCount = $expiredBeforePeriod->distinct('ca.client_id')->count('ca.client_id');
-            
+            $expiredCount = $expiredClients->count();
             // Éviter l'explosion du nombre de placeholders (erreur 1390) sur de très gros volumes
             if ($expiredCount == 0 || $expiredCount > 15000) {
                 Log::warning("calculateReactivationRate - Skipped (too many expired clients)", [
@@ -3346,17 +3312,12 @@ class DashboardService
                 return 0;
             }
             
-            // Seulement maintenant charger les IDs si le count est OK
-            $expiredClients = $expiredBeforePeriod->distinct('ca.client_id')->pluck('ca.client_id');
-            
             // Clients réactivés pendant la période
             $reactivatedQuery = DB::table('client_abonnement as ca')
-                ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
                 ->whereIn('ca.client_id', $expiredClients)
                 ->where('ca.client_abonnement_creation', '>=', $startDate)
                 ->where('ca.client_abonnement_creation', '<=', $endCarbon);
-            
-            $this->applyOperatorFilter($reactivatedQuery, $operatorFilter);
+            $this->applyOperatorJoinAndFilter($reactivatedQuery, $operatorFilter, 'ca');
             
             $reactivatedClients = $reactivatedQuery->distinct('ca.client_id')->count();
             
@@ -3527,7 +3488,9 @@ class DashboardService
             $grouped[$monthKey]['total_nb_facturation'] += floatval($stat['nb_facturation'] ?? 0);
             $grouped[$monthKey]['sum_taux_facturation'] += floatval($stat['taux_facturation'] ?? 0);
             
-            // Revenu TTC sera recalculé en fin de mois par formule (total_nb_facturation * 3)
+            // Sommer le revenu TTC qui est déjà dans les stats quotidiennes (en TND)
+            $grouped[$monthKey]['total_revenu_ttc_tnd'] += floatval($stat['revenu_ttc_tnd'] ?? 0);
+            
             $grouped[$monthKey]['days_count']++;
             
             // Pour active_sub, on prend le dernier jour du mois
@@ -3541,19 +3504,20 @@ class DashboardService
                 $month['total_taux_facturation'] = $month['sum_taux_facturation'] / $month['days_count'];
             }
             
-            // Revenu TTC (TND) = Nbfacturation × 3 DT (formule explicite)
-            $month['total_revenu_ttc_tnd'] = $month['total_nb_facturation'] * 3;
-
-            // CA BigDeal HT = Nbfacturation × prix selon paliers du contrat
+            // 3. Calculer le CA BigDeal HT selon les règles du contrat
             $nbFacturation = $month['total_nb_facturation'];
+            
             if ($nbFacturation < 100000) {
+                // Moins de 100K : 1.2 DT HT par facturation
                 $month['ca_bigdeal_ht'] = $nbFacturation * 1.2;
             } elseif ($nbFacturation >= 100000 && $nbFacturation < 250000) {
+                // Entre 100K et 250K : 1.0 DT HT par facturation
                 $month['ca_bigdeal_ht'] = $nbFacturation * 1.0;
             } else {
+                // 250K et plus : plafonné à 250K DT HT
                 $month['ca_bigdeal_ht'] = 250000;
             }
-
+            
             // Formater le label avec le nombre de jours
             $month['display_label'] = $month['month_label'] . ' (' . $month['days_count'] . ')';
             

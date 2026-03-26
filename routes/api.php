@@ -7,7 +7,7 @@ use App\Http\Controllers\Api\DataControllerOptimized;
 use App\Http\Controllers\Api\EklektikController;
 use App\Http\Controllers\Api\EklektikStatsController;
 use App\Http\Controllers\Api\EklektikDashboardController;
-use App\Http\Controllers\Api\TimweDiagnosticApiController;
+use App\Http\Controllers\Api\MonitoringController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,23 +24,14 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-// Opérateurs (session via EnsureFrontendRequestsAreStateful pour appels same-origin)
-// DÉSACTIVÉ : route déplacée vers web.php pour utiliser l'authentification web correcte
-// Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
+// API pour récupérer les opérateurs
+Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
 
-// Dashboard API routes
+// Dashboard API routes - Routes legacy stateless (utilisées par des clients API externes)
+// Les routes principales avec auth session sont dans web.php
 Route::prefix('dashboard')->name('api.dashboard.')->group(function () {
-    Route::get('/data', [DataControllerOptimized::class, 'getDashboardData'])->name('data');
-    Route::get('/subscriptions-details', [DataControllerOptimized::class, 'getSubscriptionsDetails'])->name('subscriptions-details');
-    Route::get('/cohorts', [DataControllerOptimized::class, 'getCohorts'])->name('cohorts');
-    Route::get('/transactions-separate', [DataControllerOptimized::class, 'getTransactions'])->name('transactions-separate');
-    Route::get('/subscriptions/{clientId}', [DataControllerOptimized::class, 'getUserSubscriptions'])->name('user.subscriptions');
     Route::get('/operators', [DataController::class, 'getUserOperators'])->name('operators');
     Route::get('/partners', [DataController::class, 'getPartnersList'])->name('partners');
-    Route::get('/kpis', [DataController::class, 'getKpis'])->name('kpis');
-    Route::get('/merchants', [DataController::class, 'getMerchants'])->name('merchants');
-    Route::get('/transactions', [DataController::class, 'getTransactions'])->name('transactions');
-    Route::get('/subscriptions', [DataController::class, 'getSubscriptions'])->name('subscriptions');
 });
 
 // Eklektik API routes - Contrôleur consolidé (sans auth pour test)
@@ -82,17 +73,13 @@ Route::prefix('eklektik-dashboard')->name('api.eklektik-dashboard.')->group(func
     Route::post('/clear-cache', [EklektikDashboardController::class, 'clearCache'])->name('clear-cache');
 });
 
-// Diagnostic Timwe — API découpée (summary / delivery / phones / recent / lifetime), objectif < 200 ms
-Route::middleware('auth')->prefix('timwe-diagnostic')->name('api.timwe-diagnostic.')->group(function () {
-    Route::get('/summary', [TimweDiagnosticApiController::class, 'summary'])->name('summary');
-    Route::get('/delivery', [TimweDiagnosticApiController::class, 'delivery'])->name('delivery');
-    Route::get('/phones', [TimweDiagnosticApiController::class, 'phones'])->name('phones');
-    Route::get('/phones/{phone}/delivery-codes', [TimweDiagnosticApiController::class, 'phoneDeliveryCodes'])->name('phones.delivery-codes');
-    Route::get('/recent', [TimweDiagnosticApiController::class, 'recent'])->name('recent');
-    Route::get('/lifetime', [TimweDiagnosticApiController::class, 'lifetime'])->name('lifetime');
-});
-
 // Routes optimisées additionnelles si présentes
 if (file_exists(base_path('routes/api_optimized.php'))) {
     require base_path('routes/api_optimized.php');
 }
+
+// Monitoring API routes
+Route::prefix('monitoring')->name('api.monitoring.')->group(function () {
+    Route::get('/dashboard', [MonitoringController::class, 'dashboard'])->name('dashboard');
+    Route::post('/record', [MonitoringController::class, 'recordApiTime'])->name('record');
+});
