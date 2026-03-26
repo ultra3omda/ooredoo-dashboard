@@ -54,6 +54,13 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/dashboard-warmup.log'));
+            
+            // Matérialisation des KPIs quotidiens - Chaque jour à 3h00
+            $schedule->command('dashboard:materialize --days=3')
+                ->dailyAt('03:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/dashboard-materialize.log'));
     }
 
     /**
