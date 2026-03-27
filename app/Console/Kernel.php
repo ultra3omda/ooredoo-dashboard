@@ -55,10 +55,20 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/ooredoo-stats.log'));
-
-            // Métriques ML (ml_model_performance) - Chaque jour à 3h
-            // Décommenter pour alimenter ml_model_performance automatiquement
-            // $schedule->command('ml:log-performance')->dailyAt('03:00')->withoutOverlapping();
+            
+            // Cache warmup dashboard - Toutes les 25 minutes (éviter cold cache)
+            $schedule->command('dashboard:warmup --operator=ALL')
+                ->cron('*/25 * * * *')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/dashboard-warmup.log'));
+            
+            // Matérialisation des KPIs quotidiens - Chaque jour à 3h00
+            $schedule->command('dashboard:materialize --days=3')
+                ->dailyAt('03:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/dashboard-materialize.log'));
 
             // Cache intelligent (contexte agent IA, KPIs, features ML) - Tous les jours à 6h
             $schedule->command('cache:warmup')
@@ -70,25 +80,22 @@ class Kernel extends ConsoleKernel
             // ============================================================
             // SYSTÈME ML INCRÉMENTAL - Architecture optimisée
             // ============================================================
-            
+
             // Ingestion incrémentale des transactions vers tx_daily_agg
-            // Toutes les 5 minutes pour minimiser le retard
             $schedule->command('ml:tx-daily-ingest --batch-size=100000 --max-batches=5')
                 ->everyFiveMinutes()
-                ->withoutOverlapping(30) // Timeout 30 min
+                ->withoutOverlapping(30)
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/ml-ingest.log'));
 
             // Construction des features ML 90 jours depuis les agrégats
-            // Toutes les 2 heures pour maintenir les features à jour
             $schedule->command('ml:build-90d-features --chunk=2000')
                 ->everyTwoHours()
-                ->withoutOverlapping(60) // Timeout 60 min
+                ->withoutOverlapping(60)
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/ml-features-90d.log'));
 
             // Maintenance et nettoyage des agrégats (rétention 120 jours)
-            // Une fois par semaine le dimanche à 4h
             $schedule->command('ml:tx-daily-maintenance --retention-days=120 --vacuum')
                 ->weekly()
                 ->sundays()

@@ -40,3 +40,7 @@ storage/logs/*.csv
 # Environment files
 *.env
 *.env.*
+
+frontend/node_modules/
+**/__pycache__/
+

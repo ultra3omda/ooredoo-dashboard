@@ -4,19 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\DashboardService;
-use App\Services\DashboardCacheService;
+use App\Services\CacheService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class DataControllerOptimized extends Controller
 {
     private DashboardService $dashboardService;
-    private DashboardCacheService $cacheService;
+    private CacheService $cacheService;
     
-    public function __construct(DashboardService $dashboardService, DashboardCacheService $cacheService)
+    public function __construct(DashboardService $dashboardService, CacheService $cacheService)
     {
         $this->dashboardService = $dashboardService;
         $this->cacheService = $cacheService;
@@ -24,19 +25,17 @@ class DataControllerOptimized extends Controller
     
     /**
      * Get complete dashboard data - VERSION OPTIMISÉE
-     * Si ?light=true, retourne seulement les KPIs essentiels (rapide)
      */
     public function getDashboardData(Request $request): JsonResponse
     {
         // Augmenter le temps d'exécution et la limite de mémoire pour les longues périodes
-        set_time_limit(180); // 3 minutes pour supporter jusqu'à 2 ans
-        ini_set('memory_limit', '1G'); // 1GB pour très longues périodes
+        set_time_limit(120); // 120 secondes
+        ini_set('memory_limit', '512M'); // 512MB
         
         $startTime = microtime(true);
-        $lightMode = $request->boolean('light', false);
         
         try {
-            Log::info("=== DÉBUT API getDashboardData OPTIMISÉE ===" . ($lightMode ? " (LIGHT MODE)" : ""));
+            Log::info("=== DÉBUT API getDashboardData OPTIMISÉE ===");
             
             // Validation et normalisation des paramètres
             $params = $this->validateAndNormalizeParams($request);
@@ -48,34 +47,31 @@ class DataControllerOptimized extends Controller
             Log::info("Paramètres validés", $params);
             Log::info("Utilisateur: {$user->email} (Rôle: {$user->role->name})");
             
-            // Mode léger : retourner seulement les KPIs essentiels
-            if ($lightMode) {
-                $data = $this->dashboardService->getLightDashboardData(
-                    $params['start_date'],
-                    $params['end_date'],
-                    $params['comparison_start_date'],
-                    $params['comparison_end_date'],
-                    $params['operator']
-                );
-            } else {
-                // Récupération complète des données via le service optimisé
-                $data = $this->dashboardService->getDashboardData(
-                    $params['start_date'],
-                    $params['end_date'],
-                    $params['comparison_start_date'],
-                    $params['comparison_end_date'],
-                    $params['operator']
-                );
-            }
+            // Récupération des données via le service optimisé
+            $data = $this->dashboardService->getDashboardData(
+                $params['start_date'],
+                $params['end_date'],
+                $params['comparison_start_date'],
+                $params['comparison_end_date'],
+                $params['operator']
+            );
             
             // Ajout des métadonnées de performance
             $totalTime = round((microtime(true) - $startTime) * 1000, 2);
             $data['api_execution_time_ms'] = $totalTime;
             $data['optimized_version'] = true;
-            $data['light_mode'] = $lightMode;
             
-            Log::info("Données récupérées avec succès en {$totalTime}ms" . ($lightMode ? " (LIGHT)" : ""));
-            Log::info("Source: " . ($data['data_source'] ?? 'inconnu'));
+            // Enregistrer pour le monitoring
+            $cacheHit = ($data['cache_mode'] ?? '') === 'standard_subcached' && $totalTime < 5000;
+            $history = Cache::get('monitoring:api_history', []);
+            $history[] = [
+                'endpoint' => '/api/dashboard/data',
+                'time_ms' => $totalTime,
+                'cache_hit' => $cacheHit,
+                'operator' => $params['operator'] ?? 'unknown',
+                'timestamp' => now()->toISOString(),
+            ];
+            Cache::put('monitoring:api_history', array_slice($history, -100), 3600);
             
             return response()->json($data);
             
@@ -100,108 +96,6 @@ class DataControllerOptimized extends Controller
                 "data_source" => "error",
                     "timestamp" => now()->toISOString()
                 ], 500);
-        }
-    }
-    
-    /**
-     * Endpoint séparé pour les détails d'abonnements (section lourde)
-     */
-    public function getSubscriptionsDetails(Request $request): JsonResponse
-    {
-        set_time_limit(60);
-        ini_set('memory_limit', '256M');
-        
-        try {
-            $params = $this->validateAndNormalizeParams($request);
-            $user = auth()->user();
-            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
-            
-            $startBound = Carbon::parse($params['start_date'])->startOfDay();
-            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
-            
-            $details = $this->dashboardService->getSubscriptionDetailsPublic(
-                $startBound,
-                $endExclusive,
-                $params['operator']
-            );
-            
-            return response()->json([
-                'success' => true,
-                'data' => $details,
-                'execution_time_ms' => round((microtime(true) - (microtime(true))) * 1000, 2)
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error("Erreur getSubscriptionsDetails: " . $e->getMessage());
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
-        }
-    }
-    
-    /**
-     * Endpoint séparé pour les cohorts (section lourde)
-     */
-    public function getCohorts(Request $request): JsonResponse
-    {
-        set_time_limit(60);
-        ini_set('memory_limit', '256M');
-        
-        try {
-            $params = $this->validateAndNormalizeParams($request);
-            $user = auth()->user();
-            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
-            
-            $startBound = Carbon::parse($params['start_date'])->startOfDay();
-            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
-            
-            $cohorts = $this->dashboardService->calculateCohortsPublic(
-                $startBound,
-                $endExclusive,
-                $params['operator']
-            );
-            
-            return response()->json([
-                'success' => true,
-                'data' => $cohorts,
-                'execution_time_ms' => round((microtime(true) - (microtime(true))) * 1000, 2)
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error("Erreur getCohorts: " . $e->getMessage());
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
-        }
-    }
-    
-    /**
-     * Endpoint séparé pour les transactions (section lourde)
-     */
-    public function getTransactions(Request $request): JsonResponse
-    {
-        set_time_limit(60);
-        ini_set('memory_limit', '256M');
-        
-        try {
-            $params = $this->validateAndNormalizeParams($request);
-            $user = auth()->user();
-            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
-            
-            $startBound = Carbon::parse($params['start_date'])->startOfDay();
-            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
-            
-            $transactions = $this->dashboardService->getTransactionsDataPublic(
-                $startBound,
-                $endExclusive,
-                $params['operator']
-            );
-            
-            return response()->json([
-                'success' => true,
-                'data' => $transactions,
-                'execution_time_ms' => round((microtime(true) - (microtime(true))) * 1000, 2)
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error("Erreur getTransactions: " . $e->getMessage());
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
     
@@ -241,16 +135,10 @@ class DataControllerOptimized extends Controller
             throw new \InvalidArgumentException("La date de début doit être antérieure à la date de fin");
         }
         
-        // Limitation de la période maximale (2 ans)
+        // Limitation de la période maximale (1 an)
         $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate));
-        if ($periodDays > 730) {
-            throw new \InvalidArgumentException("Période maximale autorisée: 730 jours (2 ans) (demandé: {$periodDays} jours)");
-        }
-        
-        // Activation automatique du mode light pour périodes > 90 jours
-        if ($periodDays > 90 && !$request->boolean('light', false)) {
-            Log::info("🚀 Activation automatique du mode light pour période de {$periodDays} jours");
-            $request->merge(['light' => true]);
+        if ($periodDays > 365) {
+            throw new \InvalidArgumentException("Période maximale autorisée: 365 jours (demandé: {$periodDays} jours)");
         }
         
         return [
@@ -268,11 +156,6 @@ class DataControllerOptimized extends Controller
      */
     private function validateOperatorAccess($user, string $requestedOperator): string
     {
-        // Sécurité : vérifier que l'utilisateur existe
-        if (!$user) {
-            abort(401, 'Unauthenticated');
-        }
-        
         // Si c'est "ALL", autoriser uniquement pour SuperAdmin
         if ($requestedOperator === 'ALL' || $requestedOperator === '' || $requestedOperator === null) {
             if ($user->isSuperAdmin()) {
@@ -686,5 +569,178 @@ class DataControllerOptimized extends Controller
         }
     }
     */
+    
+    // ==========================================
+    // ENDPOINTS SPLIT POUR CHARGEMENT PROGRESSIF
+    // ==========================================
+    
+    /**
+     * KPIs seuls (rapide ~15s cold, ~1s cached)
+     */
+    public function getKpisSplit(Request $request): JsonResponse
+    {
+        set_time_limit(120);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:kpis:' . md5(json_encode($params));
+            $kpis = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+                return $this->dashboardService->getKPIsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'kpis',
+                'data' => $kpis,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'kpis', 'error' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Marchands seuls
+     */
+    public function getMerchantsSplit(Request $request): JsonResponse
+    {
+        set_time_limit(120);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:merchants:' . md5(json_encode($params));
+            $merchants = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+                return $this->dashboardService->getMerchantsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'merchants',
+                'data' => $merchants['data'],
+                'categoryDistribution' => $merchants['categories'],
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'merchants', 'error' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Transactions seules (rapide ~1s)
+     */
+    public function getTransactionsSplit(Request $request): JsonResponse
+    {
+        set_time_limit(60);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:transactions:' . md5(json_encode($params));
+            $transactions = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $params) {
+                return $this->dashboardService->getTransactionsDataPublic($startBound, $endExclusive, $params['operator']);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'transactions',
+                'data' => $transactions,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'transactions', 'error' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Abonnements seuls (le plus lourd)
+     */
+    public function getSubscriptionsSplit(Request $request): JsonResponse
+    {
+        set_time_limit(180);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:subscriptions:' . md5(json_encode($params));
+            $subscriptions = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $params, $compStartBound, $compEndExclusive) {
+                return $this->dashboardService->getSubscriptionsDataPublic($startBound, $endExclusive, $params['operator'], $compStartBound, $compEndExclusive);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'subscriptions',
+                'data' => $subscriptions,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'subscriptions', 'error' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Ooredoo stats seuls (rapide ~1s)
+     */
+    public function getOoredooStatsSplit(Request $request): JsonResponse
+    {
+        set_time_limit(60);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:ooredoo:' . md5(json_encode($params));
+            $ooredooStats = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive) {
+                $daily = $this->dashboardService->getOoredooDailyStatisticsPublic($startBound, $endExclusive);
+                $dailyComp = $this->dashboardService->getOoredooDailyStatisticsPublic($compStartBound, $compEndExclusive);
+                return [
+                    'daily_statistics' => $daily,
+                    'daily_statistics_comparison' => $dailyComp,
+                    'ooredoo_monthly_stats' => $this->dashboardService->groupOoredooStatsByMonthPublic($daily),
+                    'ooredoo_monthly_stats_comparison' => $this->dashboardService->groupOoredooStatsByMonthPublic($dailyComp)
+                ];
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'ooredoo_stats',
+                'data' => $ooredooStats,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'ooredoo_stats', 'error' => $e->getMessage()], 500);
+        }
+    }
 }
 
