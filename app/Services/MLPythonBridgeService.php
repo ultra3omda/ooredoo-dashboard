@@ -18,7 +18,7 @@ class MLPythonBridgeService
 
     public function __construct()
     {
-        $this->pythonPath = env('PYTHON_PATH', 'python3');
+        $this->pythonPath = env('PYTHON_PATH', PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3');
         $this->modelPath = base_path('ml_models/billing_predictor_v3.pkl');
         $this->trainScriptPath = base_path('ml_models/train_model.py');
         $this->predictScriptPath = base_path('ml_models/predict.py');

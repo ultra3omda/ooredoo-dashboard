@@ -32,7 +32,9 @@ class SubStoreService
                     ->where(function($query) {
                         $query->where('is_sub_store', 1)
                               // Ajouter le store ID 54 manuellement
-                              ->orWhere('store_id', 54);
+                              ->orWhere('store_id', 54)
+                              // Distributeur Pluxee (carte_recharge.stores), souvent hors is_sub_store
+                              ->orWhereIn('store_id', config('substore.pluxee_distributor_store_ids', [61]));
                     })
                     ->where('store_active', 1)
                     ->pluck('store_name')
@@ -76,8 +78,8 @@ class SubStoreService
                 return DB::table('stores')
                     ->where(function($query) {
                         $query->where('is_sub_store', 1)
-                              // Ajouter le store ID 54 manuellement
-                              ->orWhere('store_id', 54);
+                              ->orWhere('store_id', 54)
+                              ->orWhereIn('store_id', config('substore.pluxee_distributor_store_ids', [61]));
                     })
                     ->where('store_active', 1)
                     ->select('store_name as name', 'store_id')
@@ -203,8 +205,8 @@ class SubStoreService
                 return DB::table('stores')
                     ->where(function($query) {
                         $query->where('is_sub_store', 1)
-                              // Ajouter le store ID 54 manuellement
-                              ->orWhere('store_id', 54);
+                              ->orWhere('store_id', 54)
+                              ->orWhereIn('store_id', config('substore.pluxee_distributor_store_ids', [61]));
                     })
                     ->where('store_active', 1)
                     ->pluck('store_name', 'store_name')

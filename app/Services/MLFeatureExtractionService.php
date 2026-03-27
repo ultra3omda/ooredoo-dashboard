@@ -710,7 +710,7 @@ class MLFeatureExtractionService
         }
 
         $processedCount = 0;
-        $batchSize = 100;
+        $batchSize = (int) env('ML_EXTRACTION_SYNC_BATCH_SIZE', 50);
 
         foreach (array_chunk($activeClients, $batchSize) as $batch) {
             $featuresData = [];
@@ -726,7 +726,7 @@ class MLFeatureExtractionService
                 }
             }
             if (!empty($featuresData)) {
-                DB::table('ml_client_features')->upsert(
+                $this->upsertFeaturesWithDeadlockRetry(
                     $featuresData,
                     ['client_id', 'calculation_date'],
                     array_keys($featuresData[0])
@@ -740,6 +740,32 @@ class MLFeatureExtractionService
         ]);
 
         return $processedCount;
+    }
+
+    /**
+     * Upsert avec retry en cas de deadlock MySQL (1213).
+     */
+    private function upsertFeaturesWithDeadlockRetry(array $featuresData, array $uniqueBy, array $updateColumns, int $maxAttempts = 3): void
+    {
+        $attempt = 0;
+        while (true) {
+            try {
+                DB::table('ml_client_features')->upsert($featuresData, $uniqueBy, $updateColumns);
+                return;
+            } catch (\Throwable $e) {
+                $isDeadlock = $e->getCode() === '40001' || $e->getCode() === 1213
+                    || str_contains($e->getMessage(), '1213')
+                    || str_contains($e->getMessage(), 'Deadlock');
+                $attempt++;
+                if (!$isDeadlock || $attempt >= $maxAttempts) {
+                    throw $e;
+                }
+                Log::warning("MLFeatureExtractionService - Deadlock, retry {$attempt}/{$maxAttempts}", [
+                    'message' => $e->getMessage(),
+                ]);
+                usleep(100000 * $attempt); // 100ms, 200ms, 300ms
+            }
+        }
     }
 
     /**

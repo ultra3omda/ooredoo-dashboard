@@ -720,11 +720,37 @@ class MLMultiOperatorFeatureService
                 continue;
             }
             $updateColumns = array_values(array_diff($cols, ['client_id', 'calculation_date', 'created_at']));
-            DB::table('ml_client_features')->upsert($filtered, ['client_id', 'calculation_date'], $updateColumns);
+            $this->upsertFeaturesWithDeadlockRetry($filtered, ['client_id', 'calculation_date'], $updateColumns);
             $total += count($filtered);
         }
 
         return $total;
+    }
+
+    /**
+     * Upsert avec retry en cas de deadlock MySQL (1213).
+     */
+    private function upsertFeaturesWithDeadlockRetry(array $rows, array $uniqueBy, array $updateColumns, int $maxAttempts = 3): void
+    {
+        $attempt = 0;
+        while (true) {
+            try {
+                DB::table('ml_client_features')->upsert($rows, $uniqueBy, $updateColumns);
+                return;
+            } catch (\Throwable $e) {
+                $isDeadlock = $e->getCode() === '40001' || $e->getCode() === 1213
+                    || str_contains($e->getMessage(), '1213')
+                    || str_contains($e->getMessage(), 'Deadlock');
+                $attempt++;
+                if (!$isDeadlock || $attempt >= $maxAttempts) {
+                    throw $e;
+                }
+                Log::warning('MLMultiOperatorFeatureService - Deadlock, retry ' . $attempt . '/' . $maxAttempts, [
+                    'message' => $e->getMessage(),
+                ]);
+                usleep(100000 * $attempt);
+            }
+        }
     }
 
     // --------------- Helpers JSON (inchangés) ---------------

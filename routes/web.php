@@ -73,16 +73,21 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/eklektik-dashboard/subs-evolution', [App\Http\Controllers\Api\EklektikDashboardController::class, 'getSubsEvolution']);
         // API Sub-Stores dashboard (liste, expirations, données utilisateurs)
         Route::get('/sub-stores', [SubStoreController::class, 'getSubStores'])->name('api.sub-stores');
+        Route::get('/sub-store/campaigns', [SubStoreController::class, 'getCampaigns'])->name('api.sub-store.campaigns');
         Route::get('/sub-store/dashboard/data', [SubStoreController::class, 'getDashboardData'])->name('api.sub-store.dashboard.data');
         Route::get('/expirations', [SubStoreController::class, 'getExpirationsAsync'])->name('api.expirations');
         Route::get('/users/data', [SubStoreController::class, 'getUsersData'])->name('api.users.data');
     });
     // Pas de doublon ici pour garder l’ordre des routes comme avant (api puis web)
 
-    // Dashboards des Sub-Stores (accès selon les permissions)
-    Route::get('/sub-store/{storeType}', [SubStoreController::class, 'index'])
-        ->name('sub-stores.dashboard')
-        ->where('storeType', 'eklektik');
+    // Dashboard Sub-Stores (URL neutre, sans agrégateur)
+    Route::get('/sub-store', [SubStoreController::class, 'index'])
+        ->name('sub-stores.dashboard');
+
+    // Compatibilité ancienne URL : /sub-store/eklektik -> /sub-store
+    Route::get('/sub-store/{storeType}', function () {
+        return redirect()->route('sub-stores.dashboard');
+    })->where('storeType', 'eklektik');
 
     // Routes d'administration (réservées aux super-admins et admins)
     // Note: le rôle en base est "super_admin" (underscore), pas "super-admin"
@@ -168,7 +173,7 @@ Route::middleware(['auth'])->group(function () {
         
         // Tracking et monitoring Eklektik
         Route::prefix('eklektik')->name('eklektik.')->group(function () {
-            Route::get('/dashboard', fn () => redirect()->route('sub-stores.dashboard', ['storeType' => 'eklektik']))->name('dashboard');
+            Route::get('/dashboard', fn () => redirect()->route('sub-stores.dashboard'))->name('dashboard');
             Route::get('/sync-tracking', [EklektikSyncTrackingController::class, 'index'])->name('sync.tracking');
             Route::get('/sync-tracking/data', [EklektikSyncTrackingController::class, 'getData'])->name('sync.data');
             Route::post('/sync-tracking/retry/{id}', [EklektikSyncTrackingController::class, 'retry'])->name('sync.retry');
