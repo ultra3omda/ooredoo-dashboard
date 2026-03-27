@@ -35,13 +35,13 @@ Route::get('/', function () {
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('auth.login');
     Route::post('/login', [AuthController::class, 'login']);
-    
+
     Route::get('/otp/request', [AuthController::class, 'showOtpRequest'])->name('auth.otp.request');
     Route::post('/otp/send', [AuthController::class, 'sendOtp'])->name('auth.otp.send');
     Route::get('/otp/verify', [AuthController::class, 'showOtpVerify'])->name('auth.otp.verify');
     Route::post('/otp/verify', [AuthController::class, 'verifyOtp']);
     Route::post('/otp/resend', [AuthController::class, 'resendOtp'])->name('auth.otp.resend');
-    
+
     // Routes de gestion des mots de passe
     Route::get('/password/forgot', [PasswordController::class, 'showForgotPasswordForm'])->name('password.forgot');
     Route::post('/password/send-reset', [PasswordController::class, 'sendResetLink'])->name('password.send-reset');
@@ -67,16 +67,16 @@ Route::middleware('auth')->group(function () {
     // Route principale avec redirection intelligente selon le rôle
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/config', [DashboardController::class, 'getConfig'])->name('dashboard.config');
-    
+
     // Dashboard Opérateur (accès restreint)
     Route::middleware(['check.dashboard:operators'])->prefix('operator')->name('operator.')->group(function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
     });
-    
+
     // Routes de gestion des mots de passe (utilisateur connecté)
     Route::get('/password/change', [PasswordController::class, 'showChangePasswordForm'])->name('password.change');
     Route::post('/password/change', [PasswordController::class, 'changePassword']);
-        
+
         // API routes pour données dashboard
         Route::get('/api/operators', [DataController::class, 'getUserOperators'])->name('api.user.operators');
         Route::get('/api/dashboard/data', [DataControllerOptimized::class, 'getDashboardData'])->name('api.dashboard.data');
@@ -86,14 +86,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/dashboard/subscriptions/{clientId}', [DataControllerOptimized::class, 'getUserSubscriptions'])->name('api.dashboard.user.subscriptions');
         Route::get('/api/dashboard/operators', [DataController::class, 'getAvailableOperators'])->name('api.dashboard.operators');
         Route::get('/api/dashboard/partners', [DataController::class, 'getPartnersList'])->name('api.dashboard.partners');
-        Route::get('/api/dashboard/kpis', [DataController::class, 'getKpis'])->name('api.dashboard.kpis');
-        Route::get('/api/dashboard/merchants', [DataController::class, 'getMerchants'])->name('api.dashboard.merchants');
-        Route::get('/api/dashboard/transactions', [DataController::class, 'getTransactions'])->name('api.dashboard.transactions');
-        Route::get('/api/dashboard/subscriptions', [DataController::class, 'getSubscriptions'])->name('api.dashboard.subscriptions');
-        
-        // DÉSACTIVÉ POUR OPTIMISATION: API pour les transactions Timwe d'un client spécifique
-        // Route::get('/api/timwe-client-transactions/{clientId}', [DataControllerOptimized::class, 'getClientTimweTransactions'])->name('api.timwe.client.transactions');
-    
+        Route::get('/api/timwe-client-transactions/{clientId}', [DataControllerOptimized::class, 'getClientTimweTransactions'])->name('api.timwe.client.transactions');
+
     // Dashboard Sub-Stores (accès restreint)
     Route::middleware(['check.dashboard:sub-stores'])->prefix('sub-stores')->name('sub-stores.')->group(function () {
         Route::get('/', [SubStoreController::class, 'index'])->name('dashboard');
@@ -112,12 +106,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/users/{user}/edit', [UserManagementController::class, 'edit'])->name('users.edit');
         Route::put('/users/{user}', [UserManagementController::class, 'update'])->name('users.update');
         Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
-        
+
         // Actions supplémentaires pour les utilisateurs
         Route::post('/users/{user}/reset-password', [UserManagementController::class, 'resetPassword'])->name('users.reset-password');
         Route::post('/users/{user}/suspend', [UserManagementController::class, 'suspend'])->name('users.suspend');
         Route::post('/users/{user}/unsuspend', [UserManagementController::class, 'unsuspend'])->name('users.unsuspend');
-        
+
         // Invitations (admins seulement)
         Route::middleware('check.invitation')->group(function () {
             Route::get('/invitations', [InvitationController::class, 'index'])->name('invitations.index');
@@ -127,7 +121,7 @@ Route::middleware('auth')->group(function () {
             Route::patch('/invitations/{invitation}/cancel', [InvitationController::class, 'cancel'])->name('invitations.cancel');
             Route::delete('/invitations/{invitation}', [InvitationController::class, 'destroy'])->name('invitations.destroy');
         });
-        
+
         // Configuration du Cron Eklektik (Super Admin seulement)
         // Attention: le groupe a déjà le préfixe de nom "admin.",
         // donc les routes internes doivent être nommées sans le préfixe "admin." pour éviter "admin.admin.*"
@@ -140,19 +134,19 @@ Route::middleware('auth')->group(function () {
             Route::post('/eklektik-cron/run', [EklektikCronController::class, 'runCron'])->name('eklektik-cron.run');
             Route::post('/eklektik-cron/reset', [EklektikCronController::class, 'resetToDefault'])->name('eklektik-cron.reset');
         });
-        
+
         // Gestion des Synchronisations Eklektik (Super Admin seulement)
         Route::middleware('check.dashboard:eklektik-config')->group(function () {
             Route::get('/eklektik-sync', [EklektikSyncController::class, 'index'])->name('eklektik.sync');
             Route::post('/eklektik-sync', [EklektikSyncController::class, 'sync'])->name('eklektik.sync.post');
             Route::get('/eklektik-sync/status', [EklektikSyncController::class, 'status'])->name('eklektik.status');
             Route::get('/eklektik-sync/logs', [EklektikSyncController::class, 'logs'])->name('eklektik.logs');
-            
+
             // Dashboard Eklektik Intégré (Super Admin seulement)
             Route::get('/eklektik-dashboard', function() {
                 return view('eklektik.dashboard');
             })->name('eklektik.dashboard');
-            
+
             // Suivi des synchronisations Eklektik
             Route::get('/eklektik-sync-tracking', [App\Http\Controllers\Admin\EklektikSyncTrackingController::class, 'index'])->name('eklektik.sync-tracking');
             Route::get('/eklektik-sync-tracking/{id}', [App\Http\Controllers\Admin\EklektikSyncTrackingController::class, 'show'])->name('eklektik.sync-details');

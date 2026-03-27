@@ -35,23 +35,23 @@
       /* Backward compatibility */
       --brand-red: var(--brand-primary);
     }
-    
+
     * { box-sizing: border-box; }
-    html, body { 
-      margin: 0; 
-      padding: 0; 
-      background: var(--bg); 
-      color: var(--brand-dark); 
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--brand-dark);
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       line-height: 1.5;
     }
-    
-    .container { 
-      max-width: 1400px; 
-      margin: 0 auto; 
-      padding: 20px; 
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
     }
-    
+
     /* Header */
     .header {
       display: flex;
@@ -65,25 +65,25 @@
       width: 100%; /* Prend toute la largeur disponible */
       box-sizing: border-box; /* Inclut padding dans la largeur */
     }
-    
+
     .header-left {
       display: flex;
       align-items: center;
       gap: 16px;
     }
-    
+
     .logo {
       width: 120px;
       height: auto;
     }
-    
+
     .header h1 {
       font-size: 24px;
       font-weight: 700;
       margin: 0;
       color: var(--brand-dark);
     }
-    
+
     .header-right {
       font-size: 14px;
       color: var(--muted);
@@ -91,7 +91,7 @@
       align-items: center;
       gap: 16px;
     }
-    
+
     .user-menu {
       display: flex;
       align-items: center;
@@ -101,24 +101,24 @@
       border-radius: 8px;
       border: 1px solid var(--border);
     }
-    
+
     .user-info {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
     }
-    
+
     .user-name {
       font-weight: 600;
       color: var(--brand-dark);
       font-size: 14px;
     }
-    
+
     .user-role {
       font-size: 12px;
       color: var(--muted);
     }
-    
+
     .admin-btn {
       background: var(--brand-red);
       color: white;
@@ -129,12 +129,12 @@
       text-decoration: none;
       transition: all 0.2s ease;
     }
-    
+
     .admin-btn:hover {
       background: #c20510;
       text-decoration: none;
     }
-    
+
     .logout-btn {
       background: transparent;
       border: 1px solid var(--border);
@@ -145,12 +145,12 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    
+
     .logout-btn:hover {
       border-color: var(--danger);
       color: var(--danger);
     }
-    
+
     /* Navigation Tabs */
     .nav-tabs {
       display: flex;
@@ -168,12 +168,12 @@
       scrollbar-width: none; /* Firefox */
       -ms-overflow-style: none; /* IE/Edge */
     }
-    
+
     /* Hide scrollbar for webkit browsers */
     .nav-tabs::-webkit-scrollbar {
       display: none;
     }
-    
+
     .nav-tab {
       flex: 1;
       padding: 12px 16px;
@@ -190,25 +190,25 @@
       white-space: nowrap;
       min-width: fit-content;
     }
-    
+
     .nav-tab.active {
       background: var(--brand-red);
       color: white;
     }
-    
+
     .nav-tab:hover:not(.active) {
       background: #f1f5f9;
     }
-    
+
     /* Tab Content */
     .tab-content {
       display: none;
     }
-    
+
     .tab-content.active {
       display: block;
     }
-    
+
     /* Filters */
     .filters {
       display: grid;
@@ -216,7 +216,7 @@
       gap: 16px;
       margin-bottom: 24px;
     }
-    
+
     /* Responsive filters pour mobile */
     @media (max-width: 600px) {
       .filters {
@@ -224,14 +224,14 @@
         gap: 12px;
       }
     }
-    
+
     .filter-card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 16px;
     }
-    
+
     .filter-label {
       font-size: 12px;
       color: var(--muted);
@@ -240,12 +240,12 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    
+
     .filter-value {
       font-weight: 600;
       font-size: 14px;
     }
-    
+
     /* Grid Layout */
     .grid {
       display: grid;
@@ -253,7 +253,7 @@
       gap: 20px;
       margin-bottom: 24px;
     }
-    
+
     .card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -261,13 +261,13 @@
       padding: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    
+
     /* KPI Cards */
     .kpi-card {
       grid-column: span 3;
       text-align: center;
     }
-    
+
     .kpi-title {
       font-size: 12px;
       color: var(--muted);
@@ -276,14 +276,14 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    
+
     .kpi-value {
       font-size: 28px;
       font-weight: 700;
       margin-bottom: 4px;
       color: var(--brand-dark);
     }
-    
+
     .kpi-delta {
       font-size: 12px;
       font-weight: 500;
@@ -292,65 +292,65 @@
       justify-content: center;
       gap: 4px;
     }
-    
+
     .delta-positive { color: var(--success); }
     .delta-negative { color: var(--danger); }
     .delta-neutral { color: var(--muted); }
-    
+
     /* Chart Cards */
     .chart-card {
       grid-column: span 6;
       min-height: 350px;
     }
-    
+
     .chart-card.full-width {
       grid-column: span 12;
     }
-    
+
     .chart-title {
       font-size: 16px;
       font-weight: 600;
       margin-bottom: 16px;
       color: var(--brand-dark);
     }
-    
+
     .chart-container {
       height: 300px;
       position: relative;
     }
-    
+
     /* Table */
     .table-card {
       grid-column: span 12;
       overflow-x: auto; /* Scroll horizontal sur mobile */
     }
-    
+
     /* Table responsive wrapper */
     .table-wrapper {
       overflow-x: auto;
       -webkit-overflow-scrolling: touch; /* Smooth scrolling sur iOS */
     }
-    
+
     .enhanced-table {
       min-width: 600px; /* Largeur minimale pour éviter le rétrécissement excessif */
     }
-    
+
     .table-container {
       overflow-x: auto;
     }
-    
+
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 14px;
     }
-    
+
     th, td {
       padding: 12px 16px;
       text-align: left;
       border-bottom: 1px solid var(--border);
     }
-    
+
     th {
       background: #f8fafc;
       font-weight: 600;
@@ -359,11 +359,11 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    
+
     tr:hover {
       background: #f8fafc;
     }
-    
+
     /* Badges */
     .badge {
       display: inline-flex;
@@ -373,7 +373,7 @@
       font-size: 12px;
       font-weight: 500;
     }
-    
+
     .badge-success { background: #dcfce7; color: #166534; }
     .badge-warning { background: #fef3c7; color: #92400e; }
     .badge-danger { background: #fee2e2; color: #991b1b; }
@@ -430,7 +430,7 @@
       color: var(--muted);
       text-align: center;
     }
-    
+
     /* Progress Bar */
     .progress-bar {
       width: 100%;
@@ -440,27 +440,27 @@
       overflow: hidden;
       margin-top: 8px;
     }
-    
+
     .progress-fill {
       height: 100%;
       background: var(--brand-red);
       transition: width 0.3s ease;
     }
-    
+
     /* Insights Section */
     .insights-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 20px;
     }
-    
+
     .insight-card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 20px;
     }
-    
+
     .insight-title {
       font-size: 16px;
       font-weight: 600;
@@ -469,23 +469,23 @@
       align-items: center;
       gap: 8px;
     }
-    
+
     .insight-list {
       list-style: none;
       padding: 0;
       margin: 0;
     }
-    
+
     .insight-list li {
       padding: 8px 0;
       border-bottom: 1px solid #f1f5f9;
       font-size: 14px;
     }
-    
+
     .insight-list li:last-child {
       border-bottom: none;
     }
-    
+
     /* Loading State */
     .loading {
       display: flex;
@@ -494,7 +494,7 @@
       height: 200px;
       color: var(--muted);
     }
-    
+
     .spinner {
       width: 20px;
       height: 20px;
@@ -504,13 +504,13 @@
       animation: spin 1s linear infinite;
       margin-right: 8px;
     }
-    
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    
-    
+
+
     /* Date Input Styles */
     .date-input {
       width: 100%;
@@ -522,13 +522,13 @@
       background: white;
       transition: border-color 0.2s;
     }
-    
+
     .date-input:focus {
       outline: none;
       border-color: var(--brand-red);
       box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
     }
-    
+
     .btn-refresh {
       width: 100%;
       padding: 8px 12px;
@@ -541,21 +541,21 @@
       cursor: pointer;
       transition: background-color 0.2s;
     }
-    
+
     .btn-refresh:hover {
       background: #c41e3a;
     }
-    
+
     .btn-refresh:active {
       transform: translateY(1px);
     }
-    
+
     .btn-refresh:disabled {
       background: #ccc;
       cursor: not-allowed;
       transform: none;
     }
-    
+
     /* Loading and notification styles */
     .loading-overlay {
       position: fixed;
@@ -569,7 +569,7 @@
       align-items: center;
       z-index: 9999;
     }
-    
+
     .loading-spinner {
       background: white;
       padding: 30px;
@@ -577,7 +577,7 @@
       text-align: center;
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
-    
+
     .spinner {
       border: 4px solid #f3f3f3;
       border-top: 4px solid var(--brand-red);
@@ -587,12 +587,12 @@
       animation: spin 1s linear infinite;
       margin: 0 auto 15px;
     }
-    
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    
+
     /* Skeleton loading styles */
     .skeleton-text {
       height: 24px;
@@ -602,7 +602,7 @@
       border-radius: 4px;
       width: 80%;
     }
-    
+
     .skeleton-text-small {
       height: 16px;
       background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
@@ -611,7 +611,7 @@
       border-radius: 4px;
       width: 60%;
     }
-    
+
     @keyframes skeleton-loading {
       0% {
         background-position: 200% 0;
@@ -620,7 +620,7 @@
         background-position: -200% 0;
       }
     }
-    
+
     .notification {
       position: fixed;
       top: 20px;
@@ -632,30 +632,30 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       animation: slideIn 0.3s ease;
     }
-    
+
     .notification.error {
       background: #f8d7da;
       color: #721c24;
       border-left: 4px solid #dc3545;
     }
-    
+
     .notification.success {
       background: #d4edda;
       color: #155724;
       border-left: 4px solid #28a745;
     }
-    
+
     .notification.info {
       background: #d1ecf1;
       color: #0c5460;
       border-left: 4px solid #17a2b8;
     }
-    
+
     @keyframes slideIn {
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
-    
+
     /* Operator selector styling */
     .operator-select {
       width: 100%;
@@ -669,25 +669,25 @@
       cursor: pointer;
       transition: all 0.3s ease;
     }
-    
+
     .operator-select:hover {
       border-color: var(--brand-red);
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    
+
     .operator-select:focus {
       outline: none;
       border-color: var(--brand-red);
       box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
     }
-    
+
     .operator-select option {
       background: white;
       color: var(--brand-dark);
       padding: 8px;
     }
-    
+
     /* Enhanced insights styling */
     .insight-item {
       display: flex;
@@ -696,43 +696,43 @@
       padding: 8px 0;
       border-bottom: 1px solid #f1f5f9;
     }
-    
+
     .insight-item:last-child {
       border-bottom: none;
     }
-    
+
     .insight-icon {
       font-size: 16px;
       margin-top: 2px;
       flex-shrink: 0;
     }
-    
+
     .insight-text {
       flex: 1;
       line-height: 1.4;
     }
-    
+
     .high-priority {
       background: rgba(239, 68, 68, 0.1);
       padding: 8px;
       border-radius: 6px;
       border-left: 3px solid #ef4444;
     }
-    
+
     .medium-priority {
       background: rgba(245, 158, 11, 0.1);
       padding: 8px;
       border-radius: 6px;
       border-left: 3px solid #f59e0b;
     }
-    
+
     .action-item {
       background: rgba(59, 130, 246, 0.1);
       padding: 8px;
       border-radius: 6px;
       border-left: 3px solid #3b82f6;
     }
-    
+
     @keyframes fadeInUp {
       from {
         opacity: 0;
@@ -743,7 +743,7 @@
         transform: translateY(0);
       }
     }
-    
+
     /* Enhanced Filters Bar */
     .enhanced-filters-bar {
       background: var(--card);
@@ -753,7 +753,7 @@
       margin-bottom: 32px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
-    
+
     /* Mobile responsive filters */
     @media (max-width: 768px) {
       .enhanced-filters-bar {
@@ -785,7 +785,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 24px;
     }
-    
+
     /* Responsive date periods pour mobile */
     @media (max-width: 900px) {
       .date-periods {
@@ -823,7 +823,7 @@
       gap: 12px;
       margin-bottom: 12px;
     }
-    
+
     /* Mobile responsive date inputs */
     @media (max-width: 600px) {
       .date-inputs {
@@ -831,22 +831,22 @@
         gap: 8px;
         align-items: stretch;
       }
-      
+
       .date-separator {
         text-align: center;
         order: 1; /* Place separator between inputs */
       }
-      
+
       /* Multi-select mobile responsive */
       .multi-select-dropdown {
         max-height: 200px;
       }
-      
+
       .checkbox-label {
         padding: 10px 0;
         font-size: 16px; /* Plus grand pour mobile */
       }
-      
+
       .checkmark {
         width: 18px;
         height: 18px;
@@ -935,13 +935,13 @@
       border-color: var(--brand-red);
       box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
     }
-    
+
     /* Multi-select styles */
     .multi-select-container {
       position: relative;
       width: 100%;
     }
-    
+
     .multi-select-header {
       display: flex;
       justify-content: space-between;
@@ -955,22 +955,22 @@
       user-select: none;
       font-size: 14px;
     }
-    
+
     .multi-select-header:hover {
       border-color: var(--brand-red);
       box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
     }
-    
+
     .dropdown-arrow {
       transition: transform 0.2s ease;
       font-size: 12px;
       color: var(--muted);
     }
-    
+
     .multi-select-header.open .dropdown-arrow {
       transform: rotate(180deg);
     }
-    
+
     .multi-select-dropdown {
       position: absolute;
       top: 100%;
@@ -985,18 +985,18 @@
       max-height: 250px;
       overflow-y: auto;
     }
-    
+
     .select-all-option {
       padding: 8px 12px;
       border-bottom: 1px solid var(--border);
       background: #f8fafc;
     }
-    
+
     .operators-list {
       max-height: 200px;
       overflow-y: auto;
     }
-    
+
     .checkbox-label {
       display: flex;
       align-items: center;
@@ -1007,15 +1007,15 @@
       user-select: none;
       transition: background 0.2s ease;
     }
-    
+
     .checkbox-label:hover {
       background: rgba(227, 6, 19, 0.05);
     }
-    
+
     .checkbox-label input[type="checkbox"] {
       display: none;
     }
-    
+
     .checkmark {
       width: 16px;
       height: 16px;
@@ -1027,23 +1027,23 @@
       transition: all 0.2s ease;
       flex-shrink: 0;
     }
-    
+
     .checkbox-label input[type="checkbox"]:checked + .checkmark {
       background: var(--brand-red);
       border-color: var(--brand-red);
     }
-    
+
     .checkbox-label input[type="checkbox"]:checked + .checkmark::after {
       content: '✓';
       color: white;
       font-size: 11px;
       font-weight: bold;
     }
-    
+
     .operator-option {
       padding: 4px 12px;
     }
-    
+
     /* Eklektik Integration Styles */
     .eklektik-filters {
       display: flex;
@@ -1051,7 +1051,7 @@
       flex-wrap: wrap;
       margin-bottom: 16px;
     }
-    
+
     .api-status-item {
       background: #f8fafc;
       border: 1px solid var(--border);
@@ -1059,7 +1059,7 @@
       padding: 16px;
       text-align: center;
     }
-    
+
     .status-label {
       font-size: 12px;
       color: var(--muted);
@@ -1067,34 +1067,34 @@
       font-weight: 600;
       text-transform: uppercase;
     }
-    
+
     .status-value {
       font-size: 16px;
       font-weight: 600;
       color: var(--text);
     }
-    
+
     .status-indicator {
       margin-right: 8px;
     }
-    
+
     .status-indicator.success {
       color: var(--success);
     }
-    
+
     .status-indicator.warning {
       color: var(--warning);
     }
-    
+
     .status-indicator.danger {
       color: var(--danger);
     }
-    
+
     .loading-spinner {
       color: var(--muted);
       font-style: italic;
     }
-    
+
     /* Service and Status Badges */
     .service-badge, .status-badge {
       padding: 4px 8px;
@@ -1104,74 +1104,74 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    
+
     .service-badge.service-subscription {
       background: #dbeafe;
       color: #1e40af;
     }
-    
+
     .service-badge.service-promotion {
       background: #fed7d7;
       color: #c53030;
     }
-    
+
     .service-badge.service-notification {
       background: #fef5e7;
       color: #d69e2e;
     }
-    
+
     .service-badge.service-unknown {
       background: #f7fafc;
       color: #4a5568;
     }
-    
+
     .status-badge.status-active {
       background: #d1fae5;
       color: #065f46;
     }
-    
+
     .status-badge.status-inactive {
       background: #fed7d7;
       color: #c53030;
     }
-    
+
     .status-badge.status-pending {
       background: #fef5e7;
       color: #d69e2e;
     }
-    
+
     .status-badge.status-unknown {
       background: #f7fafc;
       color: #4a5568;
     }
-    
+
     /* Usage meter */
     .usage-meter {
       position: relative;
       width: 100%;
       max-width: 120px;
     }
-    
+
     .usage-bar {
       height: 8px;
       background: linear-gradient(90deg, #22c55e 0%, #eab308 70%, #ef4444 100%);
       border-radius: 4px;
       transition: width 0.3s ease;
     }
-    
+
     .usage-text {
       font-size: 11px;
       color: var(--muted);
       margin-top: 2px;
       display: block;
     }
-    
+
     /* Action buttons */
     .action-buttons {
       display: flex;
       gap: 4px;
     }
-    
+
     .btn-sm {
       padding: 4px 8px;
       border: none;
@@ -1180,28 +1180,28 @@
       font-size: 12px;
       transition: all 0.2s ease;
     }
-    
+
     .btn-sm.btn-primary {
       background: var(--brand-red);
       color: white;
     }
-    
+
     .btn-sm.btn-primary:hover {
       background: #dc2626;
       transform: translateY(-1px);
     }
-    
+
     .btn-sm.btn-secondary {
       background: #f1f5f9;
       color: var(--text);
       border: 1px solid var(--border);
     }
-    
+
     .btn-sm.btn-secondary:hover {
       background: #e2e8f0;
       transform: translateY(-1px);
     }
-    
+
     /* Test Statistics Cards */
     .test-stat-card {
       background: white;
@@ -1210,7 +1210,7 @@
       padding: 16px;
       text-align: center;
     }
-    
+
     .stat-label {
       font-size: 12px;
       color: var(--muted);
@@ -1218,19 +1218,19 @@
       font-weight: 600;
       text-transform: uppercase;
     }
-    
+
     .stat-value {
       font-size: 24px;
       font-weight: 700;
       color: var(--text);
     }
-    
+
     /* Progress animations */
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    
+
     /* Button success style */
     .btn-success {
       background: #10b981;
@@ -1242,93 +1242,93 @@
       transition: all 0.2s ease;
       cursor: pointer;
     }
-    
+
     .btn-success:hover {
       background: #059669;
       border-color: #059669;
       transform: translateY(-1px);
     }
-    
+
     .btn-success:disabled {
       background: #9ca3af;
       border-color: #9ca3af;
       cursor: not-allowed;
       transform: none;
     }
-    
+
     /* Responsive Eklektik */
     @media (max-width: 768px) {
       .eklektik-filters {
         flex-direction: column;
         gap: 8px;
       }
-      
+
       .api-status-item {
         padding: 12px;
       }
-      
+
       .status-label {
         font-size: 11px;
       }
-      
+
       .status-value {
         font-size: 14px;
       }
-      
+
       /* KPIs Eklektik responsive */
       .kpi-card {
         grid-column: span 12 !important; /* 1 par ligne sur mobile */
       }
     }
-    
+
     @media (max-width: 600px) {
       .kpi-card {
         grid-column: span 12 !important; /* 1 par ligne sur petit mobile */
         margin-bottom: 12px;
       }
-      
+
       .kpi-title {
         font-size: 11px;
       }
-      
+
       .kpi-value {
         font-size: 24px;
       }
-      
+
       .kpi-delta {
         font-size: 11px;
       }
     }
-    
+
     @media (max-width: 480px) {
       .kpi-card {
         grid-column: span 12 !important;
         margin-bottom: 10px;
         padding: 12px;
       }
-      
+
       .kpi-title {
         font-size: 10px;
       }
-      
+
       .kpi-value {
         font-size: 20px;
       }
-      
+
       .kpi-delta {
         font-size: 10px;
       }
     }
-      
+
       .usage-meter {
         max-width: 80px;
       }
-      
+
       .action-buttons {
         flex-direction: column;
         gap: 2px;
       }
-      
+
       .btn-sm {
         padding: 3px 6px;
         font-size: 11px;
@@ -1577,50 +1577,50 @@
     }
 
     /* === SYSTÈME RESPONSIVE AMÉLIORÉ 5-BREAKPOINTS === */
-    
+
     /* Large Desktop (>1400px) - Layout optimal */
     @media (min-width: 1400px) {
       .container { max-width: 1600px; }
-      
+
       /* Header reste aligné avec le contenu élargi */
       .header {
         padding: 16px 20px;
       }
-      
+
       /* Grid KPI optimal large desktop */
       .main-grid {
         grid-template-columns: repeat(12, 1fr);
         gap: 20px;
       }
     }
-    
+
     /* Desktop (1200px - 1400px) */
     @media (max-width: 1200px) {
       .merchants-kpis-row {
         grid-template-columns: repeat(3, 1fr);
       }
-      
+
       .merchants-kpi:nth-child(4),
       .merchants-kpi:nth-child(5) {
         grid-column: span 1;
       }
-      
+
       /* Grid plus compact */
       .main-grid {
         gap: 16px;
       }
     }
-    
+
     /* Tablet Large (900px - 1200px) */
     @media (max-width: 900px) {
       .kpi-card { grid-column: span 4; } /* 3 par ligne */
       .chart-card { grid-column: span 6; } /* 2 par ligne */
-      
+
       .trans-kpis-row,
       .sub-kpis-row {
         grid-template-columns: repeat(3, 1fr);
       }
-      
+
       /* Typography responsive tablet large */
       .kpi-value {
         font-size: clamp(28px, 4vw, 36px);
@@ -1633,54 +1633,54 @@
     /* Tablet (768px - 900px) */
     @media (max-width: 768px) {
       .kpi-card { grid-column: span 6; } /* 2 par ligne */
-      .chart-card { 
+      .chart-card {
         grid-column: span 12; /* 1 par ligne */
         min-height: 280px; /* Hauteur réduite */
       }
-      
+
       /* Header responsive sur tablet */
       .header {
         padding: 14px 16px;
         flex-wrap: wrap;
         gap: 12px;
       }
-      
+
       .header h1 {
         font-size: 20px; /* Titre plus petit sur tablet */
       }
-      
-      .nav-tabs { 
+
+      .nav-tabs {
         flex-direction: column;
         gap: 8px;
       }
-      .nav-tab { 
-        text-align: center; 
+      .nav-tab {
+        text-align: center;
         padding: 12px 16px;
       }
-      
+
       .merchants-kpis-row {
         grid-template-columns: repeat(2, 1fr);
       }
-      
+
       .merchants-charts-row {
         grid-template-columns: 1fr;
       }
-      
+
       .date-periods {
         grid-template-columns: 1fr;
         gap: 16px;
       }
-      
+
       .controls-section {
         flex-direction: column;
         align-items: stretch;
       }
-      
+
       .action-buttons {
         margin-left: 0;
         justify-content: center;
       }
-      
+
       /* Typography responsive tablet */
       .kpi-value {
         font-size: clamp(26px, 4.5vw, 32px);
@@ -1691,7 +1691,7 @@
       .kpi-change {
         font-size: clamp(10px, 2.5vw, 12px);
       }
-      
+
       /* Enhanced table responsiveness for tablet */
       .table-wrapper {
         overflow-x: auto;
@@ -1699,30 +1699,30 @@
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       }
-      
+
       .enhanced-table {
         min-width: 500px;
         font-size: 13px;
       }
-      
+
       .enhanced-table th,
       .enhanced-table td {
         padding: 12px 8px;
       }
     }
-    
+
     /* Mobile Large (480px - 768px) */
     @media (max-width: 600px) {
       .kpi-card { grid-column: span 6; } /* 2 par ligne maintenu */
       .chart-card { min-height: 250px; }
-      
+
       .container { padding: 16px 12px; }
-      
+
       /* Header alignment sur mobile */
       .header {
         padding: 12px 12px; /* Même padding que le container */
       }
-      
+
       /* Navigation tabs optimisées pour mobile */
       .nav-tabs {
         margin-bottom: 16px;
@@ -1732,7 +1732,7 @@
         top: 2px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       }
-      
+
       .nav-tab {
         padding: 10px 12px;
         font-size: 14px;
@@ -1740,85 +1740,85 @@
         /* Plus compact sur mobile */
         margin: 0 2px;
       }
-      
+
       .nav-tab:first-child {
         margin-left: 0;
       }
-      
+
       .nav-tab:last-child {
         margin-right: 0;
       }
-      
+
       /* KPI values responsive - taille réduite */
-      .kpi-value { 
-        font-size: clamp(20px, 4.5vw, 28px); 
+      .kpi-value {
+        font-size: clamp(20px, 4.5vw, 28px);
       }
-      .kpi-label { 
-        font-size: clamp(10px, 2.5vw, 12px); 
+      .kpi-label {
+        font-size: clamp(10px, 2.5vw, 12px);
       }
-      .kpi-change { 
-        font-size: clamp(11px, 2.5vw, 13px); 
+      .kpi-change {
+        font-size: clamp(11px, 2.5vw, 13px);
       }
-      
+
       /* Réduction de la hauteur des cartes KPI pour mobile */
       .kpi-card {
         padding: 12px 16px;
         min-height: 75px;
       }
-      
+
       /* Logo responsive sur mobile */
       .logo {
         width: 100px;
         height: auto;
       }
-      
+
       .header h1 {
         font-size: 18px;
       }
-      
+
       /* User menu responsive */
       .user-menu {
         padding: 6px 12px;
       }
-      
+
       .user-name {
         font-size: 12px;
       }
-      
+
       .user-role {
         font-size: 10px;
       }
-      
+
       .admin-btn {
         padding: 4px 8px;
         font-size: 10px;
       }
-      
+
       .logout-btn {
         padding: 4px 8px;
         font-size: 10px;
       }
     }
-    
+
     /* Mobile Small (<480px) */
     @media (max-width: 480px) {
       .kpi-card { grid-column: span 12; } /* 1 par ligne sur très petit écran */
       .chart-card { min-height: 220px; }
-      
+
       .container { padding: 12px 8px; }
-      
+
       /* Navigation tabs ultra compactes */
       .nav-tabs {
         padding: 4px;
         margin-bottom: 12px;
       }
-      
+
       .nav-tab {
         padding: 8px 10px;
         font-size: 13px;
         border-radius: 6px;
       }
-      
+
       /* Header alignment sur très petit mobile */
       .header {
         padding: 8px 8px; /* Même padding que le container */
@@ -1826,28 +1826,28 @@
         gap: 12px;
         text-align: center;
       }
-      
+
       .header-left, .header-right {
         justify-content: center;
         width: 100%;
       }
-      
+
       .header-left {
         flex-direction: column;
         gap: 8px;
       }
-      
+
       /* Logo très compact sur très petit mobile */
       .logo {
         width: 80px;
         height: auto;
       }
-      
+
       .header h1 {
         font-size: 16px;
         text-align: center;
       }
-      
+
       /* User menu stack vertical sur très petit mobile */
       .user-menu {
         flex-direction: column;
@@ -1855,66 +1855,66 @@
         padding: 8px;
         align-items: center;
       }
-      
+
       .user-info {
         align-items: center;
         text-align: center;
       }
-      
+
       .admin-btn, .logout-btn {
         padding: 4px 8px;
         font-size: 9px;
         min-width: 60px;
       }
-      
+
       .merchants-kpis-row,
       .trans-kpis-row,
       .sub-kpis-row {
         grid-template-columns: 1fr;
         gap: 12px;
       }
-      
+
       /* Typography ultra mobile */
-      .kpi-value { 
-        font-size: clamp(20px, 6vw, 28px); 
+      .kpi-value {
+        font-size: clamp(20px, 6vw, 28px);
       }
-      h1, h2 { 
-        font-size: clamp(18px, 5vw, 24px); 
+      h1, h2 {
+        font-size: clamp(18px, 5vw, 24px);
       }
-      h3 { 
-        font-size: clamp(16px, 4vw, 20px); 
+      h3 {
+        font-size: clamp(16px, 4vw, 20px);
       }
-      
+
       .enhanced-filters-bar {
         padding: 16px;
       }
-      
+
       .date-inputs {
         flex-direction: column;
         gap: 8px;
       }
-      
+
       .date-separator {
         text-align: center;
         margin: 8px 0;
       }
-      
+
       /* Tables très responsive */
       .table-wrapper {
         font-size: 11px;
         border-radius: 6px;
       }
-      
+
       .enhanced-table {
         min-width: 320px; /* Largeur minimale pour très petit mobile */
       }
-      
+
       .enhanced-table th,
       .enhanced-table td {
         padding: 6px 3px;
         font-size: 10px;
       }
-      
+
       .enhanced-table th {
         font-size: 9px;
         text-transform: none;
@@ -2000,7 +2000,7 @@
       <div class="header-right">
         <span>📊</span>
         <span>{{ Auth::user()->isSuperAdmin() ? 'Vue Globale' : 'Vue ' . (Auth::user()->getPrimaryOperatorName() ?? 'Opérateur') }}</span>
-        
+
         <div class="user-menu">
           <div class="user-info" id="profileMenuToggle" style="cursor: pointer;">
             <div class="user-name">{{ Auth::user()->name ?? 'Utilisateur' }}</div>
@@ -2056,7 +2056,7 @@
       document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
       });
-      
+
       // Remove active class from all tabs
       document.querySelectorAll('.nav-tab').forEach(tab => {
         tab.classList.remove('active');
@@ -2070,18 +2070,18 @@
 
       // Add active class to clicked tab
       event.target.classList.add('active');
-      
+
       // Auto-scroll to center active tab on mobile
       if (typeof centerActiveTab === 'function') {
         centerActiveTab(event.target);
       }
-      
+
       // Ne pas recharger les données Eklektik à chaque visite d'onglet
       // (les données se chargent en une seule fois au démarrage ou via le bouton d'actualisation)
       if (tabName === 'eklektik') {
         console.log('📞 Onglet Eklektik activé (sans rechargement des données)');
       }
-      
+
       // Resize charts when tab becomes visible
       setTimeout(() => {
         // Resize main dashboard charts
@@ -2090,7 +2090,7 @@
             chart.resize();
           }
         });
-        
+
         // Eklektik charts removed - no need to resize
       }, 100);
     }
@@ -2104,7 +2104,7 @@
           <span class="section-icon">📅</span>
           <span>Sélection des Périodes</span>
         </div>
-        
+
         <div class="date-periods">
           <!-- Période Principale -->
           <div class="date-period primary-period">
@@ -2185,19 +2185,19 @@
                     <span id="refresh-text">📊 Actualiser</span>
                     <span id="refresh-loading" style="display: none;">⏳ Chargement...</span>
                   </button>
-                  
+
                   <button class="btn-secondary enhanced-btn" onclick="setSmartComparison()">
                     🔄 Comparaison Auto
                   </button>
-                  
+
                   <button class="btn-accent enhanced-btn" onclick="toggleDatePickerMode()">
                     📆 Raccourcis
                   </button>
-                  
+
                   <button class="btn-info enhanced-btn" onclick="showKeyboardShortcutsHelp()">
                     ⌨️ Aide
                   </button>
-                  
+
                   <!-- Performance indicator -->
                   <div class="performance-indicator" id="performance-indicator" style="display: none;">
                     <span class="performance-icon">⚡</span>
@@ -2344,7 +2344,7 @@
       @if(!Auth::user()->isCollaborator())
       <div class="grid" style="margin-top: 20px;">
         <h3 style="grid-column: 1 / -1; margin-bottom: 15px; color: var(--text); font-size: 18px; font-weight: 600;">📊 Analyses Avancées</h3>
-        
+
         <!-- Activations par Canal -->
         <div class="card kpi-card">
           <div class="kpi-title">Activations CB <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre d’abonnements commencés via carte bancaire.">ⓘ</span></div>
@@ -2390,7 +2390,7 @@
           <div class="kpi-value" id="sub-averageLifespan">Loading...</div>
           <div class="kpi-delta" id="sub-averageLifespanDelta">Loading...</div>
         </div>
-        
+
       </div>
       @endif
 
@@ -2701,7 +2701,7 @@
               </tbody>
             </table>
           </div>
-          
+
           <!-- Pagination Controls -->
           <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-top: 1px solid var(--border);">
             <div class="pagination-info">
@@ -2891,14 +2891,14 @@
               📋 Copy
             </button>
           </div>
-          
+
           <!-- Search bar -->
           <div style="padding: 16px; border-bottom: 1px solid var(--border);">
-            <input type="text" id="timweStatsSearch" placeholder="🔍 Rechercher..." 
-                   onkeyup="filterTimweStats()" 
+            <input type="text" id="timweStatsSearch" placeholder="🔍 Rechercher..."
+                   onkeyup="filterTimweStats()"
                    style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px;">
           </div>
-          
+
           <div class="table-container" style="max-height: 600px; overflow-y: auto;">
             <table id="timweStatsTable">
               <thead style="position: sticky; top: 0; background: var(--card); z-index: 10;">
@@ -3009,14 +3009,14 @@
               📋 Copy
             </button>
           </div>
-          
+
           <!-- Search bar -->
           <div style="padding: 16px; border-bottom: 1px solid var(--border);">
-            <input type="text" id="ooredooStatsSearch" placeholder="🔍 Rechercher..." 
-                   onkeyup="filterOoredooStats()" 
+            <input type="text" id="ooredooStatsSearch" placeholder="🔍 Rechercher..."
+                   onkeyup="filterOoredooStats()"
                    style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px;">
           </div>
-          
+
           <div class="table-container" style="max-height: 600px; overflow-y: auto;">
             <table id="ooredooStatsTable">
               <thead style="position: sticky; top: 0; background: var(--card); z-index: 10;">
@@ -3167,14 +3167,14 @@
       muted: '#64748b',
       mutedRgba: 'rgba(100, 116, 139, 0.2)'
     };
-    
+
     // Alias global immédiat
     const THEME_COLORS = window.THEME_COLORS;
-    
+
     // Global variables for charts and data
     let dashboardData = null;
     let charts = {};
-    
+
     // Pagination variables
     let allMerchants = [];
     let currentMerchantsPage = 1;
@@ -3197,7 +3197,7 @@
       } catch (e) {
         console.warn('Erreur accès THEME_COLORS:', e);
       }
-      
+
       // Fallback colors
       const fallbackColors = {
         primary: '#E30613',
@@ -3209,7 +3209,7 @@
         muted: '#64748b',
         mutedRgba: 'rgba(100, 116, 139, 0.2)'
       };
-      
+
       return fallbackColors[colorName] || '#E30613';
     }
 
@@ -3331,10 +3331,10 @@
       const isMobileLarge = screenWidth >= 600 && screenWidth < 768;
       const isMobileSmall = screenWidth >= 480 && screenWidth < 600;
       const isMobileTiny = screenWidth < 480;
-      
+
       // Determine font sizes based on breakpoint
       let legendFontSize, tooltipTitleSize, tooltipBodySize, tickFontSize, padding;
-      
+
       if (isLargeDesktop) {
         legendFontSize = 13; tooltipTitleSize = 15; tooltipBodySize = 14; tickFontSize = 12; padding = 24;
       } else if (isDesktop) {
@@ -3350,10 +3350,10 @@
       } else { // isMobileTiny
         legendFontSize = 7; tooltipTitleSize = 9; tooltipBodySize = 8; tickFontSize = 6; padding = 6;
       }
-      
+
       const isMobile = screenWidth < 768;
       const isSmallMobile = screenWidth < 480;
-      
+
       const baseOptions = {
         responsive: true,
         maintainAspectRatio: false,
@@ -3431,7 +3431,7 @@
           }
         }
       };
-      
+
       // Simple merge avec priorité aux options personnalisées
       return Object.assign({}, baseOptions, customOptions);
     }
@@ -3449,7 +3449,7 @@
             }
           });
         }
-        
+
         // Eklektik charts removed (they were buggy)
       }, 250);
     });
@@ -3486,12 +3486,12 @@
             }
           }
         };
-        
+
         // Désactiver complètement toutes les animations
         Chart.defaults.plugins = Chart.defaults.plugins || {};
         Chart.defaults.plugins.legend = Chart.defaults.plugins.legend || {};
         Chart.defaults.plugins.legend.animation = false;
-        
+
         // Désactiver les animations de survol
         Chart.defaults.elements = Chart.defaults.elements || {};
         Chart.defaults.elements.point = Chart.defaults.elements.point || {};
@@ -3504,18 +3504,18 @@
           intersect: false,
           mode: 'index'
         };
-        
+
         // Configuration Chart.js pour un comportement normal (pas d'interception globale)
         if (typeof Chart !== 'undefined') {
           // Configuration légère pour améliorer les performances
           Chart.defaults.maintainAspectRatio = false;
           Chart.defaults.responsive = true;
         }
-        
-        
-        
-        
-        
+
+
+
+
+
         console.log('✅ Chart.js configuré avec succès');
       } else {
         console.error('❌ Chart.js non chargé');
@@ -3524,21 +3524,21 @@
       setDefaultDates();
       updateDateRange();
       initializeDashboard();
-      
+
       // Charger les données Eklektik APRÈS le dashboard (non-bloquant)
       // Ne pas charger automatiquement pour éviter les doubles chargements
       // L'utilisateur peut charger Eklektik manuellement via l'onglet
-      
+
       // Initialize mobile navigation
       initializeMobileNavigation();
-      
+
       // ❌ Auto-refresh désactivé (demande utilisateur)
       // setInterval(loadDashboardData, 5 * 60 * 1000);
-      
+
       // Initialize keyboard shortcuts
       initializeKeyboardShortcuts();
     });
-    
+
     // Initialize mobile-specific navigation features
     function initializeMobileNavigation() {
       // Center active tab on page load (mobile)
@@ -3546,48 +3546,48 @@
       if (activeTab && window.innerWidth <= 768) {
         setTimeout(() => centerActiveTab(activeTab), 200);
       }
-      
+
       // Add touch/swipe support for tab navigation (optional)
       if (window.innerWidth <= 768) {
         addMobileSwipeSupport();
       }
     }
-    
+
     // Add swipe support for mobile tab navigation
     function addMobileSwipeSupport() {
       const tabsContainer = document.querySelector('.nav-tabs');
       let startX = 0;
       let scrollLeft = 0;
-      
+
       tabsContainer.addEventListener('touchstart', (e) => {
         startX = e.touches[0].pageX - tabsContainer.offsetLeft;
         scrollLeft = tabsContainer.scrollLeft;
       }, { passive: true });
-      
+
       tabsContainer.addEventListener('touchmove', (e) => {
         const x = e.touches[0].pageX - tabsContainer.offsetLeft;
         const walk = (x - startX) * 2; // Adjust scroll speed
         tabsContainer.scrollLeft = scrollLeft - walk;
       }, { passive: true });
     }
-    
+
     // Advanced keyboard shortcuts for power users
     function initializeKeyboardShortcuts() {
       document.addEventListener('keydown', function(e) {
         // Only trigger shortcuts when no input is focused
-        if (document.activeElement.tagName === 'INPUT' || 
-            document.activeElement.tagName === 'SELECT' || 
+        if (document.activeElement.tagName === 'INPUT' ||
+            document.activeElement.tagName === 'SELECT' ||
             document.activeElement.tagName === 'TEXTAREA') {
           return;
         }
-        
+
         // Ctrl/Cmd + R - Refresh dashboard
         if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
           e.preventDefault();
           loadDashboardData();
           showNotification('🔄 Dashboard actualisé via raccourci clavier', 'info', 2000);
         }
-        
+
         // Tab navigation: 1-5 for tabs
         if (['1', '2', '3', '4', '5'].includes(e.key)) {
           e.preventDefault();
@@ -3601,7 +3601,7 @@
             showNotification(`📊 Onglet ${tabName} activé`, 'info', 1500);
           }
         }
-        
+
         // E for Export (if on merchants tab)
         if (e.key === 'e' || e.key === 'E') {
           const activeTab = document.querySelector('.tab-content.active');
@@ -3611,20 +3611,20 @@
             showNotification('📥 Export des données marchands lancé', 'success', 2000);
           }
         }
-        
+
         // D for Date shortcuts modal
         if (e.key === 'd' || e.key === 'D') {
           e.preventDefault();
           toggleDatePickerMode();
           showNotification('📅 Raccourcis de dates', 'info', 1500);
         }
-        
+
         // H for Help (show shortcuts)
         if (e.key === 'h' || e.key === 'H' || e.key === '?') {
           e.preventDefault();
           showKeyboardShortcutsHelp();
         }
-        
+
         // Escape to close modals/notifications
         if (e.key === 'Escape') {
           // Close date shortcuts modal if open
@@ -3632,24 +3632,24 @@
           if (modal && modal.style.display !== 'none') {
             modal.style.display = 'none';
           }
-          
+
           // Close help modal if open
           const helpModal = document.getElementById('shortcuts-help-modal');
           if (helpModal && helpModal.style.display !== 'none') {
             helpModal.style.display = 'none';
           }
-          
+
           // Close all notifications
           document.querySelectorAll('.notification').forEach(n => n.remove());
         }
       });
     }
-    
+
     function showKeyboardShortcutsHelp() {
       // Remove existing help modal
       const existing = document.getElementById('shortcuts-help-modal');
       if (existing) existing.remove();
-      
+
       const modal = document.createElement('div');
       modal.id = 'shortcuts-help-modal';
       modal.innerHTML = `
@@ -3659,48 +3659,48 @@
               <h3 style="margin: 0; color: var(--brand-red); font-size: 20px;">⌨️ Raccourcis Clavier</h3>
               <button onclick="document.getElementById('shortcuts-help-modal').remove()" style="background: none; border: none; font-size: 20px; cursor: pointer; margin-left: auto;">×</button>
             </div>
-            
+
             <div style="space-y: 12px;">
               <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
                 <span><kbd style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">Ctrl+R</kbd></span>
                 <span>Actualiser le dashboard</span>
               </div>
-              
+
               <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
                 <span><kbd style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">1-4</kbd></span>
                 <span>Naviguer entre les onglets</span>
               </div>
-              
+
               <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
                 <span><kbd style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">E</kbd></span>
                 <span>Exporter (onglet Marchands)</span>
               </div>
-              
+
               <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
                 <span><kbd style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">D</kbd></span>
                 <span>Raccourcis de dates</span>
               </div>
-              
+
               <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
                 <span><kbd style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">H / ?</kbd></span>
                 <span>Afficher cette aide</span>
               </div>
-              
+
               <div style="display: flex; justify-content: space-between; padding: 8px 0;">
                 <span><kbd style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">Esc</kbd></span>
                 <span>Fermer modales/notifications</span>
               </div>
             </div>
-            
+
             <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 14px; color: #6c757d;">
               💡 <strong>Astuce :</strong> Ces raccourcis fonctionnent uniquement quand aucun champ de saisie n'est actif.
             </div>
           </div>
         </div>
       `;
-      
+
       document.body.appendChild(modal);
-      
+
       // Close on background click
       modal.addEventListener('click', function(e) {
         if (e.target === modal) {
@@ -3714,23 +3714,23 @@
       try {
         // Show immediate loading state for KPIs (skeleton)
         showKPISkeleton();
-        
+
         // Start loading dashboard data immediately (most important)
         loadDashboardData();
-        
+
         // Load operators in parallel (non-blocking)
         loadOperators().catch(error => {
           console.warn('Operators loading failed:', error);
           // Ne pas utiliser setupFallbackOperators - laisser loadOperators gérer les retries
         });
-        
+
       } catch (error) {
         console.error('Erreur lors de l\'initialisation:', error);
         hideKPISkeleton();
         showNotification('Erreur lors de l\'initialisation du dashboard', 'error');
       }
     }
-    
+
     // Cette fonction n'est plus utilisée - les opérateurs doivent toujours venir de l'API
     // Conservée uniquement pour référence mais ne devrait jamais être appelée
     function setupFallbackOperators() {
@@ -3741,14 +3741,14 @@
         operatorInfo.style.color = '#ef4444';
       }
     }
-    
+
     // Show skeleton loading for KPIs immediately
     function showKPISkeleton() {
       const kpiValues = document.querySelectorAll('.kpi-value');
       kpiValues.forEach(el => {
         el.innerHTML = '<div class="skeleton-text"></div>';
       });
-      
+
       const kpiDeltas = document.querySelectorAll('.kpi-delta');
       kpiDeltas.forEach(el => {
         // Ne pas ajouter de skeleton pour les KPIs Timwe (qui seront masqués par updateKPI)
@@ -3757,54 +3757,54 @@
           el.innerHTML = '<div class="skeleton-text-small"></div>';
         }
       });
-      
+
       // Reset progress bars to 0
       const progressBars = document.querySelectorAll('.progress-fill');
       progressBars.forEach(bar => {
         bar.style.width = '0%';
       });
     }
-    
+
     // Hide skeleton loading
     function hideKPISkeleton() {
       // This will be replaced by real values when updateKPIs is called
     }
-    
+
     // Progress bar issue resolved: height was 0px
-    
+
     // Update Overview conversion progress bar safely
     function updateOverviewConversionProgressBar(conversionRateData) {
       const conversionProgress = document.getElementById('overview-conversionProgress');
-      
+
       if (conversionProgress && conversionRateData && typeof conversionRateData.current !== 'undefined') {
         const percentage = Math.min(100, Math.max(0, (conversionRateData.current / 30) * 100));
-        
+
         conversionProgress.style.width = `${percentage}%`;
         conversionProgress.style.transition = 'width 0.5s ease-in-out';
         conversionProgress.style.backgroundColor = getThemeColor('primary');
         conversionProgress.style.height = '8px'; // Fixed: same as transactions
         conversionProgress.style.display = 'block';
-        
+
       } else if (conversionProgress) {
         // Fallback: set to 0% if no data
         conversionProgress.style.width = '0%';
         conversionProgress.style.height = '8px';
       }
     }
-    
+
     // Update conversion progress bar safely
     function updateConversionProgressBar(conversionRateData) {
       const conversionProgress = document.getElementById('trans-conversionProgress');
-      
+
       if (conversionProgress && conversionRateData && typeof conversionRateData.current !== 'undefined') {
         const percentage = Math.min(100, Math.max(0, (conversionRateData.current / 30) * 100));
-        
+
         conversionProgress.style.width = `${percentage}%`;
         conversionProgress.style.transition = 'width 0.5s ease-in-out';
         conversionProgress.style.backgroundColor = getThemeColor('primary');
         conversionProgress.style.height = '8px'; // Fixed: was 0px height
         conversionProgress.style.display = 'block';
-        
+
       } else if (conversionProgress) {
         // Fallback: set to 0% if no data
         conversionProgress.style.width = '0%';
@@ -3813,14 +3813,14 @@
     }
 
     // Tab switching functionality - Supprimé (défini plus haut)
-    
 
-    
-    
-    
+
+
+
+
     function updateEklektikTable(numbers) {
       const tbody = document.getElementById('eklektik-numbers-tbody');
-      
+
       if (!numbers || numbers.length === 0) {
         tbody.innerHTML = `
           <tr>
@@ -3831,7 +3831,7 @@
         `;
         return;
       }
-      
+
       tbody.innerHTML = numbers.map(number => `
         <tr>
           <td><strong>${number.phone_number}</strong></td>
@@ -3868,8 +3868,8 @@
           </td>
           <td>
             <span class="source-badge source-${(number.source || 'unknown').toLowerCase()}" style="font-size: 10px;">
-              ${number.source === 'EKLEKTIK_API_TESTED' ? '🟢 API Testé' : 
-                number.source === 'LOCAL_DATABASE_EKLEKTIK_ONLY' ? '🔵 Local' : 
+              ${number.source === 'EKLEKTIK_API_TESTED' ? '🟢 API Testé' :
+                number.source === 'LOCAL_DATABASE_EKLEKTIK_ONLY' ? '🔵 Local' :
                 number.source === 'LOCAL_DATABASE_READY_FOR_API_TEST' ? '🟡 Prêt pour Test' :
                 number.source === 'FALLBACK_LOCAL_DATA' ? '🟡 Fallback' : '❓ Unknown'}
             </span>
@@ -3887,7 +3887,7 @@
         </tr>
       `).join('');
     }
-    
+
     function updateEklektikApiStatus(apiStatus) {
       // Connection status
       const connectionEl = document.getElementById('eklektik-api-status');
@@ -3898,7 +3898,7 @@
         </span>
         ${isConnected ? 'Connecté' : 'Déconnecté'}
       `;
-      
+
       // Response time
       const responseTimeEl = document.getElementById('eklektik-response-time');
       const responseTime = apiStatus.responseTime || 0;
@@ -3907,14 +3907,14 @@
         <span class="status-indicator ${timeStatus}">⚡</span>
         ${responseTime}ms
       `;
-      
+
       // Last sync
       const lastSyncEl = document.getElementById('eklektik-last-sync');
       lastSyncEl.innerHTML = `
         <span class="status-indicator">📊</span>
         ${formatDate(apiStatus.lastSync) || 'Jamais'}
       `;
-      
+
       // Sync status
       const syncStatusEl = document.getElementById('eklektik-sync-status');
       const syncStatus = apiStatus.syncStatus || 'unknown';
@@ -3924,10 +3924,10 @@
         ${syncStatus === 'success' ? 'OK' : syncStatus === 'error' ? 'Erreur' : 'En cours'}
       `;
     }
-    
+
     function createEklektikCharts(chartsData) {
       console.log('🔍 [EKLEKTIK DEBUG] Création des graphiques avec données:', chartsData);
-      
+
       // Destroy existing charts to prevent conflicts
       if (window.eklektikCharts) {
         Object.values(window.eklektikCharts).forEach(chart => {
@@ -3937,7 +3937,7 @@
         });
       }
       window.eklektikCharts = {};
-      
+
       // Usage by service chart
       const usageCtx = document.getElementById('eklektik-usage-chart')?.getContext('2d');
       if (usageCtx && chartsData.serviceUsage) {
@@ -3967,7 +3967,7 @@
           }
         });
       }
-      
+
       // Timeline chart
       const timelineCtx = document.getElementById('eklektik-timeline-chart')?.getContext('2d');
       if (timelineCtx && chartsData.timeline) {
@@ -4012,7 +4012,7 @@
         });
       }
     }
-    
+
     // Variables globales pour la pagination
     let currentPage = 1;
     let pageSize = 20;
@@ -4024,7 +4024,7 @@
       allEklektikNumbers = numbers || [];
       totalNumbers = allEklektikNumbers.length;
       currentPage = 1;
-      
+
       updatePaginationDisplay();
       updateTableWithPagination();
     }
@@ -4032,10 +4032,10 @@
     function updatePaginationDisplay() {
       const start = ((currentPage - 1) * pageSize) + 1;
       const end = Math.min(currentPage * pageSize, totalNumbers);
-      
-      document.getElementById('eklektik-pagination-info').textContent = 
+
+      document.getElementById('eklektik-pagination-info').textContent =
         `Affichage des numéros ${start}-${end} sur ${totalNumbers}`;
-      
+
       // Update button states
       document.getElementById('prev-page-btn').disabled = currentPage <= 1;
       document.getElementById('next-page-btn').disabled = currentPage >= Math.ceil(totalNumbers / pageSize);
@@ -4043,13 +4043,13 @@
 
     function changePage(direction) {
       const maxPages = Math.ceil(totalNumbers / pageSize);
-      
+
       if (direction === 1 && currentPage < maxPages) {
         currentPage++;
       } else if (direction === -1 && currentPage > 1) {
         currentPage--;
       }
-      
+
       updatePaginationDisplay();
       updateTableWithPagination();
     }
@@ -4065,7 +4065,7 @@
       const start = (currentPage - 1) * pageSize;
       const end = start + pageSize;
       const pageNumbers = allEklektikNumbers.slice(start, end);
-      
+
       updateEklektikTable(pageNumbers);
     }
 
@@ -4079,8 +4079,8 @@
       if (checkbox) checkbox.checked = false;
       console.log('❌ Auto-actualisation désactivée');
     }
-    
-    
+
+
     // Bulk test functionality
     async function startBulkTest() {
       try {
@@ -4089,18 +4089,18 @@
         const progressText = document.getElementById('test-progress-text');
         const progressFill = document.getElementById('test-progress-fill');
         const summaryDiv = document.getElementById('test-results-summary');
-        
+
         // Disable button and show progress
         btn.disabled = true;
         btn.textContent = '🧪 Test en cours...';
         progressDiv.style.display = 'block';
         summaryDiv.style.display = 'none';
-        
+
         progressText.textContent = 'Authentification...';
         progressFill.style.width = '10%';
-        
+
         console.log('🧪 [EKLEKTIK] Démarrage du test en masse...');
-        
+
         // Start the bulk test
         const response = await fetch('/api/eklektik/test-all', {
           method: 'POST',
@@ -4113,62 +4113,62 @@
             operator: 'ALL'
           })
         });
-        
+
         progressText.textContent = 'Test des numéros en cours...';
         progressFill.style.width = '50%';
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const result = await response.json();
-        
+
         progressText.textContent = 'Traitement des résultats...';
         progressFill.style.width = '90%';
-        
+
         console.log('✅ [EKLEKTIK] Test en masse terminé:', result);
-        
+
         // Update results
         updateBulkTestResults(result);
-        
+
         progressText.textContent = 'Terminé !';
         progressFill.style.width = '100%';
-        
+
         // Hide progress after a moment
         setTimeout(() => {
           progressDiv.style.display = 'none';
           btn.disabled = false;
           btn.textContent = '🧪 Tester Tous les Numéros';
         }, 2000);
-        
+
         showNotification('✅ Test en masse terminé avec succès !', 'success', 3000);
-        
+
       } catch (error) {
         console.error('❌ [EKLEKTIK] Erreur lors du test en masse:', error);
-        
+
         // Reset UI on error
         const btn = document.getElementById('bulk-test-btn');
         const progressDiv = document.getElementById('bulk-test-progress');
-        
+
         progressDiv.style.display = 'none';
         btn.disabled = false;
         btn.textContent = '🧪 Tester Tous les Numéros';
-        
+
         showNotification('❌ Erreur lors du test en masse', 'error', 3000);
       }
     }
-    
+
     function updateBulkTestResults(result) {
       const summaryDiv = document.getElementById('test-results-summary');
       const tableBody = document.getElementById('eklektik-numbers-tbody');
-      
+
       if (!result.success || !result.statistics) {
         showNotification('❌ Erreur dans les résultats du test', 'error', 3000);
         return;
       }
-      
+
       const stats = result.statistics;
-      
+
       // Update statistics
       document.getElementById('test-stat-total').textContent = stats.total || 0;
       document.getElementById('test-stat-active').textContent = stats.active || 0;
@@ -4176,15 +4176,15 @@
       document.getElementById('test-stat-errors').textContent = stats.errors || 0;
       document.getElementById('test-stat-success-rate').textContent = `${stats.success_rate || 0}%`;
       document.getElementById('test-stat-avg-time').textContent = `${stats.avg_response_time || 0}ms`;
-      
+
       // Afficher les timeouts séparément si présents
       if (stats.timeout > 0) {
         console.log(`⏱️ [EKLEKTIK] ${stats.timeout} timeout(s) détecté(s) - API Eklektik lente`);
       }
-      
+
       // Show summary
       summaryDiv.style.display = 'block';
-      
+
       // Update table with test results
       if (result.results && result.results.length > 0) {
         tableBody.innerHTML = result.results.map(testResult => `
@@ -4246,23 +4246,23 @@
         `;
       }
     }
-    
+
     function viewTestDetails(msisdn) {
       showNotification(`👁️ Détails pour le test du numéro ${msisdn}`, 'info', 2000);
       console.log(`[EKLEKTIK] Demande de détails pour ${msisdn}`);
       // TODO: Implement detailed view
     }
-    
+
     function viewEklektikDetails(phoneNumber) {
       showNotification(`👁️ Détails pour ${phoneNumber}`, 'info', 2000);
       // TODO: Implement detail view
     }
-    
+
     function testEklektikNumber(phoneNumber) {
       showNotification(`🧪 Test du numéro ${phoneNumber}...`, 'info', 2000);
       // TODO: Implement number testing
     }
-    
+
     function showEklektikError(message) {
       const tbody = document.getElementById('eklektik-numbers-tbody');
       tbody.innerHTML = `
@@ -4291,7 +4291,7 @@
       const navTabs = document.querySelector('.nav-tabs');
       const tabRect = activeTab.getBoundingClientRect();
       const navRect = navTabs.getBoundingClientRect();
-      
+
       // Only auto-scroll on mobile/tablet
       if (window.innerWidth <= 768) {
         const scrollLeft = activeTab.offsetLeft - (navRect.width / 2) + (tabRect.width / 2);
@@ -4309,18 +4309,18 @@
     async function fetchEklektikStats(endpoint, params) {
       const url = new URL(endpoint, window.location.origin);
       Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-      
+
       const response = await fetch(url, {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       return await response.json();
     }
 
@@ -4356,9 +4356,9 @@
     // Créer les graphiques des statistiques Eklektik
     async function createEklektikStatsCharts(data) {
       const { overviewChart, revenueEvolution, revenueDistribution } = data;
-      
+
       console.log('🎨 [CHARTS] Création des graphiques avec données:', data);
-      
+
       // Détruire les graphiques existants
       console.log('🗑️ [CHARTS] Destruction des graphiques existants:', Object.keys(eklektikCharts));
       Object.values(eklektikCharts).forEach(chart => {
@@ -4368,23 +4368,23 @@
         }
       });
       eklektikCharts = {};
-      
+
       console.log('📊 [CHARTS] Création des nouveaux graphiques...');
-      
+
       // Attendre un peu avant de créer les graphiques pour éviter les conflits
       setTimeout(() => {
         // Graphique multi-axes principal (Vue d'ensemble)
         createEklektikOverviewChart(overviewChart?.chart);
-        
+
         // Graphique d'évolution des revenus
         createEklektikRevenueEvolutionChart(revenueEvolution?.chart);
-        
+
         // Graphique de répartition par opérateur
         createEklektikOperatorsDistributionChart(revenueDistribution?.pie_chart);
-        
+
         // Graphique CA par partenaire
         createEklektikCAPartnersChart(revenueDistribution?.bar_chart);
-        
+
         // Afficher les statistiques par opérateur
         if (revenueDistribution?.data?.distribution) {
           displayEklektikOperatorsStats(revenueDistribution.data.distribution);
@@ -4401,7 +4401,7 @@
         console.log('❌ [OVERVIEW CHART] Pas de données ou contexte manquant');
         return;
       }
-      
+
       // Vérifier si le graphique existe déjà et a les mêmes données
       if (eklektikCharts.overview && eklektikCharts.overview.data) {
         const currentData = JSON.stringify(eklektikCharts.overview.data);
@@ -4411,18 +4411,18 @@
           return;
         }
       }
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.overview) {
         console.log('🗑️ [OVERVIEW CHART] Destruction du graphique existant');
         eklektikCharts.overview.destroy();
         eklektikCharts.overview = null;
       }
-      
+
       // Attendre un peu avant de créer le nouveau graphique
       setTimeout(() => {
       console.log('🎨 [DEBUG] Création du graphique multi-axes avec données:', chartData);
-      
+
       // Créer le graphique avec des options ultra-strictes
       const chartOptions = {
         responsive: true,
@@ -4548,7 +4548,7 @@
                 if (label) {
                   label += ': ';
                 }
-                
+
                 if (context.dataset.yAxisID === 'y-revenue') {
                   label += new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'TND' }).format(context.parsed.y * 1000);
                 } else if (context.dataset.yAxisID === 'y-active') {
@@ -4556,19 +4556,19 @@
                 } else if (context.dataset.yAxisID === 'y-rate') {
                   label += context.parsed.y.toFixed(2) + '%';
                 }
-                
+
                 return label;
               }
             }
           }
         }
       };
-      
+
       console.log('🔧 [DEBUG] Options du graphique:', chartOptions);
-      
+
       // Créer le graphique avec interception de requestAnimationFrame
       // Pas d'interception globale - laissons les autres graphiques fonctionner normalement
-      
+
       try {
         eklektikCharts.overview = new Chart(ctx, {
           type: 'bar',
@@ -4582,7 +4582,7 @@
         window.requestAnimationFrame = originalRAF;
         window.cancelAnimationFrame = originalCAF;
       }
-      
+
       console.log('✅ [OVERVIEW CHART] Graphique multi-axes créé avec succès');
       console.log('🔍 [DEBUG] Graphique overview:', eklektikCharts.overview);
       }, 10); // Délai de 10ms pour éviter les conflits de rendu
@@ -4595,7 +4595,7 @@
         console.log('❌ [REVENUE EVOLUTION CHART] Pas de données ou contexte manquant');
         return;
       }
-      
+
       // Vérifier si le graphique existe déjà et a les mêmes données
       if (eklektikCharts.revenueEvolution && eklektikCharts.revenueEvolution.data) {
         const currentData = JSON.stringify(eklektikCharts.revenueEvolution.data);
@@ -4605,14 +4605,14 @@
           return;
         }
       }
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.revenueEvolution) {
         console.log('🗑️ [REVENUE EVOLUTION CHART] Destruction du graphique existant');
         eklektikCharts.revenueEvolution.destroy();
         eklektikCharts.revenueEvolution = null;
       }
-      
+
       eklektikCharts.revenueEvolution = new Chart(ctx, {
         type: 'line',
         data: chartData,
@@ -4637,7 +4637,7 @@
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return context.dataset.label + ': ' + 
+                  return context.dataset.label + ': ' +
                     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'TND' }).format(context.parsed.y);
                 }
               }
@@ -4654,7 +4654,7 @@
         console.log('❌ [OPERATORS DISTRIBUTION CHART] Pas de données ou contexte manquant');
         return;
       }
-      
+
       // Vérifier si le graphique existe déjà et a les mêmes données
       if (eklektikCharts.operatorsDistribution && eklektikCharts.operatorsDistribution.data) {
         const currentData = JSON.stringify(eklektikCharts.operatorsDistribution.data);
@@ -4664,14 +4664,14 @@
           return;
         }
       }
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.operatorsDistribution) {
         console.log('🗑️ [OPERATORS DISTRIBUTION CHART] Destruction du graphique existant');
         eklektikCharts.operatorsDistribution.destroy();
         eklektikCharts.operatorsDistribution = null;
       }
-      
+
       eklektikCharts.operatorsDistribution = new Chart(ctx, {
         type: 'doughnut',
         data: chartData,
@@ -4686,7 +4686,7 @@
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return context.label + ': ' + 
+                  return context.label + ': ' +
                     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'TND' }).format(context.parsed);
                 }
               }
@@ -4703,7 +4703,7 @@
         console.log('❌ [CA PARTNERS CHART] Pas de données ou contexte manquant');
         return;
       }
-      
+
       // Vérifier si le graphique existe déjà et a les mêmes données
       if (eklektikCharts.caPartners && eklektikCharts.caPartners.data) {
         const currentData = JSON.stringify(eklektikCharts.caPartners.data);
@@ -4713,14 +4713,14 @@
           return;
         }
       }
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.caPartners) {
         console.log('🗑️ [CA PARTNERS CHART] Destruction du graphique existant');
         eklektikCharts.caPartners.destroy();
         eklektikCharts.caPartners = null;
       }
-      
+
       eklektikCharts.caPartners = new Chart(ctx, {
         type: 'bar',
         data: chartData,
@@ -4745,7 +4745,7 @@
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return context.dataset.label + ': ' + 
+                  return context.dataset.label + ': ' +
                     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'TND' }).format(context.parsed.y);
                 }
               }
@@ -4762,9 +4762,9 @@
         console.log('❌ [OPERATORS STATS] Pas de données ou conteneur manquant');
         return;
       }
-      
+
       let html = '';
-      
+
       for (const [operator, data] of Object.entries(distribution)) {
         const newSubs = (data.new_subscriptions ?? data.new_subs ?? data.subscriptions ?? data.activated ?? 0);
         const active = (data.active_subscribers ?? data.active ?? 0);
@@ -4788,7 +4788,7 @@
           </div>
         `;
       }
-      
+
       container.innerHTML = html;
     }
 
@@ -4797,18 +4797,18 @@
       try {
         const response = await fetch('/api/eklektik-dashboard/sync-status');
         const data = await response.json();
-        
+
         if (data.success && data.data) {
           const status = data.data;
           const statusValue = status.status || 'unknown';
-          const statusColor = statusValue === 'healthy' ? 'success' : 
+          const statusColor = statusValue === 'healthy' ? 'success' :
                              statusValue === 'warning' ? 'warning' : 'danger';
-          
-          const lastSync = status.last_sync ? 
+
+          const lastSync = status.last_sync ?
             new Date(status.last_sync).toLocaleString('fr-FR') : 'Jamais';
-          
+
           const totalRecords = status.total_records || 0;
-          
+
           alert(`Statut Eklektik: ${statusValue.toUpperCase()}\nDernière sync: ${lastSync}\nEnregistrements: ${totalRecords}`);
         } else {
           alert('Erreur: Impossible de récupérer le statut de synchronisation');
@@ -4823,7 +4823,7 @@
       try {
         const response = await fetch('/api/eklektik-dashboard/clear-cache', { method: 'POST' });
         const data = await response.json();
-        
+
         if (data.success) {
           alert('Cache vidé avec succès!');
           console.log('Cache vidé - les graphiques vont se recharger automatiquement');
@@ -4843,22 +4843,22 @@
         console.log('❌ [SUBSCRIPTIONS CHART] Pas de données ou contexte manquant', { ctx: !!ctx, data: data });
         return;
       }
-      
+
       console.log('📊 [SUBSCRIPTIONS CHART] Données reçues:', data);
-      console.log('📊 [SUBSCRIPTIONS CHART] Contexte canvas:', { 
-        width: ctx.width, 
-        height: ctx.height, 
-        offsetWidth: ctx.offsetWidth, 
-        offsetHeight: ctx.offsetHeight 
+      console.log('📊 [SUBSCRIPTIONS CHART] Contexte canvas:', {
+        width: ctx.width,
+        height: ctx.height,
+        offsetWidth: ctx.offsetWidth,
+        offsetHeight: ctx.offsetHeight
       });
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.subscriptions) {
         console.log('🗑️ [SUBSCRIPTIONS CHART] Destruction du graphique existant');
         eklektikCharts.subscriptions.destroy();
         eklektikCharts.subscriptions = null;
       }
-      
+
       eklektikCharts.subscriptions = new Chart(ctx, {
         type: 'line',
         data: {
@@ -4898,22 +4898,22 @@
         console.log('❌ [REVENUE CHART] Pas de données ou contexte manquant', { ctx: !!ctx, data: data });
         return;
       }
-      
+
       console.log('📊 [REVENUE CHART] Données reçues:', data);
-      console.log('📊 [REVENUE CHART] Contexte canvas:', { 
-        width: ctx.width, 
-        height: ctx.height, 
-        offsetWidth: ctx.offsetWidth, 
-        offsetHeight: ctx.offsetHeight 
+      console.log('📊 [REVENUE CHART] Contexte canvas:', {
+        width: ctx.width,
+        height: ctx.height,
+        offsetWidth: ctx.offsetWidth,
+        offsetHeight: ctx.offsetHeight
       });
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.revenue) {
         console.log('🗑️ [REVENUE CHART] Destruction du graphique existant');
         eklektikCharts.revenue.destroy();
         eklektikCharts.revenue = null;
       }
-      
+
       eklektikCharts.revenue = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -4950,51 +4950,51 @@
         console.log('❌ [ACTIONS CHART] Pas de données ou contexte manquant', { ctx: !!ctx, data: data });
         return;
       }
-      
+
       if (typeof Chart === 'undefined') {
         console.error('❌ [ACTIONS CHART] Chart.js non chargé');
         return;
       }
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.actions) {
         eklektikCharts.actions.destroy();
         eklektikCharts.actions = null;
       }
-      
+
       const kpis = data.kpis;
       console.log('📊 [ACTIONS CHART] Données KPIs:', kpis);
-      console.log('📊 [ACTIONS CHART] Contexte canvas:', { 
-        width: ctx.width, 
-        height: ctx.height, 
-        offsetWidth: ctx.offsetWidth, 
-        offsetHeight: ctx.offsetHeight 
+      console.log('📊 [ACTIONS CHART] Contexte canvas:', {
+        width: ctx.width,
+        height: ctx.height,
+        offsetWidth: ctx.offsetWidth,
+        offsetHeight: ctx.offsetHeight
       });
-      
+
       const actions = [
         { label: 'SUB', value: kpis.new_subscriptions || 0, color: '#3b82f6' },
         { label: 'RENEW', value: kpis.renewals || 0, color: '#10b981' },
         { label: 'CHARGE', value: kpis.charges || 0, color: '#f59e0b' },
         { label: 'UNSUB', value: kpis.unsubscriptions || 0, color: '#ef4444' }
       ];
-      
+
       console.log('📊 [ACTIONS CHART] Actions calculées:', actions);
-      
+
       // Filtrer les actions avec des valeurs > 0
       const filteredActions = actions.filter(action => action.value > 0);
-      
+
       console.log('📊 [ACTIONS CHART] Actions filtrées:', filteredActions);
-      
+
       if (filteredActions.length === 0) {
         console.log('⚠️ [ACTIONS CHART] Aucune action avec valeur > 0');
         return;
       }
-      
+
       console.log('📊 [ACTIONS CHART] Création du graphique avec données:', {
         labels: filteredActions.map(action => action.label),
         data: filteredActions.map(action => action.value)
       });
-      
+
       eklektikCharts.actions = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -5062,7 +5062,7 @@
           }
         }
       });
-      
+
       console.log('✅ [ACTIONS CHART] Graphique créé avec succès');
     }
 
@@ -5073,20 +5073,20 @@
         console.log('❌ [OPERATORS CHART] Pas de données ou contexte manquant', { ctx: !!ctx, data: data });
         return;
       }
-      
+
       if (typeof Chart === 'undefined') {
         console.error('❌ [OPERATORS CHART] Chart.js non chargé');
         return;
       }
-      
+
       console.log('📊 [OPERATORS CHART] Données opérateurs:', data.operators_distribution);
-      console.log('📊 [OPERATORS CHART] Contexte canvas:', { 
-        width: ctx.width, 
-        height: ctx.height, 
-        offsetWidth: ctx.offsetWidth, 
-        offsetHeight: ctx.offsetHeight 
+      console.log('📊 [OPERATORS CHART] Contexte canvas:', {
+        width: ctx.width,
+        height: ctx.height,
+        offsetWidth: ctx.offsetWidth,
+        offsetHeight: ctx.offsetHeight
       });
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.operators) {
         console.log('🗑️ [OPERATORS CHART] Destruction du graphique existant');
@@ -5097,18 +5097,18 @@
         }
         eklektikCharts.operators = null;
       }
-      
+
       // Attendre un tick pour éviter les conflits de rendu
       await new Promise(resolve => setTimeout(resolve, 10));
-      
+
       // Extraire les données des opérateurs
       const operatorsData = data.operators_distribution;
       const operators = Object.keys(operatorsData);
       const values = operators.map(op => operatorsData[op].total);
-      
+
       console.log('📊 [OPERATORS CHART] Opérateurs extraits:', operators);
       console.log('📊 [OPERATORS CHART] Valeurs extraites:', values);
-      
+
       // Couleurs pour chaque opérateur
       const colors = {
         'Orange': '#FF9500',
@@ -5118,7 +5118,7 @@
         'Ooredoo': '#FFCE56',
         'Unknown': '#9E9E9E'
       };
-      
+
       eklektikCharts.operators = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -5191,7 +5191,7 @@
           }
         }
       });
-      
+
       console.log('✅ [OPERATORS CHART] Graphique créé avec succès');
     }
 
@@ -5202,22 +5202,22 @@
         console.log('❌ [BILLING RATE CHART] Pas de données ou contexte manquant', { ctx: !!ctx, data: data });
         return;
       }
-      
+
       console.log('📊 [BILLING RATE CHART] Données reçues:', data);
-      console.log('📊 [BILLING RATE CHART] Contexte canvas:', { 
-        width: ctx.width, 
-        height: ctx.height, 
-        offsetWidth: ctx.offsetWidth, 
-        offsetHeight: ctx.offsetHeight 
+      console.log('📊 [BILLING RATE CHART] Contexte canvas:', {
+        width: ctx.width,
+        height: ctx.height,
+        offsetWidth: ctx.offsetWidth,
+        offsetHeight: ctx.offsetHeight
       });
-      
+
       // Détruire le graphique existant s'il existe
       if (eklektikCharts.billingRate) {
         console.log('🗑️ [BILLING RATE CHART] Destruction du graphique existant');
         eklektikCharts.billingRate.destroy();
         eklektikCharts.billingRate = null;
       }
-      
+
       eklektikCharts.billingRate = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -5251,14 +5251,14 @@
         'eklektik-billing-rate', 'eklektik-revenue', 'eklektik-active-subscriptions',
         'eklektik-new-subscriptions', 'eklektik-unsubscriptions', 'eklektik-renewals', 'eklektik-charges', 'eklektik-billed-clients'
       ];
-      
+
       elements.forEach(id => {
         const element = document.getElementById(id);
         if (element) {
           element.textContent = 'Erreur';
         }
       });
-      
+
       console.error('❌ [EKLEKTIK STATS]', message);
     }
 
@@ -5284,9 +5284,9 @@
     document.addEventListener('DOMContentLoaded', function() {
       console.log('🏁 [INIT] Initialisation du dashboard - configuration terminée');
     });
-    
+
     // Helper functions
-    
+
     /**
      * Calcule le changement en pourcentage entre deux valeurs
      * @param {number} current - Valeur actuelle
@@ -5297,7 +5297,7 @@
       if (!previous || previous === 0) return 0;
       return ((current - previous) / previous) * 100;
     }
-    
+
     /**
      * Formate un nombre avec espaces pour milliers, virgule pour décimales
      * @param {number} value - Nombre à formater
@@ -5306,20 +5306,20 @@
      */
     function formatNumber(value, decimals = 3) {
       if (value === null || value === undefined || isNaN(value)) return '0,000';
-      
+
       const num = Number(value);
       const fixed = num.toFixed(decimals);
-      
+
       // Séparer partie entière et décimale
       const [integerPart, decimalPart] = fixed.split('.');
-      
+
       // Ajouter espaces pour les milliers
       const withSpaces = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-      
+
       // Remplacer le point par une virgule pour les décimales
       return decimalPart ? `${withSpaces},${decimalPart}` : withSpaces;
     }
-    
+
     /**
      * Formate un pourcentage avec virgule au lieu de point
      * @param {number} value - Valeur du pourcentage
@@ -5330,7 +5330,7 @@
       if (value === null || value === undefined || isNaN(value)) return '0,000%';
       return formatNumber(value, decimals) + '%';
     }
-    
+
     function getServiceIcon(serviceType) {
       const icons = {
         'SUBSCRIPTION': '📱',
@@ -5340,7 +5340,7 @@
       };
       return icons[serviceType] || icons.default;
     }
-    
+
     function getStatusIcon(status) {
       const icons = {
         'ACTIVE': '✅',
@@ -5350,19 +5350,19 @@
       };
       return icons[status] || icons.default;
     }
-    
+
     function formatDate(dateString) {
       if (!dateString) return 'N/A';
       const date = new Date(dateString);
-      return date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
+      return date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit'
       });
     }
 
     // Variable pour éviter les chargements multiples simultanés
     let isLoadingDashboard = false;
-    
+
     // Load dashboard data with progressive loading
     async function loadDashboardData() {
       // Empêcher les chargements multiples simultanés
@@ -5370,66 +5370,66 @@
         console.log('⏸️ Chargement déjà en cours, ignoré');
         return;
       }
-      
+
       isLoadingDashboard = true;
       let timeoutId = null;
-      
+
       try {
         // Show simple loading
         showLoading();
         showProgressiveLoading();
-        
+
         // Get date values for both periods
         const startDate = document.getElementById('start-date').value;
         const endDate = document.getElementById('end-date').value;
         const comparisonStartDate = document.getElementById('comparison-start-date').value;
         const comparisonEndDate = document.getElementById('comparison-end-date').value;
-        
+
         // Get selected operators (multi-select)
-        const selectedOperator = selectedOperators.includes('ALL') || selectedOperators.length === 0 
-          ? 'ALL' 
-          : selectedOperators.length === 1 
-            ? selectedOperators[0] 
+        const selectedOperator = selectedOperators.includes('ALL') || selectedOperators.length === 0
+          ? 'ALL'
+          : selectedOperators.length === 1
+            ? selectedOperators[0]
             : selectedOperators.join(',');
-        
+
         // Calculer la période en jours
         const startDateObj = new Date(startDate);
         const endDateObj = new Date(endDate);
         const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24));
-        
+
         // Build API URL with date parameters
         let apiUrl = '/api/dashboard/data';
         const params = new URLSearchParams();
-        
+
         if (startDate && endDate) {
           params.append('start_date', startDate);
           params.append('end_date', endDate);
         }
-        
+
         if (comparisonStartDate && comparisonEndDate) {
           params.append('comparison_start_date', comparisonStartDate);
           params.append('comparison_end_date', comparisonEndDate);
         }
-        
+
         if (selectedOperator) {
           params.append('operator', selectedOperator);
         }
-        
+
         // Mode light automatique pour périodes > 90 jours
         const shouldUseLightMode = periodDays > 90;
         if (shouldUseLightMode) {
           params.append('light', 'true');
           console.log(`⚡ Mode light activé automatiquement pour période de ${periodDays} jours`);
         }
-        
+
         const startTime = performance.now();
-        
+
         // OPTIMISATION: Charger directement les données complètes (avec cache Redis, c'est rapide)
         updateProgressiveLoading('Chargement des données...', 30);
-        
+
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), 150000); // 2.5 minutes timeout (augmenté pour périodes jusqu'à 2 ans)
-        
+
         // Charger les données complètes (le cache Redis devrait rendre ça rapide)
         const response = await fetch(apiUrl + '?' + params.toString(), {
           signal: controller.signal,
@@ -5440,16 +5440,16 @@
           },
           credentials: 'same-origin'
         });
-        
+
         clearTimeout(timeoutId);
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
         const loadTime = performance.now() - startTime;
-        
+
         console.log('✅ Dashboard data loaded successfully:', {
           operator: selectedOperator,
           hasKPIs: !!data.kpis,
@@ -5457,23 +5457,23 @@
           loadTime: `${loadTime.toFixed(0)}ms`,
           lightMode: data.light_mode || false
         });
-        
+
         // Si c'est en mode light, charger les sections manquantes
         if (data.light_mode) {
           updateProgressiveLoading('Chargement des sections avancées...', 60);
-          
+
           const baseParams = params.toString();
           const heavyEndpoints = [
             { name: 'subscriptions-details', url: `/api/dashboard/subscriptions-details?${baseParams}`, key: 'subscriptions' },
             { name: 'cohorts', url: `/api/dashboard/cohorts?${baseParams}`, key: 'cohorts' },
             { name: 'transactions', url: `/api/dashboard/transactions-separate?${baseParams}`, key: 'transactions' }
           ];
-          
+
           // Charger en parallèle avec gestion d'erreur individuelle
           const heavyPromises = heavyEndpoints.map(async (endpoint, index) => {
             try {
               updateProgressiveLoading(`Chargement ${endpoint.name}...`, 60 + (index + 1) * 10);
-              
+
               const heavyResponse = await fetch(endpoint.url, {
                 headers: {
                   'Accept': 'application/json',
@@ -5482,22 +5482,22 @@
                 },
                 credentials: 'same-origin'
               });
-              
+
               if (!heavyResponse.ok) {
                 throw new Error(`HTTP ${heavyResponse.status} pour ${endpoint.name}`);
               }
-              
+
               const result = await heavyResponse.json();
-              
+
               return { key: endpoint.key, data: result.data || result, success: true };
             } catch (error) {
               console.warn(`⚠️ Erreur chargement ${endpoint.name}:`, error);
               return { key: endpoint.key, data: null, success: false, error: error.message };
             }
           });
-          
+
           const heavyResults = await Promise.all(heavyPromises);
-          
+
           // Fusionner les résultats
           heavyResults.forEach(result => {
             if (result.success && result.data) {
@@ -5516,35 +5516,35 @@
             }
           });
         }
-        
+
         // Masquer le message d'optimisation
         hideOptimizationMessage();
-        
+
         // Show performance indicator avec métadonnées
         updatePerformanceIndicator(loadTime, data);
-        
+
         // Update dashboard and hide loading simultaneously
         updateProgressiveLoading('Finalisation...', 95);
         updateDashboard(data);
         hideLoading();
         hideProgressiveLoading();
-        
+
         // Show success notification
         const operatorLabel = selectedOperator === 'ALL' ? 'globales' : selectedOperator;
-        
+
         setTimeout(() => {
           showNotification(`✅ Données ${operatorLabel} mises à jour! (${loadTime.toFixed(0)}ms)`, 'success');
         }, 100);
 
         // NE PAS émettre l'événement dashboard:refreshed pour éviter les rechargements en cascade
         // Les modules Eklektik se chargeront indépendamment
-        
+
       } catch (error) {
         clearTimeout(timeoutId);
         console.error('Error loading dashboard data:', error);
         hideLoading();
         hideProgressiveLoading();
-        
+
         // Try to show fallback data instead of complete failure
         if (error.name === 'AbortError') {
           showNotification('⏱️ Délai d\'attente dépassé - Chargement des données de démonstration', 'warning');
@@ -5560,10 +5560,10 @@
         isLoadingDashboard = false;
       }
     }
-    
+
     // Gestion du chargement progressif
     let progressiveLoadingElement = null;
-    
+
     function showProgressiveLoading() {
       // Créer l'élément de progression s'il n'existe pas
       if (!progressiveLoadingElement) {
@@ -5582,7 +5582,7 @@
       }
       progressiveLoadingElement.style.display = 'block';
     }
-    
+
     function updateProgressiveLoading(text, percent) {
       if (progressiveLoadingElement) {
         const textEl = progressiveLoadingElement.querySelector('#progressive-loading-text');
@@ -5591,24 +5591,24 @@
         if (barEl) barEl.style.width = Math.min(100, Math.max(0, percent)) + '%';
       }
     }
-    
+
     function hideProgressiveLoading() {
       if (progressiveLoadingElement) {
         progressiveLoadingElement.style.display = 'none';
       }
     }
-    
+
     // Simple loading management
     function showLoading() {
       // Update button state
       const refreshBtn = document.getElementById('refresh-btn');
       const refreshText = document.getElementById('refresh-text');
       const refreshLoading = document.getElementById('refresh-loading');
-      
+
       if (refreshBtn) refreshBtn.disabled = true;
       if (refreshText) refreshText.style.display = 'none';
       if (refreshLoading) refreshLoading.style.display = 'inline';
-      
+
       // Simple overlay
       showSimpleOverlay();
     }
@@ -5632,30 +5632,30 @@
 
       document.body.appendChild(overlay);
     }
-    
+
     function hideLoading() {
       // Reset button state
       const refreshBtn = document.getElementById('refresh-btn');
       const refreshText = document.getElementById('refresh-text');
       const refreshLoading = document.getElementById('refresh-loading');
-      
+
       if (refreshBtn) refreshBtn.disabled = false;
       if (refreshText) refreshText.style.display = 'inline';
       if (refreshLoading) refreshLoading.style.display = 'none';
-      
+
       // Remove simple overlay
       const overlay = document.getElementById('loading-overlay');
       if (overlay) {
         overlay.remove();
       }
     }
-    
+
     // Enhanced notification system with better UX
     function showNotification(message, type = 'info', duration = 4000) {
       // Remove existing notifications of same type
       const existing = document.querySelectorAll(`.notification.${type}`);
       existing.forEach(n => n.remove());
-      
+
       // Create new notification with enhanced features
       const notification = document.createElement('div');
       notification.className = `notification ${type}`;
@@ -5669,19 +5669,19 @@
           <div class="notification-progress-bar" style="height: 100%; background: rgba(255,255,255,0.8); width: 100%; animation: progressShrink ${duration}ms linear;"></div>
         </div>
       `;
-      
+
       // Improve positioning and stacking
       notification.style.position = 'fixed';
       notification.style.zIndex = '10000';
       notification.style.marginBottom = '10px';
-      
+
       // Stack notifications
       const existingNotifications = document.querySelectorAll('.notification');
       const offset = existingNotifications.length * 80; // 80px per notification
       notification.style.top = (20 + offset) + 'px';
-      
+
       document.body.appendChild(notification);
-      
+
       // Add progress animation style if not exists
       if (!document.getElementById('progress-animation-style')) {
         const style = document.createElement('style');
@@ -5691,7 +5691,7 @@
             from { width: 100%; }
             to { width: 0%; }
           }
-          
+
           .notification {
             position: relative;
             min-height: 60px;
@@ -5699,14 +5699,14 @@
             align-items: center;
             transition: all 0.3s ease;
           }
-          
+
           .notification:hover .notification-progress-bar {
             animation-play-state: paused;
           }
         `;
         document.head.appendChild(style);
       }
-      
+
       // Auto-remove with smooth animation
       setTimeout(() => {
         if (document.body.contains(notification)) {
@@ -5722,7 +5722,7 @@
         }
       }, duration);
     }
-    
+
     function closeNotification(button) {
       const notification = button.closest('.notification');
       if (notification) {
@@ -5736,7 +5736,7 @@
         }, 300);
       }
     }
-    
+
     function repositionNotifications() {
       const notifications = document.querySelectorAll('.notification');
       notifications.forEach((notification, index) => {
@@ -5747,7 +5747,7 @@
     function updatePerformanceIndicator(loadTime, data = null) {
       const indicator = document.getElementById('performance-indicator');
       if (!indicator) return;
-      
+
       // Calculer la période pour l'affichage
       const startDate = document.getElementById('start-date')?.value;
       const endDate = document.getElementById('end-date')?.value;
@@ -5757,12 +5757,12 @@
         const end = new Date(endDate);
         periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
       }
-      
+
       // Déterminer la source des données
       const isFromCache = data?._cache_meta || loadTime < 500;
       const isStale = data?._cache_meta?.is_stale === true;
       const dataType = data?._cache_meta?.data_type || 'standard';
-      
+
       if (loadTime < 500) {
         // Excellent - Cache
         indicator.style.display = 'flex';
@@ -5771,50 +5771,50 @@
         indicator.style.background = 'rgba(16, 185, 129, 0.1)';
         indicator.style.borderColor = 'rgba(16, 185, 129, 0.3)';
         indicator.style.color = '#059669';
-        
+
         setTimeout(() => {
           indicator.style.display = 'none';
         }, 5000);
       } else if (loadTime < 3000) {
         // Bon - Optimisé
         indicator.style.display = 'flex';
-        const optimizedText = periodDays > 0 
-          ? `${Math.round(loadTime)}ms (${periodDays}j)` 
+        const optimizedText = periodDays > 0
+          ? `${Math.round(loadTime)}ms (${periodDays}j)`
           : `${Math.round(loadTime)}ms (optimisé)`;
         indicator.querySelector('.performance-text').textContent = optimizedText;
         indicator.style.background = 'rgba(245, 158, 11, 0.1)';
         indicator.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         indicator.style.color = '#d97706';
-        
+
         setTimeout(() => {
           indicator.style.display = 'none';
         }, 4000);
       } else {
         // Lent - Longue période
         indicator.style.display = 'flex';
-        const slowText = periodDays > 0 
-          ? `${Math.round(loadTime / 1000)}s (${periodDays}j)` 
+        const slowText = periodDays > 0
+          ? `${Math.round(loadTime / 1000)}s (${periodDays}j)`
           : `${Math.round(loadTime / 1000)}s`;
         indicator.querySelector('.performance-text').textContent = slowText;
         indicator.style.background = 'rgba(239, 68, 68, 0.1)';
         indicator.style.borderColor = 'rgba(239, 68, 68, 0.3)';
         indicator.style.color = '#dc2626';
-        
+
         setTimeout(() => {
           indicator.style.display = 'none';
         }, 6000);
       }
     }
-    
+
     // Load available operators with improved error handling
     async function loadOperators() {
       let timeoutId = null;
-      
+
       const controller = new AbortController();
       // Timeout augmenté à 60s pour SuperAdmin (beaucoup d'opérateurs)
       // Le timeout est silencieux si les opérateurs sont déjà chargés
       timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-      
+
       try {
         const response = await fetch('/api/operators', {
           signal: controller.signal,
@@ -5825,37 +5825,37 @@
           },
           credentials: 'same-origin'
         });
-        
+
         clearTimeout(timeoutId);
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(`HTTP ${response.status}: ${errorData.error || response.statusText}`);
         }
-        
+
         const data = await response.json();
-        
+
         console.log('🔍 DEBUG API Response:', {
           operators: data.operators,
           default_operator: data.default_operator,
           user_role: data.user_role
         });
-        
+
         if (data.operators && Array.isArray(data.operators) && data.operators.length > 0) {
           const operatorsList = document.getElementById('operators-list');
           const operatorInfo = document.getElementById('operator-info');
-          
+
           // Store available operators
           availableOperators = data.operators;
-          
+
           // Clear existing operators
           operatorsList.innerHTML = '';
-          
+
           // Vérifier si "ALL" est disponible (seulement pour SuperAdmin et Admin)
           hasAllOption = data.operators.some(op => op.value === 'ALL');
           const selectAllCheckbox = document.getElementById('select-all-operators');
           const selectAllOption = selectAllCheckbox ? selectAllCheckbox.closest('.select-all-option') : null;
-          
+
           // Masquer "Tous les opérateurs" pour les collaborateurs
           if (!hasAllOption) {
             if (selectAllOption) {
@@ -5869,50 +5869,50 @@
               selectAllOption.style.display = 'block';
             }
           }
-          
+
           // Stocker les opérateurs disponibles globalement
           availableOperators = data.operators;
-          
+
           // Add operators to multi-select
           data.operators.forEach(operator => {
             const operatorDiv = document.createElement('div');
             operatorDiv.className = 'operator-option';
-            
+
             const label = document.createElement('label');
             label.className = 'checkbox-label';
-            
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = operator.value;
             checkbox.onchange = function() {
               handleOperatorChange(operator.value, this);
             };
-            
+
             const checkmark = document.createElement('span');
             checkmark.className = 'checkmark';
-            
+
             const text = document.createElement('span');
             text.textContent = `📱 ${operator.label}`;
-            
+
             label.appendChild(checkbox);
             label.appendChild(checkmark);
             label.appendChild(text);
             operatorDiv.appendChild(label);
             operatorsList.appendChild(operatorDiv);
-            
+
             console.log(`🔍 Opérateur ajouté: ${operator.label} (${operator.value})`);
           });
-          
+
           // Set default selection - s'assurer qu'un opérateur est toujours sélectionné
           let defaultOperatorSelected = false;
-          
+
           if (data.default_operator && data.default_operator !== 'ALL') {
             // Vérifier que l'opérateur par défaut existe dans la liste
             const defaultOpExists = data.operators.some(op => op.value === data.default_operator);
             if (defaultOpExists) {
               selectedOperators = [data.default_operator];
               selectAllCheckbox.checked = false;
-              
+
               // Check the default operator
               const defaultCheckbox = operatorsList.querySelector(`input[value="${data.default_operator}"]`);
               if (defaultCheckbox) {
@@ -5926,15 +5926,15 @@
             selectAllCheckbox.checked = true;
             defaultOperatorSelected = true;
           }
-          
+
           // Si aucun opérateur par défaut n'a été sélectionné, sélectionner le premier disponible
           if (!defaultOperatorSelected && data.operators.length > 0) {
-            const firstOperator = hasAllOption && data.operators.some(op => op.value === 'ALL') 
-              ? 'ALL' 
+            const firstOperator = hasAllOption && data.operators.some(op => op.value === 'ALL')
+              ? 'ALL'
               : data.operators[0].value;
-            
+
             selectedOperators = [firstOperator];
-            
+
             if (firstOperator === 'ALL' && selectAllCheckbox) {
               selectAllCheckbox.checked = true;
             } else {
@@ -5944,15 +5944,15 @@
               }
             }
           }
-          
+
           updateSelectedOperatorsDisplay();
           updateOperatorInfo();
-          
+
           // Déclencher le chargement des données avec l'opérateur sélectionné
           if (selectedOperators.length > 0) {
             loadDashboardData();
           }
-          
+
           // Update info text based on user role
           if (data.user_role === 'super_admin') {
             operatorInfo.textContent = `Vue globale disponible (${data.operators.length} opérateurs)`;
@@ -5961,16 +5961,16 @@
           } else {
             operatorInfo.textContent = `${data.operators.length} opérateur(s) assigné(s)`;
           }
-          
+
           console.log('✅ Opérateurs chargés:', data.operators.length);
-          
+
         } else {
           throw new Error('No operators data');
         }
-        
+
       } catch (error) {
         clearTimeout(timeoutId);
-        
+
         // Ne pas afficher d'erreur si c'est juste une annulation (timeout)
         // Vérifier si les opérateurs ont déjà été chargés (cas où le timeout arrive après chargement)
         if (error.name === 'AbortError') {
@@ -5979,14 +5979,14 @@
           const hasOperatorsInList = operatorsList && operatorsList.children.length > 0;
           const operatorInfo = document.getElementById('operator-info');
           const hasOperatorInfo = operatorInfo && operatorInfo.textContent && (
-            operatorInfo.textContent.includes('opérateur') || 
+            operatorInfo.textContent.includes('opérateur') ||
             operatorInfo.textContent.includes('Vue globale') ||
             operatorInfo.textContent.includes('assigné')
           );
-          
+
           // Vérifier aussi si availableOperators est défini et non vide
           const hasAvailableOperators = availableOperators && Array.isArray(availableOperators) && availableOperators.length > 0;
-          
+
           // Vérifier si les opérateurs sont réellement chargés
           // Si au moins un indicateur montre que les opérateurs sont chargés, ignorer le timeout complètement
           if (hasOperatorsInList || hasOperatorInfo || hasAvailableOperators) {
@@ -5994,7 +5994,7 @@
             // Ne rien afficher, ne rien logger
             return;
           }
-          
+
           // Seulement afficher le warning si les opérateurs ne sont vraiment pas chargés
           console.warn('⚠️ Chargement des opérateurs annulé (timeout) - réessayez si les opérateurs ne sont pas visibles');
           if (operatorInfo) {
@@ -6011,12 +6011,12 @@
         }
       }
     }
-    
+
     // Toggle operator dropdown
     function toggleOperatorDropdown() {
       const dropdown = document.getElementById('operators-dropdown');
       const header = document.querySelector('.multi-select-header');
-      
+
       if (dropdown.style.display === 'none') {
         dropdown.style.display = 'block';
         header.classList.add('open');
@@ -6025,12 +6025,12 @@
         header.classList.remove('open');
       }
     }
-    
+
     // Handle select all operators
     function handleSelectAllOperators() {
       const selectAllCheckbox = document.getElementById('select-all-operators');
       const operatorCheckboxes = document.querySelectorAll('.operators-list input[type="checkbox"]');
-      
+
       if (selectAllCheckbox.checked) {
         selectedOperators = ['ALL'];
         operatorCheckboxes.forEach(checkbox => {
@@ -6045,16 +6045,16 @@
           }
         });
       }
-      
+
       updateSelectedOperatorsDisplay();
       updateOperatorInfo();
       loadDashboardData();
     }
-    
+
     // Handle individual operator selection
     function handleOperatorChange(operatorValue, checkbox) {
       const selectAllCheckbox = document.getElementById('select-all-operators');
-      
+
       if (checkbox.checked) {
         // Add operator
         if (selectedOperators.includes('ALL')) {
@@ -6067,7 +6067,7 @@
         // Remove operator
         selectedOperators = selectedOperators.filter(op => op !== operatorValue);
         selectAllCheckbox.checked = false;
-        
+
         // Si aucun opérateur sélectionné, revenir à "Tous" seulement si disponible
         if (selectedOperators.length === 0 && hasAllOption) {
           selectedOperators = ['ALL'];
@@ -6081,16 +6081,16 @@
           }
         }
       }
-      
+
       updateSelectedOperatorsDisplay();
       updateOperatorInfo();
       loadDashboardData();
     }
-    
+
     // Update selected operators display
     function updateSelectedOperatorsDisplay() {
       const displayElement = document.getElementById('selected-operators-text');
-      
+
       if (selectedOperators.includes('ALL') || selectedOperators.length === 0) {
         displayElement.textContent = '📱 Tous les opérateurs';
       } else if (selectedOperators.length === 1) {
@@ -6099,11 +6099,11 @@
         displayElement.textContent = `📱 ${selectedOperators.length} opérateurs sélectionnés`;
       }
     }
-    
+
     // Update operator info
     function updateOperatorInfo() {
       const operatorInfo = document.getElementById('operator-info');
-      
+
       if (selectedOperators.includes('ALL') || selectedOperators.length === 0) {
         operatorInfo.textContent = 'Vue globale - Tous les opérateurs';
       } else if (selectedOperators.length === 1) {
@@ -6112,12 +6112,12 @@
         operatorInfo.textContent = `Données limitées à ${selectedOperators.length} opérateurs sélectionnés`;
       }
     }
-    
+
     // Close dropdown when clicking outside
     document.addEventListener('click', function(event) {
       const container = document.querySelector('.multi-select-container');
       const dropdown = document.getElementById('operators-dropdown');
-      
+
       if (container && !container.contains(event.target)) {
         dropdown.style.display = 'none';
         document.querySelector('.multi-select-header').classList.remove('open');
@@ -6129,7 +6129,7 @@
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - 13);
-      
+
       // Comparison period (14 days before the primary period)
       const comparisonEndDate = new Date(startDate);
       comparisonEndDate.setDate(comparisonEndDate.getDate() - 1);
@@ -6141,23 +6141,23 @@
       document.getElementById('comparison-start-date').value = comparisonStartDate.toISOString().split('T')[0];
       document.getElementById('comparison-end-date').value = comparisonEndDate.toISOString().split('T')[0];
     }
-    
+
     // Set smart comparison period (same duration as primary, just before)
     function setSmartComparison() {
       const startDate = new Date(document.getElementById('start-date').value);
       const endDate = new Date(document.getElementById('end-date').value);
-      
+
       if (startDate && endDate) {
         const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-        
+
         const comparisonEndDate = new Date(startDate);
         comparisonEndDate.setDate(comparisonEndDate.getDate() - 1);
         const comparisonStartDate = new Date(comparisonEndDate);
         comparisonStartDate.setDate(comparisonStartDate.getDate() - duration);
-        
+
         document.getElementById('comparison-start-date').value = comparisonStartDate.toISOString().split('T')[0];
         document.getElementById('comparison-end-date').value = comparisonEndDate.toISOString().split('T')[0];
-        
+
         updateDateRange();
         // Ne pas charger automatiquement - l'utilisateur doit cliquer sur "Actualiser"
       }
@@ -6165,12 +6165,12 @@
 
     // Debounce timer pour les changements de dates
     let dateChangeDebounceTimer = null;
-    
+
     // Update date range display avec debouncing
     function updateDateRange() {
       const startDate = document.getElementById('start-date').value;
       const endDate = document.getElementById('end-date').value;
-      
+
       // Calculer la période
       let periodDays = 0;
       if (startDate && endDate) {
@@ -6178,7 +6178,7 @@
         const end = new Date(endDate);
         periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
       }
-      
+
       // Debounce de 800ms sur les changements de dates
       // L'utilisateur doit cliquer sur "Actualiser" pour charger
       clearTimeout(dateChangeDebounceTimer);
@@ -6187,7 +6187,7 @@
           console.log(`✅ Dates mises à jour (${periodDays}j) - Cliquez sur "Actualiser" pour charger`);
         }
       }, 800);
-      
+
       if (startDate && endDate) {
         const start = new Date(startDate);
         const end = new Date(endDate);
@@ -6200,20 +6200,20 @@
     function showLoading() {
       // Add loading indicators to KPI cards
       const kpiValues = document.querySelectorAll('.kpi-value');
-      
+
       // Détecter les longues périodes
       const startDate = document.getElementById('start-date').value;
       const endDate = document.getElementById('end-date').value;
       let isLongPeriod = false;
       let diffDays = 0;
-      
+
       if (startDate && endDate) {
         const start = new Date(startDate);
         const end = new Date(endDate);
         diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
         isLongPeriod = diffDays > 90;
       }
-      
+
       kpiValues.forEach(el => {
         if (isLongPeriod) {
           el.innerHTML = `<div class="spinner"></div> <small>Optimisation ${diffDays}j...</small>`;
@@ -6221,7 +6221,7 @@
         el.innerHTML = '<div class="spinner"></div>';
         }
       });
-      
+
       if (isLongPeriod) {
         showOptimizationMessage(diffDays);
       }
@@ -6249,7 +6249,7 @@
         `;
         document.body.appendChild(optimMsg);
       }
-      
+
       optimMsg.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
@@ -6280,7 +6280,7 @@
       kpiValues.forEach(el => {
         el.textContent = 'Erreur';
       });
-      
+
       // You could also show a toast notification here
       alert(message);
     }
@@ -6337,7 +6337,7 @@
           ]
         }
       };
-      
+
       updateDashboard(dashboardData);
     }
 
@@ -6368,7 +6368,7 @@
           data.ooredoo_stats = {};
         }
       }
-      
+
       // Store globally FIRST so dependent functions can safely read it
       dashboardData = data;
 
@@ -6377,19 +6377,19 @@
       if (primaryPeriodEl && data.periods && data.periods.primary) {
         primaryPeriodEl.textContent = data.periods.primary;
       }
-      
+
       const comparisonPeriodEl = document.getElementById('comparisonPeriod');
       if (comparisonPeriodEl && data.periods && data.periods.comparison) {
         comparisonPeriodEl.textContent = data.periods.comparison;
       }
-      
+
       // Update KPIs first (most important)
       updateKPIs(data.kpis);
-      
+
       // Update other components with small delays to avoid blocking
       requestAnimationFrame(() => {
       updateCharts(data);
-      
+
         requestAnimationFrame(() => {
       updateTables(data);
       updateMerchantKPIs(data.merchants, data.kpis);
@@ -6411,7 +6411,7 @@
         // Sinon retourner 0
         return { current: 0, previous: 0, change: 0 };
       };
-      
+
       // Overview KPIs
       updateKPI('activatedSubscriptions', normalizeKPI(kpis?.activatedSubscriptions));
       updateKPI('activeSubscriptions', normalizeKPI(kpis?.activeSubscriptions));
@@ -6424,10 +6424,10 @@
       updateKPI('conversionRate', normalizeKPI(kpis?.conversionRate), '%');
       // Overview retention rate
       updateKPI('overview-retentionRate', normalizeKPI(kpis?.retentionRate), '%');
-      
+
       // Update Overview conversion progress bar
       updateOverviewConversionProgressBar(normalizeKPI(kpis?.conversionRate));
-      
+
       // Subscription KPIs
       updateKPI('sub-activatedSubscriptions', normalizeKPI(kpis?.activatedSubscriptions));
       updateKPI('sub-activeSubscriptions', normalizeKPI(kpis?.activeSubscriptions));
@@ -6437,40 +6437,40 @@
       updateKPI('sub-lostSubscriptions', normalizeKPI(kpis?.cohortDeactivated));
       // Taux de churn doit utiliser la valeur churnRate
       updateKPI('sub-retentionRateTrue', normalizeKPI(kpis?.churnRate), '%');
-      
+
       // Timwe Tab KPIs (super admin uniquement)
       if (kpis?.billingRateTimwe) {
         updateKPI('timwe-billing-rate', normalizeKPI(kpis?.billingRateTimwe), '%');
         updateKPI('timwe-total-billings', normalizeKPI(kpis?.totalTimweBillings));
-        
+
         // Récupérer les statistiques mensuelles groupées Timwe depuis les données du dashboard
         // Support mode light (timwe_stats au niveau racine) et mode complet (subscriptions.timwe_monthly_stats)
         const timweStats = dashboardData?.timwe_stats?.timwe_monthly_stats || dashboardData?.subscriptions?.timwe_monthly_stats;
         if (timweStats) {
           updateTimweStatisticsTable(timweStats);
-          
+
           // DÉSACTIVÉ POUR OPTIMISATION: Tableau des transactions Timwe par utilisateur
           // if (dashboardData.subscriptions.timwe_transactions_by_user) {
           //   updateTimweTransactionsTable(dashboardData.subscriptions.timwe_transactions_by_user);
           // } else {
           //   updateTimweTransactionsTable([]);
           // }
-          
+
           // Calculer les KPIs agrégés avec comparaison (depuis les données mensuelles)
           const monthlyStats = timweStats || [];
           const monthlyStatsComparison = dashboardData?.timwe_stats?.timwe_monthly_stats_comparison || dashboardData?.subscriptions?.timwe_monthly_stats_comparison || [];
-          
+
           const totals = calculateTimweTotals(monthlyStats);
-          const comparisonTotals = monthlyStatsComparison.length > 0 
-            ? calculateTimweComparisonTotals(monthlyStatsComparison) 
+          const comparisonTotals = monthlyStatsComparison.length > 0
+            ? calculateTimweComparisonTotals(monthlyStatsComparison)
             : null;
-          
+
           console.log('🔍 [TIMWE] Statistiques:', {
             current: monthlyStats.length,
             comparison: monthlyStatsComparison.length,
             hasSeparateComparison: !!dashboardData.subscriptions.timwe_monthly_stats_comparison
           });
-          
+
           // Helper pour créer un objet KPI avec ou sans comparaison
           const makeKPI = (current, previous) => {
             if (previous === null || previous === undefined || !comparisonTotals) {
@@ -6482,46 +6482,55 @@
               change: calculateChange(current, previous)
             };
           };
-          
+
           // Mise à jour des KPIs avec comparaison (si disponible)
           const newSubsKPI = makeKPI(totals.newSubs, comparisonTotals?.newSubs);
           console.log('🔍 [TIMWE KPI] Nouveaux Abonnements:', newSubsKPI);
-          
-          updateKPI('timwe-active-subs', makeKPI(
-            totals.activeSubsEndOfPeriod,
-            comparisonTotals?.activeSubsEndOfPeriod
-          ));
-          
-          updateKPI('timwe-new-subscriptions', newSubsKPI);
-          
-          updateKPI('timwe-unsubscriptions', makeKPI(
-            totals.unsubs,
-            comparisonTotals?.unsubs
-          ));
-          
-          updateKPI('timwe-simchurn', makeKPI(
-            totals.simchurn,
-            comparisonTotals?.simchurn
-          ));
-          
+
+          const rt = kpis?.timweRealtime;
+
+          if (rt) {
+            updateKPI('timwe-active-subs', normalizeKPI(rt.activeSubs));
+            updateKPI('timwe-new-subscriptions', normalizeKPI(rt.newSubs));
+            updateKPI('timwe-unsubscriptions', normalizeKPI(rt.unsubs));
+            updateKPI('timwe-simchurn', normalizeKPI(rt.simchurn));
+          } else {
+            updateKPI('timwe-active-subs', makeKPI(
+              totals.activeSubsEndOfPeriod,
+              comparisonTotals?.activeSubsEndOfPeriod
+            ));
+
+            updateKPI('timwe-new-subscriptions', newSubsKPI);
+
+            updateKPI('timwe-unsubscriptions', makeKPI(
+              totals.unsubs,
+              comparisonTotals?.unsubs
+            ));
+
+            updateKPI('timwe-simchurn', makeKPI(
+              totals.simchurn,
+              comparisonTotals?.simchurn
+            ));
+          }
+
           updateKPI('timwe-simchurn-revenue', {
             current: formatNumber(totals.simchurnRevenue, 3),
             previous: comparisonTotals ? formatNumber(comparisonTotals.simchurnRevenue, 3) : 0,
             change: comparisonTotals ? calculateChange(totals.simchurnRevenue, comparisonTotals.simchurnRevenue) : 0
           }, ' TND');
-          
+
           updateKPI('timwe-revenue-tnd', {
             current: formatNumber(totals.revenueTnd, 3),
             previous: comparisonTotals ? formatNumber(comparisonTotals.revenueTnd, 3) : 0,
             change: comparisonTotals ? calculateChange(totals.revenueTnd, comparisonTotals.revenueTnd) : 0
           }, ' TND');
-          
+
           updateKPI('timwe-revenue-usd', {
             current: formatNumber(totals.caBigdealHt, 3),
             previous: comparisonTotals ? formatNumber(comparisonTotals.caBigdealHt, 3) : 0,
             change: comparisonTotals ? calculateChange(totals.caBigdealHt, comparisonTotals.caBigdealHt) : 0
           }, ' TND');
-          
+
           // Calculer le nombre de jours de la période pour normaliser l'ARPU
           const startDate = document.getElementById('start-date')?.value;
           const endDate = document.getElementById('end-date')?.value;
@@ -6531,37 +6540,47 @@
             const end = new Date(endDate);
             periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 30;
           }
-          
+
+          const rtNewSubs = rt ? (rt.newSubs?.current ?? totals.newSubs) : totals.newSubs;
+          const rtUnsubs = rt ? (rt.unsubs?.current ?? totals.unsubs) : totals.unsubs;
+          const rtSimchurn = rt ? (rt.simchurn?.current ?? totals.simchurn) : totals.simchurn;
+          const rtActiveSubs = rt ? (rt.activeSubs?.current ?? totals.activeSubsEndOfPeriod) : totals.activeSubsEndOfPeriod;
+
           // Taux de Croissance Nette = ((New Subs - Unsubs - Simchurn) / Active Subs) * 100
-          const netGrowth = totals.newSubs - totals.unsubs - totals.simchurn;
-          const netGrowthRate = totals.activeSubsEndOfPeriod > 0 
-            ? (netGrowth / totals.activeSubsEndOfPeriod) * 100 
+          const netGrowth = rtNewSubs - rtUnsubs - rtSimchurn;
+          const netGrowthRate = rtActiveSubs > 0
+            ? (netGrowth / rtActiveSubs) * 100
             : 0;
-          
-          const netGrowthRateComparison = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
-            ? ((comparisonTotals.newSubs - comparisonTotals.unsubs - comparisonTotals.simchurn) / comparisonTotals.activeSubsEndOfPeriod) * 100
+
+          const rtActiveSubsComp = rt ? (rt.activeSubs?.previous ?? (comparisonTotals?.activeSubsEndOfPeriod || 0)) : (comparisonTotals?.activeSubsEndOfPeriod || 0);
+          const rtNewSubsComp = rt ? (rt.newSubs?.previous ?? (comparisonTotals?.newSubs || 0)) : (comparisonTotals?.newSubs || 0);
+          const rtUnsubsComp = rt ? (rt.unsubs?.previous ?? (comparisonTotals?.unsubs || 0)) : (comparisonTotals?.unsubs || 0);
+          const rtSimchurnComp = rt ? (rt.simchurn?.previous ?? (comparisonTotals?.simchurn || 0)) : (comparisonTotals?.simchurn || 0);
+
+          const netGrowthRateComparison = rtActiveSubsComp > 0
+            ? ((rtNewSubsComp - rtUnsubsComp - rtSimchurnComp) / rtActiveSubsComp) * 100
             : null;
-          
+
           // Formater le taux de croissance avec 2 décimales
           const netGrowthFormatted = formatNumber(netGrowthRate, 2);
           const netGrowthComparisonFormatted = netGrowthRateComparison !== null ? formatNumber(netGrowthRateComparison, 2) : 0;
-          
+
           updateKPI('timwe-net-growth-rate', {
             current: netGrowthFormatted,
             previous: netGrowthComparisonFormatted,
             change: netGrowthRateComparison !== null ? calculateChange(netGrowthRate, netGrowthRateComparison) : 0
           }, '%');
-          
+
           // ARPU mensuel normalisé (30 jours)
           // Formule : (Revenu Total / Active Subs) * (30 / Nombre de jours)
-          const arpuValue = totals.activeSubsEndOfPeriod > 0 
-            ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays)
+          const arpuValue = rtActiveSubs > 0
+            ? (totals.revenueTnd / rtActiveSubs) * (30 / periodDays)
             : 0;
           const arpuFormatted = formatNumber(arpuValue, 3);
-          
+
           updateKPI('timwe-arpu', { current: arpuFormatted, previous: 0, change: 0 }, ' TND');
-          
-          const avgBillingValue = kpis?.totalTimweBillings?.current > 0 
+
+          const avgBillingValue = kpis?.totalTimweBillings?.current > 0
             ? totals.revenueTnd / kpis.totalTimweBillings.current
             : 0;
           const avgBillingFormatted = formatNumber(avgBillingValue, 3);
@@ -6573,7 +6592,7 @@
       if (dashboardData && dashboardData.ooredoo_stats) {
         updateOoredooKPIs(dashboardData);
       }
-      
+
       // Nouveaux KPIs Avancés - Activations par Canal (avec comparaison)
       if (dashboardData && dashboardData.subscriptions && dashboardData.subscriptions.activations_by_channel) {
         const activations = dashboardData.subscriptions.activations_by_channel;
@@ -6581,7 +6600,7 @@
         updateKPI('sub-activationsRecharge', normalizeKPI(activations.recharge));
         updateKPI('sub-activationsPhone', normalizeKPI(activations.phone_balance));
       }
-      
+
       // Nouveaux KPIs Avancés - Plans (avec comparaison)
       if (dashboardData && dashboardData.subscriptions && dashboardData.subscriptions.plan_distribution) {
         const plans = dashboardData.subscriptions.plan_distribution;
@@ -6589,7 +6608,7 @@
         updateKPI('sub-plansMonthly', normalizeKPI(plans.monthly));
         updateKPI('sub-plansAnnual', normalizeKPI(plans.annual));
       }
-      
+
       // Nouveaux KPIs Avancés - Métriques (avec comparaison)
       if (dashboardData && dashboardData.subscriptions) {
         updateKPI('sub-renewalRate', normalizeKPI(dashboardData.subscriptions.renewal_rate), '%');
@@ -6641,7 +6660,7 @@
         const topMerchantNameEl = document.getElementById('merch-topMerchantName');
         const diversityEl = document.getElementById('merch-diversity');
         const diversityDetailEl = document.getElementById('merch-diversityDetail');
-        
+
             // Si le backend ne calcule pas la part, on la calcule côté client
             const enriched = Array.isArray(merchants) ? merchants.slice() : [];
             if (enriched.length > 0 && (typeof enriched[0].share === 'undefined' || enriched[0].share === null)) {
@@ -6649,7 +6668,7 @@
               enriched.forEach(m => { m.share = totalTx > 0 ? +(m.current * 100 / totalTx).toFixed(1) : 0; });
               enriched.sort((a, b) => (b.current || 0) - (a.current || 0));
             }
-            
+
             if (enriched && enriched.length > 0) {
                 const topMerchant = enriched[0];
         if (topMerchantShareEl) topMerchantShareEl.textContent = `${topMerchant.share}%`;
@@ -6677,11 +6696,11 @@
     function updateKPI(elementId, data, suffix = '') {
       const valueElement = document.getElementById(elementId);
       // Pour les KPIs Timwe et Ooredoo, utiliser '-delta' au lieu de 'Delta'
-      const deltaId = (elementId.startsWith('timwe-') || elementId.startsWith('ooredoo-')) 
-        ? elementId + '-delta' 
+      const deltaId = (elementId.startsWith('timwe-') || elementId.startsWith('ooredoo-'))
+        ? elementId + '-delta'
         : elementId + 'Delta';
       const deltaElement = document.getElementById(deltaId);
-      
+
       // Normalisation: éviter les erreurs si data est undefined/null
       const safe = (data && typeof data.current !== 'undefined')
         ? data
@@ -6691,7 +6710,7 @@
       if (elementId.startsWith('sub-') || elementId.startsWith('timwe-') || elementId.startsWith('ooredoo-')) {
         console.log('[KPI DEBUG]', elementId, JSON.parse(JSON.stringify(safe)));
       }
-      
+
       if (valueElement) {
         // Force la mise à jour complète même si c'était en mode "Optimisation"
         valueElement.innerHTML = ''; // Clear any existing content including loading states
@@ -6701,7 +6720,7 @@
         const formattedValue = (typeof safe.current === 'string') ? safe.current : formatNumber(safe.current, 0);
         valueElement.textContent = formattedValue + suffix;
       }
-      
+
       if (deltaElement) {
         const change = Number.isFinite(safe.change) ? safe.change : 0;
         const isPositive = change > 0;
@@ -6728,15 +6747,15 @@
           // Afficher le delta avec les bonnes classes
           deltaElement.style.display = '';
           deltaElement.innerHTML = ''; // Nettoyer d'abord
-          
+
           // Inverser la couleur pour les KPI où une baisse est positive (ex: deactivated, churn, durée entre transactions)
           const inverse = elementId.includes('deactivated') || elementId.includes('churn') || elementId.includes('lostSubscriptions') || elementId.includes('retentionRateTrue') || elementId.includes('avgInterTxDays');
           const positiveClass = inverse ? 'delta-negative' : 'delta-positive';
           const negativeClass = inverse ? 'delta-positive' : 'delta-negative';
-          
+
           deltaElement.textContent = `${isPositive ? '↗' : isNegative ? '↘' : '→'} ${isPositive ? '+' : ''}${change.toFixed(1)}%`;
           deltaElement.className = `kpi-delta ${isPositive ? positiveClass : isNegative ? negativeClass : 'delta-neutral'}`;
-          
+
           // DEBUG pour Timwe
           if (elementId.startsWith('timwe-')) {
             console.log(`✅ [DELTA SET] ${elementId}:`, deltaElement.textContent);
@@ -6764,20 +6783,20 @@
     function updateCharts(data) {
       // Overview Chart
       createOverviewChart(data);
-      
+
       // Subscription Charts
       createSubscriptionTrendChart(data);
       createRetentionChart(data);
-      
+
       // Nouveaux graphiques de subscription
       createActivationsByChannelChart(data);
       createPlanDistributionChart(data);
       createCohortsAnalysisChart(data);
-      
+
       // Transaction Charts
       createTransactionVolumeChart(data);
       createTransactingUsersChart(data);
-      
+
       // Nouveaux graphiques d'analyse des transactions
       // Ne pas afficher ces graphiques pour les collaborateurs
       @if(!Auth::user()->isCollaborator())
@@ -6789,7 +6808,7 @@
       createTopMerchantsChart(data);
       createCategoryChart(data);
       createActiveLocationsTrend(data);
-      
+
       // Comparison Chart (nouveau)
       createComparisonChart(data);
     }
@@ -6803,16 +6822,11 @@
     }
 
     const points = (data.subscriptions && data.subscriptions.quarterly_active_locations) ? data.subscriptions.quarterly_active_locations : [];
-    
+
     if (!points || points.length === 0) {
-      // Afficher un message si pas de données
-      const parent = ctx.parentElement;
-      if (parent) {
-        parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
-      }
       return;
     }
-    
+
     const labels = points.map(p => p.quarter);
     const values = points.map(p => p.locations);
 
@@ -6883,7 +6897,7 @@
     function createTransactionsByPlanChart(data) {
       const ctx = document.getElementById('transactionsByPlanChart');
       if (!ctx) return;
-      
+
       // Ne pas créer le graphique si l'élément n'existe pas (masqué pour collaborateur)
       if (!ctx.parentElement || ctx.parentElement.style.display === 'none') return;
 
@@ -6935,11 +6949,11 @@
     function createOverviewChart(data) {
       const ctx = document.getElementById('overviewChart');
       if (!ctx) return;
-      
+
       if (charts.overview) {
         charts.overview.destroy();
       }
-      
+
       charts.overview = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -6990,29 +7004,33 @@
     function createSubscriptionTrendChart(data) {
       const ctx = document.getElementById('subscriptionTrendChart');
       if (!ctx) return;
-      
+
       if (charts.subscriptionTrend) {
         charts.subscriptionTrend.destroy();
       }
-      
+
       // Use real daily activations data from backend
       const dailyActivations = data.subscriptions?.daily_activations || [];
-      
-      console.log('📊 Daily Activations data:', dailyActivations.length, 'entries', dailyActivations.slice(0, 3));
-      
-      if (!dailyActivations || dailyActivations.length === 0) {
-        // Afficher un message si pas de données
-        const parent = ctx.parentElement;
-        if (parent) {
-          parent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée disponible</div>';
+      const dateToValue = new Map();
+      const parseISO = (s) => new Date(s + 'T00:00:00');
+      dailyActivations.forEach(it => {
+        if (it && it.date) {
+          dateToValue.set(it.date, Number(it.activations || 0));
         }
-        return;
+      });
+
+      const sortedDates = Array.from(dateToValue.keys()).sort();
+      if (sortedDates.length === 0) return;
+      const start = parseISO(sortedDates[0]);
+      const end = parseISO(sortedDates[sortedDates.length - 1]);
+      const days = [];
+      const dailyData = [];
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const iso = d.toISOString().slice(0, 10);
+        days.push(iso);
+        dailyData.push(dateToValue.has(iso) ? dateToValue.get(iso) : 0);
       }
-      
-      // Pour les longues périodes (données mensuelles), utiliser directement les données sans interpolation
-      const days = dailyActivations.map(it => it.date);
-      const dailyData = dailyActivations.map(it => Number(it.activations || 0));
-      
+
       charts.subscriptionTrend = new Chart(ctx, {
         type: 'line',
         data: {
@@ -7049,26 +7067,37 @@
     function createRetentionChart(data) {
       const ctx = document.getElementById('retentionChart');
       if (!ctx) return;
-      
+
       if (charts.retention) {
         charts.retention.destroy();
       }
-      
+
       // Use real retention trend data from backend
       const retentionTrend = data.subscriptions?.retention_trend || [];
-      
-      console.log('📊 Retention Trend data:', retentionTrend?.length, 'entries', retentionTrend?.slice(0, 3));
-      
+
       if (!retentionTrend || retentionTrend.length === 0) {
-        // Afficher un message si pas de données
         ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
         return;
       }
-      
-      // Utiliser directement les données sans transformation complexe
-      const days = retentionTrend.map(it => it.date || it.period);
-      const retentionData = retentionTrend.map(it => Number((it.value ?? it.rate ?? 0) || 0));
-      
+
+      const mapDateToValue = new Map();
+      retentionTrend.forEach(it => {
+        if (it && (it.date || it.period)) {
+          const dateKey = it.date || it.period;
+          const value = Number((it.value ?? it.rate ?? 0) || 0);
+          mapDateToValue.set(dateKey, value);
+        }
+      });
+
+      const sorted = Array.from(mapDateToValue.keys()).sort();
+      if (sorted.length === 0) {
+        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
+        return;
+      }
+
+      const days = sorted;
+      const retentionData = sorted.map(date => mapDateToValue.get(date));
+
       charts.retention = new Chart(ctx, {
         type: 'line',
         data: {
@@ -7115,31 +7144,31 @@
     function createTransactionVolumeChart(data) {
       const ctx = document.getElementById('transactionVolumeChart');
       if (!ctx) return;
-      
+
       if (charts.transactionVolume) {
         charts.transactionVolume.destroy();
       }
-      
+
       // Use real daily transactions data from backend
       const dailyTransactions = data.transactions?.daily_volume || [];
-      
+
       console.log('📊 Daily Volume data:', dailyTransactions?.length, 'entries', dailyTransactions?.slice(0, 3));
-      
+
       if (!dailyTransactions || dailyTransactions.length === 0) {
         // Afficher un message si pas de données
         ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de transaction disponible</div>';
         return;
       }
-      
+
       const days = dailyTransactions.map((item) => item.date || '');
       const transactionData = dailyTransactions.map(item => Number(item.transactions || item.count || 0));
-      
+
       // Build cumulative series
       const cumulativeTransactions = transactionData.reduce((acc, val, idx) => {
         acc.push((acc[idx - 1] || 0) + val);
         return acc;
       }, []);
-      
+
       charts.transactionVolume = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -7149,7 +7178,7 @@
             data: transactionData,
             backgroundColor: getThemeColor('accent'),
             borderRadius: 4,
-            
+
           },{
             type: 'line',
             label: 'Cumulative (preview)',
@@ -7179,30 +7208,30 @@
     function createTransactingUsersChart(data) {
       const ctx = document.getElementById('transactingUsersChart');
       if (!ctx) return;
-      
+
       if (charts.transactingUsers) {
         charts.transactingUsers.destroy();
       }
-      
+
       // Use real daily transactions data from backend to extract users
       const dailyTransactions = data.transactions?.daily_volume || [];
-      
+
       console.log('📊 Transacting Users data:', dailyTransactions?.length, 'entries');
-      
+
       if (!dailyTransactions || dailyTransactions.length === 0) {
         // Afficher un message si pas de données
         ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée d\'utilisateurs disponible</div>';
         return;
       }
-      
+
       const days = dailyTransactions.map((item) => item.date || '');
       const userData = dailyTransactions.map(item => Number(item.users || item.unique_users || 0));
-      
+
       const cumulativeUsers = userData.reduce((acc, val, idx) => {
         acc.push((acc[idx - 1] || 0) + val);
         return acc;
       }, []);
-      
+
       charts.transactingUsers = new Chart(ctx, {
         type: 'line',
         data: {
@@ -7243,23 +7272,23 @@
     function createTopMerchantsChart(data) {
       const ctx = document.getElementById('topMerchantsChart');
       if (!ctx) return;
-      
+
       if (charts.topMerchants) {
         charts.topMerchants.destroy();
       }
-      
+
       const merchants = data.merchants || [];
-      
+
       if (!merchants || merchants.length === 0) {
         // Afficher un message si pas de données
         ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucun marchand disponible</div>';
         return;
       }
-      
+
       const top10 = merchants.slice(0, 10);
       const merchantNames = top10.map(m => m.name || m.merchant_name || 'Sans nom');
       const merchantValues = top10.map(m => Number(m.current || m.transactions || 0));
-      
+
       charts.topMerchants = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -7292,26 +7321,26 @@
     function createCategoryChart(data) {
       const ctx = document.getElementById('categoryChart');
       if (!ctx) return;
-      
+
       if (charts.category) {
         charts.category.destroy();
       }
-      
+
       const dist = data.categoryDistribution || [];
-      
+
       if (!dist || dist.length === 0) {
         // Afficher un message si pas de données
         ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune catégorie disponible</div>';
         return;
       }
-      
+
       const top10 = dist.slice(0, 10);
       // Utiliser transactions pour le volume, mais afficher aussi le nombre de marchands dans le label
       const labels = top10.map(d => `${d.category || 'Sans catégorie'} (${d.merchants ?? d.merchants_count ?? 0} marchands)`);
       // Utiliser transactions pour représenter le volume par catégorie
       const values = top10.map(d => Number(d.transactions ?? d.transaction_count ?? d.count ?? 0));
       const colors = ['#E30613','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#f97316','#64748b','#ec4899','#14b8a6'];
-      
+
       charts.category = new Chart(ctx, {
         type: 'pie',
         data: {
@@ -7338,11 +7367,11 @@
     function createComparisonChart(data) {
       const ctx = document.getElementById('comparisonChart');
       if (!ctx) return;
-      
+
       if (charts.comparison) {
         charts.comparison.destroy();
       }
-      
+
       const k = data?.kpis || {};
       const safe = (obj) => (obj && typeof obj.current !== 'undefined') ? obj : { current: 0, previous: 0 };
       const activated = safe(k.activatedSubscriptions);
@@ -7351,7 +7380,7 @@
       const conversion = safe(k.conversionRate);
       // Retention: préférer retentionRateTrue s'il existe, sinon retentionRate
       const retention = safe(k.retentionRateTrue || k.retentionRate);
-      
+
       const currentRaw = [
         activated.current,
         transactions.current,
@@ -7366,7 +7395,7 @@
         conversion.previous,
         retention.previous
       ];
-      
+
       const current = [];
       const previous = [];
       for (let i = 0; i < currentRaw.length; i++) {
@@ -7379,7 +7408,7 @@
           previous.push(+((Number(previousRaw[i]) || 0) * 100 / denom).toFixed(1));
         }
       }
-      
+
       charts.comparison = new Chart(ctx, {
         type: 'radar',
         data: {
@@ -7425,11 +7454,11 @@
     function createActivationsByChannelChart(data) {
       const ctx = document.getElementById('activationsByChannelChart');
       if (!ctx) return;
-      
+
       if (charts.activationsByChannel) {
         charts.activationsByChannel.destroy();
       }
-      
+
       const activations = data.subscriptions?.activations_by_channel || {};
       // Support both old (numbers) and new (objects with current/previous/change) shapes
       const cbVal = (activations.cb && typeof activations.cb === 'object') ? (activations.cb.current ?? 0) : (activations.cb ?? 0);
@@ -7481,17 +7510,17 @@
     function createPlanDistributionChart(data) {
       const ctx = document.getElementById('planDistributionChart');
       if (!ctx) return;
-      
+
       if (charts.planDistribution) {
         charts.planDistribution.destroy();
       }
-      
+
       const plans = data.subscriptions?.plan_distribution || {};
       const dailyVal = (plans.daily && typeof plans.daily === 'object') ? (plans.daily.current ?? 0) : (plans.daily ?? 0);
       const monthlyVal = (plans.monthly && typeof plans.monthly === 'object') ? (plans.monthly.current ?? 0) : (plans.monthly ?? 0);
       const annualVal = (plans.annual && typeof plans.annual === 'object') ? (plans.annual.current ?? 0) : (plans.annual ?? 0);
       const otherPlanVal = (plans.other && typeof plans.other === 'object') ? (plans.other.current ?? 0) : (plans.other ?? 0);
-      
+
       const total = dailyVal + monthlyVal + annualVal + otherPlanVal;
       if (total === 0) {
         // Afficher un message si pas de données
@@ -7501,9 +7530,9 @@
         }
         return;
       }
-      
+
       console.log('📊 Plan Distribution Chart:', { plans, dailyVal, monthlyVal, annualVal, otherPlanVal });
-      
+
       charts.planDistribution = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -7541,15 +7570,15 @@
     function createCohortsAnalysisChart(data) {
       const ctx = document.getElementById('cohortsAnalysisChart');
       if (!ctx) return;
-      
+
       if (charts.cohortsAnalysis) {
         charts.cohortsAnalysis.destroy();
       }
-      
+
       const cohorts = data.subscriptions?.cohorts || [];
-      
+
       // Si pas de données, créer un graphique vide avec des labels par défaut
-      const months = cohorts.length > 0 
+      const months = cohorts.length > 0
         ? cohorts.map(c => c.month)
         : ['Aucune donnée'];
       const survivalD30 = cohorts.length > 0
@@ -7558,9 +7587,9 @@
       const survivalD60 = cohorts.length > 0
         ? cohorts.map(c => c.survival_d60 || 0)
         : [0];
-      
+
       console.log('📊 Cohorts Analysis Chart:', { cohorts_count: cohorts.length, months, survivalD30, survivalD60 });
-      
+
       charts.cohortsAnalysis = new Chart(ctx, {
         type: 'line',
         data: {
@@ -7617,43 +7646,43 @@
         updateDailyStatisticsTable(data.subscriptions);
       }, 200);
     }
-    
+
     // Variables pour le tableau des statistiques quotidiennes
     let allDailyStatistics = [];
     let currentDailyStatsSortColumn = -1;
     let dailyStatsSortDirection = 'asc';
-    
+
     // Fonction pour mettre à jour le tableau des statistiques quotidiennes
     function updateDailyStatisticsTable(subscriptions) {
       const tbody = document.getElementById('daily-statistics-body');
       if (!tbody) return;
-      
+
       // Récupérer les statistiques quotidiennes
       let dailyStats = [];
       if (subscriptions && subscriptions.daily_statistics && Array.isArray(subscriptions.daily_statistics)) {
         dailyStats = subscriptions.daily_statistics;
       }
-      
+
       allDailyStatistics = dailyStats;
-      
+
       if (!dailyStats || dailyStats.length === 0) {
         tbody.innerHTML = '<tr><td colspan="12" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
         return;
       }
-      
+
       renderDailyStatisticsTable();
     }
-    
+
     // Fonction pour afficher le tableau des statistiques quotidiennes
     function renderDailyStatisticsTable() {
       const tbody = document.getElementById('daily-statistics-body');
       if (!tbody) return;
-      
+
       if (!allDailyStatistics || allDailyStatistics.length === 0) {
         tbody.innerHTML = '<tr><td colspan="12" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
         return;
       }
-      
+
       tbody.innerHTML = allDailyStatistics.map(row => {
         const dimension = row.dimension || '-';
         const offre = row.offre || 'N/A';
@@ -7667,7 +7696,7 @@
         const revenuTTC = row.revenu_ttc_tnd || row.revenu_ttc_local || 0;
         const revenuUSD = row.revenu_ttc_usd || 0;
         const revenuTND = row.revenu_ttc_tnd || row.revenu_ttc_local || 0;
-        
+
         return `
           <tr>
             <td>${dimension}</td>
@@ -7686,7 +7715,7 @@
         `;
       }).join('');
     }
-    
+
     // Fonction pour trier le tableau des statistiques quotidiennes
     function sortDailyStatistics(columnIndex) {
       if (currentDailyStatsSortColumn === columnIndex) {
@@ -7695,10 +7724,10 @@
         currentDailyStatsSortColumn = columnIndex;
         dailyStatsSortDirection = 'asc';
       }
-      
+
       allDailyStatistics.sort((a, b) => {
         let aVal, bVal;
-        
+
         switch(columnIndex) {
           case 0: aVal = a.dimension; bVal = b.dimension; break;
           case 1: aVal = a.offre; bVal = b.offre; break;
@@ -7714,29 +7743,29 @@
           case 11: aVal = a.revenu_ttc_tnd || 0; bVal = b.revenu_ttc_tnd || 0; break;
           default: return 0;
         }
-        
+
         if (typeof aVal === 'string') {
           return dailyStatsSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
         } else {
           return dailyStatsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
         }
       });
-      
+
       renderDailyStatisticsTable();
     }
-    
+
     // Fonction pour filtrer le tableau des statistiques quotidiennes
     function filterDailyStatistics() {
       const searchInput = document.getElementById('daily-stats-search');
       if (!searchInput) return;
-      
+
       const searchTerm = searchInput.value.toLowerCase();
-      
+
       if (!searchTerm) {
         renderDailyStatisticsTable();
         return;
       }
-      
+
       const filtered = allDailyStatistics.filter(row => {
         return (
           (row.dimension && row.dimension.toLowerCase().includes(searchTerm)) ||
@@ -7746,15 +7775,15 @@
           String(row.active_sub || '').includes(searchTerm)
         );
       });
-      
+
       const tbody = document.getElementById('daily-statistics-body');
       if (!tbody) return;
-      
+
       if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="12" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucun résultat trouvé</td></tr>';
         return;
       }
-      
+
       tbody.innerHTML = filtered.map(row => {
         const dimension = row.dimension || '-';
         const offre = row.offre || 'N/A';
@@ -7768,7 +7797,7 @@
         const revenuTTC = row.revenu_ttc_tnd || row.revenu_ttc_local || 0;
         const revenuUSD = row.revenu_ttc_usd || 0;
         const revenuTND = row.revenu_ttc_tnd || row.revenu_ttc_local || 0;
-        
+
         return `
           <tr>
             <td>${dimension}</td>
@@ -7787,21 +7816,21 @@
         `;
       }).join('');
     }
-    
+
     // Fonction pour exporter en Excel (simplifiée - copie dans le presse-papier)
     function exportDailyStatistics() {
       if (!allDailyStatistics || allDailyStatistics.length === 0) {
         alert('Aucune donnée à exporter');
         return;
       }
-      
+
       // Créer le CSV
       let csv = 'Dimension,Offre,New sub,Unsub,Simchurn,Rev Simchurn,Active Sub,NB facturation,Taux Facturation,Revenu TTC local,Revenu TTC USD,Revenu TTC TND\n';
-      
+
       allDailyStatistics.forEach(row => {
         csv += `${row.dimension || ''},${row.offre || 'N/A'},${row.new_sub || 0},${row.unsub || 0},${row.simchurn || 0},${row.rev_simchurn || 0},${row.active_sub || 0},${row.nb_facturation || 0},${row.taux_facturation || 0},${row.revenu_ttc_local || 0},${row.revenu_ttc_usd || 0},${row.revenu_ttc_tnd || 0}\n`;
       });
-      
+
       // Créer un blob et télécharger
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
@@ -7813,21 +7842,21 @@
       link.click();
       document.body.removeChild(link);
     }
-    
+
     // Fonction pour copier les données
     function copyDailyStatistics() {
       if (!allDailyStatistics || allDailyStatistics.length === 0) {
         alert('Aucune donnée à copier');
         return;
       }
-      
+
       // Créer le texte tabulé
       let text = 'Dimension\tOffre\tNew sub\tUnsub\tSimchurn\tRev Simchurn\tActive Sub\tNB facturation\tTaux Facturation\tRevenu TTC local\tRevenu TTC USD\tRevenu TTC TND\n';
-      
+
       allDailyStatistics.forEach(row => {
         text += `${row.dimension || ''}\t${row.offre || 'N/A'}\t${row.new_sub || 0}\t${row.unsub || 0}\t${row.simchurn || 0}\t${row.rev_simchurn || 0}\t${row.active_sub || 0}\t${row.nb_facturation || 0}\t${row.taux_facturation || 0}\t${row.revenu_ttc_local || 0}\t${row.revenu_ttc_usd || 0}\t${row.revenu_ttc_tnd || 0}\n`;
       });
-      
+
       navigator.clipboard.writeText(text).then(() => {
         alert('Données copiées dans le presse-papier !');
       }).catch(err => {
@@ -7835,12 +7864,12 @@
         alert('Erreur lors de la copie');
       });
     }
-    
+
     // ===== FONCTIONS TIMWE =====
     let allTimweStatistics = [];
     let currentTimweStatsSortColumn = 0;
     let timweStatsSortDirection = 'asc';
-    
+
     function calculateTimweTotals(monthlyStats) {
       if (!monthlyStats || monthlyStats.length === 0) {
         return {
@@ -7853,7 +7882,7 @@
           caBigdealHt: 0
         };
       }
-      
+
       const totals = {
         newSubs: 0,
         unsubs: 0,
@@ -7863,7 +7892,7 @@
         revenueTnd: 0,
         caBigdealHt: 0
       };
-      
+
       // Sommer les totaux mensuels
       monthlyStats.forEach(month => {
         totals.newSubs += Number(month.total_new_sub) || 0;
@@ -7873,59 +7902,59 @@
         totals.revenueTnd += Number(month.total_revenu_ttc_tnd) || 0;
         totals.caBigdealHt += Number(month.ca_bigdeal_ht) || 0;
       });
-      
+
       // Active Subs = valeur du DERNIER mois de la période
       const lastMonth = monthlyStats[0]; // Le premier dans l'ordre décroissant
       totals.activeSubsEndOfPeriod = lastMonth ? (Number(lastMonth.total_active_sub) || 0) : 0;
-      
+
       return totals;
     }
-    
+
     function calculateTimweComparisonTotals(monthlyStatsComparison) {
       // Utiliser directement les données mensuelles de comparaison du backend
       if (!monthlyStatsComparison || monthlyStatsComparison.length === 0) {
         console.log('🔍 [TIMWE COMPARISON] Pas de données de comparaison');
         return null;
       }
-      
+
       return calculateTimweTotals(monthlyStatsComparison);
     }
-    
+
     // Stockage des mois Timwe et leur état d'expansion
     let allTimweMonthlyStats = [];
     let expandedMonths = new Set();
-    
+
     function updateTimweStatisticsTable(monthlyStats) {
       const tbody = document.getElementById('timweStatsTableBody');
       if (!tbody) return;
-      
+
       if (!monthlyStats || monthlyStats.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
         return;
       }
-      
+
       allTimweMonthlyStats = monthlyStats;
       renderTimweStatisticsTable();
     }
-    
+
     function renderTimweStatisticsTable() {
       const tbody = document.getElementById('timweStatsTableBody');
       if (!tbody) return;
-      
+
       if (!allTimweMonthlyStats || allTimweMonthlyStats.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
         return;
       }
-      
+
       let html = '';
-      
+
       allTimweMonthlyStats.forEach((month, idx) => {
         const isExpanded = expandedMonths.has(month.month_key);
         const expandIcon = isExpanded ? '▼' : '▶';
-        
+
         // Ligne du mois (cliquable)
         html += `
-          <tr style="background: var(--card); border-bottom: 2px solid var(--border); cursor: pointer; font-weight: 600;" 
+          <tr style="background: var(--card); border-bottom: 2px solid var(--border); cursor: pointer; font-weight: 600;"
               onclick="toggleTimweMonth('${month.month_key}')">
             <td style="padding: 12px; text-align: center;">${expandIcon}</td>
             <td style="padding: 12px;">${month.display_label}</td>
@@ -7939,7 +7968,7 @@
             <td style="padding: 12px; text-align: center;">${formatNumber(month.ca_bigdeal_ht, 3)} TND</td>
           </tr>
         `;
-        
+
         // Lignes des détails quotidiens (affichées seulement si le mois est expandé)
         if (isExpanded && month.daily_details && month.daily_details.length > 0) {
           month.daily_details.forEach(day => {
@@ -7960,10 +7989,10 @@
           });
         }
       });
-      
+
       tbody.innerHTML = html;
     }
-    
+
     function toggleTimweMonth(monthKey) {
       if (expandedMonths.has(monthKey)) {
         expandedMonths.delete(monthKey);
@@ -7972,7 +8001,7 @@
       }
       renderTimweStatisticsTable();
     }
-    
+
     function sortTimweStatistics(columnIndex) {
       if (currentTimweStatsSortColumn === columnIndex) {
         timweStatsSortDirection = timweStatsSortDirection === 'asc' ? 'desc' : 'asc';
@@ -7980,10 +8009,10 @@
         currentTimweStatsSortColumn = columnIndex;
         timweStatsSortDirection = 'asc';
       }
-      
+
       allTimweStatistics.sort((a, b) => {
         let aVal, bVal;
-        
+
         switch(columnIndex) {
           case 0: aVal = a.dimension; bVal = b.dimension; break;
           case 1: aVal = a.offre; bVal = b.offre; break;
@@ -7998,34 +8027,34 @@
           case 10: aVal = a.revenu_ttc_usd || 0; bVal = b.revenu_ttc_usd || 0; break;
           default: return 0;
         }
-        
+
         if (typeof aVal === 'string') {
           return timweStatsSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
         } else {
           return timweStatsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
         }
       });
-      
+
       renderTimweStatisticsTable();
     }
-    
+
     function filterTimweStats() {
       // Fonction simplifiée : on filtre simplement par le nom du mois
       renderTimweStatisticsTable();
     }
-    
+
     function exportTimweStatsToExcel() {
       if (!allTimweMonthlyStats || allTimweMonthlyStats.length === 0) {
         alert('Aucune donnée à exporter');
         return;
       }
-      
+
       let csv = 'Période,New Sub,Unsub,Simchurn,Active Sub,NB Facturation,Taux Facturation %,Revenu TTC (TND),CA BigDeal HT (TND)\n';
-      
+
       allTimweMonthlyStats.forEach(month => {
         // Ligne du mois (avec formatage français)
         csv += `${month.display_label},${formatNumber(month.total_new_sub, 0)},${formatNumber(month.total_unsub, 0)},${formatNumber(month.total_simchurn, 0)},${formatNumber(month.total_active_sub, 0)},${formatNumber(month.total_nb_facturation, 0)},${formatPercentage(month.total_taux_facturation, 3)},${formatNumber(month.total_revenu_ttc_tnd, 3)},${formatNumber(month.ca_bigdeal_ht, 3)}\n`;
-        
+
         // Lignes des détails quotidiens
         if (month.daily_details && month.daily_details.length > 0) {
           month.daily_details.forEach(day => {
@@ -8033,7 +8062,7 @@
           });
         }
       });
-      
+
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -8044,19 +8073,19 @@
       link.click();
       document.body.removeChild(link);
     }
-    
+
     function copyTimweStatsToClipboard() {
       if (!allTimweMonthlyStats || allTimweMonthlyStats.length === 0) {
         alert('Aucune donnée à copier');
         return;
       }
-      
+
       let text = 'Période\tNew Sub\tUnsub\tSimchurn\tActive Sub\tNB Facturation\tTaux Facturation %\tRevenu TTC (TND)\tCA BigDeal HT (TND)\n';
-      
+
       allTimweMonthlyStats.forEach(month => {
         // Ligne du mois (avec formatage français)
         text += `${month.display_label}\t${formatNumber(month.total_new_sub, 0)}\t${formatNumber(month.total_unsub, 0)}\t${formatNumber(month.total_simchurn, 0)}\t${formatNumber(month.total_active_sub, 0)}\t${formatNumber(month.total_nb_facturation, 0)}\t${formatPercentage(month.total_taux_facturation, 3)}\t${formatNumber(month.total_revenu_ttc_tnd, 3)}\t${formatNumber(month.ca_bigdeal_ht, 3)}\n`;
-        
+
         // Lignes des détails quotidiens
         if (month.daily_details && month.daily_details.length > 0) {
           month.daily_details.forEach(day => {
@@ -8064,7 +8093,7 @@
           });
         }
       });
-      
+
       navigator.clipboard.writeText(text).then(() => {
         alert('Données copiées dans le presse-papier !');
       }).catch(err => {
@@ -8086,27 +8115,27 @@
     function updateTimweTransactionsTable(transactions) {
       const tbody = document.getElementById('timweTransactionsTableBody');
       if (!tbody) return;
-      
+
       if (!transactions || transactions.length === 0) {
         // Vérifier si c'est une longue période
         const startDate = document.getElementById('start-date')?.value;
         const endDate = document.getElementById('end-date')?.value;
         let message = 'Aucune transaction disponible';
-        
+
         if (startDate && endDate) {
           const start = new Date(startDate);
           const end = new Date(endDate);
           const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-          
+
           if (diffDays > 90) {
             message = '⚠️ Tableau désactivé pour les périodes > 90 jours (optimisation des performances). Veuillez sélectionner une période plus courte.';
           }
         }
-        
+
         tbody.innerHTML = `<tr><td colspan="6" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">${message}</td></tr>`;
         return;
       }
-      
+
       allTimweTransactions = transactions;
       filteredTimweTransactions = transactions;
       renderTimweTransactionsTable();
@@ -8115,24 +8144,24 @@
     function renderTimweTransactionsTable() {
       const tbody = document.getElementById('timweTransactionsTableBody');
       if (!tbody) return;
-      
+
       if (!filteredTimweTransactions || filteredTimweTransactions.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune transaction trouvée</td></tr>';
         return;
       }
-      
+
       // Pagination
       const start = (currentTimweTransactionsPage - 1) * timweTransactionsPerPage;
       const end = start + timweTransactionsPerPage;
       const pageData = filteredTimweTransactions.slice(start, end);
-      
+
       tbody.innerHTML = pageData.map(row => {
         const clientId = row.client_id || '-';
         const nbTransactions = row.nb_transactions || 0;
         const derniereTransactionId = row.derniere_transaction_id || '-';
         const derniereDate = row.derniere_date ? new Date(row.derniere_date).toLocaleString('fr-FR') : '-';
         const lastStatus = row.last_status || '-';
-        
+
         // Badge de statut basé sur la facturation
         let statusBadge = '';
         if (lastStatus === 'RENOUVELÉ') {
@@ -8142,7 +8171,7 @@
         } else {
           statusBadge = '<span style="padding: 4px 12px; background: #f3f4f6; color: #374151; border-radius: 12px; font-size: 11px; font-weight: 600;">' + lastStatus + '</span>';
         }
-        
+
         return `
           <tr>
             <td><strong>${clientId}</strong></td>
@@ -8151,7 +8180,7 @@
             <td>${derniereDate}</td>
             <td>${statusBadge}</td>
             <td>
-              <button onclick="viewClientTimweTransactions(${clientId})" 
+              <button onclick="viewClientTimweTransactions(${clientId})"
                       style="padding: 4px 8px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
                 📊 Détails
               </button>
@@ -8159,44 +8188,44 @@
           </tr>
         `;
       }).join('');
-      
+
       updateTimweTransactionsPagination();
     }
 
     function updateTimweTransactionsPagination() {
       const paginationDiv = document.getElementById('timweTransactionsPagination');
       if (!paginationDiv) return;
-      
+
       const totalPages = Math.ceil(filteredTimweTransactions.length / timweTransactionsPerPage);
-      
+
       if (totalPages <= 1) {
         paginationDiv.innerHTML = '';
         return;
       }
-      
+
       let html = '';
-      
+
       // Previous button
       if (currentTimweTransactionsPage > 1) {
         html += `<button onclick="changeTimweTransactionsPage(${currentTimweTransactionsPage - 1})" style="padding: 8px 12px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">‹ Précédent</button>`;
       }
-      
+
       // Page numbers
       for (let i = 1; i <= Math.min(totalPages, 5); i++) {
         const isActive = i === currentTimweTransactionsPage;
         html += `<button onclick="changeTimweTransactionsPage(${i})" style="padding: 8px 12px; border: 1px solid var(--border); background: ${isActive ? 'var(--primary)' : 'white'}; color: ${isActive ? 'white' : 'black'}; border-radius: 4px; cursor: pointer;">${i}</button>`;
       }
-      
+
       if (totalPages > 5) {
         html += '<span style="padding: 8px;">...</span>';
         html += `<button onclick="changeTimweTransactionsPage(${totalPages})" style="padding: 8px 12px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">${totalPages}</button>`;
       }
-      
+
       // Next button
       if (currentTimweTransactionsPage < totalPages) {
         html += `<button onclick="changeTimweTransactionsPage(${currentTimweTransactionsPage + 1})" style="padding: 8px 12px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">Suivant ›</button>`;
       }
-      
+
       paginationDiv.innerHTML = html;
     }
 
@@ -8218,10 +8247,10 @@
         currentTimweTransactionsSortColumn = columnIndex;
         timweTransactionsSortDirection = 'desc'; // Default to desc for numbers
       }
-      
+
       filteredTimweTransactions.sort((a, b) => {
         let aVal, bVal;
-        
+
         switch(columnIndex) {
           case 0: aVal = a.client_id || 0; bVal = b.client_id || 0; break;
           case 1: aVal = a.nb_transactions || 0; bVal = b.nb_transactions || 0; break;
@@ -8230,14 +8259,14 @@
           case 4: aVal = a.last_status || ''; bVal = b.last_status || ''; break;
           default: return 0;
         }
-        
+
         if (typeof aVal === 'string') {
           return timweTransactionsSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
         } else {
           return timweTransactionsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
         }
       });
-      
+
       currentTimweTransactionsPage = 1;
       renderTimweTransactionsTable();
     }
@@ -8245,9 +8274,9 @@
     function filterTimweTransactions() {
       const searchInput = document.getElementById('timweTransactionsSearch');
       if (!searchInput) return;
-      
+
       const searchTerm = searchInput.value.toLowerCase();
-      
+
       if (!searchTerm) {
         filteredTimweTransactions = allTimweTransactions;
       } else {
@@ -8260,7 +8289,7 @@
           );
         });
       }
-      
+
       currentTimweTransactionsPage = 1;
       renderTimweTransactionsTable();
     }
@@ -8270,13 +8299,13 @@
         alert('Aucune donnée à exporter');
         return;
       }
-      
+
       let csv = 'Client ID,Nb Transactions,Dernière Transaction,Dernière Date,Statut\n';
-      
+
       allTimweTransactions.forEach(row => {
         csv += `${row.client_id || ''},${row.nb_transactions || 0},${row.derniere_transaction_id || ''},${row.derniere_date || ''},${row.last_status || ''}\n`;
       });
-      
+
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -8293,13 +8322,13 @@
         alert('Aucune donnée à copier');
         return;
       }
-      
+
       let text = 'Client ID\tNb Transactions\tDernière Transaction\tDernière Date\tStatut\n';
-      
+
       allTimweTransactions.forEach(row => {
         text += `${row.client_id || ''}\t${row.nb_transactions || 0}\t${row.derniere_transaction_id || ''}\t${row.derniere_date || ''}\t${row.last_status || ''}\n`;
       });
-      
+
       navigator.clipboard.writeText(text).then(() => {
         alert('Données copiées dans le presse-papier !');
       }).catch(err => {
@@ -8317,14 +8346,14 @@
 
     async function viewClientTimweTransactions(clientId) {
       currentModalClientId = clientId;
-      
+
       // Afficher le modal
       const modal = document.getElementById('clientTransactionsModal');
       modal.style.display = 'block';
-      
+
       // Mettre à jour le client ID
       document.getElementById('modalClientId').textContent = clientId;
-      
+
       // Réinitialiser la table
       document.getElementById('modalTransactionsTableBody').innerHTML = `
         <tr>
@@ -8333,12 +8362,12 @@
           </td>
         </tr>
       `;
-      
+
       try {
         // Récupérer les dates de la période sélectionnée
         const startDate = document.getElementById('start-date')?.value || '';
         const endDate = document.getElementById('end-date')?.value || '';
-        
+
         // Appeler l'API pour récupérer les transactions du client
         const response = await fetch(`/api/timwe-client-transactions/${clientId}?start_date=${startDate}&end_date=${endDate}`, {
           method: 'GET',
@@ -8349,28 +8378,28 @@
           },
           credentials: 'include'
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Erreur API:', errorText);
           throw new Error(`Erreur ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
           currentClientTransactions = data.transactions || [];
           filteredModalTransactions = currentClientTransactions;
-          
+
           // Mettre à jour les stats
           updateModalClientStats(data.stats);
-          
+
           // Afficher les transactions
           renderModalTransactions();
         } else {
           throw new Error(data.message || 'Erreur inconnue');
         }
-        
+
       } catch (error) {
         console.error('Erreur:', error);
         document.getElementById('modalTransactionsTableBody').innerHTML = `
@@ -8385,7 +8414,7 @@
 
     function updateModalClientStats(stats) {
       const statsDiv = document.getElementById('modalClientStats');
-      
+
       const totalTransactions = stats.total_transactions || 0;
       const renewals = stats.renewals || 0;
       const unsubscriptions = stats.unsubscriptions || 0;
@@ -8394,7 +8423,7 @@
       const tentative = stats.tentative || 0;
       const firstTransaction = stats.first_transaction_date ? new Date(stats.first_transaction_date).toLocaleDateString('fr-FR') : '-';
       const lastTransaction = stats.last_transaction_date ? new Date(stats.last_transaction_date).toLocaleDateString('fr-FR') : '-';
-      
+
       statsDiv.innerHTML = `
         <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #667eea;">
           <div style="color: #6b7280; font-size: 12px; margin-bottom: 5px;">Total Transactions</div>
@@ -8433,7 +8462,7 @@
 
     function renderModalTransactions() {
       const tbody = document.getElementById('modalTransactionsTableBody');
-      
+
       if (!filteredModalTransactions || filteredModalTransactions.length === 0) {
         tbody.innerHTML = `
           <tr>
@@ -8444,13 +8473,13 @@
         `;
         return;
       }
-      
+
       tbody.innerHTML = filteredModalTransactions.map(tx => {
         const transactionId = tx.transaction_history_id || '-';
         const reference = tx.reference || '-';
         const status = tx.status || '-';
         const date = tx.created_at ? new Date(tx.created_at).toLocaleString('fr-FR') : '-';
-        
+
         // Badge de statut original
         let statusBadge = '';
         if (status.includes('RENEWED')) {
@@ -8460,12 +8489,12 @@
         } else {
           statusBadge = '<span style="padding: 4px 12px; background: #f3f4f6; color: #374151; border-radius: 12px; font-size: 11px; font-weight: 600;">' + status + '</span>';
         }
-        
+
         // Badge de statut de facturation
         let billingStatusBadge = '';
         const billingStatus = tx.billing_status || 'tentative';
         const billingLabel = tx.billing_status_label || 'Tentative';
-        
+
         if (billingStatus === 'facture') {
           billingStatusBadge = '<span style="padding: 4px 12px; background: #d1fae5; color: #065f46; border-radius: 12px; font-size: 11px; font-weight: 600;">✅ FACTURÉ</span>';
         } else if (billingStatus === 'tentative_nb') {
@@ -8473,7 +8502,7 @@
         } else {
           billingStatusBadge = '<span style="padding: 4px 12px; background: #e5e7eb; color: #374151; border-radius: 12px; font-size: 11px; font-weight: 600;">🔄 TENTATIVE</span>';
         }
-        
+
         // Delivery Code
         const deliveryCode = tx.mno_delivery_code || '-';
         let deliveryCodeBadge = '';
@@ -8486,13 +8515,13 @@
         } else {
           deliveryCodeBadge = '<span style="padding: 4px 8px; background: #e0e7ff; color: #3730a3; border-radius: 8px; font-size: 10px; font-weight: 600;">' + deliveryCode + '</span>';
         }
-        
+
         // Montant
         const amount = tx.total_charged || 0;
-        const amountDisplay = amount > 0 
+        const amountDisplay = amount > 0
           ? '<span style="color: #059669; font-weight: 600;">' + amount.toFixed(3) + ' TND</span>'
           : '<span style="color: #6b7280;">0.000 TND</span>';
-        
+
         return `
           <tr>
             <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
@@ -8530,23 +8559,23 @@
       const searchTerm = document.getElementById('modalTransactionsSearch')?.value.toLowerCase() || '';
       const statusFilter = document.getElementById('modalStatusFilter')?.value || '';
       const billingFilter = document.getElementById('modalBillingFilter')?.value || '';
-      
+
       filteredModalTransactions = currentClientTransactions.filter(tx => {
-        const matchesSearch = !searchTerm || 
+        const matchesSearch = !searchTerm ||
           (tx.reference && tx.reference.toLowerCase().includes(searchTerm)) ||
           (tx.status && tx.status.toLowerCase().includes(searchTerm)) ||
           (tx.transaction_history_id && String(tx.transaction_history_id).includes(searchTerm)) ||
           (tx.mno_delivery_code && tx.mno_delivery_code.toLowerCase().includes(searchTerm));
-        
-        const matchesStatus = !statusFilter || 
+
+        const matchesStatus = !statusFilter ||
           (statusFilter === 'RENEWED' && tx.status.includes('RENEWED')) ||
           (statusFilter === 'UNSUBSCRIPTION' && tx.status.includes('UNSUBSCRIPTION'));
-        
+
         const matchesBilling = !billingFilter || tx.billing_status === billingFilter;
-        
+
         return matchesSearch && matchesStatus && matchesBilling;
       });
-      
+
       renderModalTransactions();
     }
 
@@ -8557,10 +8586,10 @@
         modalSortColumn = columnIndex;
         modalSortDirection = 'asc';
       }
-      
+
       filteredModalTransactions.sort((a, b) => {
         let aVal, bVal;
-        
+
         switch(columnIndex) {
           case 0: aVal = a.transaction_history_id || 0; bVal = b.transaction_history_id || 0; break;
           case 1: aVal = a.reference || ''; bVal = b.reference || ''; break;
@@ -8571,14 +8600,14 @@
           case 6: aVal = a.created_at || ''; bVal = b.created_at || ''; break;
           default: return 0;
         }
-        
+
         if (typeof aVal === 'string') {
           return modalSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
         } else {
           return modalSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
         }
       });
-      
+
       renderModalTransactions();
     }
 
@@ -8587,9 +8616,9 @@
         alert('Aucune transaction à exporter');
         return;
       }
-      
+
       let csv = 'Transaction ID,Référence,Statut Original,Statut Facturation,Delivery Code,Montant (TND),Date\n';
-      
+
       currentClientTransactions.forEach(tx => {
         const transactionId = tx.transaction_history_id || '';
         const reference = tx.reference || '';
@@ -8598,10 +8627,10 @@
         const deliveryCode = tx.mno_delivery_code || '';
         const amount = tx.total_charged || 0;
         const date = tx.created_at || '';
-        
+
         csv += `${transactionId},"${reference}","${status}","${billingStatus}","${deliveryCode}",${amount},"${date}"\n`;
       });
-      
+
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -8623,38 +8652,38 @@
     function viewTransactionDetails(transactionId, resultDetailsEncoded) {
       try {
         const resultDetails = JSON.parse(decodeURIComponent(resultDetailsEncoded));
-        
+
         // Formater le JSON pour affichage
         const jsonFormatted = JSON.stringify(resultDetails, null, 2);
-        
+
         // Créer le contenu HTML
         let htmlContent = '<div style="padding: 20px;">';
         htmlContent += '<h3 style="margin-top: 0; color: #111827;">Détails de la Transaction #' + transactionId + '</h3>';
-        
+
         if (resultDetails && Object.keys(resultDetails).length > 0) {
           htmlContent += '<div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-top: 15px;">';
           htmlContent += '<h4 style="margin: 0 0 10px 0; color: #374151;">Détails Result (JSON)</h4>';
           htmlContent += '<pre style="background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.6;">' + jsonFormatted + '</pre>';
           htmlContent += '</div>';
-          
+
           // Afficher les champs importants
           if (resultDetails.mnoDeliveryCode || resultDetails.totalCharged !== undefined) {
             htmlContent += '<div style="margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">';
-            
+
             if (resultDetails.mnoDeliveryCode) {
               htmlContent += '<div style="background: white; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px;">';
               htmlContent += '<div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">Delivery Code</div>';
               htmlContent += '<div style="font-size: 18px; font-weight: 600; color: #111827;">' + resultDetails.mnoDeliveryCode + '</div>';
               htmlContent += '</div>';
             }
-            
+
             if (resultDetails.totalCharged !== undefined) {
               htmlContent += '<div style="background: white; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px;">';
               htmlContent += '<div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">Montant Chargé</div>';
               htmlContent += '<div style="font-size: 18px; font-weight: 600; color: ' + (resultDetails.totalCharged > 0 ? '#059669' : '#6b7280') + ';">' + resultDetails.totalCharged + ' TND</div>';
               htmlContent += '</div>';
             }
-            
+
             htmlContent += '</div>';
           }
         } else {
@@ -8663,9 +8692,9 @@
           htmlContent += 'Aucun détail result disponible pour cette transaction';
           htmlContent += '</div>';
         }
-        
+
         htmlContent += '</div>';
-        
+
         // Utiliser SweetAlert si disponible, sinon alert simple
         if (typeof Swal !== 'undefined') {
           Swal.fire({
@@ -8692,7 +8721,7 @@
           `;
           document.body.insertAdjacentHTML('beforeend', modalHtml);
         }
-        
+
       } catch (error) {
         console.error('Erreur lors du parsing des détails:', error);
         alert('Erreur lors de l\'affichage des détails de la transaction');
@@ -8725,7 +8754,7 @@
           revenueTnd: 0
         };
       }
-      
+
       const totals = {
         newSubs: 0,
         unsubs: 0,
@@ -8733,7 +8762,7 @@
         activeSubsEndOfPeriod: 0,
         revenueTnd: 0
       };
-      
+
       // Sommer les totaux mensuels
       monthlyStats.forEach(month => {
         totals.newSubs += Number(month.total_new_sub) || 0;
@@ -8741,11 +8770,11 @@
         totals.billings += Number(month.total_nb_facturation) || 0;
         totals.revenueTnd += Number(month.total_revenu_tnd) || 0;
       });
-      
+
       // Active Subs = valeur du DERNIER mois de la période
       const lastMonth = monthlyStats[0]; // Le premier dans l'ordre décroissant
       totals.activeSubsEndOfPeriod = lastMonth ? (Number(lastMonth.total_active_sub) || 0) : 0;
-      
+
       return totals;
     }
 
@@ -8754,42 +8783,42 @@
       console.log('🔍 [OOREDOO] ooredoo_stats:', data?.ooredoo_stats);
       console.log('🔍 [OOREDOO] monthly_stats:', data?.ooredoo_stats?.ooredoo_monthly_stats);
       console.log('🔍 [OOREDOO] monthly_stats_comparison:', data?.ooredoo_stats?.ooredoo_monthly_stats_comparison);
-      
+
       if (!data || !data.ooredoo_stats) {
         console.warn('⚠️ [OOREDOO] Données manquantes');
         return;
       }
-      
+
       // Récupérer les statistiques mensuelles groupées Ooredoo
       if (data.ooredoo_stats.ooredoo_monthly_stats) {
         updateOoredooStatisticsTable(data.ooredoo_stats.ooredoo_monthly_stats);
-        
+
         // Calculer les KPIs agrégés avec comparaison
         const monthlyStats = data.ooredoo_stats.ooredoo_monthly_stats || [];
         const monthlyStatsComparison = data.ooredoo_stats.ooredoo_monthly_stats_comparison || [];
-        
+
         const totals = calculateOoredooTotals(monthlyStats);
-        const comparisonTotals = monthlyStatsComparison.length > 0 
-          ? calculateOoredooTotals(monthlyStatsComparison) 
+        const comparisonTotals = monthlyStatsComparison.length > 0
+          ? calculateOoredooTotals(monthlyStatsComparison)
           : null;
-        
+
         console.log('🔍 [OOREDOO] Statistiques:', {
           current_months: monthlyStats.length,
           comparison_months: monthlyStatsComparison.length,
           totals: totals,
           comparisonTotals: comparisonTotals
         });
-        
+
         // Helper pour créer un objet KPI avec ou sans comparaison
         const makeKPI = (current, previous, decimals = 0) => {
           const currentNum = Number(current) || 0;
           const previousNum = Number(previous) || 0;
-          
+
           if (previous === null || previous === undefined || previousNum === 0) {
-            return { 
-              current: formatNumber(currentNum, decimals), 
-              previous: 0, 
-              change: 0 
+            return {
+              current: formatNumber(currentNum, decimals),
+              previous: 0,
+              change: 0
             };
           }
           return {
@@ -8798,35 +8827,35 @@
             change: calculateChange(currentNum, previousNum)
           };
         };
-        
+
         // Taux de Facturation
-        const billingRateCurrent = totals.activeSubsEndOfPeriod > 0 
-          ? (totals.billings / totals.activeSubsEndOfPeriod * 100) 
+        const billingRateCurrent = totals.activeSubsEndOfPeriod > 0
+          ? (totals.billings / totals.activeSubsEndOfPeriod * 100)
           : 0;
         const billingRatePrevious = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
           ? (comparisonTotals.billings / comparisonTotals.activeSubsEndOfPeriod * 100)
           : null;
         updateKPI('ooredoo-billing-rate', makeKPI(billingRateCurrent, billingRatePrevious, 2), '%');
-        
+
         // Total Facturations
         updateKPI('ooredoo-total-billings', makeKPI(totals.billings, comparisonTotals?.billings, 0));
-        
+
         // Active Subs: pas de delta (valeur à la fin de période)
         updateKPI('ooredoo-active-subs', {
           current: formatNumber(totals.activeSubsEndOfPeriod, 0),
           previous: 0,
           change: 0
         });
-        
+
         // Nouveaux Abonnements
         updateKPI('ooredoo-new-subscriptions', makeKPI(totals.newSubs, comparisonTotals?.newSubs, 0));
-        
+
         // Désabonnements
         updateKPI('ooredoo-unsubscriptions', makeKPI(totals.unsubs, comparisonTotals?.unsubs, 0));
-        
+
         // Revenu Total TND
         updateKPI('ooredoo-revenue-tnd', makeKPI(totals.revenueTnd, comparisonTotals?.revenueTnd, 3), ' TND');
-        
+
         // ARPU: pas de delta (calcul global)
         // Calculer le nombre de jours de la période pour normaliser l'ARPU
         const startDate = document.getElementById('start-date')?.value;
@@ -8837,7 +8866,7 @@
           const end = new Date(endDate);
           periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 30;
         }
-        const arpuValue = totals.activeSubsEndOfPeriod > 0 
+        const arpuValue = totals.activeSubsEndOfPeriod > 0
           ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays)
           : 0;
         updateKPI('ooredoo-arpu', {
@@ -8845,9 +8874,9 @@
           previous: 0,
           change: 0
         }, ' TND');
-        
+
         // Revenu Moyen/Facturation: pas de delta (calcul global)
-        const avgBillingValue = totals.billings > 0 
+        const avgBillingValue = totals.billings > 0
           ? totals.revenueTnd / totals.billings
           : 0;
         updateKPI('ooredoo-avg-billing-revenue', {
@@ -8863,12 +8892,12 @@
     function updateOoredooStatisticsTable(monthlyStats) {
       const tbody = document.getElementById('ooredooStatsTableBody');
       if (!tbody) return;
-      
+
       if (!monthlyStats || monthlyStats.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
         return;
       }
-      
+
       allOoredooMonthlyStats = monthlyStats;
       renderOoredooStatisticsTable();
     }
@@ -8876,21 +8905,21 @@
     function renderOoredooStatisticsTable() {
       const tbody = document.getElementById('ooredooStatsTableBody');
       if (!tbody) return;
-      
+
       if (!allOoredooMonthlyStats || allOoredooMonthlyStats.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
         return;
       }
-      
+
       let html = '';
-      
+
       allOoredooMonthlyStats.forEach((month, idx) => {
         const isExpanded = expandedOoredooMonths.has(month.month_key);
         const expandIcon = isExpanded ? '▼' : '▶';
-        
+
         // Ligne du mois (cliquable)
         html += `
-          <tr style="background: var(--card); border-bottom: 2px solid var(--border); cursor: pointer; font-weight: 600;" 
+          <tr style="background: var(--card); border-bottom: 2px solid var(--border); cursor: pointer; font-weight: 600;"
               onclick="toggleOoredooMonth('${month.month_key}')">
             <td style="padding: 12px; text-align: center;">${expandIcon}</td>
             <td style="padding: 12px;">${month.display_label}</td>
@@ -8902,7 +8931,7 @@
             <td style="padding: 12px; text-align: center;">${formatNumber(month.total_revenu_tnd, 3)} TND</td>
           </tr>
         `;
-        
+
         // Lignes des détails quotidiens (affichées seulement si le mois est expandé)
         if (isExpanded && month.daily_details && month.daily_details.length > 0) {
           month.daily_details.forEach(day => {
@@ -8921,10 +8950,10 @@
           });
         }
       });
-      
+
       tbody.innerHTML = html;
     }
-    
+
     function toggleOoredooMonth(monthKey) {
       if (expandedOoredooMonths.has(monthKey)) {
         expandedOoredooMonths.delete(monthKey);
@@ -8949,13 +8978,13 @@
         alert('Aucune donnée à exporter');
         return;
       }
-      
+
       let csv = 'Période,New Sub,Unsub,Active Sub,NB Facturation,Taux Facturation %,Revenu TND\n';
-      
+
       allOoredooMonthlyStats.forEach(month => {
         csv += `${month.display_label},${month.total_new_sub || 0},${month.total_unsub || 0},${month.total_active_sub || 0},${month.total_nb_facturation || 0},${month.total_taux_facturation || 0},${month.total_revenu_tnd || 0}\n`;
       });
-      
+
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -8972,13 +9001,13 @@
         alert('Aucune donnée à copier');
         return;
       }
-      
+
       let text = 'Période\tNew Sub\tUnsub\tActive Sub\tNB Facturation\tTaux Facturation %\tRevenu TND\n';
-      
+
       allOoredooMonthlyStats.forEach(month => {
         text += `${month.display_label}\t${month.total_new_sub || 0}\t${month.total_unsub || 0}\t${month.total_active_sub || 0}\t${month.total_nb_facturation || 0}\t${month.total_taux_facturation || 0}\t${month.total_revenu_tnd || 0}\n`;
       });
-      
+
       navigator.clipboard.writeText(text).then(() => {
         alert('Données copiées dans le presse-papier !');
       }).catch(err => {
@@ -8991,7 +9020,7 @@
     function updateMerchantsTable(merchants) {
       allMerchants = merchants || [];
       currentMerchantsPage = 1;
-      
+
       if (!allMerchants || allMerchants.length === 0) {
         const tbody = document.getElementById('merchantsTableBody');
         if (tbody) {
@@ -9003,7 +9032,7 @@
         document.getElementById('merchantsNextBtn').disabled = true;
         return;
       }
-      
+
       renderMerchantsPage();
     }
 
@@ -9016,14 +9045,14 @@
     function updateSubscriptionsTable(subscriptions) {
       const tbody = document.getElementById('subs-details-body');
       if (!tbody) return;
-      
+
       // Afficher indicateur de chargement spécifique
       tbody.innerHTML = '<tr><td colspan="6" class="loading">🔄 Chargement des détails...</td></tr>';
-      
+
       // Gestion de la nouvelle structure avec meta
       let detailsData = [];
       let meta = null;
-      
+
       if (subscriptions && subscriptions.details) {
         if (Array.isArray(subscriptions.details)) {
           // Ancienne structure (compatibilité)
@@ -9040,19 +9069,19 @@
           }
         }
       }
-      
+
       // Si pas de données, afficher le message
       if (!detailsData || detailsData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
         return;
       }
-      
+
       // Simule un petit délai pour montrer le chargement
       setTimeout(() => {
         allSubscriptionDetails = detailsData;
         currentSubscriptionPage = 1;
         renderSubscriptionsPage();
-        
+
         // Afficher les informations de performance
         if (meta) {
           updateSubscriptionTableInfo(meta);
@@ -9066,7 +9095,7 @@
         const infoSpan = tableTitle.querySelector('.table-info') || document.createElement('span');
         infoSpan.className = 'table-info';
         infoSpan.innerHTML = ` <small style="color: #666; font-weight: normal;">(${meta.total_count} clients - ${meta.execution_time_ms}ms)</small>`;
-        
+
         if (!tableTitle.querySelector('.table-info')) {
           tableTitle.appendChild(infoSpan);
         }
@@ -9076,16 +9105,16 @@
     function renderSubscriptionsPage() {
       const tbody = document.getElementById('subs-details-body');
       if (!tbody) return;
-      
+
       const startIndex = (currentSubscriptionPage - 1) * subscriptionsPerPage;
       const endIndex = startIndex + subscriptionsPerPage;
       const pageData = allSubscriptionDetails.slice(startIndex, endIndex);
-      
+
       if (!pageData || pageData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
         return;
       }
-      
+
       tbody.innerHTML = pageData.map(row => {
         // Gérer différents formats de données (objets Laravel ou tableaux associatifs)
         const firstName = row.first_name || row.client_prenom || '';
@@ -9095,25 +9124,25 @@
         const operator = row.operator || row.country_payments_methods_name || '-';
         const plan = row.plan || '-';
         const clientId = row.client_id || null;
-        const planBadgeClass = 
+        const planBadgeClass =
           plan === 'Trial' ? 'badge-primary' :
           plan === 'Journalier' ? 'badge-warning' :
           plan === 'Mensuel' ? 'badge-info' :
           plan === 'Annuel' ? 'badge-success' : 'badge-secondary';
-        
+
         // Formater les dates
         const activationDate = row.activation_date || row.client_abonnement_creation || null;
         const endDate = row.end_date || row.client_abonnement_expiration || null;
         const formattedActivation = activationDate ? (typeof activationDate === 'string' ? activationDate.substring(0, 10) : activationDate) : '-';
         const formattedEnd = endDate ? (typeof endDate === 'string' ? endDate.substring(0, 10) : endDate) : '-';
-        
+
         // Bouton détails (seulement si client_id est disponible)
         // Échapper les apostrophes dans le nom pour éviter les erreurs JavaScript
         const escapedName = fullName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const detailsButton = clientId ? 
+        const detailsButton = clientId ?
           `<button onclick="showUserSubscriptionsDetails(${clientId}, '${escapedName}')" class="btn-details" style="padding: 6px 12px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; font-weight: 500;" onmouseover="this.style.background='var(--brand-primary)'" onmouseout="this.style.background='var(--accent)'">Détails</button>` :
           `<span style="color: var(--muted); font-size: 12px;">-</span>`;
-        
+
         return `
           <tr>
             <td>${fullName}</td>
@@ -9126,36 +9155,36 @@
           </tr>
         `;
       }).join('');
-      
+
       updateSubscriptionsPagination();
     }
 
     function updateSubscriptionsPagination() {
       const totalPages = Math.ceil(allSubscriptionDetails.length / subscriptionsPerPage);
       const pagination = document.querySelector('.subscriptions-pagination');
-      
+
       if (pagination && totalPages > 1) {
         let paginationHTML = '<div class="pagination-controls">';
-        
+
         // Previous button
         if (currentSubscriptionPage > 1) {
           paginationHTML += `<button onclick="changeSubscriptionPage(${currentSubscriptionPage - 1})" class="pagination-btn">‹ Précédent</button>`;
         }
-        
+
         // Page numbers
         const startPage = Math.max(1, currentSubscriptionPage - 2);
         const endPage = Math.min(totalPages, currentSubscriptionPage + 2);
-        
+
         for (let i = startPage; i <= endPage; i++) {
           const activeClass = i === currentSubscriptionPage ? 'active' : '';
           paginationHTML += `<button onclick="changeSubscriptionPage(${i})" class="pagination-btn ${activeClass}">${i}</button>`;
         }
-        
+
         // Next button
         if (currentSubscriptionPage < totalPages) {
           paginationHTML += `<button onclick="changeSubscriptionPage(${currentSubscriptionPage + 1})" class="pagination-btn">Suivant ›</button>`;
         }
-        
+
         paginationHTML += `</div><div class="pagination-info">Page ${currentSubscriptionPage} sur ${totalPages} (${allSubscriptionDetails.length} éléments)</div>`;
         pagination.innerHTML = paginationHTML;
       }
@@ -9177,7 +9206,7 @@
       // Supprimer la modale existante si elle existe
       const existing = document.getElementById('user-subscriptions-modal');
       if (existing) existing.remove();
-      
+
       // Créer la modale avec indicateur de chargement
       const modal = document.createElement('div');
       modal.id = 'user-subscriptions-modal';
@@ -9197,7 +9226,7 @@
         </div>
       `;
       document.body.appendChild(modal);
-      
+
       try {
         // Appeler l'API
         const response = await fetch(`/api/dashboard/subscriptions/${clientId}`, {
@@ -9207,10 +9236,10 @@
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
           }
         });
-        
+
         const data = await response.json();
         const contentDiv = document.getElementById('user-subscriptions-content');
-        
+
         if (!data.success || !data.subscriptions || data.subscriptions.length === 0) {
           contentDiv.innerHTML = `
             <div style="text-align: center; padding: 40px; color: var(--muted);">
@@ -9220,11 +9249,11 @@
           `;
           return;
         }
-        
+
         // Afficher les abonnements dans un tableau
         const subscriptions = data.subscriptions;
         const totalSubscriptions = data.total_subscriptions || subscriptions.length;
-        
+
         let tableHTML = `
           <div style="margin-bottom: 15px; color: var(--muted); font-size: 14px;">
             Total: <strong>${totalSubscriptions}</strong> abonnement(s)
@@ -9243,7 +9272,7 @@
             </thead>
             <tbody>
         `;
-        
+
         subscriptions.forEach(sub => {
           const operator = sub.operator || '-';
           const plan = sub.plan || '-';
@@ -9253,17 +9282,17 @@
           const endDate = sub.end_date ? (typeof sub.end_date === 'string' ? sub.end_date.substring(0, 10) : sub.end_date) : '-';
           const status = sub.status || 'Inconnu';
           const price = sub.price ? parseFloat(sub.price).toFixed(2) + ' TND' : '-';
-          
-          const statusBadge = status === 'Actif' ? 
+
+          const statusBadge = status === 'Actif' ?
             '<span style="background: var(--success); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Actif</span>' :
             '<span style="background: var(--muted); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Expiré</span>';
-          
-          const planBadgeClass = 
+
+          const planBadgeClass =
             plan === 'Trial' ? 'var(--brand-primary)' :
             plan === 'Journalier' ? 'var(--warning)' :
             plan === 'Mensuel' ? 'var(--accent)' :
             plan === 'Annuel' ? 'var(--success)' : 'var(--muted)';
-          
+
           tableHTML += `
             <tr style="border-bottom: 1px solid var(--border);">
               <td style="padding: 12px;">${operator}</td>
@@ -9276,14 +9305,14 @@
             </tr>
           `;
         });
-        
+
         tableHTML += `
             </tbody>
           </table>
         `;
-        
+
         contentDiv.innerHTML = tableHTML;
-        
+
       } catch (error) {
         console.error('Erreur lors de la récupération des abonnements:', error);
         const contentDiv = document.getElementById('user-subscriptions-content');
@@ -9296,15 +9325,15 @@
         `;
       }
     }
-    
+
     function renderMerchantsPage() {
       const tbody = document.getElementById('merchantsTableBody');
       if (!tbody) return;
-      
+
       const startIndex = (currentMerchantsPage - 1) * merchantsPerPage;
       const endIndex = startIndex + merchantsPerPage;
       const pageData = allMerchants.slice(startIndex, endIndex);
-      
+
       tbody.innerHTML = pageData.map((merchant, index) => {
         const globalIndex = startIndex + index;
         // Calcul du changement plus robuste
@@ -9313,7 +9342,7 @@
         let changeText = 'Nouveau';
         let statusClass = 'badge-success';
         let statusText = 'Actif';
-        
+
         if (merchant.previous > 0) {
           change = ((merchant.current - merchant.previous) / merchant.previous * 100);
           const isPositive = change > 0;
@@ -9323,7 +9352,7 @@
           badgeClass = 'badge-success';
           changeText = 'Nouveau';
         }
-        
+
         // Déterminer le statut basé sur la performance
         if (merchant.current === 0) {
           statusClass = 'badge-danger';
@@ -9335,9 +9364,9 @@
           statusClass = 'badge-success';
           statusText = 'En croissance';
         }
-        
+
         const shareVal = (typeof merchant.share === 'number') ? merchant.share : 0;
-        
+
         return `
           <tr>
             <td>
@@ -9379,59 +9408,59 @@
           </tr>
         `;
       }).join('');
-      
+
       updateMerchantsPagination();
     }
-    
+
     function updateMerchantsPagination() {
       const totalMerchants = allMerchants.length;
       const totalPages = Math.ceil(totalMerchants / merchantsPerPage);
       const startIndex = (currentMerchantsPage - 1) * merchantsPerPage + 1;
       const endIndex = Math.min(currentMerchantsPage * merchantsPerPage, totalMerchants);
-      
+
       // Update pagination info
       const infoEl = document.getElementById('merchantsPaginationInfo');
       if (infoEl) {
         infoEl.textContent = `Affichage de ${startIndex}-${endIndex} sur ${totalMerchants} marchands`;
       }
-      
+
       // Update page numbers
       const pageNumbersEl = document.getElementById('merchantsPageNumbers');
       if (pageNumbersEl) {
         pageNumbersEl.textContent = `Page ${currentMerchantsPage} sur ${totalPages}`;
       }
-      
+
       // Update button states
       const prevBtn = document.getElementById('merchantsPrevBtn');
       const nextBtn = document.getElementById('merchantsNextBtn');
-      
+
       if (prevBtn) {
         prevBtn.disabled = currentMerchantsPage <= 1;
         prevBtn.style.opacity = currentMerchantsPage <= 1 ? '0.5' : '1';
         prevBtn.style.cursor = currentMerchantsPage <= 1 ? 'not-allowed' : 'pointer';
       }
-      
+
       if (nextBtn) {
         nextBtn.disabled = currentMerchantsPage >= totalPages;
         nextBtn.style.opacity = currentMerchantsPage >= totalPages ? '0.5' : '1';
         nextBtn.style.cursor = currentMerchantsPage >= totalPages ? 'not-allowed' : 'pointer';
       }
     }
-    
+
     function changeMerchantsPerPage() {
       const select = document.getElementById('merchantsPerPage');
       merchantsPerPage = parseInt(select.value);
       currentMerchantsPage = 1;
       renderMerchantsPage();
     }
-    
+
     function previousMerchantsPage() {
       if (currentMerchantsPage > 1) {
         currentMerchantsPage--;
         renderMerchantsPage();
       }
     }
-    
+
     function nextMerchantsPage() {
       const totalPages = Math.ceil(allMerchants.length / merchantsPerPage);
       if (currentMerchantsPage < totalPages) {
@@ -9446,16 +9475,16 @@
         showNotification('Aucune donnée à exporter', 'warning');
         return;
       }
-      
-      const csvContent = "data:text/csv;charset=utf-8," + 
+
+      const csvContent = "data:text/csv;charset=utf-8," +
         "Merchant,Category,Current,Previous,Change,Market Share,Status\n" +
         dashboardData.merchants.map(merchant => {
-          const change = merchant.previous > 0 ? 
-            ((merchant.current - merchant.previous) / merchant.previous * 100).toFixed(1) + '%' : 
+          const change = merchant.previous > 0 ?
+            ((merchant.current - merchant.previous) / merchant.previous * 100).toFixed(1) + '%' :
             'Nouveau';
           return `"${merchant.name}","${merchant.category}",${merchant.current},${merchant.previous},"${change}",${merchant.share}%,"Active"`;
         }).join("\n");
-      
+
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
@@ -9463,7 +9492,7 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       showNotification('Données exportées avec succès', 'success');
     }
 
@@ -9476,7 +9505,7 @@
         { label: 'Ce mois', type: 'month' },
         { label: 'Mois dernier', type: 'lastMonth' }
       ];
-      
+
       // Create modal for shortcuts
       const modal = document.createElement('div');
       modal.style.cssText = `
@@ -9484,13 +9513,13 @@
         background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
         z-index: 10000;
       `;
-      
+
       const content = document.createElement('div');
       content.style.cssText = `
         background: white; padding: 24px; border-radius: 12px; min-width: 300px;
         box-shadow: 0 10px 25px rgba(0,0,0,0.2);
       `;
-      
+
       content.innerHTML = `
         <h3 style="margin: 0 0 16px 0; color: var(--brand-dark);">📆 Raccourcis de Date</h3>
         <div id="shortcut-buttons"></div>
@@ -9499,7 +9528,7 @@
           border-radius: 6px; background: white; cursor: pointer;
         ">Annuler</button>
       `;
-      
+
       const buttonsContainer = content.querySelector('#shortcut-buttons');
       shortcuts.forEach(shortcut => {
         const btn = document.createElement('button');
@@ -9515,7 +9544,7 @@
         };
         buttonsContainer.appendChild(btn);
       });
-      
+
       modal.className = 'modal';
       modal.appendChild(content);
       document.body.appendChild(modal);
@@ -9524,7 +9553,7 @@
     function applyDateShortcut(shortcut) {
       const today = new Date();
       let startDate, endDate;
-      
+
       if (shortcut.days) {
         endDate = new Date(today);
         startDate = new Date(today);
@@ -9536,15 +9565,15 @@
         startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         endDate = new Date(today.getFullYear(), today.getMonth(), 0);
       }
-      
+
       document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
       document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
-      
+
       // Auto-set comparison period
       setSmartComparison();
       updateDateRange();
       loadDashboardData();
-      
+
       showNotification(`Période appliquée: ${shortcut.label}`, 'success');
     }
 
@@ -9552,9 +9581,9 @@
     function updateComparisonTable(kpis) {
       const tbody = document.getElementById('comparisonTableBody');
       if (!tbody) return;
-      
+
       const safe = (obj) => obj ?? { current: 0, previous: 0, change: 0 };
-      
+
       const metrics = [
         { name: 'Activated Subscriptions', data: safe(kpis?.activatedSubscriptions) },
         { name: 'Active Subscriptions', data: safe(kpis?.activeSubscriptions) },
@@ -9563,7 +9592,7 @@
         { name: 'Active Merchants', data: safe(kpis?.activeMerchants) },
         { name: 'Conversion Rate (%)', data: safe(kpis?.conversionRate) }
       ];
-      
+
       tbody.innerHTML = metrics.map(metric => {
         const data = metric.data || { current: 0, previous: 0, change: 0 };
         const current = Number(data.current) || 0;
@@ -9572,7 +9601,7 @@
         const isPositive = change > 0;
         const badgeClass = isPositive ? 'badge-success' : change < 0 ? 'badge-danger' : 'badge-info';
         const absoluteChange = current - previous;
-        
+
         return `
           <tr>
             <td><strong>${metric.name}</strong></td>
@@ -9600,7 +9629,7 @@
     function updateInsightList(elementId, items) {
       const list = document.getElementById(elementId);
       if (!list) return;
-      
+
       list.innerHTML = items.map(item => `<li>${item}</li>`).join('');
     }
   </script>
@@ -9622,11 +9651,11 @@
         transform: translateY(0);
       }
     }
-    
+
     #clientTransactionsModal table tbody tr:hover {
       background-color: #f9fafb;
     }
-    
+
     #clientTransactionsModal table tbody tr {
       transition: background-color 0.2s;
     }
