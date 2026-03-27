@@ -91,6 +91,20 @@ class Kernel extends ConsoleKernel
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/subscription-materialize-full.log'));
 
+            // Matérialisation des transactions quotidiennes - Chaque jour à 3h30
+            $schedule->command('dashboard:materialize-transactions --days=7')
+                ->dailyAt('03:30')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/transaction-materialize.log'));
+
+            // Matérialisation complète transactions - Chaque dimanche à 5h30
+            $schedule->command('dashboard:materialize-transactions --days=365 --force')
+                ->weeklyOn(0, '05:30')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/transaction-materialize-full.log'));
+
             // Cache intelligent (contexte agent IA, KPIs, features ML) - Tous les jours à 6h
             $schedule->command('cache:warmup')
                 ->dailyAt('06:00')

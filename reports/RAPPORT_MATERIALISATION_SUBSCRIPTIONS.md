@@ -1,42 +1,66 @@
-# Rapport de Benchmark - Subscriptions Matérialisées
+# Rapport de Benchmark Final - Toutes Matérialisations
 
 ## Date: 27 Mars 2026
 
-## Contexte
-L'endpoint `/api/dashboard/split/subscriptions` utilisait des requêtes live sur la table `client_abonnement` (353K lignes) pour calculer les métriques d'abonnement. Les cold cache loads prenaient 20-27 secondes pour les longues périodes.
+## Tables Matérialisées
 
-## Solution: Table `subscription_daily_stats` matérialisée
-- Table pré-calculée avec 1822 lignes quotidiennes (2021-04-01 → 2026-03-27)
-- Métriques pré-agrégées: activations par canal, distribution par plan, renouvellements, durée de vie
-- Cron quotidien (3h15) et hebdomadaire (dim 5h00) pour mise à jour automatique
-- Fallback vers requêtes live si données matérialisées insuffisantes
+| Table | Lignes | Couverture | Données |
+|-------|--------|------------|---------|
+| `dashboard_daily_stats` | 2 281 | 365 jours | KPIs all-in-one |
+| `subscription_daily_stats` | 1 822+ | 5 ans (2021-2026) | Abonnements quotidiens |
+| `transaction_daily_stats` | 1 822 | 5 ans (2021-2026) | Transactions quotidiennes |
 
-## Résultats Benchmark - Cold Cache
+## Résultats Benchmark - Cold Cache LIFETIME (~5 ans)
 
-| Période | AVANT (ms) | APRÈS (ms) | Réduction |
-|---------|-----------|-----------|-----------|
-| 1 mois  | 19 551    | 7 032     | **-64%**  |
-| 6 mois  | 26 069    | 7 009     | **-73%**  |
-| 12 mois | 27 086    | 6 482     | **-76%**  |
-| Lifetime| 19 982    | 6 377     | **-68%**  |
+| Endpoint | AVANT (ms) | APRÈS (ms) | Réduction |
+|----------|-----------|-----------|-----------|
+| **kpis** | 13 242 | **6 399** | **-52%** |
+| **transactions** | 6 599 | **1 819** | **-72%** |
+| **subscriptions** | ~20 000 | **7 336** | **-63%** |
+| merchants | 4 975 | 4 297 | -14% |
+| timwe | 2 093 | 1 985 | ~même |
+| ooredoo | 2 085 | 2 094 | ~même |
+| **TOTAL** | **~49 000** | **~23 930** | **-51%** |
 
-## Observation clé
-Le temps de réponse est désormais **constant** (~6.5-7s) quelle que soit la période, vs variable (20-27s) avant. Le cache Redis (30 min TTL) élimine complètement la latence pour les requêtes suivantes.
+## Résultats Benchmark - Cold Cache 1 MOIS
 
-## Répartition du temps (chemin matérialisé)
-- Agrégats matérialisés (channels, plans, renewal, lifespan): ~0.9s
-- Rétention matérialisée: ~1.0s
-- Locations trimestrielles: ~1.0s
-- Détails abonnements (1000 records): ~1.5s
-- Cohortes batch (1 requête): ~1.5s
-- Timwe + groupement: ~0.5s
+| Endpoint | APRÈS (ms) |
+|----------|-----------|
+| kpis | 4 225 |
+| transactions | 1 483 |
+| subscriptions | 7 001 |
+| merchants | 4 174 |
 
-## Intégrité des données vérifiée
-- daily_activations: OK (29-60 points selon période)
-- retention_trend: OK (29-31 points)
-- quarterly_active_locations: OK (8 trimestres)
-- activations_by_channel: OK (CB, Recharge, Solde Tél.)
-- plan_distribution: OK (Daily, Monthly, Annual, Other)
-- cohorts: OK (6 mois)
-- renewal_rate: OK (7.5%-21.8% selon période)
-- average_lifespan: OK (43.5-161.2 jours selon période)
+## Stratégie de Matérialisation
+
+### Chemin KPIs (getKPIsFromMaterialized)
+1. **Priorité 1**: `dashboard_daily_stats` (si couverture ≥ 100%)
+2. **Priorité 2**: `subscription_daily_stats` + `transaction_daily_stats` combinées
+3. **Fallback**: Requêtes live SQL
+
+### Chemin Transactions (getTransactionsData)
+1. **Priorité 1**: `transaction_daily_stats` (si couverture ≥ 80%)
+2. **Fallback**: Requêtes live SQL avec JOINs
+
+### Chemin Subscriptions (getSubscriptionsData)
+1. **Priorité 1**: `subscription_daily_stats` (si couverture ≥ 80%)
+2. **Fallback**: Requêtes live SQL
+
+## Crons Automatiques
+
+| Commande | Fréquence | Heure |
+|----------|-----------|-------|
+| `materialize --days=7` | Quotidien | 03:00 |
+| `materialize-subscriptions --days=7` | Quotidien | 03:15 |
+| `materialize-transactions --days=7` | Quotidien | 03:30 |
+| `materialize --days=365 --force` | Hebdo (dim) | 04:30 |
+| `materialize-subscriptions --days=365 --force` | Hebdo (dim) | 05:00 |
+| `materialize-transactions --days=365 --force` | Hebdo (dim) | 05:30 |
+
+## Intégrité Vérifiée
+- ✅ 6/6 endpoints retournent `success: true`
+- ✅ KPIs: 30 clés de données
+- ✅ Merchants: 50 marchands avec stats
+- ✅ Transactions: volume quotidien + opérateur + plan breakdowns
+- ✅ Subscriptions: 15 clés (channels, plans, cohorts, retention, lifespan)
+- ✅ Timwe/Ooredoo: stats quotidiennes

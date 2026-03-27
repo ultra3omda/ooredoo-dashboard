@@ -118,242 +118,223 @@ class DashboardService
     private function getKPIsFromMaterialized(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator): ?array
     {
         try {
-            if (!Schema::hasTable('dashboard_daily_stats')) {
-                return null;
-            }
-            
             $operatorId = ($selectedOperator === 'ALL') ? null : ($this->getOperatorId($selectedOperator));
             
-            // Vérifier couverture des données pour la période principale
             $startDate = $startBound->toDateString();
             $endDate = $endExclusive->copy()->subDay()->toDateString();
             $compStartDate = $compStartBound->toDateString();
             $compEndDate = $compEndExclusive->copy()->subDay()->toDateString();
             
-            $coverageQuery = DB::table('dashboard_daily_stats')
-                ->where(function ($q) use ($operatorId) {
-                    if ($operatorId === null) {
-                        $q->whereNull('operator_id');
-                    } else {
-                        $q->where('operator_id', $operatorId);
+            // Strategy 1: Try dashboard_daily_stats (all-in-one table, 365 days coverage)
+            if (Schema::hasTable('dashboard_daily_stats')) {
+                $expectedDays = $startBound->diffInDays($endExclusive);
+                $actualDays = DB::table('dashboard_daily_stats')
+                    ->where(function ($q) use ($operatorId) {
+                        if ($operatorId === null) $q->whereNull('operator_id');
+                        else $q->where('operator_id', $operatorId);
+                    })
+                    ->whereBetween('stat_date', [$startDate, $endDate])
+                    ->count();
+                
+                $tolerance = ($endDate === Carbon::today()->toDateString()) ? 1 : 0;
+                if ($actualDays >= ($expectedDays - $tolerance)) {
+                    Log::info("KPIs: Using dashboard_daily_stats ({$actualDays}/{$expectedDays} days)");
+                    if ($tolerance > 0 && $actualDays < $expectedDays) {
+                        $endDate = Carbon::yesterday()->toDateString();
                     }
-                })
-                ->whereBetween('stat_date', [$startDate, $endDate]);
-            
-            $expectedDays = $startBound->diffInDays($endExclusive);
-            $actualDays = $coverageQuery->count();
-            
-            // Tolérer 1 jour manquant (aujourd'hui pas encore matérialisé)
-            $tolerance = ($endDate === Carbon::today()->toDateString()) ? 1 : 0;
-            if ($actualDays < ($expectedDays - $tolerance)) {
-                Log::info("Matérialisées: couverture insuffisante ({$actualDays}/{$expectedDays} jours, tolérance {$tolerance})");
-                return null;
+                    return $this->buildKPIsFromDashboardDailyStats($startBound, $endExclusive, $compStartBound, $compEndExclusive, $startDate, $endDate, $compStartDate, $compEndDate, $operatorId, $selectedOperator);
+                }
             }
             
-            // Si aujourd'hui manque, ajuster endDate à hier
-            if ($tolerance > 0 && $actualDays < $expectedDays) {
-                $endDate = Carbon::yesterday()->toDateString();
+            // Strategy 2: Combine subscription_daily_stats + transaction_daily_stats
+            $subCoverage = $this->hasMaterializedCoverage($startBound, $endExclusive, $operatorId);
+            $txCoverage = $this->hasTransactionMaterializedCoverage($startBound, $endExclusive);
+            
+            if ($subCoverage && $txCoverage) {
+                Log::info("KPIs: Using combined subscription_daily_stats + transaction_daily_stats");
+                return $this->buildKPIsFromCombinedMaterialized($startBound, $endExclusive, $compStartBound, $compEndExclusive, $operatorId, $selectedOperator);
             }
             
-            // Agréger période principale
-            $current = $this->aggregateMaterialized($startDate, $endDate, $operatorId);
-            // Agréger période de comparaison
-            $comparison = $this->aggregateMaterialized($compStartDate, $compEndDate, $operatorId);
-            
-            if (!$current) return null;
-            
-            // active_current = abonnements activés dans la période ET encore actifs à la fin
-            // Requête légère (~200ms) car utilise l'index sur client_abonnement_creation
-            $activeCurrent = $this->queryActivatedStillActive($startBound, $endExclusive, $operatorId);
-            $activeComp = $this->queryActivatedStillActive($compStartBound, $compEndExclusive, $operatorId);
-            
-            // active_snapshot = total abonnements actifs à la fin de la période (pour conversion rate)
-            $activeCurrentSnapshot = DB::table('dashboard_daily_stats')
-                ->where('stat_date', $endDate)
-                ->where(function ($q) use ($operatorId) {
-                    if ($operatorId === null) $q->whereNull('operator_id');
-                    else $q->where('operator_id', $operatorId);
-                })
-                ->value('active_snapshot') ?? 0;
-            
-            $activeCompSnapshot = DB::table('dashboard_daily_stats')
-                ->where('stat_date', $compEndDate)
-                ->where(function ($q) use ($operatorId) {
-                    if ($operatorId === null) $q->whereNull('operator_id');
-                    else $q->where('operator_id', $operatorId);
-                })
-                ->value('active_snapshot') ?? 0;
-            
-            // Calculs des taux avec les bonnes métriques
-            $retentionRate = $current['activated'] > 0 ? round(($activeCurrent / $current['activated']) * 100, 1) : 0;
-            $retentionRateComp = ($comparison['activated'] ?? 0) > 0 ? round(($activeComp / $comparison['activated']) * 100, 1) : 0;
-            
-            $conversionRate = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 1) : 0;
-            $conversionRateComp = $activeComp > 0 ? round((($comparison['transacting_users'] ?? 0) / $activeComp) * 100, 1) : 0;
-            
-            $churnRate = $current['activated'] > 0 ? round(($current['lost'] / $current['activated']) * 100, 1) : 0;
-            $churnRateComp = ($comparison['activated'] ?? 0) > 0 ? round((($comparison['lost'] ?? 0) / $comparison['activated']) * 100, 1) : 0;
-            
-            $txPerUser = $current['transacting_users'] > 0 ? round($current['transactions'] / $current['transacting_users'], 1) : 0;
-            $txPerUserComp = ($comparison['transacting_users'] ?? 0) > 0 ? round($comparison['transactions'] / $comparison['transacting_users'], 1) : 0;
-            
-            $convRatePeriod = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 2) : 0;
-            $convRatePeriodComp = $activeComp > 0 ? round((($comparison['transacting_users'] ?? 0) / $activeComp) * 100, 2) : 0;
-            
-            // Marchands actifs ratio
-            $totalActivePartnersDB = Cache::remember('total_active_partners', 3600, function() {
-                return DB::table('partner')->where('partener_active', 1)->count();
-            });
-            $totalMerchantsEverActive = Cache::remember('total_merchants_ever', 3600, function() {
-                return DB::table('history as h')
-                    ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
-                    ->distinct('p.partner_id')->count('p.partner_id');
-            });
-            
-            $activeMerchantRatio = $totalActivePartnersDB > 0 ? round(($current['active_merchants'] / $totalActivePartnersDB) * 100, 1) : 0;
-            $activeMerchantRatioComp = $totalActivePartnersDB > 0 ? round((($comparison['active_merchants'] ?? 0) / $totalActivePartnersDB) * 100, 1) : 0;
-            
-            $txPerMerchant = $current['active_merchants'] > 0 ? round($current['transactions'] / $current['active_merchants'], 1) : 0;
-            $txPerMerchantComp = ($comparison['active_merchants'] ?? 0) > 0 ? round($comparison['transactions'] / $comparison['active_merchants'], 1) : 0;
-            
-            // Billing rates - ces données ne sont PAS dans la table matérialisée, fallback
-            $billingRateTimweData = $this->calculateTimweBillingRate($startBound, $endExclusive, $selectedOperator);
-            $billingRateTimweCompData = $this->calculateTimweBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
-            $billingRateOoredooData = $this->calculateOoredooBillingRate($startBound, $endExclusive, $selectedOperator);
-            $billingRateOoredooCompData = $this->calculateOoredooBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
-
-            return [
-                "activatedSubscriptions" => [
-                    "current" => $current['activated'],
-                    "previous" => $comparison['activated'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['activated'], $comparison['activated'] ?? 0)
-                ],
-                "activeSubscriptions" => [
-                    "current" => $activeCurrent,
-                    "previous" => $activeComp,
-                    "change" => $this->calculatePercentageChange($activeCurrent, $activeComp)
-                ],
-                "deactivatedSubscriptions" => [
-                    "current" => $current['deactivated'],
-                    "previous" => $comparison['deactivated'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['deactivated'], $comparison['deactivated'] ?? 0)
-                ],
-                "periodDeactivated" => [
-                    "current" => $current['deactivated'],
-                    "previous" => $comparison['deactivated'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['deactivated'], $comparison['deactivated'] ?? 0)
-                ],
-                "cohortDeactivated" => [
-                    "current" => $current['lost'],
-                    "previous" => $comparison['lost'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['lost'], $comparison['lost'] ?? 0)
-                ],
-                "totalTransactions" => [
-                    "current" => $current['transactions'],
-                    "previous" => $comparison['transactions'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['transactions'], $comparison['transactions'] ?? 0)
-                ],
-                "cohortTransactions" => [
-                    "current" => $current['cohort_tx'],
-                    "previous" => $comparison['cohort_tx'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['cohort_tx'], $comparison['cohort_tx'] ?? 0)
-                ],
-                "transactingUsers" => [
-                    "current" => $current['transacting_users'],
-                    "previous" => $comparison['transacting_users'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['transacting_users'], $comparison['transacting_users'] ?? 0)
-                ],
-                "cohortTransactingUsers" => [
-                    "current" => $current['cohort_users'],
-                    "previous" => $comparison['cohort_users'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['cohort_users'], $comparison['cohort_users'] ?? 0)
-                ],
-                "retentionRate" => [
-                    "current" => $retentionRate,
-                    "previous" => $retentionRateComp,
-                    "change" => $this->calculatePercentageChange($retentionRate, $retentionRateComp)
-                ],
-                "retentionRateTrue" => [
-                    "current" => max(0, 100 - $churnRate),
-                    "previous" => max(0, 100 - $churnRateComp),
-                    "change" => $this->calculatePercentageChange(max(0, 100 - $churnRate), max(0, 100 - $churnRateComp))
-                ],
-                "conversionRate" => [
-                    "current" => $conversionRate,
-                    "previous" => $conversionRateComp,
-                    "change" => $this->calculatePercentageChange($conversionRate, $conversionRateComp)
-                ],
-                "churnRate" => [
-                    "current" => $churnRate,
-                    "previous" => $churnRateComp,
-                    "change" => $this->calculatePercentageChange($churnRate, $churnRateComp)
-                ],
-                "transactionsPerUser" => [
-                    "current" => $txPerUser,
-                    "previous" => $txPerUserComp,
-                    "change" => $this->calculatePercentageChange($txPerUser, $txPerUserComp)
-                ],
-                "conversionRatePeriod" => [
-                    "current" => $convRatePeriod,
-                    "previous" => $convRatePeriodComp,
-                    "change" => $this->calculatePercentageChange($convRatePeriod, $convRatePeriodComp)
-                ],
-                "activeMerchants" => [
-                    "current" => $current['active_merchants'],
-                    "previous" => $comparison['active_merchants'] ?? 0,
-                    "change" => $this->calculatePercentageChange($current['active_merchants'], $comparison['active_merchants'] ?? 0)
-                ],
-                "activeMerchantRatio" => [
-                    "current" => $activeMerchantRatio,
-                    "previous" => $activeMerchantRatioComp,
-                    "change" => $this->calculatePercentageChange($activeMerchantRatio, $activeMerchantRatioComp)
-                ],
-                "totalPartners" => $totalActivePartnersDB,
-                "totalActivePartnersDB" => $totalActivePartnersDB,
-                "totalLocationsActive" => 0,
-                "totalMerchantsEverActive" => $totalMerchantsEverActive,
-                "allTransactionsPeriod" => $current['transactions'],
-                "transactionsPerMerchant" => [
-                    "current" => $txPerMerchant,
-                    "previous" => $txPerMerchantComp,
-                    "change" => $this->calculatePercentageChange($txPerMerchant, $txPerMerchantComp)
-                ],
-                "billingRateTimwe" => [
-                    "current" => $billingRateTimweData['rate'],
-                    "previous" => $billingRateTimweCompData['rate'],
-                    "change" => $this->calculatePercentageChange($billingRateTimweData['rate'], $billingRateTimweCompData['rate'])
-                ],
-                "totalTimweClients" => [
-                    "current" => $billingRateTimweData['total_clients'],
-                    "previous" => $billingRateTimweCompData['total_clients'],
-                    "change" => $this->calculatePercentageChange($billingRateTimweData['total_clients'], $billingRateTimweCompData['total_clients'])
-                ],
-                "totalTimweBillings" => [
-                    "current" => $billingRateTimweData['total_billings'],
-                    "previous" => $billingRateTimweCompData['total_billings'],
-                    "change" => $this->calculatePercentageChange($billingRateTimweData['total_billings'], $billingRateTimweCompData['total_billings'])
-                ],
-                "billingRateOoredoo" => [
-                    "current" => $billingRateOoredooData['rate'],
-                    "previous" => $billingRateOoredooCompData['rate'],
-                    "change" => $this->calculatePercentageChange($billingRateOoredooData['rate'], $billingRateOoredooCompData['rate'])
-                ],
-                "totalOoredooClients" => [
-                    "current" => $billingRateOoredooData['total_clients'],
-                    "previous" => $billingRateOoredooCompData['total_clients'],
-                    "change" => $this->calculatePercentageChange($billingRateOoredooData['total_clients'], $billingRateOoredooCompData['total_clients'])
-                ],
-                "totalOoreodooBillings" => [
-                    "current" => $billingRateOoredooData['total_billings'],
-                    "previous" => $billingRateOoredooCompData['total_billings'],
-                    "change" => $this->calculatePercentageChange($billingRateOoredooData['total_billings'], $billingRateOoredooCompData['total_billings'])
-                ],
-                "_source" => "materialized"
-            ];
+            Log::info("KPIs: No materialized coverage, falling back to live queries");
+            return null;
         } catch (\Exception $e) {
-            Log::warning("Fallback raw SQL: materialized read failed: " . $e->getMessage());
+            Log::warning("KPIs materialized read failed: " . $e->getMessage());
             return null;
         }
+    }
+    
+    /**
+     * Check if transaction_daily_stats has sufficient coverage
+     */
+    private function hasTransactionMaterializedCoverage(Carbon $startBound, Carbon $endExclusive): bool
+    {
+        try {
+            $expectedDays = $startBound->diffInDays($endExclusive);
+            if ($expectedDays <= 0) return false;
+            $count = DB::table('transaction_daily_stats')
+                ->where('stat_date', '>=', $startBound->toDateString())
+                ->where('stat_date', '<', $endExclusive->toDateString())
+                ->whereNull('operator_id')
+                ->count();
+            return ($count / $expectedDays) >= 0.8;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+    
+    /**
+     * Build KPIs from dashboard_daily_stats (original logic)
+     */
+    private function buildKPIsFromDashboardDailyStats(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $startDate, string $endDate, string $compStartDate, string $compEndDate, ?int $operatorId, string $selectedOperator): ?array
+    {
+        $current = $this->aggregateMaterialized($startDate, $endDate, $operatorId);
+        $comparison = $this->aggregateMaterialized($compStartDate, $compEndDate, $operatorId);
+        if (!$current) return null;
+        
+        return $this->assembleKPIResult($current, $comparison, $startBound, $endExclusive, $compStartBound, $compEndExclusive, $operatorId, $selectedOperator, $endDate, $compEndDate);
+    }
+    
+    /**
+     * Build KPIs from combined subscription_daily_stats + transaction_daily_stats
+     */
+    private function buildKPIsFromCombinedMaterialized(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, ?int $operatorId, string $selectedOperator): ?array
+    {
+        $current = $this->aggregateCombinedMaterialized($startBound, $endExclusive, $operatorId);
+        $comparison = $this->aggregateCombinedMaterialized($compStartBound, $compEndExclusive, $operatorId);
+        if (!$current) return null;
+        
+        $endDate = $endExclusive->copy()->subDay()->toDateString();
+        $compEndDate = $compEndExclusive->copy()->subDay()->toDateString();
+        
+        return $this->assembleKPIResult($current, $comparison, $startBound, $endExclusive, $compStartBound, $compEndExclusive, $operatorId, $selectedOperator, $endDate, $compEndDate);
+    }
+    
+    /**
+     * Aggregate from subscription_daily_stats + transaction_daily_stats combined
+     */
+    private function aggregateCombinedMaterialized(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): ?array
+    {
+        $startStr = $startBound->toDateString();
+        $endStr = $endExclusive->copy()->subDay()->toDateString();
+        
+        // Subscriptions data
+        $subAgg = DB::table('subscription_daily_stats')
+            ->where('stat_date', '>=', $startStr)
+            ->where('stat_date', '<=', $endStr)
+            ->where(function ($q) use ($operatorId) {
+                if ($operatorId === null) $q->whereNull('operator_id');
+                else $q->where('operator_id', $operatorId);
+            })
+            ->selectRaw('SUM(activated_count) as activated, SUM(deactivated_count) as deactivated, SUM(expired_count) as lost')
+            ->first();
+        
+        if (!$subAgg || $subAgg->activated === null) return null;
+        
+        // Transactions data
+        $txAgg = DB::table('transaction_daily_stats')
+            ->where('stat_date', '>=', $startStr)
+            ->where('stat_date', '<=', $endStr)
+            ->whereNull('operator_id')
+            ->selectRaw('SUM(transaction_count) as transactions, SUM(distinct_users) as transacting_users, SUM(cohort_transaction_count) as cohort_tx, SUM(cohort_distinct_users) as cohort_users, SUM(active_merchants) as active_merchants')
+            ->first();
+        
+        // For lost subscriptions: use expired subs that were also created in the period
+        // This is an approximation - we count subs that both activated AND expired in the period
+        $lostSubs = DB::table('client_abonnement as ca')
+            ->where('ca.client_abonnement_creation', '>=', $startBound)
+            ->where('ca.client_abonnement_creation', '<', $endExclusive)
+            ->whereNotNull('ca.client_abonnement_expiration')
+            ->where('ca.client_abonnement_expiration', '>=', $startBound)
+            ->where('ca.client_abonnement_expiration', '<', $endExclusive)
+            ->when($operatorId !== null, fn($q) => $q->where('ca.country_payments_methods_id', $operatorId))
+            ->count();
+        
+        return [
+            'activated' => (int)($subAgg->activated ?? 0),
+            'deactivated' => (int)($subAgg->deactivated ?? 0),
+            'transactions' => (int)($txAgg->transactions ?? 0),
+            'transacting_users' => (int)($txAgg->transacting_users ?? 0),
+            'cohort_tx' => (int)($txAgg->cohort_tx ?? 0),
+            'cohort_users' => (int)($txAgg->cohort_users ?? 0),
+            'active_merchants' => (int)($txAgg->active_merchants ?? 0),
+            'lost' => $lostSubs,
+        ];
+    }
+    
+    /**
+     * Assemble the final KPI result array from aggregated data
+     */
+    private function assembleKPIResult(array $current, ?array $comparison, Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, ?int $operatorId, string $selectedOperator, string $endDate, string $compEndDate): array
+    {
+        $comparison = $comparison ?? ['activated' => 0, 'deactivated' => 0, 'transactions' => 0, 'transacting_users' => 0, 'cohort_tx' => 0, 'cohort_users' => 0, 'active_merchants' => 0, 'lost' => 0];
+        
+        $activeCurrent = $this->queryActivatedStillActive($startBound, $endExclusive, $operatorId);
+        $activeComp = $this->queryActivatedStillActive($compStartBound, $compEndExclusive, $operatorId);
+        
+        $retentionRate = $current['activated'] > 0 ? round(($activeCurrent / $current['activated']) * 100, 1) : 0;
+        $retentionRateComp = $comparison['activated'] > 0 ? round(($activeComp / $comparison['activated']) * 100, 1) : 0;
+        
+        $conversionRate = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 1) : 0;
+        $conversionRateComp = $activeComp > 0 ? round(($comparison['transacting_users'] / $activeComp) * 100, 1) : 0;
+        
+        $churnRate = $current['activated'] > 0 ? round(($current['lost'] / $current['activated']) * 100, 1) : 0;
+        $churnRateComp = $comparison['activated'] > 0 ? round(($comparison['lost'] / $comparison['activated']) * 100, 1) : 0;
+        
+        $txPerUser = $current['transacting_users'] > 0 ? round($current['transactions'] / $current['transacting_users'], 1) : 0;
+        $txPerUserComp = $comparison['transacting_users'] > 0 ? round($comparison['transactions'] / $comparison['transacting_users'], 1) : 0;
+        
+        $convRatePeriod = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 2) : 0;
+        $convRatePeriodComp = $activeComp > 0 ? round(($comparison['transacting_users'] / $activeComp) * 100, 2) : 0;
+        
+        $totalActivePartnersDB = Cache::remember('total_active_partners', 3600, fn() => DB::table('partner')->where('partener_active', 1)->count());
+        $totalMerchantsEverActive = Cache::remember('total_merchants_ever', 3600, fn() => DB::table('history as h')->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')->distinct('p.partner_id')->count('p.partner_id'));
+        $totalLocationsActive = Cache::remember('total_locations_active', 3600, function() {
+            try { return DB::table('partner_location')->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')->where('partner.partener_active', 1)->distinct('partner_location.partner_location_id')->count('partner_location.partner_location_id'); }
+            catch (\Exception $e) { return 0; }
+        });
+        
+        $activeMerchantRatio = $totalActivePartnersDB > 0 ? round(($current['active_merchants'] / $totalActivePartnersDB) * 100, 1) : 0;
+        $activeMerchantRatioComp = $totalActivePartnersDB > 0 ? round(($comparison['active_merchants'] / $totalActivePartnersDB) * 100, 1) : 0;
+        $txPerMerchant = $current['active_merchants'] > 0 ? round($current['transactions'] / $current['active_merchants'], 1) : 0;
+        $txPerMerchantComp = $comparison['active_merchants'] > 0 ? round($comparison['transactions'] / $comparison['active_merchants'], 1) : 0;
+        
+        $billingRateTimweData = $this->calculateTimweBillingRate($startBound, $endExclusive, $selectedOperator);
+        $billingRateTimweCompData = $this->calculateTimweBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
+        $billingRateOoredooData = $this->calculateOoredooBillingRate($startBound, $endExclusive, $selectedOperator);
+        $billingRateOoredooCompData = $this->calculateOoredooBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
+
+        return [
+            "activatedSubscriptions" => ["current" => $current['activated'], "previous" => $comparison['activated'], "change" => $this->calculatePercentageChange($current['activated'], $comparison['activated'])],
+            "activeSubscriptions" => ["current" => $activeCurrent, "previous" => $activeComp, "change" => $this->calculatePercentageChange($activeCurrent, $activeComp)],
+            "deactivatedSubscriptions" => ["current" => $current['deactivated'], "previous" => $comparison['deactivated'], "change" => $this->calculatePercentageChange($current['deactivated'], $comparison['deactivated'])],
+            "periodDeactivated" => ["current" => $current['deactivated'], "previous" => $comparison['deactivated'], "change" => $this->calculatePercentageChange($current['deactivated'], $comparison['deactivated'])],
+            "cohortDeactivated" => ["current" => $current['lost'], "previous" => $comparison['lost'], "change" => $this->calculatePercentageChange($current['lost'], $comparison['lost'])],
+            "totalTransactions" => ["current" => $current['transactions'], "previous" => $comparison['transactions'], "change" => $this->calculatePercentageChange($current['transactions'], $comparison['transactions'])],
+            "cohortTransactions" => ["current" => $current['cohort_tx'], "previous" => $comparison['cohort_tx'], "change" => $this->calculatePercentageChange($current['cohort_tx'], $comparison['cohort_tx'])],
+            "transactingUsers" => ["current" => $current['transacting_users'], "previous" => $comparison['transacting_users'], "change" => $this->calculatePercentageChange($current['transacting_users'], $comparison['transacting_users'])],
+            "cohortTransactingUsers" => ["current" => $current['cohort_users'], "previous" => $comparison['cohort_users'], "change" => $this->calculatePercentageChange($current['cohort_users'], $comparison['cohort_users'])],
+            "retentionRate" => ["current" => $retentionRate, "previous" => $retentionRateComp, "change" => $this->calculatePercentageChange($retentionRate, $retentionRateComp)],
+            "retentionRateTrue" => ["current" => max(0, 100 - $churnRate), "previous" => max(0, 100 - $churnRateComp), "change" => $this->calculatePercentageChange(max(0, 100 - $churnRate), max(0, 100 - $churnRateComp))],
+            "conversionRate" => ["current" => $conversionRate, "previous" => $conversionRateComp, "change" => $this->calculatePercentageChange($conversionRate, $conversionRateComp)],
+            "churnRate" => ["current" => $churnRate, "previous" => $churnRateComp, "change" => $this->calculatePercentageChange($churnRate, $churnRateComp)],
+            "transactionsPerUser" => ["current" => $txPerUser, "previous" => $txPerUserComp, "change" => $this->calculatePercentageChange($txPerUser, $txPerUserComp)],
+            "conversionRatePeriod" => ["current" => $convRatePeriod, "previous" => $convRatePeriodComp, "change" => $this->calculatePercentageChange($convRatePeriod, $convRatePeriodComp)],
+            "activeMerchants" => ["current" => $current['active_merchants'], "previous" => $comparison['active_merchants'], "change" => $this->calculatePercentageChange($current['active_merchants'], $comparison['active_merchants'])],
+            "activeMerchantRatio" => ["current" => $activeMerchantRatio, "previous" => $activeMerchantRatioComp, "change" => $this->calculatePercentageChange($activeMerchantRatio, $activeMerchantRatioComp)],
+            "totalPartners" => ["current" => $totalActivePartnersDB, "previous" => $totalActivePartnersDB, "change" => 0.0],
+            "totalActivePartnersDB" => ["current" => $totalActivePartnersDB, "previous" => $totalActivePartnersDB, "change" => 0.0],
+            "totalLocationsActive" => ["current" => $totalLocationsActive, "previous" => $totalLocationsActive, "change" => 0.0],
+            "totalMerchantsEverActive" => $totalMerchantsEverActive,
+            "allTransactionsPeriod" => $current['transactions'],
+            "transactionsPerMerchant" => ["current" => $txPerMerchant, "previous" => $txPerMerchantComp, "change" => $this->calculatePercentageChange($txPerMerchant, $txPerMerchantComp)],
+            "billingRateTimwe" => ["current" => $billingRateTimweData['rate'], "previous" => $billingRateTimweCompData['rate'], "change" => $this->calculatePercentageChange($billingRateTimweData['rate'], $billingRateTimweCompData['rate'])],
+            "totalTimweClients" => ["current" => $billingRateTimweData['total_clients'], "previous" => $billingRateTimweCompData['total_clients'], "change" => $this->calculatePercentageChange($billingRateTimweData['total_clients'], $billingRateTimweCompData['total_clients'])],
+            "totalTimweBillings" => ["current" => $billingRateTimweData['total_billings'], "previous" => $billingRateTimweCompData['total_billings'], "change" => $this->calculatePercentageChange($billingRateTimweData['total_billings'], $billingRateTimweCompData['total_billings'])],
+            "billingRateOoredoo" => ["current" => $billingRateOoredooData['rate'], "previous" => $billingRateOoredooCompData['rate'], "change" => $this->calculatePercentageChange($billingRateOoredooData['rate'], $billingRateOoredooCompData['rate'])],
+            "totalOoredooClients" => ["current" => $billingRateOoredooData['total_clients'], "previous" => $billingRateOoredooCompData['total_clients'], "change" => $this->calculatePercentageChange($billingRateOoredooData['total_clients'], $billingRateOoredooCompData['total_clients'])],
+            "totalOoreodooBillings" => ["current" => $billingRateOoredooData['total_billings'], "previous" => $billingRateOoredooCompData['total_billings'], "change" => $this->calculatePercentageChange($billingRateOoredooData['total_billings'], $billingRateOoredooCompData['total_billings'])],
+            "_source" => "materialized"
+        ];
     }
     
     /**
@@ -1231,6 +1212,117 @@ class DashboardService
      * Données de transactions avec volume quotidien filtré par opérateur
      */
     private function getTransactionsData(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
+    {
+        // Try materialized path first
+        if ($selectedOperator === 'ALL' || empty($selectedOperator)) {
+            if ($this->hasTransactionMaterializedCoverage($startBound, $endExclusive)) {
+                Log::info("getTransactionsData - MATERIALIZED path");
+                return $this->getTransactionsDataMaterialized($startBound, $endExclusive);
+            }
+        }
+        
+        Log::info("getTransactionsData - LIVE path");
+        return $this->getTransactionsDataLive($startBound, $endExclusive, $selectedOperator);
+    }
+    
+    /**
+     * FAST PATH: Read transaction data from transaction_daily_stats
+     */
+    private function getTransactionsDataMaterialized(Carbon $startBound, Carbon $endExclusive): array
+    {
+        $periodDays = $startBound->diffInDays($endExclusive);
+        $granularity = $periodDays > 365 ? 'month' : 'day';
+        $dateExpr = $granularity === 'month' ? "DATE_FORMAT(stat_date, '%Y-%m-01')" : 'stat_date';
+        
+        $rows = DB::table('transaction_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->whereNull('operator_id')
+            ->select(
+                DB::raw("{$dateExpr} as period_date"),
+                DB::raw('SUM(transaction_count) as transactions'),
+                DB::raw('SUM(distinct_users) as users')
+            )
+            ->groupBy(DB::raw($dateExpr))
+            ->orderBy('period_date')
+            ->get()
+            ->keyBy('period_date');
+        
+        $startDate = $startBound->copy();
+        $endDate = $endExclusive->copy()->subDay();
+        $dailyVolume = [];
+        
+        if ($granularity === 'month') {
+            $cursor = $startDate->copy()->firstOfMonth();
+            while ($cursor->lte($endDate)) {
+                $key = $cursor->toDateString();
+                $row = $rows->get($key);
+                $dailyVolume[] = ['date' => $key, 'transactions' => $row ? (int)$row->transactions : 0, 'users' => $row ? (int)$row->users : 0];
+                $cursor->addMonth();
+            }
+        } else {
+            $cursor = $startDate->copy();
+            while ($cursor->lte($endDate)) {
+                $key = $cursor->toDateString();
+                $row = $rows->get($key);
+                $dailyVolume[] = ['date' => $key, 'transactions' => $row ? (int)$row->transactions : 0, 'users' => $row ? (int)$row->users : 0];
+                $cursor->addDay();
+            }
+        }
+        
+        // By operator: aggregate JSON columns
+        $byOperator = [];
+        $opAgg = DB::table('transaction_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->whereNull('operator_id')
+            ->pluck('by_operator');
+        foreach ($opAgg as $jsonStr) {
+            $ops = json_decode($jsonStr, true) ?? [];
+            foreach ($ops as $name => $cnt) {
+                $byOperator[$name] = ($byOperator[$name] ?? 0) + $cnt;
+            }
+        }
+        $byOperatorResult = [];
+        foreach ($byOperator as $name => $count) {
+            $byOperatorResult[] = ['operator' => $name, 'count' => $count];
+        }
+        usort($byOperatorResult, fn($a, $b) => $b['count'] - $a['count']);
+        
+        // By plan: aggregate JSON columns
+        $byPlan = [];
+        $planAgg = DB::table('transaction_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->whereNull('operator_id')
+            ->pluck('by_plan');
+        foreach ($planAgg as $jsonStr) {
+            $plans = json_decode($jsonStr, true) ?? [];
+            foreach ($plans as $name => $cnt) {
+                $byPlan[$name] = ($byPlan[$name] ?? 0) + $cnt;
+            }
+        }
+        $byPlanResult = [];
+        foreach ($byPlan as $name => $count) {
+            $byPlanResult[] = ['plan' => $name, 'count' => $count];
+        }
+        usort($byPlanResult, fn($a, $b) => $b['count'] - $a['count']);
+        
+        return [
+            "daily_volume" => $dailyVolume,
+            "by_category" => [],
+            "analytics" => [
+                "byOperator" => $byOperatorResult,
+                "byPlan" => $byPlanResult,
+                "byChannel" => []
+            ]
+        ];
+    }
+    
+    /**
+     * SLOW PATH (fallback): Original live queries
+     */
+    private function getTransactionsDataLive(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
     {
         // Calculer la granularité selon la période (forcer le mode quotidien pour toutes les périodes < 365 jours)
         $periodDays = $startBound->diffInDays($endExclusive);
