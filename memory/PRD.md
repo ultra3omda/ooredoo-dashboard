@@ -34,16 +34,18 @@ Deployer l'application Ooredoo Privileges et effectuer des analyses fonctionnell
 - Benchmark: Gemini 2.5 Flash 35% plus rapide que GPT-4
 - Gemini defini comme provider par defaut
 
-### Correction donnees Timwe (26 Mars 2026)
+### Correction donnees Timwe (26-27 Mars 2026)
 - Anomalie 26/03: recalculee (740 -> 332)
-- Anomalie historique Feb 19 - Mar 2: 12 jours recalcules avec succes
-  - Billings avant: ~450-576/jour (gonfles ~4x)
-  - Billings apres: ~103-142/jour (fourchette normale)
-  - Cause: ancien code buggue avait calcule ces dates sans filtrage correct
+- Anomalie historique Feb 19 - Mar 2: 12 jours recalcules (billings gonfles ~4x corriges)
+- Code mis a jour: 3 ppids (63980, 63981, 63982) au lieu de 63980 seul
+- Comptage par transaction (sans dedup telephone) pour coller au rapport Timwe
+- Fevrier recalcule integralement: 3 837 (Timwe: 4 012, ecart 4.4% - accepte, transactions absentes de la base)
+- Mars recalcule integralement (1-26): 4 008
 
 ### Configuration
 - TrustProxies='*', PHP-FPM 10 workers, Nginx timeout 300s
 - 11 jobs planifies (scheduler Laravel)
+- TIMWE_BILLING_PPIDS: 63980,63981,63982
 
 ## Backlog
 - P1: Nettoyer secrets dans env.production.example (GitGuardian - 4 secrets exposes)
