@@ -93,7 +93,7 @@ Password: SuperAdmin2024!
 SMTP Email:
 Host: smtp.gmail.com
 User: assistant@clubprivileges.app
-Pass: nltk qbof szsp qopq
+Pass: *** (voir .env production)
 
 ⚠️ CHANGER TOUS LES MOTS DE PASSE EN PRODUCTION
 ```

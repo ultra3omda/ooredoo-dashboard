@@ -113,7 +113,7 @@ Super Admin:
 Email SMTP:
 - Host: smtp.gmail.com
 - User: assistant@clubprivileges.app
-- Pass: nltk qbof szsp qopq
+- Pass: *** (voir .env production)
 
 Base de données suggérée:
 - DB: ooredoo_dashboard

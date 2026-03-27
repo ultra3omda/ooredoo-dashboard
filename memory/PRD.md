@@ -39,8 +39,14 @@ Deployer l'application Ooredoo Privileges et effectuer des analyses fonctionnell
 - Anomalie historique Feb 19 - Mar 2: 12 jours recalcules (billings gonfles ~4x corriges)
 - Code mis a jour: 3 ppids (63980, 63981, 63982) au lieu de 63980 seul
 - Comptage par transaction (sans dedup telephone) pour coller au rapport Timwe
-- Fevrier recalcule integralement: 3 837 (Timwe: 4 012, ecart 4.4% - accepte, transactions absentes de la base)
+- Fevrier recalcule integralement: 3 837 (Timwe: 4 012, ecart 4.4% accepte)
 - Mars recalcule integralement (1-26): 4 008
+
+### Nettoyage securite GitGuardian (27 Mars 2026)
+- MAIL_PASSWORD supprime de: env.production.example, PRODUCTION_CONFIG.md, PACKAGE_FINAL_README.md, INSTRUCTIONS_ENVOI.md
+- EKLEKTIK_CLIENT_SECRET et CLIENT_ID supprimes de: env.production.example, config/eklektik.php (fallback), EklektikController.php (hardcode)
+- Secrets migres vers .env uniquement (non commite)
+- 0 secret restant dans les fichiers trackes
 
 ### Configuration
 - TrustProxies='*', PHP-FPM 10 workers, Nginx timeout 300s
@@ -48,7 +54,6 @@ Deployer l'application Ooredoo Privileges et effectuer des analyses fonctionnell
 - TIMWE_BILLING_PPIDS: 63980,63981,63982
 
 ## Backlog
-- P1: Nettoyer secrets dans env.production.example (GitGuardian - 4 secrets exposes)
 - P2: Monitoring stabilite Agent IA / Gemini 2.5 Flash
 - P2: Materialiser merchants/subscriptions/transactions (cold cache < 5s)
 - P3: Materialisation 365 jours
