@@ -2016,9 +2016,12 @@
             @if(Auth::user()->canAccessSubStoresDashboard())
             <a href="{{ route('sub-stores.dashboard') }}" class="admin-btn" style="display:block; margin:8px;">🏪 Sub-Stores</a>
             @endif
+            @if(Auth::user()->isSuperAdmin())
+            <a href="{{ route('admin.ml.dashboard') }}" class="admin-btn" style="display:block; margin:8px;">🤖 ML Dashboard</a>
+            @endif
             @if(Auth::user()->canAccessEklektikConfig())
             <a href="{{ route('admin.eklektik-cron') }}" class="admin-btn" style="display:block; margin:8px;">⚙️ Configuration Eklektik</a>
-            <a href="{{ route('admin.eklektik.sync') }}" class="admin-btn" style="display:block; margin:8px;">🔄 Gestion des Synchronisations</a>
+            <a href="{{ route('admin.eklektik.sync.tracking') }}" class="admin-btn" style="display:block; margin:8px;">🔄 Gestion des Synchronisations</a>
             <a href="{{ route('admin.eklektik.sync-tracking') }}" class="admin-btn" style="display:block; margin:8px;">📈 Suivi des Synchronisations</a>
             @endif
             <form action="{{ route('auth.logout') }}" method="POST" style="display:block; margin:8px;">
@@ -6325,6 +6328,8 @@
         const end = new Date(endDate);
         const primaryPeriod = `${start.toLocaleDateString('fr-FR')} - ${end.toLocaleDateString('fr-FR')}`;
         document.getElementById('primaryPeriod').textContent = primaryPeriod;
+        
+        loadDashboardData();
       }
     }
 
@@ -6534,7 +6539,7 @@
       updateKPI('sub-retentionRateTrue', normalizeKPI(kpis?.churnRate), '%');
       
       // Timwe Tab KPIs (super admin uniquement)
-      if (kpis?.billingRateTimwe) {
+      if (kpis?.billingRateTimwe !== undefined && kpis?.billingRateTimwe !== null) {
         updateKPI('timwe-billing-rate', normalizeKPI(kpis?.billingRateTimwe), '%');
         updateKPI('timwe-total-billings', normalizeKPI(kpis?.totalTimweBillings));
         
@@ -6576,26 +6581,28 @@
             };
           };
           
-          // Mise à jour des KPIs avec comparaison (si disponible)
-          const newSubsKPI = makeKPI(totals.newSubs, comparisonTotals?.newSubs);
-          console.log('🔍 [TIMWE KPI] Nouveaux Abonnements:', newSubsKPI);
-          
-          updateKPI('timwe-active-subs', makeKPI(
-            totals.activeSubsEndOfPeriod,
-            comparisonTotals?.activeSubsEndOfPeriod
-          ));
-          
-          updateKPI('timwe-new-subscriptions', newSubsKPI);
-          
-          updateKPI('timwe-unsubscriptions', makeKPI(
-            totals.unsubs,
-            comparisonTotals?.unsubs
-          ));
-          
-          updateKPI('timwe-simchurn', makeKPI(
-            totals.simchurn,
-            comparisonTotals?.simchurn
-          ));
+          // KPIs temps réel depuis client_abonnement (cohérent avec l'Overview)
+          const rt = kpis?.timweRealtime;
+          if (rt) {
+            updateKPI('timwe-active-subs', normalizeKPI(rt.activeSubs));
+            updateKPI('timwe-new-subscriptions', normalizeKPI(rt.newSubs));
+            updateKPI('timwe-unsubscriptions', normalizeKPI(rt.unsubs));
+            updateKPI('timwe-simchurn', normalizeKPI(rt.simchurn));
+          } else {
+            updateKPI('timwe-active-subs', makeKPI(
+              totals.activeSubsEndOfPeriod,
+              comparisonTotals?.activeSubsEndOfPeriod
+            ));
+            updateKPI('timwe-new-subscriptions', makeKPI(totals.newSubs, comparisonTotals?.newSubs));
+            updateKPI('timwe-unsubscriptions', makeKPI(
+              totals.unsubs,
+              comparisonTotals?.unsubs
+            ));
+            updateKPI('timwe-simchurn', makeKPI(
+              totals.simchurn,
+              comparisonTotals?.simchurn
+            ));
+          }
           
           updateKPI('timwe-simchurn-revenue', {
             current: formatNumber(totals.simchurnRevenue, 3),
@@ -6625,14 +6632,25 @@
             periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 30;
           }
           
+          // Utiliser les métriques temps réel si disponibles pour la cohérence
+          const rtNewSubs = rt ? (rt.newSubs?.current ?? totals.newSubs) : totals.newSubs;
+          const rtUnsubs = rt ? (rt.unsubs?.current ?? totals.unsubs) : totals.unsubs;
+          const rtSimchurn = rt ? (rt.simchurn?.current ?? totals.simchurn) : totals.simchurn;
+          const rtActiveSubs = rt ? (rt.activeSubs?.current ?? totals.activeSubsEndOfPeriod) : totals.activeSubsEndOfPeriod;
+          
           // Taux de Croissance Nette = ((New Subs - Unsubs - Simchurn) / Active Subs) * 100
-          const netGrowth = totals.newSubs - totals.unsubs - totals.simchurn;
-          const netGrowthRate = totals.activeSubsEndOfPeriod > 0 
-            ? (netGrowth / totals.activeSubsEndOfPeriod) * 100 
+          const netGrowth = rtNewSubs - rtUnsubs - rtSimchurn;
+          const netGrowthRate = rtActiveSubs > 0 
+            ? (netGrowth / rtActiveSubs) * 100 
             : 0;
           
-          const netGrowthRateComparison = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
-            ? ((comparisonTotals.newSubs - comparisonTotals.unsubs - comparisonTotals.simchurn) / comparisonTotals.activeSubsEndOfPeriod) * 100
+          const rtActiveSubsComp = rt ? (rt.activeSubs?.previous ?? (comparisonTotals?.activeSubsEndOfPeriod || 0)) : (comparisonTotals?.activeSubsEndOfPeriod || 0);
+          const rtNewSubsComp = rt ? (rt.newSubs?.previous ?? (comparisonTotals?.newSubs || 0)) : (comparisonTotals?.newSubs || 0);
+          const rtUnsubsComp = rt ? (rt.unsubs?.previous ?? (comparisonTotals?.unsubs || 0)) : (comparisonTotals?.unsubs || 0);
+          const rtSimchurnComp = rt ? (rt.simchurn?.previous ?? (comparisonTotals?.simchurn || 0)) : (comparisonTotals?.simchurn || 0);
+          
+          const netGrowthRateComparison = rtActiveSubsComp > 0
+            ? ((rtNewSubsComp - rtUnsubsComp - rtSimchurnComp) / rtActiveSubsComp) * 100
             : null;
           
           // Formater le taux de croissance avec 2 décimales
@@ -6646,9 +6664,8 @@
           }, '%');
           
           // ARPU mensuel normalisé (30 jours)
-          // Formule : (Revenu Total / Active Subs) * (30 / Nombre de jours)
-          const arpuValue = totals.activeSubsEndOfPeriod > 0 
-            ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays)
+          const arpuValue = rtActiveSubs > 0 
+            ? (totals.revenueTnd / rtActiveSubs) * (30 / periodDays)
             : 0;
           const arpuFormatted = formatNumber(arpuValue, 3);
           
@@ -10023,9 +10040,9 @@
         const avgEl = document.getElementById('aiAvgTime');
         if (avgEl) avgEl.textContent = stats.avg_execution_time ? Math.round(stats.avg_execution_time) : '0';
         const questEl = document.getElementById('aiTotalQuestions');
-        if (questEl) questEl.textContent = formatNumber(stats.total_questions || 0);
+        if (questEl) questEl.textContent = formatNumberCompact(stats.total_questions || 0);
         const tokEl = document.getElementById('aiTotalTokens');
-        if (tokEl) tokEl.textContent = formatNumber(stats.total_tokens_consumed || 0);
+        if (tokEl) tokEl.textContent = formatNumberCompact(stats.total_tokens_consumed || 0);
       }).catch(() => {});
     }
 
@@ -10042,7 +10059,7 @@
       }
     }
 
-    function formatNumber(n) {
+    function formatNumberCompact(n) {
       if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
       if (n >= 1000) return (n/1000).toFixed(1) + 'K';
       return n.toString();

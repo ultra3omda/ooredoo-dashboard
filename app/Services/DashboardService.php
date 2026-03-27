@@ -348,12 +348,42 @@ class DashboardService
                     "previous" => $billingRateOoredooCompData['total_billings'],
                     "change" => $this->calculatePercentageChange($billingRateOoredooData['total_billings'], $billingRateOoredooCompData['total_billings'])
                 ],
+                "timweRealtime" => $this->getTimweRealtimeKPIs($startBound, $endExclusive, $compStartBound, $compEndExclusive),
                 "_source" => "materialized"
             ];
         } catch (\Exception $e) {
             Log::warning("Fallback raw SQL: materialized read failed: " . $e->getMessage());
             return null;
         }
+    }
+
+    private function getTimweRealtimeKPIs(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive): array
+    {
+        $current = $this->getTimweRealtimeMetrics($startBound, $endExclusive);
+        $comparison = $this->getTimweRealtimeMetrics($compStartBound, $compEndExclusive);
+
+        return [
+            'newSubs' => [
+                'current' => $current['new_subs'],
+                'previous' => $comparison['new_subs'],
+                'change' => $this->calculatePercentageChange($current['new_subs'], $comparison['new_subs'])
+            ],
+            'unsubs' => [
+                'current' => $current['unsubs'],
+                'previous' => $comparison['unsubs'],
+                'change' => $this->calculatePercentageChange($current['unsubs'], $comparison['unsubs'])
+            ],
+            'activeSubs' => [
+                'current' => $current['active_subs'],
+                'previous' => $comparison['active_subs'],
+                'change' => $this->calculatePercentageChange($current['active_subs'], $comparison['active_subs'])
+            ],
+            'simchurn' => [
+                'current' => $current['simchurn'],
+                'previous' => $comparison['simchurn'],
+                'change' => $this->calculatePercentageChange($current['simchurn'], $comparison['simchurn'])
+            ],
+        ];
     }
     
     /**
@@ -375,6 +405,60 @@ class DashboardService
         return $query->count();
     }
     
+    /**
+     * Métriques Timwe temps réel depuis client_abonnement (new_subs, unsubs, active, simchurn)
+     */
+    private function getTimweRealtimeMetrics(Carbon $startBound, Carbon $endExclusive): array
+    {
+        $timweOperatorIds = Cache::remember('timwe_operator_ids', 3600, function () {
+            return DB::table('country_payments_methods')
+                ->whereRaw("TRIM(country_payments_methods_name) LIKE ?", ['%timwe%'])
+                ->pluck('country_payments_methods_id')
+                ->toArray();
+        });
+
+        if (empty($timweOperatorIds)) {
+            return ['new_subs' => 0, 'unsubs' => 0, 'active_subs' => 0, 'simchurn' => 0];
+        }
+
+        $newSubs = DB::table('client_abonnement')
+            ->whereIn('country_payments_methods_id', $timweOperatorIds)
+            ->where('client_abonnement_creation', '>=', $startBound)
+            ->where('client_abonnement_creation', '<', $endExclusive)
+            ->count();
+
+        $unsubs = DB::table('client_abonnement')
+            ->whereIn('country_payments_methods_id', $timweOperatorIds)
+            ->whereNotNull('client_abonnement_expiration')
+            ->where('client_abonnement_expiration', '>=', $startBound)
+            ->where('client_abonnement_expiration', '<', $endExclusive)
+            ->count();
+
+        $activeSubs = DB::table('client_abonnement')
+            ->whereIn('country_payments_methods_id', $timweOperatorIds)
+            ->where('client_abonnement_creation', '<', $endExclusive)
+            ->where(function ($q) use ($endExclusive) {
+                $q->whereNull('client_abonnement_expiration')
+                  ->orWhere('client_abonnement_expiration', '>=', $endExclusive);
+            })
+            ->count();
+
+        $simchurn = DB::table('client_abonnement')
+            ->whereIn('country_payments_methods_id', $timweOperatorIds)
+            ->where('client_abonnement_creation', '>=', $startBound)
+            ->where('client_abonnement_creation', '<', $endExclusive)
+            ->whereNotNull('client_abonnement_expiration')
+            ->whereColumn(DB::raw('DATE(client_abonnement_creation)'), DB::raw('DATE(client_abonnement_expiration)'))
+            ->count();
+
+        return [
+            'new_subs' => $newSubs,
+            'unsubs' => $unsubs,
+            'active_subs' => $activeSubs,
+            'simchurn' => $simchurn,
+        ];
+    }
+
     /**
      * Agrège les métriques quotidiennes matérialisées pour une plage de dates
      */
@@ -797,7 +881,8 @@ class DashboardService
                 "current" => $totalOoreodooBillings,
                 "previous" => $totalOoreodooBillingsComparison,
                 "change" => $this->calculatePercentageChange($totalOoreodooBillings, $totalOoreodooBillingsComparison)
-            ]
+            ],
+            "timweRealtime" => $this->getTimweRealtimeKPIs($startBound, $endExclusive, $compStartBound, $compEndExclusive),
         ];
     }
     

@@ -212,6 +212,33 @@
                 </div>
             </div>
         </div>
+
+        <!-- Suggestions Stratégie (Acquisition, Conversion, Taux de facturation) -->
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-info">📋 Suggestions Stratégie (Acquisition, Conversion, Facturation)</h6>
+                </div>
+                <div class="card-body">
+                    <div id="strategy-suggestions-container">
+                        @if(isset($strategySuggestions) && count($strategySuggestions) > 0)
+                            @foreach($strategySuggestions as $s)
+                                <div class="mb-3 p-3 border rounded border-info">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <span class="badge badge-{{ $s['priority'] === 'critical' ? 'danger' : ($s['priority'] === 'high' ? 'warning' : 'info') }} badge-pill">{{ strtoupper($s['priority']) }}</span>
+                                        <span class="text-success font-weight-bold">+{{ $s['expected_impact_percentage'] ?? 0 }}%</span>
+                                    </div>
+                                    <strong class="d-block mt-1">{{ $s['recommended_strategy'] ?? '' }}</strong>
+                                    <small class="text-muted d-block mt-1">{{ $s['reasoning'] ?? '' }}</small>
+                                </div>
+                            @endforeach
+                        @else
+                            <div class="text-center text-muted py-3"><i class="fas fa-bullhorn"></i> Aucune suggestion stratégie pour cette date.</div>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Prédictions Récentes -->
@@ -492,6 +519,30 @@ function renderRecommendations(recommendationsData) {
     container.innerHTML = html;
 }
 
+// Remplir le bloc Suggestions Stratégie (acquisition, conversion, taux de facturation)
+function renderStrategySuggestions(list) {
+    const container = document.getElementById('strategy-suggestions-container');
+    if (!container) return;
+    if (!Array.isArray(list) || list.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-bullhorn"></i> Aucune suggestion stratégie pour cette date.</div>';
+        return;
+    }
+    const badgeClass = (p) => (p === 'critical' ? 'danger' : (p === 'high' ? 'warning' : 'info'));
+    const html = list.map(function(s) {
+        const priority = (s.priority || 'medium').toLowerCase();
+        const rec = (s.recommended_strategy || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const reason = (s.reasoning || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const pct = s.expected_impact_percentage != null ? Number(s.expected_impact_percentage) : 0;
+        return '<div class="mb-3 p-3 border rounded border-info">' +
+            '<div class="d-flex justify-content-between align-items-start">' +
+            '<span class="badge badge-' + badgeClass(priority) + ' badge-pill">' + (priority.toUpperCase()) + '</span>' +
+            '<span class="text-success font-weight-bold">+' + pct + '%</span></div>' +
+            '<strong class="d-block mt-1">' + rec + '</strong>' +
+            '<small class="text-muted d-block mt-1">' + reason + '</small></div>';
+    }).join('');
+    container.innerHTML = html;
+}
+
 // Mise à jour des données du dashboard (KPIs + graphiques + recommandations) après refresh
 function updateDashboardData(data) {
     if (!data) return;
@@ -505,6 +556,9 @@ function updateDashboardData(data) {
     el('active-recommendations', summary.total != null ? summary.total : '...');
     if (data.recommendations) {
         renderRecommendations(data.recommendations);
+    }
+    if (data.strategy_suggestions) {
+        renderStrategySuggestions(data.strategy_suggestions);
     }
     if (data.trends) {
         mlDashboard.data.trends = data.trends;

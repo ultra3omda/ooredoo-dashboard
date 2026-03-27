@@ -16,7 +16,7 @@ class WarmupDashboardCache extends Command
     public function handle(DashboardService $dashboardService): int
     {
         $operators = $this->option('operator') === 'ALL' 
-            ? ['all', 'Timwe', "S'abonner via Timwe"]
+            ? ['ALL', 'Timwe', "S'abonner via Timwe"]
             : [$this->option('operator')];
         
         $now = Carbon::now();
@@ -66,13 +66,16 @@ class WarmupDashboardCache extends Command
                 ];
                 $paramHash = md5(json_encode($params));
 
-                // Warmup KPIs (monolithique)
+                // Warmup KPIs split
                 $total++;
                 $this->info("  [{$operator}] KPIs {$start} -> {$end}");
                 try {
                     set_time_limit(180);
                     ini_set('memory_limit', '512M');
-                    $dashboardService->getDashboardData($start, $end, $compStart, $compEnd, $operator);
+                    $cacheKey = 'split:kpis:' . $paramHash;
+                    Cache::remember($cacheKey, 1800, function() use ($dashboardService, $startBound, $endExclusive, $compStartBound, $compEndExclusive, $operator) {
+                        return $dashboardService->getKPIsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $operator);
+                    });
                     $success++;
                     $this->info("    OK");
                 } catch (\Exception $e) {
@@ -126,6 +129,29 @@ class WarmupDashboardCache extends Command
                 } catch (\Exception $e) {
                     $this->error("    FAILED: " . $e->getMessage());
                     Log::error("Warmup subscriptions failed: " . $e->getMessage());
+                }
+
+                // Warmup Ooredoo stats split
+                $total++;
+                $this->info("  [{$operator}] Ooredoo {$start} -> {$end}");
+                try {
+                    set_time_limit(120);
+                    $cacheKey = 'split:ooredoo:' . $paramHash;
+                    Cache::remember($cacheKey, 1800, function() use ($dashboardService, $startBound, $endExclusive, $compStartBound, $compEndExclusive) {
+                        $daily = $dashboardService->getOoredooDailyStatisticsPublic($startBound, $endExclusive);
+                        $dailyComp = $dashboardService->getOoredooDailyStatisticsPublic($compStartBound, $compEndExclusive);
+                        return [
+                            'daily_statistics' => $daily,
+                            'daily_statistics_comparison' => $dailyComp,
+                            'ooredoo_monthly_stats' => $dashboardService->groupOoredooStatsByMonthPublic($daily),
+                            'ooredoo_monthly_stats_comparison' => $dashboardService->groupOoredooStatsByMonthPublic($dailyComp)
+                        ];
+                    });
+                    $success++;
+                    $this->info("    OK");
+                } catch (\Exception $e) {
+                    $this->error("    FAILED: " . $e->getMessage());
+                    Log::error("Warmup ooredoo failed: " . $e->getMessage());
                 }
             }
         }

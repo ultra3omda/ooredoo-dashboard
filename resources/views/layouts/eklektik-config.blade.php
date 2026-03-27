@@ -21,7 +21,7 @@
                             ⚙️ Configuration Cron
                         </a>
                         <a class="nav-item nav-link {{ request()->routeIs('admin.eklektik.sync') ? 'active' : '' }}" 
-                           href="{{ route('admin.eklektik.sync') }}" role="tab">
+                           href="{{ route('admin.eklektik.sync.tracking') }}" role="tab">
                             🔄 Gestion des Synchronisations
                         </a>
                         <a class="nav-item nav-link {{ request()->routeIs('admin.eklektik.sync.tracking') ? 'active' : '' }}" 

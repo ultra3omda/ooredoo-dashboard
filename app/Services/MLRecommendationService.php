@@ -9,6 +9,12 @@ use Carbon\Carbon;
 
 class MLRecommendationService
 {
+    public function __construct(
+        private ?AcquisitionStrategySuggestionService $acquisitionSuggestionService = null
+    ) {
+        $this->acquisitionSuggestionService ??= app(AcquisitionStrategySuggestionService::class);
+    }
+
     /**
      * Génère des recommandations pour optimiser la facturation
      */
@@ -38,8 +44,10 @@ class MLRecommendationService
             // 5. Recommandations de prévention du churn
             $recommendations['churn_prevention'] = $this->generateChurnPreventionRecommendations($analysisDate);
             
-            // 6. Recommandations globales
-            $recommendations['global_strategy'] = $this->generateGlobalStrategyRecommendations($analysisDate);
+            // 6. Recommandations globales + suggestions acquisition/conversion/taux de facturation
+            $globalStrategy = $this->generateGlobalStrategyRecommendations($analysisDate);
+            $strategySuggestions = $this->acquisitionSuggestionService->getStrategySuggestions($analysisDate);
+            $recommendations['global_strategy'] = array_merge($globalStrategy, $strategySuggestions);
 
             // Sauvegarder les recommandations
             $this->storeRecommendations($recommendations, $analysisDate);

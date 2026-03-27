@@ -1596,7 +1596,7 @@
                   @if(Auth::user()->canAccessEklektikConfig())
                   <a href="{{ route('admin.eklektik-cron') }}" class="admin-btn" style="display:block; margin:8px;">⚙️ Configuration Eklektik</a>
                   @endif
-                  <form action="{{ route('logout') }}" method="POST" style="display:block; margin:8px;">
+                  <form action="{{ route('auth.logout') }}" method="POST" style="display:block; margin:8px;">
                     @csrf
                     <button type="submit" class="logout-btn" style="width:100%;" onclick="return confirm('Êtes-vous sûr de vouloir vous déconnecter ?')">Déconnexion</button>
                   </form>
@@ -1659,6 +1659,12 @@
         <option value="ALL">Tous les sub-stores</option>
         <!-- Options will be populated by JavaScript -->
       </select>
+      <div id="campaignFilterContainer" style="margin-top:10px; display:none;">
+        <div style="font-size:12px; color: var(--muted); margin-bottom:6px;">Campagne (Pluxee)</div>
+        <select id="campaignSelect" class="substore-dropdown">
+          <option value="ALL">Toutes les campagnes</option>
+        </select>
+      </div>
                 <div class="action-buttons">
         <button class="btn btn-primary" onclick="refreshData()">
           <span>🔄</span> Actualiser
@@ -2306,6 +2312,7 @@
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         const subStore = document.getElementById('subStoreSelect').value;
+        const campaign = document.getElementById('campaignSelect')?.value || 'ALL';
         
         if (!startDate || !endDate) {
           debugError('❌ Dates manquantes pour le chargement des utilisateurs');
@@ -2322,7 +2329,7 @@
         
         debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
         
-        const response = await fetch(`/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${encodeURIComponent(subStore)}&campaign=${encodeURIComponent(campaign)}`, {
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -2413,7 +2420,8 @@
       createLoadingKPIs();
       
       // Charger la liste des sub-stores et les données du dashboard
-      loadSubStores().then(() => {
+      loadSubStores().then(async () => {
+        await loadCampaignsForSubStore();
         loadDashboardData();
       });
     }
@@ -2664,6 +2672,7 @@
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         const subStore = document.getElementById('subStoreSelect').value;
+        const campaign = document.getElementById('campaignSelect')?.value || 'ALL';
         
         // Validation des dates
         if (!startDate || !endDate || startDate.trim() === '' || endDate.trim() === '') {
@@ -2705,7 +2714,7 @@
         debugLog('📅 Période principale:', startDate, '→', endDate);
         debugLog('📅 Période comparaison:', comparisonStartDate.toISOString().split('T')[0], '→', comparisonEndDate.toISOString().split('T')[0]);
         
-        debugLog('📊 Chargement des données:', { startDate, endDate, subStore });
+        debugLog('📊 Chargement des données:', { startDate, endDate, subStore, campaign });
         
         // Timeout fixe pour toutes les périodes (mode optimisé gère les longues périodes)
         const timeoutMs = 120000; // 2 minutes pour toutes les périodes
@@ -2717,7 +2726,7 @@
             controller.abort();
         }, timeoutMs);
         
-        const response = await fetch(`/api/sub-store/dashboard/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/api/sub-store/dashboard/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${encodeURIComponent(subStore)}&campaign=${encodeURIComponent(campaign)}`, {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
@@ -2827,7 +2836,8 @@
         try {
           showExpirationsSkeleton();
           const subStore = document.getElementById('subStoreSelect')?.value || 'ALL';
-          const resp = await fetch(`/api/expirations?sub_store=${encodeURIComponent(subStore)}`);
+          const campaign = document.getElementById('campaignSelect')?.value || 'ALL';
+          const resp = await fetch(`/api/expirations?sub_store=${encodeURIComponent(subStore)}&campaign=${encodeURIComponent(campaign)}`);
           const aux = await resp.json();
           if (aux.expirationsByMonth && aux.expirationsByMonth.length > 0) {
             createExpirationsChart(aux.expirationsByMonth);
@@ -3541,6 +3551,39 @@
       }
     }
 
+    async function loadCampaignsForSubStore() {
+      const subStore = document.getElementById('subStoreSelect')?.value || 'ALL';
+      const container = document.getElementById('campaignFilterContainer');
+      const select = document.getElementById('campaignSelect');
+      if (!container || !select) return;
+
+      // Sous-filtre demandé uniquement pour Club Privilèges By Pluxee
+      if (!subStore.toLowerCase().includes('pluxee')) {
+        container.style.display = 'none';
+        select.innerHTML = '<option value=\"ALL\">Toutes les campagnes</option>';
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/sub-store/campaigns?sub_store=${encodeURIComponent(subStore)}`);
+        const data = await response.json();
+        const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+
+        select.innerHTML = '<option value=\"ALL\">Toutes les campagnes</option>';
+        campaigns.forEach(campaign => {
+          const option = document.createElement('option');
+          option.value = campaign;
+          option.textContent = campaign;
+          select.appendChild(option);
+        });
+
+        container.style.display = 'block';
+      } catch (error) {
+        debugWarn('Impossible de charger les campagnes:', error);
+        container.style.display = 'none';
+      }
+    }
+
     // Update category distribution table (Vue d'ensemble)
     function updateCategoryTable(categories) {
       const tbody = document.getElementById('categoryTableBody');
@@ -3957,7 +4000,7 @@
         
         debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
         
-        const response = await fetch(`/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${encodeURIComponent(subStore)}&campaign=${encodeURIComponent(campaign)}`, {
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -4004,13 +4047,18 @@
 
     // Event listeners
     // Seul le sub-store déclenche un rechargement automatique
-    document.getElementById('subStoreSelect').addEventListener('change', function() {
+    document.getElementById('subStoreSelect').addEventListener('change', async function() {
         debugLog('🏪 Sub-Store modifié, rechargement de toutes les données');
         // Effacer tous les caches
         window.merchantKPIsData = null;
         window.usersKPIsData = null;
         window.lastDashboardLoadTime = 0;
+        await loadCampaignsForSubStore();
         // Recharger toutes les données
+        loadDashboardData();
+    });
+    document.getElementById('campaignSelect').addEventListener('change', function() {
+        debugLog('🏷️ Campagne modifiée, rechargement des données');
         loadDashboardData();
     });
     

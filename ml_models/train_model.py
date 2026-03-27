@@ -59,6 +59,14 @@ class BillingSuccessPredictor:
     # Colonnes catégorielles encodées en numérique dans prepare_features
     CAT_COLUMNS = ['price_preference', 'preferred_frequency', 'best_performing_operator']
 
+    # À NE PAS utiliser comme features : elles définissent directement la cible (data leakage).
+    # La cible = (timwe_success_rate > 0.2 et timwe_has_activity) ou idem eklektik/ooredoo.
+    LEAKING_COLUMNS = [
+        'timwe_success_rate', 'timwe_has_activity',
+        'eklektik_success_rate', 'eklektik_has_activity',
+        'ooredoo_success_rate', 'ooredoo_has_activity',
+    ]
+
     def __init__(self):
         self.model = None
         self.feature_columns = []
@@ -140,7 +148,9 @@ class BillingSuccessPredictor:
             elif col == 'best_performing_operator':
                 df[col] = s.map({'none': 0, 'timwe': 1, 'eklektik': 2, 'ooredoo': 3}).fillna(0)
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(-1)
-        self.feature_columns = [c for c in self.FEATURE_COLUMNS + self.CAT_COLUMNS if c in df.columns]
+        all_candidates = [c for c in self.FEATURE_COLUMNS + self.CAT_COLUMNS if c in df.columns]
+        # Exclure les colonnes qui définissent la cible (éviter data leakage → AUC 1.0 artificiel)
+        self.feature_columns = [c for c in all_candidates if c not in self.LEAKING_COLUMNS]
         X = df[self.feature_columns]
         y = df['target_success']
         return X, y

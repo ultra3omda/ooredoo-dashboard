@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\MLPredictionService;
 use App\Services\MLPredictionServiceV2;
 use App\Services\MLRecommendationService;
+use App\Services\AcquisitionStrategySuggestionService;
 use App\Services\MLFeatureExtractionService;
 use App\Services\MLABTestingService;
 use App\Services\MLModelTrainingService;
@@ -22,6 +23,7 @@ class MLDashboardController extends Controller
     private MLPredictionService $predictionService;
     private MLPredictionServiceV2 $predictionServiceV2;
     private MLRecommendationService $recommendationService;
+    private AcquisitionStrategySuggestionService $strategySuggestionService;
     private MLFeatureExtractionService $featureService;
     private MLABTestingService $abTestingService;
     private MLModelTrainingService $modelTrainingService;
@@ -30,6 +32,7 @@ class MLDashboardController extends Controller
         MLPredictionService $predictionService,
         MLPredictionServiceV2 $predictionServiceV2,
         MLRecommendationService $recommendationService,
+        AcquisitionStrategySuggestionService $strategySuggestionService,
         MLFeatureExtractionService $featureService,
         MLABTestingService $abTestingService,
         MLModelTrainingService $modelTrainingService
@@ -37,6 +40,7 @@ class MLDashboardController extends Controller
         $this->predictionService = $predictionService;
         $this->predictionServiceV2 = $predictionServiceV2;
         $this->recommendationService = $recommendationService;
+        $this->strategySuggestionService = $strategySuggestionService;
         $this->featureService = $featureService;
         $this->abTestingService = $abTestingService;
         $this->modelTrainingService = $modelTrainingService;
@@ -52,6 +56,7 @@ class MLDashboardController extends Controller
             $portfolioStats = MLClientFeature::getPortfolioPerformance();
             $segmentStats = MLClientFeature::getSegmentStats();
             $recommendations = $this->recommendationService->getPriorityRecommendations(5);
+            $strategySuggestions = $this->strategySuggestionService->getStrategySuggestions();
             $predictions = $this->predictionService->getDashboardPredictions(10);
             
             // Données pour les graphiques
@@ -61,6 +66,7 @@ class MLDashboardController extends Controller
                 'portfolioStats',
                 'segmentStats', 
                 'recommendations',
+                'strategySuggestions',
                 'predictions',
                 'trendData'
             ));
@@ -86,6 +92,7 @@ class MLDashboardController extends Controller
                 'portfolio' => MLClientFeature::getPortfolioPerformance($date),
                 'segments' => MLClientFeature::getSegmentStats($date),
                 'recommendations' => $this->recommendationService->getPriorityRecommendations(10),
+                'strategy_suggestions' => $this->strategySuggestionService->getStrategySuggestions($date),
                 'predictions' => $this->predictionService->getDashboardPredictions(20),
                 'trends' => $this->getTrendData(30),
                 'model_performance' => $this->getModelPerformanceAdvanced(),

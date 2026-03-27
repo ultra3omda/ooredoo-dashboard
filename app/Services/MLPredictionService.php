@@ -95,40 +95,63 @@ class MLPredictionService
     }
 
     /**
-     * Construit le tableau de features attendu par le script Python (même ordre/noms que train_model.py).
+     * Construit le tableau de features attendu par predict.py (aligné sur ml_models/train_model.py FEATURE_COLUMNS + CAT_COLUMNS).
      */
     private function buildFeatureArrayForPython(MLClientFeature $features): array
     {
-        $map = [
-            'consecutive_failures' => $features->consecutive_failures ?? 0,
-            'total_payments' => $features->total_payments ?? 0,
-            'total_attempts' => $features->total_attempts ?? 0,
-            'payment_frequency' => $features->payment_frequency ?? 0,
-            'avg_payment_amount' => (float) ($features->avg_payment_amount ?? 0),
-            'days_since_last_payment' => $features->days_since_last_payment ?? 0,
-            'best_billing_day_week' => $features->best_billing_day_week ?? 3,
-            'best_billing_hour' => $features->best_billing_hour ?? 14,
-            'end_month_success_rate' => (float) ($features->end_month_success_rate ?? 0),
-            'beginning_month_success_rate' => (float) ($features->beginning_month_success_rate ?? 0),
-            'subscription_age_days' => $features->subscription_age_days ?? 0,
-            'churn_probability' => (float) ($features->churn_probability ?? 0),
-            'failure_streak' => $features->failure_streak ?? 0,
-            'is_high_value_client' => $features->is_high_value_client ? 1 : 0,
-            'payment_reliability_score' => (float) ($features->payment_reliability_score ?? 0),
-            'engagement_score' => (float) ($features->engagement_score ?? 0),
-            'lifetime_value_score' => (float) ($features->lifetime_value_score ?? 0),
-            'morning_success_rate' => (float) ($features->morning_success_rate ?? 0),
-            'afternoon_success_rate' => (float) ($features->afternoon_success_rate ?? 0),
-            'evening_success_rate' => (float) ($features->evening_success_rate ?? 0),
-            'recovery_after_failure_rate' => (float) ($features->recovery_after_failure_rate ?? 0),
-            'max_consecutive_successes' => $features->max_consecutive_successes ?? 0,
-            'payment_amount_std' => (float) ($features->payment_amount_std ?? 0),
-            'amount_flexibility' => (float) ($features->amount_flexibility ?? 0),
-            'no_balance_failure_rate' => (float) ($features->no_balance_failure_rate ?? 0),
-            'not_delivered_failure_rate' => (float) ($features->not_delivered_failure_rate ?? 0),
-        ];
+        // Aligné sur BillingSuccessPredictor.FEATURE_COLUMNS et CAT_COLUMNS (train_model.py)
+        $numeric = function ($v) {
+            return is_numeric($v) ? (float) $v : 0;
+        };
+        $int = function ($v) {
+            return (int) (is_numeric($v) ? $v : 0);
+        };
+        $cat = function ($s, array $map, $default = -1) {
+            if ($s === null || $s === '') {
+                return $default;
+            }
+            $k = strtolower(trim((string) $s));
+            return $map[$k] ?? $default;
+        };
 
-        return $map;
+        return [
+            'timwe_success_rate' => $numeric($features->timwe_success_rate ?? 0),
+            'timwe_total_attempts' => $int($features->timwe_total_attempts ?? 0),
+            'timwe_total_successes' => $int($features->timwe_total_successes ?? 0),
+            'timwe_avg_revenue_per_success' => $numeric($features->timwe_avg_revenue_per_success ?? 0),
+            'timwe_no_balance_rate' => $numeric($features->timwe_no_balance_rate ?? 0),
+            'timwe_not_delivered_rate' => $numeric($features->timwe_not_delivered_rate ?? 0),
+            'timwe_has_activity' => (int) (($features->timwe_has_activity ?? 0) ? 1 : 0),
+            'eklektik_success_rate' => $numeric($features->eklektik_success_rate ?? 0),
+            'eklektik_total_attempts' => $int($features->eklektik_total_attempts ?? 0),
+            'eklektik_total_subscriptions' => $int($features->eklektik_total_subscriptions ?? 0),
+            'eklektik_avg_daily_successes' => $numeric($features->eklektik_avg_daily_successes ?? 0),
+            'eklektik_daily_consistency' => $numeric($features->eklektik_daily_consistency ?? 0),
+            'eklektik_has_activity' => (int) (($features->eklektik_has_activity ?? 0) ? 1 : 0),
+            'ooredoo_success_rate' => $numeric($features->ooredoo_success_rate ?? 0),
+            'ooredoo_total_attempts' => $int($features->ooredoo_total_attempts ?? 0),
+            'ooredoo_total_subscriptions' => $int($features->ooredoo_total_subscriptions ?? 0),
+            'ooredoo_avg_monthly_successes' => $numeric($features->ooredoo_avg_monthly_successes ?? 0),
+            'ooredoo_monthly_consistency' => $numeric($features->ooredoo_monthly_consistency ?? 0),
+            'ooredoo_has_activity' => (int) (($features->ooredoo_has_activity ?? 0) ? 1 : 0),
+            'total_operators_used' => $int($features->total_operators_used ?? 0),
+            'operator_diversity_score' => $numeric($features->operator_diversity_score ?? 0),
+            'unique_price_points' => $int($features->unique_price_points ?? 0),
+            'prefers_low_price' => (int) (($features->prefers_low_price ?? 0) ? 1 : 0),
+            'prefers_high_price' => (int) (($features->prefers_high_price ?? 0) ? 1 : 0),
+            'is_multi_operator_user' => (int) (($features->is_multi_operator_user ?? 0) ? 1 : 0),
+            'daily_offers_count' => $int($features->daily_offers_count ?? 0),
+            'monthly_offers_count' => $int($features->monthly_offers_count ?? 0),
+            'total_offers_count' => $int($features->total_offers_count ?? 0),
+            'daily_engagement_rate' => $numeric($features->daily_engagement_rate ?? 0),
+            'monthly_engagement_rate' => $numeric($features->monthly_engagement_rate ?? 0),
+            'prefers_daily_offers' => (int) (($features->prefers_daily_offers ?? 0) ? 1 : 0),
+            'prefers_monthly_offers' => (int) (($features->prefers_monthly_offers ?? 0) ? 1 : 0),
+            'is_frequency_flexible' => (int) (($features->is_frequency_flexible ?? 0) ? 1 : 0),
+            'price_preference' => $cat($features->price_preference ?? null, ['low' => 0, 'high' => 1, 'mixed' => 2], -1),
+            'preferred_frequency' => $cat($features->preferred_frequency ?? null, ['daily' => 0, 'monthly' => 1, 'mixed' => 2], -1),
+            'best_performing_operator' => $cat($features->best_performing_operator ?? null, ['none' => 0, 'timwe' => 1, 'eklektik' => 2, 'ooredoo' => 3], 0),
+        ];
     }
 
     /**

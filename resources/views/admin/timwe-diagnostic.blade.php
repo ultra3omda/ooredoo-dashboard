@@ -851,7 +851,7 @@
         <div class="page-header">
             <div>
                 <h1>
-                    🩺 Diagnostic des Notifications Timwe
+                    🩺 Diagnostic des Notifications Timwexx
                 </h1>
                 <p>Analyse détaillée des réponses API Timwe par numéro et type de delivery code</p>
             </div>

@@ -33,6 +33,20 @@ class SubStoreController extends Controller
     }
 
     /**
+     * Filtre sur le store employeur (client.sub_store) pour les stats dashboard.
+     * Vue distributeur Pluxee : ne pas exiger is_sub_store sur l’employeur (sinon KPI à 0).
+     */
+    private function applyEmployerStoreScope($query, string $selectedSubStore, string $tableAlias = 'stores'): void
+    {
+        if ($selectedSubStore !== 'ALL' && $this->isPluxeeSubStore($selectedSubStore)) {
+            $query->where("{$tableAlias}.store_active", 1);
+
+            return;
+        }
+        $this->applySubStoreFilter($query, $tableAlias);
+    }
+
+    /**
      * Afficher le dashboard sub-stores
      */
     public function index()
@@ -62,6 +76,28 @@ class SubStoreController extends Controller
         ]);
     }
 
+    /**
+     * API - Campagnes disponibles pour un sub-store.
+     * Utilisé pour le sous-filtre de Club Privilèges By Pluxee.
+     */
+    public function getCampaigns(Request $request)
+    {
+        $subStore = $request->input('sub_store', 'ALL');
+
+        try {
+            return response()->json([
+                'campaigns' => $this->getCampaignsForSubStore($subStore),
+                'sub_store' => $subStore
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Erreur getCampaigns: ' . $e->getMessage());
+            return response()->json([
+                'campaigns' => [],
+                'sub_store' => $subStore
+            ]);
+        }
+    }
+
 
     /**
      * API async: Expirations par mois (léger, cache 10 min)
@@ -71,10 +107,11 @@ class SubStoreController extends Controller
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
         $selectedSubStore = $request->input('sub_store', 'ALL');
+        $selectedCampaign = $this->normalizeCampaignFilter($request->input('campaign', 'ALL'));
         try {
-            $cacheKey = 'expirations_async:' . md5(($startDate ?? 'n/a').($endDate ?? 'n/a').$selectedSubStore);
-            $data = Cache::remember($cacheKey, 600, function() use ($selectedSubStore) {
-                return $this->getExpirationsByMonth($selectedSubStore, 12);
+            $cacheKey = 'expirations_async:' . md5(($startDate ?? 'n/a').($endDate ?? 'n/a').$selectedSubStore.$selectedCampaign);
+            $data = Cache::remember($cacheKey, 600, function() use ($selectedSubStore, $selectedCampaign) {
+                return $this->getExpirationsByMonth($selectedSubStore, 12, $selectedCampaign);
             });
             return response()->json(['expirationsByMonth' => $data, 'cached' => true]);
         } catch (\Throwable $th) {
@@ -89,19 +126,21 @@ class SubStoreController extends Controller
     public function getDashboardData(Request $request)
     {
         try {
+            set_time_limit(120);
             // Période dynamique : 30 derniers jours par défaut
             $startDate = $request->input("start_date", Carbon::now()->subDays(29)->format('Y-m-d'));
             $endDate = $request->input("end_date", Carbon::now()->format('Y-m-d'));
             $comparisonStartDate = $request->input("comparison_start_date", Carbon::parse($startDate)->subDays(30)->format('Y-m-d'));
             $comparisonEndDate = $request->input("comparison_end_date", Carbon::parse($endDate)->subDays(30)->format('Y-m-d'));
             $selectedSubStore = $request->input("sub_store", "ALL");
+            $selectedCampaign = $this->normalizeCampaignFilter($request->input('campaign', 'ALL'));
             
             // Vérification des permissions
             $user = auth()->user();
             $selectedSubStore = $this->validateSubStoreAccess($user, $selectedSubStore);
 
             // Générer la clé de cache
-            $cacheKey = $this->generateCacheKey($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $user->id);
+            $cacheKey = $this->generateCacheKey($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $selectedCampaign, $user->id);
             
             // Cache intelligent selon la longueur de période avec protection contre les requêtes trop longues
             $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
@@ -123,13 +162,13 @@ class SubStoreController extends Controller
             
             // Mise en cache avec TTL adapté
             try {
-            $data = Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $periodDays) {
+            $data = Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $selectedCampaign, $periodDays) {
                 // Mode optimisé pour les périodes moyennes et longues avec vraies données
                 if ($periodDays > 90) {
-                    return $this->getOptimizedSubStoreDashboardData($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore);
+                    return $this->getOptimizedSubStoreDashboardData($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $selectedCampaign);
                 }
                 
-                return $this->fetchSubStoreDashboardData($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore);
+                return $this->fetchSubStoreDashboardData($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $selectedCampaign);
             });
             } catch (\Exception $cacheException) {
                 Log::error("Erreur dans le cache closure: " . $cacheException->getMessage());
@@ -161,53 +200,53 @@ class SubStoreController extends Controller
     /**
      * Mode optimisé pour les longues périodes (comme dashboard opérateur)
      */
-    private function getOptimizedSubStoreDashboardData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore): array
+    private function getOptimizedSubStoreDashboardData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore, string $selectedCampaign = 'ALL'): array
     {
         try {
             $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
             
             // Cache adaptatif selon la durée de période
             $cacheTTL = $periodDays > 365 ? 3600 : ($periodDays > 180 ? 1800 : 900); // 1h/30min/15min
-            $cacheKey = 'substore_optimized_real_v1:' . md5($startDate . $endDate . $selectedSubStore);
+            $cacheKey = 'substore_optimized_real_v1:' . md5($startDate . $endDate . $selectedSubStore . $selectedCampaign);
             
-            return Cache::remember($cacheKey, $cacheTTL, function() use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $periodDays) {
+            return Cache::remember($cacheKey, $cacheTTL, function() use ($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $selectedSubStore, $selectedCampaign, $periodDays) {
                 $closureStart = microtime(true);
                 // === VRAIES DONNÉES OPTIMISÉES ===
                 
                 // KPIs de base (rapides, sans filtres de dates) - avec vraies requêtes
-                $distributed = $this->getDistributedCards($selectedSubStore);
-                $inscriptions = $this->getInscriptionsWithCards($selectedSubStore);
-                $activeUsers = $this->getUsersWithCardsCount($selectedSubStore);
-                $transactions = $this->getTransactionsWithCards($selectedSubStore);
+                $distributed = $this->getDistributedCards($selectedSubStore, $selectedCampaign);
+                $inscriptions = $this->getInscriptionsWithCards($selectedSubStore, $selectedCampaign);
+                $activeUsers = $this->getUsersWithCardsCount($selectedSubStore, $selectedCampaign);
+                $transactions = $this->getTransactionsWithCards($selectedSubStore, $selectedCampaign);
                 
                 // KPIs avec dates - requêtes OPTIMISÉES pour longues périodes
-                $activeUsersCohorte = $this->getUsersWithCardsCohorteCount($selectedSubStore, $startDate, $endDate);
-                $transactionsCohorte = $this->getOptimizedTransactionsCohorte($selectedSubStore, $startDate, $endDate);
-                $inscriptionsCohorte = $this->getOptimizedInscriptionsCohorte($selectedSubStore, $startDate, $endDate);
-                $transactionsCohorteComparison = $this->getOptimizedTransactionsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
+                $activeUsersCohorte = $this->getUsersWithCardsCohorteCount($selectedSubStore, $startDate, $endDate, $selectedCampaign);
+                $transactionsCohorte = $this->getOptimizedTransactionsCohorte($selectedSubStore, $startDate, $endDate, $selectedCampaign);
+                $inscriptionsCohorte = $this->getOptimizedInscriptionsCohorte($selectedSubStore, $startDate, $endDate, $selectedCampaign);
+                $transactionsCohorteComparison = $this->getOptimizedTransactionsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
                 
                 // TOTAL ABONNEMENTS (toutes périodes) - comme le mode normal
-                $totalSubscriptions = $this->getTotalSubscriptions($selectedSubStore);
+                $totalSubscriptions = $this->getTotalSubscriptions($selectedSubStore, $selectedCampaign);
                 
                 $conversionRate = $inscriptions > 0 ? round(($activeUsers / $inscriptions) * 100, 1) : 0;
                 
                 // CARTES ACTIVÉES optimisé
-                $renewalRate = $this->getCardsActivated($selectedSubStore, $startDate, $endDate);
+                $renewalRate = $this->getCardsActivated($selectedSubStore, $startDate, $endDate, $selectedCampaign);
                 
                 // === DONNÉES DE COMPARAISON ===
-                $distributedComparison = $this->getDistributedCards($selectedSubStore);
-                $inscriptionsComparison = $this->getInscriptionsWithCards($selectedSubStore);
-                $activeUsersComparison = $this->getUsersWithCardsCount($selectedSubStore);
-                $transactionsComparison = $this->getTransactionsWithCards($selectedSubStore);
-                $totalSubscriptionsComparison = $this->getTotalSubscriptions($selectedSubStore);
+                $distributedComparison = $this->getDistributedCards($selectedSubStore, $selectedCampaign);
+                $inscriptionsComparison = $this->getInscriptionsWithCards($selectedSubStore, $selectedCampaign);
+                $activeUsersComparison = $this->getUsersWithCardsCount($selectedSubStore, $selectedCampaign);
+                $transactionsComparison = $this->getTransactionsWithCards($selectedSubStore, $selectedCampaign);
+                $totalSubscriptionsComparison = $this->getTotalSubscriptions($selectedSubStore, $selectedCampaign);
                 
                 // Pour les KPIs avec filtre de date, on calcule pour la période de comparaison
-                $activeUsersCohorteComparison = $this->getUsersWithCardsCohorteCount($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
-                $transactionsCohorteComparison = $this->getOptimizedTransactionsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
-                $inscriptionsCohorteComparison = $this->getOptimizedInscriptionsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
+                $activeUsersCohorteComparison = $this->getUsersWithCardsCohorteCount($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
+                $transactionsCohorteComparison = $this->getOptimizedTransactionsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
+                $inscriptionsCohorteComparison = $this->getOptimizedInscriptionsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
                 
                 $conversionRateComparison = $inscriptionsComparison > 0 ? round(($activeUsersComparison / $inscriptionsComparison) * 100, 1) : 0;
-                $renewalRateComparison = $this->getCardsActivated($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
+                $renewalRateComparison = $this->getCardsActivated($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
                 
                 // === CALCUL DES VARIATIONS ===
                 $distributedChange = $this->calculatePercentageChange($distributedComparison, $distributed);
@@ -222,10 +261,10 @@ class SubStoreController extends Controller
                 $renewalRateChange = $this->calculatePercentageChange($renewalRateComparison, $renewalRate);
                 
                 // === COMPARAISONS OPTIMISÉES ===
-                $previousDistributed = $this->getDistributedCards($selectedSubStore); // Même valeur car pas de filtre date
-                $previousInscriptions = $this->getInscriptionsWithCards($selectedSubStore);
-                $previousActiveUsers = $this->getActiveUsersWithCards($selectedSubStore);
-                $previousTransactions = $this->getTransactionsWithCards($selectedSubStore);
+                $previousDistributed = $this->getDistributedCards($selectedSubStore, $selectedCampaign); // Même valeur car pas de filtre date
+                $previousInscriptions = $this->getInscriptionsWithCards($selectedSubStore, $selectedCampaign);
+                $previousActiveUsers = $this->getActiveUsersWithCards($selectedSubStore, $selectedCampaign);
+                $previousTransactions = $this->getTransactionsWithCards($selectedSubStore, $selectedCampaign);
 
                 // === DONNÉES GRAPHIQUES OPTIMISÉES ===
                 
@@ -233,10 +272,10 @@ class SubStoreController extends Controller
                 $topSubStores = $this->getOptimizedTopSubStores($selectedSubStore, $startDate, $endDate);
                 
                 // Distribution par catégorie optimisée
-                $categoryDistribution = $this->getOptimizedCategoryDistribution($selectedSubStore, $startDate, $endDate);
+                $categoryDistribution = $this->getOptimizedCategoryDistribution($selectedSubStore, $startDate, $endDate, $selectedCampaign);
                 
                 // Tendances d'inscription optimisées
-                $inscriptionTrends = $this->getOptimizedInscriptionTrends($selectedSubStore, $startDate, $endDate);
+                $inscriptionTrends = $this->getOptimizedInscriptionTrends($selectedSubStore, $startDate, $endDate, $selectedCampaign);
 
                 // === DONNÉES MERCHANT OPTIMISÉES ===
                 $merchantData = $this->getMerchantData($selectedSubStore, $startDate, $endDate, $comparisonStartDate, $comparisonEndDate);
@@ -307,8 +346,8 @@ class SubStoreController extends Controller
                 'categoryDistribution' => $categoryDistribution,
                 'inscriptionsTrend' => $inscriptionTrends,
                 'merchants' => $merchantData['merchants'],
-                'users_kpis' => $this->getUsersKPIs(Carbon::parse($startDate), Carbon::parse($endDate), Carbon::parse($comparisonStartDate), Carbon::parse($comparisonEndDate), $selectedSubStore),
-                'users' => $this->getUsersList(Carbon::parse($startDate), Carbon::parse($endDate)->endOfDay(), $selectedSubStore, 150),
+                'users_kpis' => $this->getUsersKPIs(Carbon::parse($startDate), Carbon::parse($endDate), Carbon::parse($comparisonStartDate), Carbon::parse($comparisonEndDate), $selectedSubStore, $selectedCampaign),
+                'users' => $this->getUsersList(Carbon::parse($startDate), Carbon::parse($endDate)->endOfDay(), $selectedSubStore, 150, $selectedCampaign),
                 'insights' => [
                         'positive' => ['Performance stable sur période longue', 'Conversion optimisée'],
                         'negative' => ['Données estimées pour période longue'],
@@ -337,20 +376,18 @@ class SubStoreController extends Controller
     {
         try {
             $query = DB::table('carte_recharge_client')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id');
-            $this->applySubStoreFilter($query)
-                ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now())
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $query->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now())
                 ->whereBetween('client_abonnement.client_abonnement_creation', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
                 ])
                 ->distinct();
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
 
             return $query->distinct('client.client_id')->count();
 
@@ -360,7 +397,7 @@ class SubStoreController extends Controller
         }
     }
 
-    private function getOptimizedTransactionsCohorte(string $selectedSubStore, string $startDate, string $endDate): int
+    private function getOptimizedTransactionsCohorte(string $selectedSubStore, string $startDate, string $endDate, string $selectedCampaign = 'ALL'): int
     {
         try {
             $query = DB::table('history')
@@ -368,14 +405,20 @@ class SubStoreController extends Controller
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id');
-            $this->applySubStoreFilter($query)
-                ->whereBetween('history.time', [
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $query->whereBetween('history.time', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
                 ]);
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => false]);
+            if ($this->normalizeCampaignFilter($selectedCampaign) !== 'ALL' && $this->isPluxeeSubStore($selectedSubStore)) {
+                $query->whereExists(function ($sub) use ($selectedCampaign) {
+                    $sub->select(DB::raw(1))
+                        ->from('carte_recharge_client as crc')
+                        ->join('carte_recharge as cr', 'crc.carte_recharge_id', '=', 'cr.carte_recharge_id')
+                        ->whereRaw('crc.client_id = client.client_id')
+                        ->where('cr.campain_name', $selectedCampaign);
+                });
             }
 
             return $query->distinct('history.history_id')->count();
@@ -386,22 +429,21 @@ class SubStoreController extends Controller
         }
     }
 
-    private function getOptimizedInscriptionsCohorte(string $selectedSubStore, string $startDate, string $endDate): int
+    private function getOptimizedInscriptionsCohorte(string $selectedSubStore, string $startDate, string $endDate, string $selectedCampaign = 'ALL'): int
     {
         try {
             $query = DB::table('carte_recharge_client')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id');
-            $this->applySubStoreFilter($query)
-                ->whereBetween('client.created_at', [
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $query->whereBetween('client.created_at', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
                 ])
                 ->distinct();
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+            $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
 
             return $query->distinct('client.client_id')->count();
 
@@ -429,6 +471,11 @@ class SubStoreController extends Controller
     private function getOptimizedTopSubStores(string $selectedSubStore, string $startDate, string $endDate): array
     {
         try {
+            // Pluxee : éviter LEFT JOIN stores × clients × EXISTS (timeout) — filtrer d'abord sur les cartes distributeur
+            if ($selectedSubStore !== 'ALL' && $this->isPluxeeSubStore($selectedSubStore)) {
+                return $this->getOptimizedTopSubStoresForPluxee($selectedSubStore);
+            }
+
             // Requête alignée sur le front : name, type, customers, transactions, manager
             $query = DB::table('stores')
                 ->leftJoin('client', 'client.sub_store', '=', 'stores.store_id')
@@ -446,10 +493,8 @@ class SubStoreController extends Controller
                 ->groupBy('stores.store_id', 'stores.store_name', 'stores.store_type', 'stores.store_manager_name')
                 ->orderByDesc('customers')
                 ->limit(15);
-            $this->applySubStoreFilter($query);
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', '%' . $selectedSubStore . '%');
-            }
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => false]);
             $results = $query->get();
 
             return $results->map(function ($item, $index) {
@@ -467,18 +512,67 @@ class SubStoreController extends Controller
         }
     }
 
-    private function getOptimizedCategoryDistribution(string $selectedSubStore, string $startDate, string $endDate): array
+    /**
+     * Classement des sub-stores (employeurs) pour les clients ayant une carte du distributeur Pluxee sélectionné.
+     */
+    private function getOptimizedTopSubStoresForPluxee(string $selectedSubStore): array
+    {
+        $storeId = $this->getPluxeeDistributorStoreId($selectedSubStore);
+        if (! $storeId) {
+            return [];
+        }
+
+        try {
+            $query = DB::table('stores')
+                ->join('client', 'client.sub_store', '=', 'stores.store_id')
+                ->join('carte_recharge_client', 'carte_recharge_client.client_id', '=', 'client.client_id')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+                ->leftJoin('client_abonnement', 'client_abonnement.client_id', '=', 'client.client_id')
+                ->leftJoin('history', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
+                ->where('stores.store_active', 1)
+                ->select(
+                    'stores.store_id',
+                    'stores.store_name',
+                    'stores.store_type',
+                    'stores.store_manager_name',
+                    DB::raw('COUNT(DISTINCT client.client_id) as customers'),
+                    DB::raw('COUNT(DISTINCT history.history_id) as transactions')
+                );
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $this->applyPluxeeStoresOrEmployerSubStore($query, 'carte_recharge.stores', $storeId, 'client');
+            $results = $query
+                ->groupBy('stores.store_id', 'stores.store_name', 'stores.store_type', 'stores.store_manager_name')
+                ->orderByDesc('customers')
+                ->limit(15)
+                ->get();
+
+            return $results->map(function ($item) {
+                return [
+                    'name' => $item->store_name ?? 'Non spécifié',
+                    'type' => $item->store_type ?? 'Non spécifié',
+                    'customers' => (int) $item->customers,
+                    'transactions' => (int) $item->transactions,
+                    'manager' => $item->store_manager_name ?? 'Non spécifié',
+                ];
+            })->toArray();
+        } catch (\Exception $e) {
+            Log::error('Erreur getOptimizedTopSubStoresForPluxee: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    private function getOptimizedCategoryDistribution(string $selectedSubStore, string $startDate, string $endDate, string $selectedCampaign = 'ALL'): array
     {
         try {
             // Utiliser la MÊME logique que le mode normal
-            return $this->getCategoryDistribution($startDate, $endDate, $selectedSubStore);
+            return $this->getCategoryDistribution($startDate, $endDate, $selectedSubStore, $selectedCampaign);
         } catch (\Exception $e) {
             Log::error("Erreur getOptimizedCategoryDistribution: " . $e->getMessage());
             return [];
         }
     }
 
-    private function getOptimizedInscriptionTrends(string $selectedSubStore, string $startDate, string $endDate): array
+    private function getOptimizedInscriptionTrends(string $selectedSubStore, string $startDate, string $endDate, string $selectedCampaign = 'ALL'): array
     {
         try {
             // Pour les longues périodes, agrégation par semaine/mois au lieu de jours
@@ -490,19 +584,18 @@ class SubStoreController extends Controller
                 ->select(DB::raw($groupBy . ' as period'), DB::raw('COUNT(client.client_id) as count'))
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ;
-            $this->applySubStoreFilter($query)
-                ->whereBetween('client.created_at', [
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $query->whereBetween('client.created_at', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
                 ])
                 ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->groupBy('period')
                 ->orderBy('period')
                 ->limit(20); // Limiter pour performance
-
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+            $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
 
             $results = $query->get();
 
@@ -529,60 +622,60 @@ class SubStoreController extends Controller
     /**
      * Récupérer les données depuis la base de données
      */
-    private function fetchSubStoreDashboardData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore = "ALL"): array
+    private function fetchSubStoreDashboardData(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore = "ALL", string $selectedCampaign = "ALL"): array
     {
         try {
             // === KPIs BASÉS SUR LES CARTES DE RECHARGE ===
             
             // 1. DISTRIBUÉ : Total des cartes de recharge pour le sub-store (sans filtre de date)
-            $distributed = $this->getDistributedCards($selectedSubStore);
+            $distributed = $this->getDistributedCards($selectedSubStore, $selectedCampaign);
             
             // 2. INSCRIPTIONS : Clients inscrits avec cartes de recharge (sans filtre de date)
-            $inscriptions = $this->getInscriptionsWithCards($selectedSubStore);
+            $inscriptions = $this->getInscriptionsWithCards($selectedSubStore, $selectedCampaign);
             
             // 3. ACTIVE USERS : Clients avec abonnements actifs + cartes de recharge (sans filtre de date)
-            $activeUsers = $this->getActiveUsersWithCards($selectedSubStore);
+            $activeUsers = $this->getActiveUsersWithCards($selectedSubStore, $selectedCampaign);
             
             // 4. ACTIVE USERS COHORTE : Clients avec abonnements actifs + cartes de recharge (avec filtre de date)
-            $activeUsersCohorte = $this->getActiveUsersWithCardsCohorte($selectedSubStore, $startDate, $endDate);
+            $activeUsersCohorte = $this->getActiveUsersWithCardsCohorte($selectedSubStore, $startDate, $endDate, $selectedCampaign);
 
             // 4bis. TOTAL ABONNEMENTS (toutes périodes)
-            $totalSubscriptions = Cache::remember("total_subscriptions_{$selectedSubStore}", 600, function() use ($selectedSubStore) {
-                return $this->getTotalSubscriptions($selectedSubStore);
+            $totalSubscriptions = Cache::remember("total_subscriptions_{$selectedSubStore}_{$selectedCampaign}", 600, function() use ($selectedSubStore, $selectedCampaign) {
+                return $this->getTotalSubscriptions($selectedSubStore, $selectedCampaign);
             });
 
             // 4ter. CARTES ACTIVÉES (sur la période sélectionnée) — getCardsActivated retourne un entier (nombre)
-            $renewalRate = Cache::remember("cards_activated_{$selectedSubStore}_{$startDate}_{$endDate}", 600, function() use ($selectedSubStore, $startDate, $endDate) {
-                return $this->getCardsActivated($selectedSubStore, $startDate, $endDate);
+            $renewalRate = Cache::remember("cards_activated_{$selectedSubStore}_{$selectedCampaign}_{$startDate}_{$endDate}", 600, function() use ($selectedSubStore, $startDate, $endDate, $selectedCampaign) {
+                return $this->getCardsActivated($selectedSubStore, $startDate, $endDate, $selectedCampaign);
             });
             
             // 5. TRANSACTIONS : Abonnements activés avec cartes de recharge (sans filtre de date)
-            $transactions = $this->getTransactionsWithCards($selectedSubStore);
+            $transactions = $this->getTransactionsWithCards($selectedSubStore, $selectedCampaign);
             
             // 6. TRANSACTIONS COHORTE : Abonnements activés avec cartes de recharge (avec filtre de date)
-            $transactionsCohorte = $this->getTransactionsWithCardsCohorte($selectedSubStore, $startDate, $endDate);
+            $transactionsCohorte = $this->getTransactionsWithCardsCohorte($selectedSubStore, $startDate, $endDate, $selectedCampaign);
             
             // 7. INSCRIPTIONS COHORTE : Clients inscrits avec cartes de recharge (avec filtre de date)
-            $inscriptionsCohorte = $this->getInscriptionsWithCardsCohorte($selectedSubStore, $startDate, $endDate);
+            $inscriptionsCohorte = $this->getInscriptionsWithCardsCohorte($selectedSubStore, $startDate, $endDate, $selectedCampaign);
             
             // 8. TAUX DE CONVERSION : (Inscriptions TOTAL / Distribué) * 100
             $conversionRate = $distributed > 0 ? round(($inscriptions / $distributed) * 100, 1) : 0;
             
             // === KPIs PÉRIODE DE COMPARAISON (même logique mais pour la période de comparaison) ===
             
-            $distributedComparison = $this->getDistributedCards($selectedSubStore); // Même valeur car sans filtre de date
-            $inscriptionsComparison = $this->getInscriptionsWithCards($selectedSubStore); // Même valeur car sans filtre de date
-            $activeUsersComparison = $this->getUsersWithCardsCount($selectedSubStore); // Utiliser les utilisateurs avec cartes (toutes périodes)
-            $transactionsComparison = $this->getTransactionsWithCards($selectedSubStore); // Même valeur car sans filtre de date
+            $distributedComparison = $this->getDistributedCards($selectedSubStore, $selectedCampaign); // Même valeur car sans filtre de date
+            $inscriptionsComparison = $this->getInscriptionsWithCards($selectedSubStore, $selectedCampaign); // Même valeur car sans filtre de date
+            $activeUsersComparison = $this->getUsersWithCardsCount($selectedSubStore, $selectedCampaign); // Utiliser les utilisateurs avec cartes (toutes périodes)
+            $transactionsComparison = $this->getTransactionsWithCards($selectedSubStore, $selectedCampaign); // Même valeur car sans filtre de date
             
             // Pour les KPIs avec filtre de date, on calcule pour la période de comparaison
-            $activeUsersCohorteComparison = $this->getUsersWithCardsCohorteCount($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
-            $transactionsCohorteComparison = $this->getTransactionsWithCardsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
-            $inscriptionsCohorteComparison = $this->getInscriptionsWithCardsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
+            $activeUsersCohorteComparison = $this->getUsersWithCardsCohorteCount($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
+            $transactionsCohorteComparison = $this->getTransactionsWithCardsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
+            $inscriptionsCohorteComparison = $this->getInscriptionsWithCardsCohorte($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
             
             $conversionRateComparison = $inscriptionsComparison > 0 ? round(($activeUsersComparison / $inscriptionsComparison) * 100, 1) : 0;
-            $totalSubscriptionsComparison = $this->getTotalSubscriptions($selectedSubStore);
-            $renewalRateComparison = $this->getCardsActivated($selectedSubStore, $comparisonStartDate, $comparisonEndDate);
+            $totalSubscriptionsComparison = $this->getTotalSubscriptions($selectedSubStore, $selectedCampaign);
+            $renewalRateComparison = $this->getCardsActivated($selectedSubStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
             
             // === CALCUL DES VARIATIONS ===
             
@@ -599,35 +692,21 @@ class SubStoreController extends Controller
             
             // === DONNÉES DES CATÉGORIES ===
             
-            $categoryDistribution = $this->getCategoryDistribution($startDate, $endDate, $selectedSubStore);
-            $inscriptionsTrend = $this->getInscriptionsTrend($startDate, $endDate, $selectedSubStore);
-            $expirationsByMonth = Cache::remember("expirations_by_month_{$selectedSubStore}", 600, function() use ($selectedSubStore) {
-                return $this->getExpirationsByMonth($selectedSubStore, 12);
+            $categoryDistribution = $this->getCategoryDistribution($startDate, $endDate, $selectedSubStore, $selectedCampaign);
+            $inscriptionsTrend = $this->getInscriptionsTrend($startDate, $endDate, $selectedSubStore, $selectedCampaign);
+            $expirationsByMonth = Cache::remember("expirations_by_month_{$selectedSubStore}_{$selectedCampaign}", 600, function() use ($selectedSubStore, $selectedCampaign) {
+                return $this->getExpirationsByMonth($selectedSubStore, 12, $selectedCampaign);
             });
             
-            // Supprimer le fallback: afficher vide si aucune donnée réelle
-            
-            // Si pas de données de tendance, créer des données de démonstration
-            if (empty($inscriptionsTrend)) {
-                $inscriptionsTrend = [];
-                for ($i = 6; $i >= 0; $i--) {
-                    $date = Carbon::now()->subDays($i);
-                    $inscriptionsTrend[] = [
-                        'date' => $date->format('d M'),
-                        'value' => rand(50, 200)
-                    ];
-                }
-            }
+            // Ne jamais injecter de données simulées : si vide, on laisse vide.
             
             $revenueComparisonQuery = DB::table("client_abonnement")
                 ->join("client", "client_abonnement.client_id", "=", "client.client_id")
                 ->join("stores", "client.sub_store", "=", "stores.store_id")
                 ->join("abonnement_tarifs", "client_abonnement.tarif_id", "=", "abonnement_tarifs.abonnement_tarifs_id");
-            $this->applySubStoreFilter($revenueComparisonQuery)
-                ->whereBetween("client_abonnement.client_abonnement_creation", [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()])
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
-                });
+            $this->applyEmployerStoreScope($revenueComparisonQuery, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($revenueComparisonQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $revenueComparisonQuery->whereBetween("client_abonnement.client_abonnement_creation", [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()]);
             
             $totalRevenueComparison = $revenueComparisonQuery->sum('abonnement_tarifs.abonnement_tarifs_prix');
             $estimatedRevenueComparison = $totalRevenueComparison * 0.1;
@@ -644,12 +723,10 @@ class SubStoreController extends Controller
                     DB::raw("COUNT(DISTINCT stores.store_id) as store_count"),
                     DB::raw("COUNT(DISTINCT client.client_id) as client_count")
                 );
-            $this->applySubStoreFilter($subStoreTypeQuery)
-                ->where("stores.store_active", 1)
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
-                })
-                ->groupBy("stores.store_type")
+            $this->applyEmployerStoreScope($subStoreTypeQuery, $selectedSubStore);
+            $subStoreTypeQuery->where("stores.store_active", 1);
+            $this->applySubStoreOrPluxeeFilter($subStoreTypeQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $subStoreTypeQuery->groupBy("stores.store_type")
                 ->orderBy("client_count", "desc");
             
             $subStoreTypeDistribution = $subStoreTypeQuery->get()
@@ -738,8 +815,10 @@ class SubStoreController extends Controller
                 "merchants" => $merchantData['merchants'],
                 "sub_stores" => $this->getOptimizedTopSubStores($selectedSubStore, $startDate, $endDate),
                 "insights" => $this->generateSubStoreInsights($inscriptions, $activeUsers, $transactions, $selectedSubStore),
-                "users_kpis" => $this->getUsersKPIs(Carbon::parse($startDate), Carbon::parse($endDate), Carbon::parse($comparisonStartDate), Carbon::parse($comparisonEndDate), $selectedSubStore),
-                "users" => $this->getUsersList(Carbon::parse($startDate), Carbon::parse($endDate)->endOfDay(), $selectedSubStore, 150),
+                "users_kpis" => $this->getUsersKPIs(Carbon::parse($startDate), Carbon::parse($endDate), Carbon::parse($comparisonStartDate), Carbon::parse($comparisonEndDate), $selectedSubStore, $selectedCampaign),
+                "users" => $this->getUsersList(Carbon::parse($startDate), Carbon::parse($endDate)->endOfDay(), $selectedSubStore, 150, $selectedCampaign),
+                "campaigns" => $this->getCampaignsForSubStore($selectedSubStore),
+                "selected_campaign" => $selectedCampaign,
                 "last_updated" => now()->toISOString(),
                 "data_source" => "database"
             ];
@@ -844,16 +923,16 @@ class SubStoreController extends Controller
     /**
      * Total cartes utilisées (toutes périodes) pour un sub-store
      */
-    private function getTotalSubscriptions(string $selectedSubStore): int
+    private function getTotalSubscriptions(string $selectedSubStore, string $selectedCampaign = 'ALL'): int
     {
         try {
             $query = DB::table('carte_recharge_client')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id');
-            $this->applySubStoreFilter($query);
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+            $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
             
             return (int) $query->count();
         } catch (\Exception $e) {
@@ -874,22 +953,18 @@ class SubStoreController extends Controller
             $expirationsQuery = DB::table('client_abonnement')
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id');
-            $this->applySubStoreFilter($expirationsQuery)
-                ->when($selectedSubStore !== 'ALL', function($q) use ($selectedSubStore) {
-                    $q->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-                })
-                ->whereBetween('client_abonnement.client_abonnement_expiration', [$startDate, Carbon::parse($endDate)->endOfDay()]);
+            $this->applyEmployerStoreScope($expirationsQuery, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($expirationsQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $expirationsQuery->whereBetween('client_abonnement.client_abonnement_expiration', [$startDate, Carbon::parse($endDate)->endOfDay()]);
             $expirations = $expirationsQuery->count();
 
             // Renouvellements: existence d'un autre abonnement créé après l'expiration dans la période
             $renewalsQuery = DB::table('client_abonnement as ca1')
                 ->join('client', 'ca1.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id');
-            $this->applySubStoreFilter($renewalsQuery)
-                ->when($selectedSubStore !== 'ALL', function($q) use ($selectedSubStore) {
-                    $q->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-                })
-                ->whereBetween('ca1.client_abonnement_expiration', [$startDate, Carbon::parse($endDate)->endOfDay()])
+            $this->applyEmployerStoreScope($renewalsQuery, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($renewalsQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $renewalsQuery->whereBetween('ca1.client_abonnement_expiration', [$startDate, Carbon::parse($endDate)->endOfDay()])
                 ->whereExists(function($sub) {
                     $sub->select(DB::raw(1))
                         ->from('client_abonnement as ca2')
@@ -913,7 +988,7 @@ class SubStoreController extends Controller
     /**
      * Expirations par mois sur N mois
      */
-    private function getExpirationsByMonth(string $selectedSubStore, int $months): array
+    private function getExpirationsByMonth(string $selectedSubStore, int $months, string $selectedCampaign = 'ALL'): array
     {
         try {
             $start = Carbon::now()->subMonths($months)->startOfMonth();
@@ -925,11 +1000,18 @@ class SubStoreController extends Controller
                     DB::raw("DATE_FORMAT(client_abonnement.client_abonnement_expiration, '%Y-%m') as ym"),
                     DB::raw('COUNT(*) as total')
                 );
-            $this->applySubStoreFilter($rowsQuery)
-                ->when($selectedSubStore !== 'ALL', function($q) use ($selectedSubStore) {
-                    $q->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-                })
-                ->whereBetween('client_abonnement.client_abonnement_expiration', [$start, $end])
+            $this->applyEmployerStoreScope($rowsQuery, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($rowsQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            if ($this->normalizeCampaignFilter($selectedCampaign) !== 'ALL' && $this->isPluxeeSubStore($selectedSubStore)) {
+                $rowsQuery->whereExists(function ($sub) use ($selectedCampaign) {
+                    $sub->select(DB::raw(1))
+                        ->from('carte_recharge_client')
+                        ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+                        ->whereRaw('carte_recharge_client.client_id = client.client_id')
+                        ->where('carte_recharge.campain_name', $selectedCampaign);
+                });
+            }
+            $rowsQuery->whereBetween('client_abonnement.client_abonnement_expiration', [$start, $end])
                 ->groupBy(DB::raw("DATE_FORMAT(client_abonnement.client_abonnement_expiration, '%Y-%m')"))
                 ->orderBy('ym');
             $rows = $rowsQuery->get();
@@ -949,7 +1031,7 @@ class SubStoreController extends Controller
     /**
      * Générer la clé de cache
      */
-    private function generateCacheKey(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore, int $userId): string
+    private function generateCacheKey(string $startDate, string $endDate, string $comparisonStartDate, string $comparisonEndDate, string $selectedSubStore, string $selectedCampaign, int $userId): string
     {
         $keyData = [
             'substore_data_v2',
@@ -958,6 +1040,7 @@ class SubStoreController extends Controller
             $comparisonStartDate,
             $comparisonEndDate,
             $selectedSubStore,
+            $selectedCampaign,
             $userId
         ];
         
@@ -971,7 +1054,7 @@ class SubStoreController extends Controller
     /**
      * Récupérer la distribution des catégories basée sur les marchands utilisés par les utilisateurs actifs
      */
-    private function getCategoryDistribution(string $startDate, string $endDate, string $selectedSubStore): array
+    private function getCategoryDistribution(string $startDate, string $endDate, string $selectedSubStore, string $selectedCampaign = 'ALL'): array
     {
         try {
             // Récupérer les catégories des marchands où les utilisateurs ont effectué des transactions
@@ -987,11 +1070,18 @@ class SubStoreController extends Controller
                     "partner_category.partner_category_name",
                     DB::raw("COUNT(DISTINCT history.history_id) as utilizations")
                 );
-            $this->applySubStoreFilter($categoriesQuery)
-                ->where("stores.store_active", 1)
-                ->whereBetween("history.time", [$startDate, Carbon::parse($endDate)->endOfDay()])
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
+            $this->applyEmployerStoreScope($categoriesQuery, $selectedSubStore);
+            $categoriesQuery->where("stores.store_active", 1)
+                ->whereBetween("history.time", [$startDate, Carbon::parse($endDate)->endOfDay()]);
+            $this->applySubStoreOrPluxeeFilter($categoriesQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $categoriesQuery->when($this->normalizeCampaignFilter($selectedCampaign) !== 'ALL' && $this->isPluxeeSubStore($selectedSubStore), function($query) use ($selectedCampaign) {
+                    return $query->whereExists(function($sub) use ($selectedCampaign) {
+                        $sub->select(DB::raw(1))
+                            ->from('carte_recharge_client as crc')
+                            ->join('carte_recharge as cr', 'crc.carte_recharge_id', '=', 'cr.carte_recharge_id')
+                            ->whereRaw('crc.client_id = client.client_id')
+                            ->where('cr.campain_name', $selectedCampaign);
+                    });
                 })
                 ->groupBy("partner_category.partner_category_name")
                 ->orderBy("utilizations", "desc");
@@ -1017,7 +1107,7 @@ class SubStoreController extends Controller
     /**
      * Récupérer la tendance des inscriptions basée sur les cartes de recharge (par mois)
      */
-    private function getInscriptionsTrend(string $startDate, string $endDate, string $selectedSubStore): array
+    private function getInscriptionsTrend(string $startDate, string $endDate, string $selectedSubStore, string $selectedCampaign = 'ALL'): array
     {
         try {
             // Élargir la période pour avoir plusieurs mois de données
@@ -1025,16 +1115,18 @@ class SubStoreController extends Controller
             $extendedEndDate = Carbon::parse($endDate)->endOfMonth()->format('Y-m-d');
             
             $trendQuery = DB::table("carte_recharge_client")
+                ->join("carte_recharge", "carte_recharge_client.carte_recharge_id", "=", "carte_recharge.carte_recharge_id")
                 ->join("client", "carte_recharge_client.client_id", "=", "client.client_id")
                 ->join("stores", "client.sub_store", "=", "stores.store_id")
                 ->select(
                     DB::raw("DATE_FORMAT(client.created_at, '%Y-%m') as month"),
                     DB::raw("COUNT(DISTINCT client.client_id) as value")
                 );
-            $this->applySubStoreFilter($trendQuery)
-                ->whereBetween("client.created_at", [$extendedStartDate, Carbon::parse($extendedEndDate)->endOfDay()])
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
+            $this->applyEmployerStoreScope($trendQuery, $selectedSubStore);
+            $trendQuery->whereBetween("client.created_at", [$extendedStartDate, Carbon::parse($extendedEndDate)->endOfDay()]);
+            $this->applySubStoreOrPluxeeFilter($trendQuery, $selectedSubStore, ['has_carte_recharge' => true]);
+            $trendQuery->when($this->normalizeCampaignFilter($selectedCampaign) !== 'ALL' && $this->isPluxeeSubStore($selectedSubStore), function($query) use ($selectedCampaign) {
+                    return $query->where('carte_recharge.campain_name', $selectedCampaign);
                 })
                 ->groupBy(DB::raw("DATE_FORMAT(client.created_at, '%Y-%m')"))
                 ->orderBy("month");
@@ -1248,18 +1340,17 @@ class SubStoreController extends Controller
             $dateFormat = $granularity === 'month' ? '%Y-%m' : ($granularity === 'week' ? '%Y-%u' : '%Y-%m-%d');
             
             $trendQuery = DB::table("carte_recharge_client")
+                ->join("carte_recharge", "carte_recharge_client.carte_recharge_id", "=", "carte_recharge.carte_recharge_id")
                 ->join("client", "carte_recharge_client.client_id", "=", "client.client_id")
                 ->join("stores", "client.sub_store", "=", "stores.store_id")
                 ->select(
                     DB::raw("DATE_FORMAT(client.created_at, '$dateFormat') as period"),
                     DB::raw("COUNT(DISTINCT client.client_id) as value")
                 );
-            $this->applySubStoreFilter($trendQuery)
-                ->whereBetween("client.created_at", [$startDate, Carbon::parse($endDate)->endOfDay()])
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
-                })
-                ->groupBy(DB::raw("DATE_FORMAT(client.created_at, '$dateFormat')"))
+            $this->applyEmployerStoreScope($trendQuery, $selectedSubStore);
+            $trendQuery->whereBetween("client.created_at", [$startDate, Carbon::parse($endDate)->endOfDay()]);
+            $this->applySubStoreOrPluxeeFilter($trendQuery, $selectedSubStore, ['has_carte_recharge' => true]);
+            $trendQuery->groupBy(DB::raw("DATE_FORMAT(client.created_at, '$dateFormat')"))
                 ->orderBy("period");
             $trend = $trendQuery->get();
 
@@ -1306,12 +1397,12 @@ class SubStoreController extends Controller
      * 1. DISTRIBUÉ : Total des cartes de recharge pour le sub-store (sans filtre de date)
      * Ne compte que les cartes qui ont été utilisées au moins une fois par campagne
      */
-    private function getDistributedCards(string $selectedSubStore): int
+    private function getDistributedCards(string $selectedSubStore, string $selectedCampaign = 'ALL'): int
     {
         try {
             // Cache individuel pour cette méthode (5 minutes)
-            $cacheKey = "distributed_cards_{$selectedSubStore}";
-            return Cache::remember($cacheKey, 300, function() use ($selectedSubStore) {
+            $cacheKey = "distributed_cards_{$selectedSubStore}_{$selectedCampaign}";
+            return Cache::remember($cacheKey, 300, function() use ($selectedSubStore, $selectedCampaign) {
                 if ($selectedSubStore === 'ALL') {
                     // Compter TOUTES les cartes des campagnes qui ont au moins une carte utilisée
                     return DB::table('carte_recharge')
@@ -1322,29 +1413,63 @@ class SubStoreController extends Controller
                                 ->join('carte_recharge_client', 'cr2.carte_recharge_id', '=', 'carte_recharge_client.carte_recharge_id')
                                 ->whereNotNull('cr2.campain_name');
                         })
-                        ->count();
-                } else {
-                    // Pour un sub-store spécifique, compter toutes les cartes assignées à ce sub-store
-                    $storeId = $this->getStoreIdByName($selectedSubStore);
-                    if (!$storeId) return 0;
-                    
-                    $totalCards = DB::table('carte_recharge')
-                        ->where('stores', 'LIKE', "%$storeId%")
-                        ->whereNotNull('campain_name')
-                        ->whereIn('campain_name', function($query) use ($storeId) {
-                            $query->select('campain_name')
-                                ->from('carte_recharge as cr2')
-                                ->join('carte_recharge_client', 'cr2.carte_recharge_id', '=', 'carte_recharge_client.carte_recharge_id')
-                                ->where('cr2.stores', 'LIKE', "%$storeId%")
-                                ->whereNotNull('cr2.campain_name');
+                        ->when($this->normalizeCampaignFilter($selectedCampaign) !== 'ALL', function($query) use ($selectedCampaign) {
+                            $query->where('campain_name', $selectedCampaign);
                         })
                         ->count();
-                    
+                } else {
+                    // Sub-store classique : stores via client ; Pluxee : distributeur dans carte_recharge.stores
+                    $storeId = $this->isPluxeeSubStore($selectedSubStore)
+                        ? $this->getPluxeeDistributorStoreId($selectedSubStore)
+                        : $this->getStoreIdByName($selectedSubStore);
+                    if (! $storeId) {
+                        return 0;
+                    }
+
+                    $distributedQuery = DB::table('carte_recharge');
+                    if ($this->isPluxeeSubStore($selectedSubStore) && config('substore.pluxee_fallback_employer_sub_store', true)) {
+                        // IN (sous-requête) plutôt qu’EXISTS corrélé : évite un scan par ligne sur gros volumes
+                        $distributedQuery->where(function ($w) use ($storeId) {
+                            $w->where(function ($x) use ($storeId) {
+                                $this->addWhereStoresColumnContainsStoreId($x, 'carte_recharge.stores', $storeId);
+                            });
+                            $w->orWhereIn('carte_recharge.carte_recharge_id', function ($sub) use ($storeId) {
+                                $sub->select('crc.carte_recharge_id')
+                                    ->from('carte_recharge_client as crc')
+                                    ->join('client as cl', 'cl.client_id', '=', 'crc.client_id')
+                                    ->where('cl.sub_store', $storeId);
+                            });
+                        });
+                    } else {
+                        $this->addWhereStoresColumnContainsStoreId($distributedQuery, 'carte_recharge.stores', $storeId);
+                    }
+                    $totalCards = (int) $distributedQuery->whereNotNull('campain_name')
+                        ->when($this->normalizeCampaignFilter($selectedCampaign) !== 'ALL', function ($query) use ($selectedCampaign) {
+                            $query->where('campain_name', $selectedCampaign);
+                        })
+                        ->whereIn('campain_name', function ($query) use ($storeId, $selectedSubStore) {
+                            $query->select('cr2.campain_name')
+                                ->from('carte_recharge as cr2')
+                                ->join('carte_recharge_client', 'cr2.carte_recharge_id', '=', 'carte_recharge_client.carte_recharge_id')
+                                ->whereNotNull('cr2.campain_name');
+                            if ($this->isPluxeeSubStore($selectedSubStore) && config('substore.pluxee_fallback_employer_sub_store', true)) {
+                                $query->join('client as cl2', 'carte_recharge_client.client_id', '=', 'cl2.client_id')
+                                    ->where(function ($w) use ($storeId) {
+                                        $w->where(function ($x) use ($storeId) {
+                                            $this->addWhereStoresColumnContainsStoreId($x, 'cr2.stores', $storeId);
+                                        })->orWhere('cl2.sub_store', $storeId);
+                                    });
+                            } else {
+                                $this->addWhereStoresColumnContainsStoreId($query, 'cr2.stores', $storeId);
+                            }
+                        })
+                        ->count();
+
                     // Exceptionnellement, soustraire 600 cartes pour Sofrecom (erreur d'activation)
                     if ($selectedSubStore === 'Sofrecom') {
                         $totalCards = max(0, $totalCards - 600);
                     }
-                    
+
                     return $totalCards;
                 }
             });
@@ -1357,21 +1482,20 @@ class SubStoreController extends Controller
     /**
      * 2. INSCRIPTIONS : Clients inscrits avec cartes de recharge (sans filtre de date)
      */
-    private function getInscriptionsWithCards(string $selectedSubStore): int
+    private function getInscriptionsWithCards(string $selectedSubStore, string $selectedCampaign = 'ALL'): int
     {
         try {
             // Cache individuel pour cette méthode (10 minutes)
-            $cacheKey = "inscriptions_cards_{$selectedSubStore}";
-            return Cache::remember($cacheKey, 600, function() use ($selectedSubStore) {
+            $cacheKey = "inscriptions_cards_{$selectedSubStore}_{$selectedCampaign}";
+            return Cache::remember($cacheKey, 600, function() use ($selectedSubStore, $selectedCampaign) {
                 $query = DB::table('carte_recharge_client')
+                    ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                     ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                     ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                     ;
-            $this->applySubStoreFilter($query);
-                
-                if ($selectedSubStore !== 'ALL') {
-                    $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
-                }
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+                $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+                $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
                 
                 return $query->distinct('client.client_id')->count();
             });
@@ -1384,23 +1508,22 @@ class SubStoreController extends Controller
     /**
      * 3. ACTIVE USERS : Clients avec abonnements actifs + cartes de recharge (sans filtre de date)
      */
-    private function getActiveUsersWithCards(string $selectedSubStore): int
+    private function getActiveUsersWithCards(string $selectedSubStore, string $selectedCampaign = 'ALL'): int
     {
         try {
             // Cache individuel pour cette méthode (10 minutes)
-            $cacheKey = "active_users_cards_{$selectedSubStore}";
-            return Cache::remember($cacheKey, 600, function() use ($selectedSubStore) {
+            $cacheKey = "active_users_cards_{$selectedSubStore}_{$selectedCampaign}";
+            return Cache::remember($cacheKey, 600, function() use ($selectedSubStore, $selectedCampaign) {
                 $query = DB::table('carte_recharge_client')
+                    ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                     ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                     ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                     ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
                     ;
-            $this->applySubStoreFilter($query)
-                    ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now());
-                
-                if ($selectedSubStore !== 'ALL') {
-                    $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
-                }
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+                $query->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now());
+                $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+                $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
                 
                 return $query->distinct('client.client_id')->count();
             });
@@ -1413,21 +1536,20 @@ class SubStoreController extends Controller
     /**
      * 4. ACTIVE USERS COHORTE : Clients avec abonnements actifs + cartes de recharge (avec filtre de date)
      */
-    private function getActiveUsersWithCardsCohorte(string $selectedSubStore, string $startDate, string $endDate): int
+    private function getActiveUsersWithCardsCohorte(string $selectedSubStore, string $startDate, string $endDate, string $selectedCampaign = 'ALL'): int
     {
         try {
             $query = DB::table('carte_recharge_client')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
                 ;
-            $this->applySubStoreFilter($query)
-                ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now())
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $query->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now())
                 ->whereBetween('client_abonnement.client_abonnement_creation', [$startDate, Carbon::parse($endDate)->endOfDay()]);
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+            $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
             
             return $query->distinct('client.client_id')->count();
         } catch (\Exception $e) {
@@ -1440,12 +1562,12 @@ class SubStoreController extends Controller
      * 5. TRANSACTIONS : Nombre de lignes de history liées aux abonnements des clients sub-store (sans filtre de date)
      * Chaque ligne de history = 1 transaction réelle (achat/utilisation chez un partenaire)
      */
-    private function getTransactionsWithCards(string $selectedSubStore): int
+    private function getTransactionsWithCards(string $selectedSubStore, string $selectedCampaign = 'ALL'): int
     {
         try {
             // Cache individuel pour cette méthode (10 minutes)
-            $cacheKey = "transactions_cards_{$selectedSubStore}";
-            return Cache::remember($cacheKey, 600, function() use ($selectedSubStore) {
+            $cacheKey = "transactions_cards_{$selectedSubStore}_{$selectedCampaign}";
+            return Cache::remember($cacheKey, 600, function() use ($selectedSubStore, $selectedCampaign) {
                 $query = DB::table('history')
                     ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
                     ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
@@ -1457,10 +1579,16 @@ class SubStoreController extends Controller
                             ->whereRaw('carte_recharge_client.client_id = client.client_id');
                     })
                     ;
-            $this->applySubStoreFilter($query);
-                
-                if ($selectedSubStore !== 'ALL') {
-                    $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+                $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => false]);
+                if ($this->normalizeCampaignFilter($selectedCampaign) !== 'ALL' && $this->isPluxeeSubStore($selectedSubStore)) {
+                    $query->whereExists(function($sub) use ($selectedCampaign) {
+                        $sub->select(DB::raw(1))
+                            ->from('carte_recharge_client as crc')
+                            ->join('carte_recharge as cr', 'crc.carte_recharge_id', '=', 'cr.carte_recharge_id')
+                            ->whereRaw('crc.client_id = client.client_id')
+                            ->where('cr.campain_name', $selectedCampaign);
+                    });
                 }
                 
                 return $query->distinct('history.history_id')->count();
@@ -1474,7 +1602,7 @@ class SubStoreController extends Controller
     /**
      * 6. TRANSACTIONS COHORTE : Lignes de history (avec filtre de date)
      */
-    private function getTransactionsWithCardsCohorte(string $selectedSubStore, string $startDate, string $endDate): int
+    private function getTransactionsWithCardsCohorte(string $selectedSubStore, string $startDate, string $endDate, string $selectedCampaign = 'ALL'): int
     {
         try {
             // Compter toutes les transactions dans history pour les clients du sub-store (cohérent avec le tableau merchants)
@@ -1483,11 +1611,17 @@ class SubStoreController extends Controller
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('carte_recharge_client', 'client.client_id', '=', 'carte_recharge_client.client_id')
                 ;
-            $this->applySubStoreFilter($query)
-                ->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()]);
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $query->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()]);
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => false]);
+            if ($this->normalizeCampaignFilter($selectedCampaign) !== 'ALL' && $this->isPluxeeSubStore($selectedSubStore)) {
+                $query->whereExists(function($sub) use ($selectedCampaign) {
+                    $sub->select(DB::raw(1))
+                        ->from('carte_recharge_client as crc')
+                        ->join('carte_recharge as cr', 'crc.carte_recharge_id', '=', 'cr.carte_recharge_id')
+                        ->whereRaw('crc.client_id = client.client_id')
+                        ->where('cr.campain_name', $selectedCampaign);
+                });
             }
             
             return $query->count();
@@ -1500,19 +1634,18 @@ class SubStoreController extends Controller
     /**
      * 7. INSCRIPTIONS COHORTE : Clients inscrits avec cartes de recharge (avec filtre de date)
      */
-    private function getInscriptionsWithCardsCohorte(string $selectedSubStore, string $startDate, string $endDate): int
+    private function getInscriptionsWithCardsCohorte(string $selectedSubStore, string $startDate, string $endDate, string $selectedCampaign = 'ALL'): int
     {
         try {
             $query = DB::table('carte_recharge_client')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ;
-            $this->applySubStoreFilter($query)
-                ->whereBetween('client.created_at', [$startDate, Carbon::parse($endDate)->endOfDay()]);
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $query->whereBetween('client.created_at', [$startDate, Carbon::parse($endDate)->endOfDay()]);
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+            $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
             
             return $query->distinct('client.client_id')->count();
         } catch (\Exception $e) {
@@ -1540,6 +1673,94 @@ class SubStoreController extends Controller
     }
 
     /**
+     * ID du distributeur Pluxee (carte_recharge.stores) — sans filtre is_sub_store :
+     * en base, le distributeur peut ne pas être marqué sub-store alors qu'il apparaît dans le backoffice.
+     */
+    private function getPluxeeDistributorStoreId(string $selectedSubStore): ?int
+    {
+        if (! $this->isPluxeeSubStore($selectedSubStore)) {
+            return null;
+        }
+        try {
+            foreach (config('substore.pluxee_distributor_store_ids', [61]) as $knownId) {
+                if ($knownId <= 0) {
+                    continue;
+                }
+                if (DB::table('stores')->where('store_id', $knownId)->exists()) {
+                    return $knownId;
+                }
+            }
+
+            $trimmed = trim($selectedSubStore);
+            $store = DB::table('stores')
+                ->where('store_name', $trimmed)
+                ->where('store_active', 1)
+                ->first();
+            if (! $store) {
+                $store = DB::table('stores')
+                    ->where('store_name', 'LIKE', '%' . $trimmed . '%')
+                    ->where('store_active', 1)
+                    ->orderByRaw('CHAR_LENGTH(store_name) ASC')
+                    ->first();
+            }
+            if (! $store) {
+                $store = DB::table('stores')->where('store_name', $trimmed)->first();
+            }
+            if (! $store) {
+                $store = DB::table('stores')
+                    ->where('store_name', 'LIKE', '%' . $trimmed . '%')
+                    ->orderByRaw('CHAR_LENGTH(store_name) ASC')
+                    ->first();
+            }
+            return $store ? (int) $store->store_id : null;
+        } catch (\Exception $e) {
+            Log::error('Erreur getPluxeeDistributorStoreId: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * La colonne carte_recharge.stores contient l'ID (seul, CSV, espaces).
+     */
+    private function addWhereStoresColumnContainsStoreId($query, string $columnSql, int $storeId): void
+    {
+        $sid = (string) $storeId;
+        $query->where(function ($q) use ($columnSql, $storeId, $sid) {
+            $normalized = "REPLACE(REPLACE({$columnSql}, ', ', ','), ' ', '')";
+            $q->whereRaw("{$columnSql} = ?", [$sid])
+                ->orWhereRaw("FIND_IN_SET(?, {$normalized}) > 0", [$storeId])
+                ->orWhereRaw("{$columnSql} LIKE ?", [$sid . ',%'])
+                ->orWhereRaw("{$columnSql} LIKE ?", ['%,' . $sid . ',%'])
+                ->orWhereRaw("{$columnSql} LIKE ?", ['%,' . $sid]);
+            if (config('substore.pluxee_match_json_stores', false)) {
+                $q->orWhereRaw(
+                    "(JSON_VALID({$columnSql}) AND (JSON_CONTAINS(CAST({$columnSql} AS JSON), CAST(? AS JSON), '$') OR JSON_CONTAINS(CAST({$columnSql} AS JSON), JSON_QUOTE(?), '$')))",
+                    [$storeId, $sid]
+                );
+            }
+        });
+    }
+
+    /**
+     * Pluxee : ligne liée au distributeur si carte_recharge.stores contient l’ID OU (option) client.sub_store = ID.
+     */
+    private function applyPluxeeStoresOrEmployerSubStore($query, string $storesColumn, int $storeId, string $clientTable = 'client'): void
+    {
+        if (! config('substore.pluxee_fallback_employer_sub_store', true)) {
+            $this->addWhereStoresColumnContainsStoreId($query, $storesColumn, $storeId);
+
+            return;
+        }
+
+        $query->where(function ($w) use ($storesColumn, $storeId, $clientTable) {
+            $w->where(function ($x) use ($storesColumn, $storeId) {
+                $this->addWhereStoresColumnContainsStoreId($x, $storesColumn, $storeId);
+            });
+            $w->orWhere("{$clientTable}.sub_store", $storeId);
+        });
+    }
+
+    /**
      * Récupérer le top des sub-stores optimisé (basé sur les cartes de recharge)
      */
     private function getOptimizedTopSubStoresOld(string $startDate, string $endDate, string $selectedSubStore): array
@@ -1560,12 +1781,11 @@ class SubStoreController extends Controller
                     DB::raw("COUNT(DISTINCT history.history_id) as total_transactions"),
                     DB::raw("COUNT(DISTINCT client.client_id) as total_customers"),
                     DB::raw("COUNT(DISTINCT carte_recharge.carte_recharge_id) as distributed_cards")
-                )
-                ;
-            $this->applySubStoreFilter($query)
-                ->where("stores.store_active", 1)
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
+                );
+            $this->applyEmployerStoreScope($topStores, $selectedSubStore);
+            $topStores->where("stores.store_active", 1)
+                ->when($selectedSubStore !== 'ALL', function ($q) use ($selectedSubStore) {
+                    return $q->where("stores.store_name", "LIKE", "%" . $selectedSubStore . "%");
                 })
                 ->groupBy("stores.store_id", "stores.store_name", "stores.store_type", "stores.store_manager_name")
                 ->orderByDesc("active_users")
@@ -1613,11 +1833,9 @@ class SubStoreController extends Controller
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('promotion', 'history.promotion_id', '=', 'promotion.promotion_id')
                 ->join('partner', 'promotion.partner_id', '=', 'partner.partner_id');
-            $this->applySubStoreFilter($activeMerchantsQuery)
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
-                })
-                ->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()])
+            $this->applyEmployerStoreScope($activeMerchantsQuery, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($activeMerchantsQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $activeMerchantsQuery->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()])
                 ->distinct();
             $activeMerchants = $activeMerchantsQuery->count('partner.partner_id');
             
@@ -1628,11 +1846,9 @@ class SubStoreController extends Controller
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('promotion', 'history.promotion_id', '=', 'promotion.promotion_id')
                 ->join('partner', 'promotion.partner_id', '=', 'partner.partner_id');
-            $this->applySubStoreFilter($activeMerchantsComparisonQuery)
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
-                })
-                ->whereBetween('history.time', [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()])
+            $this->applyEmployerStoreScope($activeMerchantsComparisonQuery, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($activeMerchantsComparisonQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $activeMerchantsComparisonQuery->whereBetween('history.time', [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()])
                 ->distinct();
             $activeMerchantsComparison = $activeMerchantsComparisonQuery->count('partner.partner_id');
             
@@ -1662,11 +1878,9 @@ class SubStoreController extends Controller
                     'partner_category.partner_category_name',
                     DB::raw('COUNT(history.history_id) as transactions_count')
                 );
-            $this->applySubStoreFilter($allMerchantsQuery)
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
-                })
-                ->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()])
+            $this->applyEmployerStoreScope($allMerchantsQuery, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($allMerchantsQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $allMerchantsQuery->whereBetween('history.time', [$startDate, Carbon::parse($endDate)->endOfDay()])
                 ->groupBy('partner.partner_id', 'partner.partner_name', 'partner_category.partner_category_name')
                 ->orderByDesc('transactions_count');
             
@@ -1688,11 +1902,9 @@ class SubStoreController extends Controller
                     'partner.partner_id',
                     DB::raw('COUNT(history.history_id) as transactions_count')
                 );
-            $this->applySubStoreFilter($merchantsComparisonQuery)
-                ->when($selectedSubStore !== 'ALL', function($query) use ($selectedSubStore) {
-                    return $query->where('stores.store_name', 'LIKE', "%$selectedSubStore%");
-                })
-                ->whereBetween('history.time', [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()])
+            $this->applyEmployerStoreScope($merchantsComparisonQuery, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($merchantsComparisonQuery, $selectedSubStore, ['has_carte_recharge' => false]);
+            $merchantsComparisonQuery->whereBetween('history.time', [$comparisonStartDate, Carbon::parse($comparisonEndDate)->endOfDay()])
                 ->groupBy('partner.partner_id')
                 ->orderByDesc('transactions_count');
             
@@ -1831,13 +2043,14 @@ class SubStoreController extends Controller
      */
     public function getUsersData(Request $request)
     {
-        set_time_limit(90); // éviter timeout 30s sur getUsersList
+        set_time_limit(120); // éviter timeout 30s sur requêtes Pluxee / getUsersList
         try {
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
             $comparisonStartDate = $request->input('comparison_start_date');
             $comparisonEndDate = $request->input('comparison_end_date');
             $subStore = $request->input('sub_store', 'ALL');
+            $selectedCampaign = $this->normalizeCampaignFilter($request->input('campaign', 'ALL'));
 
             // Validation des dates
             if (!$startDate || !$endDate) {
@@ -1858,12 +2071,12 @@ class SubStoreController extends Controller
             }
 
         // Cache key basé sur les paramètres (après éventuel plafonnement)
-        $cacheKey = "users_data_{$subStore}_{$startDateObj->format('Y-m-d')}_{$endDateObj->format('Y-m-d')}";
+        $cacheKey = "users_data_{$subStore}_{$selectedCampaign}_{$startDateObj->format('Y-m-d')}_{$endDateObj->format('Y-m-d')}";
         
         // Mise en cache des données (tableau uniquement), pas de Response
-        $payload = Cache::remember($cacheKey, 300, function () use ($startDateObj, $endDateObj, $comparisonStartDateObj, $comparisonEndDateObj, $subStore) {
-            $usersData = $this->getUsersKPIs($startDateObj, $endDateObj, $comparisonStartDateObj, $comparisonEndDateObj, $subStore);
-            $usersList = $this->getUsersList($startDateObj, $endDateObj, $subStore);
+        $payload = Cache::remember($cacheKey, 300, function () use ($startDateObj, $endDateObj, $comparisonStartDateObj, $comparisonEndDateObj, $subStore, $selectedCampaign) {
+            $usersData = $this->getUsersKPIs($startDateObj, $endDateObj, $comparisonStartDateObj, $comparisonEndDateObj, $subStore, $selectedCampaign);
+            $usersList = $this->getUsersList($startDateObj, $endDateObj, $subStore, null, $selectedCampaign);
             return [
                 'kpis' => $usersData,
                 'users' => $usersList,
@@ -1891,16 +2104,16 @@ class SubStoreController extends Controller
     /**
      * Récupérer les KPIs des utilisateurs
      */
-    private function getUsersKPIs($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $subStore)
+    private function getUsersKPIs($startDate, $endDate, $comparisonStartDate, $comparisonEndDate, $subStore, string $selectedCampaign = 'ALL')
     {
         // Utiliser les mêmes méthodes que la vue d'ensemble pour garantir la cohérence
-        $totalUsers = $this->getInscriptionsWithCards($subStore); // INSCRIPTIONS
-        $activeUsers = $this->getUsersWithCardsCount($subStore); // ACTIVE USERS = utilisateurs avec cartes (cohérent avec le tableau)
-        $activeUsersCohorte = $this->getUsersWithCardsCohorteCount($subStore, $startDate, $endDate); // ACTIVE USERS (période)
-        $totalTransactions = $this->getTransactionsWithCards($subStore); // TRANSACTIONS (toutes périodes)
-        $totalTransactionsCohorte = $this->getTransactionsWithCardsCohorte($subStore, $startDate, $endDate); // TRANSACTIONS (période)
-        $totalSubscriptions = $this->getTotalSubscriptions($subStore); // ABONNEMENTS (toutes périodes)
-        $newUsers = $this->getCardsActivated($subStore, $startDate, $endDate); // CARTES ACTIVÉES (période)
+        $totalUsers = $this->getInscriptionsWithCards($subStore, $selectedCampaign); // INSCRIPTIONS
+        $activeUsers = $this->getUsersWithCardsCount($subStore, $selectedCampaign); // ACTIVE USERS = utilisateurs avec cartes (cohérent avec le tableau)
+        $activeUsersCohorte = $this->getUsersWithCardsCohorteCount($subStore, $startDate, $endDate, $selectedCampaign); // ACTIVE USERS (période)
+        $totalTransactions = $this->getTransactionsWithCards($subStore, $selectedCampaign); // TRANSACTIONS (toutes périodes)
+        $totalTransactionsCohorte = $this->getTransactionsWithCardsCohorte($subStore, $startDate, $endDate, $selectedCampaign); // TRANSACTIONS (période)
+        $totalSubscriptions = $this->getTotalSubscriptions($subStore, $selectedCampaign); // ABONNEMENTS (toutes périodes)
+        $newUsers = $this->getCardsActivated($subStore, $startDate, $endDate, $selectedCampaign); // CARTES ACTIVÉES (période)
         
         // Calculs dérivés - utiliser activeUsers (toutes périodes) pour la cohérence
         $avgTransactionsPerUser = $activeUsers > 0 ? round($totalTransactions / $activeUsers, 2) : 0;
@@ -1909,12 +2122,12 @@ class SubStoreController extends Controller
         // Données de comparaison si disponibles
         $comparisonData = [];
         if ($comparisonStartDate && $comparisonEndDate) {
-            $comparisonActiveUsers = $this->getUsersWithCardsCount($subStore); // Même valeur car sans filtre de date
-            $comparisonActiveUsersCohorte = $this->getUsersWithCardsCohorteCount($subStore, $comparisonStartDate, $comparisonEndDate);
-            $comparisonTotalTransactions = $this->getTransactionsWithCards($subStore); // Même valeur car sans filtre de date
-            $comparisonTotalTransactionsCohorte = $this->getTransactionsWithCardsCohorte($subStore, $comparisonStartDate, $comparisonEndDate);
-            $comparisonTotalSubscriptions = $this->getTotalSubscriptions($subStore); // Même valeur car sans filtre de date
-            $comparisonNewUsers = $this->getCardsActivated($subStore, $comparisonStartDate, $comparisonEndDate);
+            $comparisonActiveUsers = $this->getUsersWithCardsCount($subStore, $selectedCampaign); // Même valeur car sans filtre de date
+            $comparisonActiveUsersCohorte = $this->getUsersWithCardsCohorteCount($subStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
+            $comparisonTotalTransactions = $this->getTransactionsWithCards($subStore, $selectedCampaign); // Même valeur car sans filtre de date
+            $comparisonTotalTransactionsCohorte = $this->getTransactionsWithCardsCohorte($subStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
+            $comparisonTotalSubscriptions = $this->getTotalSubscriptions($subStore, $selectedCampaign); // Même valeur car sans filtre de date
+            $comparisonNewUsers = $this->getCardsActivated($subStore, $comparisonStartDate, $comparisonEndDate, $selectedCampaign);
             
             $comparisonData = [
                 'totalUsers' => $totalUsers, // Même valeur car sans filtre de date
@@ -1977,10 +2190,11 @@ class SubStoreController extends Controller
      * Récupérer la liste des utilisateurs (Top Users Performance).
      * @param int|null $limit Si défini, limite le nombre de lignes et n'exécute pas les requêtes cartes par utilisateur (évite N+1 et timeout).
      */
-    private function getUsersList($startDate, $endDate, $subStore, $limit = null)
+    private function getUsersList($startDate, $endDate, $subStore, $limit = null, string $selectedCampaign = 'ALL')
     {
-        Log::info("=== DÉBUT getUsersList pour subStore: $subStore" . ($limit ? " (limit $limit)" : '') . " ===");
+        Log::debug('getUsersList', ['sub_store' => $subStore, 'limit' => $limit]);
         $query = DB::table('carte_recharge_client')
+            ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
             ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
             ->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->leftJoin('history', function ($join) use ($startDate, $endDate) {
@@ -1989,11 +2203,11 @@ class SubStoreController extends Controller
             })
             ->leftJoin('client_abonnement', 'carte_recharge_client.client_id', '=', 'client_abonnement.client_id');
 
-        $this->applySubStoreFilter($query);
+        $this->applyEmployerStoreScope($query, $subStore);
+        $this->applySubStoreOrPluxeeFilter($query, $subStore, ['has_carte_recharge' => true]);
+        $this->applyCampaignFilterToRechargeQuery($query, $subStore, $selectedCampaign);
 
-        $query->when($subStore !== 'ALL', function ($q) use ($subStore) {
-                return $q->where('stores.store_name', 'LIKE', "%$subStore%");
-            })
+        $query
             ->select([
                 'carte_recharge_client.client_id as id',
                 DB::raw('CONCAT(COALESCE(client.client_prenom, ""), " ", COALESCE(client.client_nom, "")) as name'),
@@ -2018,12 +2232,20 @@ class SubStoreController extends Controller
             $cards = [];
 
             if ($limit === null) {
-                $storeId = $this->getStoreIdByName($subStore);
+                $storeId = $this->isPluxeeSubStore($subStore)
+                    ? $this->getPluxeeDistributorStoreId($subStore)
+                    : $this->getStoreIdByName($subStore);
                 if ($subStore !== 'ALL' && $storeId) {
-                    $cards = DB::table('carte_recharge_client')
+                    $cardQ = DB::table('carte_recharge_client')
                         ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
-                        ->where('carte_recharge_client.client_id', $user->id)
-                        ->where('carte_recharge.stores', 'LIKE', "%$storeId%")
+                        ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
+                        ->where('carte_recharge_client.client_id', $user->id);
+                    if ($this->isPluxeeSubStore($subStore)) {
+                        $this->applyPluxeeStoresOrEmployerSubStore($cardQ, 'carte_recharge.stores', (int) $storeId, 'client');
+                    } else {
+                        $this->addWhereStoresColumnContainsStoreId($cardQ, 'carte_recharge.stores', (int) $storeId);
+                    }
+                    $cards = $cardQ
                         ->select('carte_recharge.carte_recharge_code')
                         ->distinct()
                         ->pluck('carte_recharge.carte_recharge_code')
@@ -2083,18 +2305,17 @@ class SubStoreController extends Controller
     /**
      * Compter les utilisateurs avec cartes de recharge ET actifs (cohérent avec le tableau)
      */
-    private function getUsersWithCardsCount(string $selectedSubStore): int
+    private function getUsersWithCardsCount(string $selectedSubStore, string $selectedCampaign = 'ALL'): int
     {
         try {
             $query = DB::table('carte_recharge_client')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->join('history', 'carte_recharge_client.client_id', '=', 'history.client_id')
-                ->where('stores.is_sub_store', 1);
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+                ->join('history', 'carte_recharge_client.client_id', '=', 'history.client_id');
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+            $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
             
             return (int) $query->distinct('carte_recharge_client.client_id')->count();
         } catch (\Exception $e) {
@@ -2106,19 +2327,18 @@ class SubStoreController extends Controller
     /**
      * Compter les utilisateurs avec cartes de recharge ET actifs dans une période (cohérent avec le tableau)
      */
-    private function getUsersWithCardsCohorteCount(string $selectedSubStore, $startDate, $endDate): int
+    private function getUsersWithCardsCohorteCount(string $selectedSubStore, $startDate, $endDate, string $selectedCampaign = 'ALL'): int
     {
         try {
             $query = DB::table('carte_recharge_client')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->join('history', 'carte_recharge_client.client_id', '=', 'history.client_id')
-                ->where('stores.is_sub_store', 1)
                 ->whereBetween('history.time', [$startDate, $endDate]);
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+            $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
             
             return (int) $query->distinct('carte_recharge_client.client_id')->count();
         } catch (\Exception $e) {
@@ -2130,23 +2350,131 @@ class SubStoreController extends Controller
     /**
      * Compter les cartes de recharge activées dans une période
      */
-    private function getCardsActivated(string $selectedSubStore, string $startDate, string $endDate): int
+    private function getCardsActivated(string $selectedSubStore, string $startDate, string $endDate, string $selectedCampaign = 'ALL'): int
     {
         try {
             $query = DB::table('carte_recharge_client')
+                ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                 ->join('client', 'carte_recharge_client.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->where('stores.is_sub_store', 1)
                 ->whereBetween('carte_recharge_client.created_at', [$startDate, Carbon::parse($endDate)->endOfDay()]);
-            
-            if ($selectedSubStore !== 'ALL') {
-                $query->where('stores.store_name', 'LIKE', "%" . $selectedSubStore . "%");
-            }
+            $this->applyEmployerStoreScope($query, $selectedSubStore);
+            $this->applySubStoreOrPluxeeFilter($query, $selectedSubStore, ['has_carte_recharge' => true]);
+            $this->applyCampaignFilterToRechargeQuery($query, $selectedSubStore, $selectedCampaign);
             
             return (int) $query->count();
         } catch (\Exception $e) {
             Log::warning('Erreur getCardsActivated: '.$e->getMessage());
             return 0;
+        }
+    }
+
+    private function isPluxeeSubStore(string $selectedSubStore): bool
+    {
+        return str_contains(mb_strtolower($selectedSubStore), 'pluxee');
+    }
+
+    private function normalizeCampaignFilter(?string $campaign): string
+    {
+        $campaign = trim((string) $campaign);
+        return $campaign === '' ? 'ALL' : $campaign;
+    }
+
+    private function applyCampaignFilterToRechargeQuery($query, string $selectedSubStore, string $selectedCampaign): void
+    {
+        $selectedCampaign = $this->normalizeCampaignFilter($selectedCampaign);
+        if ($selectedCampaign === 'ALL' || !$this->isPluxeeSubStore($selectedSubStore)) {
+            return;
+        }
+
+        $query->where('carte_recharge.campain_name', $selectedCampaign);
+    }
+
+    private function getCampaignsForSubStore(string $selectedSubStore): array
+    {
+        if (! $this->isPluxeeSubStore($selectedSubStore) || $selectedSubStore === 'ALL') {
+            return [];
+        }
+
+        // Pour Pluxee : les campagnes viennent de carte_recharge.stores (distributeur)
+        $storeId = $this->getPluxeeDistributorStoreId($selectedSubStore);
+        if (! $storeId) {
+            Log::warning('getCampaignsForSubStore: aucun store_id distributeur pour "' . $selectedSubStore . '"');
+            return [];
+        }
+
+        $q = DB::table('carte_recharge as cr')
+            ->whereNotNull('cr.campain_name')
+            ->where('cr.campain_name', '<>', '');
+        if (config('substore.pluxee_fallback_employer_sub_store', true)) {
+            $q->where(function ($w) use ($storeId) {
+                $w->where(function ($x) use ($storeId) {
+                    $this->addWhereStoresColumnContainsStoreId($x, 'cr.stores', $storeId);
+                });
+                $w->orWhereIn('cr.carte_recharge_id', function ($sub) use ($storeId) {
+                    $sub->select('crc.carte_recharge_id')
+                        ->from('carte_recharge_client as crc')
+                        ->join('client as cl', 'cl.client_id', '=', 'crc.client_id')
+                        ->where('cl.sub_store', $storeId);
+                });
+            });
+        } else {
+            $this->addWhereStoresColumnContainsStoreId($q, 'cr.stores', $storeId);
+        }
+
+        return $q->distinct()
+            ->orderBy('cr.campain_name')
+            ->pluck('cr.campain_name')
+            ->toArray();
+    }
+
+    /**
+     * Appliquer le filtre sub-store ou Pluxee (distributeur).
+     * - Pluxee : filtre par carte_recharge.stores (distributeur de la carte, comme dans le backoffice)
+     * - Autres : filtre par client.sub_store via stores.store_name
+     */
+    private function applySubStoreOrPluxeeFilter($query, string $selectedSubStore, array $options = []): void
+    {
+        if ($selectedSubStore === 'ALL') {
+            return;
+        }
+
+        $hasCarteRecharge = $options['has_carte_recharge'] ?? false;
+        $clientTable = $options['client_table'] ?? 'client';
+
+        if ($this->isPluxeeSubStore($selectedSubStore)) {
+            $storeId = $this->getPluxeeDistributorStoreId($selectedSubStore);
+            if (! $storeId) {
+                Log::warning('applySubStoreOrPluxeeFilter: store distributeur introuvable pour "' . $selectedSubStore . '"');
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+
+            if ($hasCarteRecharge) {
+                $this->applyPluxeeStoresOrEmployerSubStore($query, 'carte_recharge.stores', $storeId, $clientTable);
+            } else {
+                // Semi-jointure (souvent plus rapide que EXISTS corrélé + FIND_IN_SET par ligne)
+                $query->whereIn(DB::raw("{$clientTable}.client_id"), function ($sub) use ($storeId) {
+                    $sub->select('crc.client_id')
+                        ->from('carte_recharge_client as crc')
+                        ->join('carte_recharge as cr', 'crc.carte_recharge_id', '=', 'cr.carte_recharge_id')
+                        ->join('client as crc_client', 'crc.client_id', '=', 'crc_client.client_id');
+                    if (config('substore.pluxee_fallback_employer_sub_store', true)) {
+                        $sub->where(function ($w) use ($storeId) {
+                            $w->where(function ($x) use ($storeId) {
+                                $this->addWhereStoresColumnContainsStoreId($x, 'cr.stores', $storeId);
+                            });
+                            $w->orWhere('crc_client.sub_store', $storeId);
+                        });
+                    } else {
+                        $this->addWhereStoresColumnContainsStoreId($sub, 'cr.stores', $storeId);
+                    }
+                    $sub->groupBy('crc.client_id');
+                });
+            }
+        } else {
+            $query->where('stores.store_name', 'LIKE', '%' . $selectedSubStore . '%');
         }
     }
 

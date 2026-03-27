@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class TestMLSystemCommand extends Command
 {
-    protected $signature = 'ml:test-system {--client-id= : ID d\'un client spécifique à tester}';
+    protected $signature = 'ml:test-system {--client-id= : ID d\'un client spécifique à tester} {--skip-extract : Ne pas lancer l\'extraction (évite deadlock si un autre job écrit dans ml_client_features)}';
     protected $description = 'Teste le système ML complet avec des données réelles';
 
     private MLFeatureExtractionService $featureService;
@@ -37,8 +37,12 @@ class TestMLSystemCommand extends Command
         // 1. Vérifier les données de base
         $this->checkDataAvailability();
         
-        // 2. Test d'extraction de features
-        $this->testFeatureExtraction();
+        // 2. Test d'extraction de features (sauf si --skip-extract)
+        if (!$this->option('skip-extract')) {
+            $this->testFeatureExtraction();
+        } else {
+            $this->line("\n🔧 2. Test d'extraction de features... (ignoré avec --skip-extract)");
+        }
         
         // 3. Test de prédiction
         $this->testPredictions();
