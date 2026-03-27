@@ -1414,19 +1414,312 @@ class DashboardService
     private function getSubscriptionsData(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?Carbon $compStartBound = null, ?Carbon $compEndExclusive = null): array
     {
         $methodStart = microtime(true);
-        $maxTimeSec = 90; // Budget de temps maximum pour cette méthode
         
-        // Appliquer un timeout MySQL de 30s par requête
-        try { DB::statement("SET SESSION max_execution_time=30000"); } catch (\Exception $e) { /* MySQL < 5.7.8 */ }
+        // Try materialized path first (fast: reads from subscription_daily_stats)
+        $operatorId = $this->resolveOperatorIdForMaterialized($selectedOperator);
+        $hasMaterialized = $this->hasMaterializedCoverage($startBound, $endExclusive, $operatorId);
         
-        // Calculer la granularité selon la période
+        if ($hasMaterialized) {
+            Log::info("getSubscriptionsData - MATERIALIZED path (operator_id={$operatorId})");
+            return $this->getSubscriptionsDataMaterialized($startBound, $endExclusive, $selectedOperator, $operatorId, $compStartBound, $compEndExclusive, $methodStart);
+        }
+        
+        Log::info("getSubscriptionsData - LIVE path (no materialized data for operator_id={$operatorId})");
+        return $this->getSubscriptionsDataLive($startBound, $endExclusive, $selectedOperator, $compStartBound, $compEndExclusive, $methodStart);
+    }
+
+    /**
+     * Resolve operator to operator_id for materialized table lookup.
+     * Returns null for ALL, integer for specific operator.
+     */
+    private function resolveOperatorIdForMaterialized(string $selectedOperator): ?int
+    {
+        if ($selectedOperator === 'ALL' || empty($selectedOperator)) {
+            return null;
+        }
+        return $this->getOperatorId($selectedOperator);
+    }
+
+    /**
+     * Check if subscription_daily_stats has sufficient coverage for the requested period.
+     * Requires at least 80% of expected days to be present.
+     */
+    private function hasMaterializedCoverage(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): bool
+    {
+        try {
+            $expectedDays = $startBound->diffInDays($endExclusive);
+            if ($expectedDays <= 0) return false;
+
+            $count = DB::table('subscription_daily_stats')
+                ->where('stat_date', '>=', $startBound->toDateString())
+                ->where('stat_date', '<', $endExclusive->toDateString())
+                ->where(function ($q) use ($operatorId) {
+                    if ($operatorId === null) {
+                        $q->whereNull('operator_id');
+                    } else {
+                        $q->where('operator_id', $operatorId);
+                    }
+                })
+                ->count();
+
+            $coverage = $count / $expectedDays;
+            Log::debug("Materialized coverage: {$count}/{$expectedDays} = " . round($coverage * 100) . "%");
+            return $coverage >= 0.8;
+        } catch (\Exception $e) {
+            Log::warning("hasMaterializedCoverage check failed: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * FAST PATH: Read pre-computed subscription metrics from subscription_daily_stats.
+     * Expected time: < 3 seconds for any period.
+     */
+    private function getSubscriptionsDataMaterialized(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?int $operatorId, ?Carbon $compStartBound, ?Carbon $compEndExclusive, float $methodStart): array
+    {
+        $periodDays = $startBound->diffInDays($endExclusive);
+        $granularity = $periodDays > 365 ? 'month' : 'day';
+
+        // === 1. Daily activations from materialized table ===
+        $dateExpr = $granularity === 'month' ? "DATE_FORMAT(stat_date, '%Y-%m-01')" : 'stat_date';
+        $matRows = DB::table('subscription_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->where(function ($q) use ($operatorId) {
+                if ($operatorId === null) {
+                    $q->whereNull('operator_id');
+                } else {
+                    $q->where('operator_id', $operatorId);
+                }
+            })
+            ->select(
+                DB::raw("{$dateExpr} as period_date"),
+                DB::raw('SUM(activated_count) as activations'),
+                DB::raw('SUM(active_snapshot) as active_snap')
+            )
+            ->groupBy(DB::raw($dateExpr))
+            ->orderBy('period_date')
+            ->get()
+            ->keyBy('period_date');
+
+        $dailyActivations = [];
+        if ($granularity === 'month') {
+            $cursor = $startBound->copy()->firstOfMonth();
+            $endDate = $endExclusive->copy()->subDay();
+            while ($cursor->lte($endDate)) {
+                $key = $cursor->toDateString();
+                $row = $matRows->get($key);
+                $act = $row ? (int)$row->activations : 0;
+                $dailyActivations[] = ['date' => $key, 'activations' => $act, 'active' => round($act * 0.95)];
+                $cursor->addMonth();
+            }
+        } else {
+            $cursor = $startBound->copy();
+            $endDate = $endExclusive->copy()->subDay();
+            while ($cursor->lte($endDate)) {
+                $key = $cursor->toDateString();
+                $row = $matRows->get($key);
+                $act = $row ? (int)$row->activations : 0;
+                $dailyActivations[] = ['date' => $key, 'activations' => $act, 'active' => round($act * 0.95)];
+                $cursor->addDay();
+            }
+        }
+
+        Log::info("Materialized daily_activations: " . count($dailyActivations) . " points (" . round((microtime(true) - $methodStart) * 1000) . "ms)");
+
+        // === 2. Aggregated metrics from materialized table (channels, plans, renewal, lifespan) ===
+        $currentAgg = $this->getMaterializedAggregates($startBound, $endExclusive, $operatorId);
+        $compAgg = ($compStartBound && $compEndExclusive) 
+            ? $this->getMaterializedAggregates($compStartBound, $compEndExclusive, $operatorId)
+            : null;
+
+        // Activations by channel
+        $activationsByChannel = [];
+        foreach (['cb', 'recharge', 'phone_balance', 'other'] as $ch) {
+            $cur = $currentAgg["channel_{$ch}"] ?? 0;
+            $prev = $compAgg ? ($compAgg["channel_{$ch}"] ?? 0) : 0;
+            $activationsByChannel[$ch] = ["current" => $cur, "previous" => $prev, "change" => $this->calculatePercentageChange($cur, $prev)];
+        }
+
+        // Plan distribution
+        $planDistribution = [];
+        foreach (['daily', 'monthly', 'annual', 'other'] as $pl) {
+            $cur = $currentAgg["plan_{$pl}"] ?? 0;
+            $prev = $compAgg ? ($compAgg["plan_{$pl}"] ?? 0) : 0;
+            $planDistribution[$pl] = ["current" => $cur, "previous" => $prev, "change" => $this->calculatePercentageChange($cur, $prev)];
+        }
+
+        // Renewal rate
+        $renewalCurrent = ($currentAgg['expired_count'] > 0) ? round(($currentAgg['renewed_count'] / $currentAgg['expired_count']) * 100, 1) : 0;
+        $renewalPrevious = ($compAgg && $compAgg['expired_count'] > 0) ? round(($compAgg['renewed_count'] / $compAgg['expired_count']) * 100, 1) : 0;
+        $renewalRate = ["current" => $renewalCurrent, "previous" => $renewalPrevious, "change" => $this->calculatePercentageChange($renewalCurrent, $renewalPrevious)];
+
+        // Average lifespan
+        $lifespanCurrent = ($currentAgg['lifespan_sub_count'] > 0) ? round($currentAgg['total_lifespan_days'] / $currentAgg['lifespan_sub_count'], 1) : 0;
+        $lifespanPrevious = ($compAgg && $compAgg['lifespan_sub_count'] > 0) ? round($compAgg['total_lifespan_days'] / $compAgg['lifespan_sub_count'], 1) : 0;
+        $averageLifespan = ["current" => $lifespanCurrent, "previous" => $lifespanPrevious, "change" => $this->calculatePercentageChange($lifespanCurrent, $lifespanPrevious)];
+
+        Log::info("Materialized aggregates done (" . round((microtime(true) - $methodStart) * 1000) . "ms)");
+
+        // === 3. Retention trend (optimized: use materialized activations + single targeted query) ===
+        $retentionCacheKey = 'ret_trend:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
+        try {
+            $retentionTrend = Cache::remember($retentionCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator, $operatorId) {
+                return $this->calculateRetentionTrendMaterialized($startBound, $endExclusive, $selectedOperator, $operatorId);
+            });
+        } catch (\Exception $e) {
+            Log::error("retentionTrend materialized - ECHEC: " . $e->getMessage());
+            $retentionTrend = [];
+        }
+
+        // === 4. Quarterly active locations (cached, fast) ===
+        $locationsCacheKey = 'qloc:' . md5($endExclusive->copy()->subDay()->toDateString());
+        try {
+            $quarterlyActiveLocations = Cache::remember($locationsCacheKey, 3600, function() use ($endExclusive) {
+                return $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->toDateString());
+            });
+        } catch (\Exception $e) {
+            Log::error("quarterlyActiveLocations - ECHEC: " . $e->getMessage());
+            $quarterlyActiveLocations = [];
+        }
+
+        // === 5. Subscription details (limited to 1000 - fast) ===
+        $detailsCacheKey = 'sub_det:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
+        try {
+            $subscriptionDetails = Cache::remember($detailsCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator) {
+                return $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
+            });
+        } catch (\Exception $e) {
+            Log::error("subscriptionDetails - ECHEC: " . $e->getMessage());
+            $subscriptionDetails = [];
+        }
+
+        // === 6. Cohorts (6 monthly queries - bounded) ===
+        $cohortsCacheKey = 'cohorts:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
+        try {
+            $cohorts = Cache::remember($cohortsCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator) {
+                return $this->calculateCohorts($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
+            });
+        } catch (\Exception $e) {
+            Log::error("cohorts - ECHEC: " . $e->getMessage());
+            $cohorts = [];
+        }
+
+        // === 7. Reactivation rate (bounded live query) ===
+        $reactivationCurrent = 0;
+        $reactivationPrevious = 0;
+        try {
+            $reactivationCurrent = $this->calculateReactivationRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
+            if ($compStartBound && $compEndExclusive) {
+                $reactivationPrevious = $this->calculateReactivationRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
+            }
+        } catch (\Exception $e) {
+            Log::error("reactivation - ECHEC: " . $e->getMessage());
+        }
+        $reactivationRate = ["current" => $reactivationCurrent, "previous" => $reactivationPrevious, "change" => $this->calculatePercentageChange($reactivationCurrent, $reactivationPrevious)];
+
+        // === 8. Timwe daily statistics (already materialized via timwe_daily_stats) ===
+        $dailyStatistics = [];
+        $dailyStatisticsComparison = [];
+        try {
+            $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
+        } catch (\Exception $e) {
+            Log::error("dailyStatistics - ECHEC: " . $e->getMessage());
+        }
+        if ($compStartBound && $compEndExclusive) {
+            try {
+                $dailyStatisticsComparison = $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator);
+            } catch (\Exception $e) {
+                Log::error("dailyStatisticsComparison - ECHEC: " . $e->getMessage());
+            }
+        }
+
+        $timweMonthlyStats = $this->groupTimweStatsByMonth($dailyStatistics);
+        $timweMonthlyStatsComparison = $this->groupTimweStatsByMonth($dailyStatisticsComparison);
+
+        $totalElapsed = round((microtime(true) - $methodStart) * 1000);
+        Log::info("getSubscriptionsData MATERIALIZED - COMPLET en {$totalElapsed}ms");
+
+        return [
+            "daily_activations" => $dailyActivations,
+            "retention_trend" => $retentionTrend,
+            "quarterly_active_locations" => $quarterlyActiveLocations,
+            "details" => $subscriptionDetails,
+            "daily_statistics" => $dailyStatistics,
+            "daily_statistics_comparison" => $dailyStatisticsComparison,
+            "timwe_monthly_stats" => $timweMonthlyStats,
+            "timwe_monthly_stats_comparison" => $timweMonthlyStatsComparison,
+            "timwe_transactions_by_user" => [],
+            "activations_by_channel" => $activationsByChannel,
+            "plan_distribution" => $planDistribution,
+            "cohorts" => $cohorts,
+            "renewal_rate" => $renewalRate,
+            "average_lifespan" => $averageLifespan,
+            "reactivation_rate" => $reactivationRate
+        ];
+    }
+
+    /**
+     * Get aggregated metrics from subscription_daily_stats for a period.
+     */
+    private function getMaterializedAggregates(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): array
+    {
+        $row = DB::table('subscription_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->where(function ($q) use ($operatorId) {
+                if ($operatorId === null) {
+                    $q->whereNull('operator_id');
+                } else {
+                    $q->where('operator_id', $operatorId);
+                }
+            })
+            ->selectRaw('
+                SUM(channel_cb) as channel_cb,
+                SUM(channel_recharge) as channel_recharge,
+                SUM(channel_phone_balance) as channel_phone_balance,
+                SUM(channel_other) as channel_other,
+                SUM(plan_daily) as plan_daily,
+                SUM(plan_monthly) as plan_monthly,
+                SUM(plan_annual) as plan_annual,
+                SUM(plan_other) as plan_other,
+                SUM(expired_count) as expired_count,
+                SUM(renewed_count) as renewed_count,
+                SUM(total_lifespan_days) as total_lifespan_days,
+                SUM(lifespan_sub_count) as lifespan_sub_count
+            ')
+            ->first();
+
+        return [
+            'channel_cb' => (int)($row->channel_cb ?? 0),
+            'channel_recharge' => (int)($row->channel_recharge ?? 0),
+            'channel_phone_balance' => (int)($row->channel_phone_balance ?? 0),
+            'channel_other' => (int)($row->channel_other ?? 0),
+            'plan_daily' => (int)($row->plan_daily ?? 0),
+            'plan_monthly' => (int)($row->plan_monthly ?? 0),
+            'plan_annual' => (int)($row->plan_annual ?? 0),
+            'plan_other' => (int)($row->plan_other ?? 0),
+            'expired_count' => (int)($row->expired_count ?? 0),
+            'renewed_count' => (int)($row->renewed_count ?? 0),
+            'total_lifespan_days' => (int)($row->total_lifespan_days ?? 0),
+            'lifespan_sub_count' => (int)($row->lifespan_sub_count ?? 0),
+        ];
+    }
+
+    /**
+     * SLOW PATH (fallback): Original live queries when no materialized data exists.
+     */
+    private function getSubscriptionsDataLive(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?Carbon $compStartBound, ?Carbon $compEndExclusive, float $methodStart): array
+    {
+        $maxTimeSec = 90;
+        
+        try { DB::statement("SET SESSION max_execution_time=30000"); } catch (\Exception $e) {}
+        
         $periodDays = $startBound->diffInDays($endExclusive);
         $granularity = $periodDays > 365 ? 'month' : 'day';
         $caDateExpr = $granularity === 'month' ? "DATE_FORMAT(client_abonnement_creation, '%Y-%m-01')" : "DATE(client_abonnement_creation)";
         
-        Log::debug("getSubscriptionsData - Période: {$periodDays} jours, Granularité: {$granularity}");
-        
-        // Requête pour les activations quotidiennes - SKIP le JOIN inutile pour ALL
+        // Activations quotidiennes
         if ($selectedOperator === 'ALL' || empty($selectedOperator)) {
             $activationsQuery = DB::table("client_abonnement as ca")
                 ->select(DB::raw("$caDateExpr as date"), DB::raw("COUNT(*) as activations"))
@@ -1441,18 +1734,8 @@ class DashboardService
             $this->applyOperatorFilter($activationsQuery, $selectedOperator);
         }
         
-        Log::debug("Requête activations quotidiennes - Opérateur: {$selectedOperator}, Période: {$startBound->toDateString()} à {$endExclusive->toDateString()}");
+        $activationsRaw = $activationsQuery->groupBy(DB::raw($caDateExpr))->orderBy("date")->get()->keyBy('date')->toArray();
         
-        $activationsRaw = $activationsQuery
-            ->groupBy(DB::raw($caDateExpr))
-            ->orderBy("date")
-            ->get()
-            ->keyBy('date')
-            ->toArray();
-        
-        Log::debug("Activations trouvées: " . count($activationsRaw) . " jours/mois avec données");
-        
-        // Générer la série complète avec toutes les dates
         $startDate = $startBound->copy();
         $endDate = $endExclusive->copy()->subDay();
         $dailyActivations = [];
@@ -1462,11 +1745,7 @@ class DashboardService
             while ($cursor->lte($endDate)) {
                 $key = $cursor->copy()->firstOfMonth()->toDateString();
                 $activations = isset($activationsRaw[$key]) ? (int)$activationsRaw[$key]->activations : 0;
-                $dailyActivations[] = [
-                    'date' => $key,
-                    'activations' => $activations,
-                    'active' => round($activations * 0.95)
-                ];
+                $dailyActivations[] = ['date' => $key, 'activations' => $activations, 'active' => round($activations * 0.95)];
                 $cursor->addMonth();
             }
         } else {
@@ -1474,185 +1753,111 @@ class DashboardService
             while ($cursor->lte($endDate)) {
                 $dateStr = $cursor->toDateString();
                 $activations = isset($activationsRaw[$dateStr]) ? (int)$activationsRaw[$dateStr]->activations : 0;
-                $dailyActivations[] = [
-                    'date' => $dateStr,
-                    'activations' => $activations,
-                    'active' => round($activations * 0.95)
-                ];
+                $dailyActivations[] = ['date' => $dateStr, 'activations' => $activations, 'active' => round($activations * 0.95)];
                 $cursor->addDay();
             }
         }
         
-        // Calculer retention_trend (optimisé - avec cache Redis + timeout)
         $retentionCacheKey = 'ret_trend:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
         try {
-            $retentionTrend = Cache::remember($retentionCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator) {
-                return $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator);
-            });
-            Log::info("retentionTrend - OK", ['points' => count($retentionTrend)]);
-        } catch (\Exception $e) {
-            Log::error("retentionTrend - ECHEC: " . $e->getMessage());
-            $retentionTrend = [];
-        }
+            $retentionTrend = Cache::remember($retentionCacheKey, 1800, fn() => $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator));
+        } catch (\Exception $e) { $retentionTrend = []; }
         
-        // Calculer quarterly_active_locations (avec cache Redis - change rarement)
         $locationsCacheKey = 'qloc:' . md5($endExclusive->copy()->subDay()->toDateString());
         try {
-            $quarterlyActiveLocations = Cache::remember($locationsCacheKey, 3600, function() use ($endExclusive) {
-                return $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->toDateString());
-            });
-        } catch (\Exception $e) {
-            Log::error("quarterlyActiveLocations - ECHEC: " . $e->getMessage());
-            $quarterlyActiveLocations = [];
-        }
+            $quarterlyActiveLocations = Cache::remember($locationsCacheKey, 3600, fn() => $this->calculateQuarterlyActiveLocations($endExclusive->copy()->subDay()->toDateString()));
+        } catch (\Exception $e) { $quarterlyActiveLocations = []; }
         
-        // === CONTRÔLE BUDGET DE TEMPS ===
         $elapsed = microtime(true) - $methodStart;
         $timeExceeded = ($elapsed > $maxTimeSec);
-        if ($timeExceeded) {
-            Log::warning("getSubscriptionsData - Budget de temps dépassé ({$elapsed}s > {$maxTimeSec}s), skip opérations non-essentielles");
-        }
         
-        // Récupérer les détails des abonnements (limité pour éviter les timeouts)
         $subscriptionDetails = [];
         if (!$timeExceeded) {
-            $detailsCacheKey = 'sub_det:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}");
             try {
-                $subscriptionDetails = Cache::remember($detailsCacheKey, 1800, function() use ($startBound, $endExclusive, $selectedOperator) {
-                    return $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
-                });
-            } catch (\Exception $e) {
-                Log::error("subscriptionDetails - ECHEC: " . $e->getMessage());
-            }
+                $subscriptionDetails = Cache::remember('sub_det:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800, fn() => $this->getSubscriptionDetails($startBound, $endExclusive, $selectedOperator));
+            } catch (\Exception $e) {}
         }
         
-        // === Calculs secondaires avec protection budget de temps ===
         $defaultChannel = ['cb' => 0, 'recharge' => 0, 'phone_balance' => 0, 'other' => 0];
         $defaultPlan = ['daily' => 0, 'monthly' => 0, 'annual' => 0, 'other' => 0];
         $defaultComparison = ["current" => 0, "previous" => 0, "change" => 0.0];
         
-        // Activations par canal
         $activationsCurrent = $defaultChannel;
         $activationsPrevious = $defaultChannel;
         if (!$timeExceeded) {
             try {
-                $activationsCurrent = Cache::remember('actbychan:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
-                    fn() => $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator));
-                $activationsPrevious = ($compStartBound && $compEndExclusive) 
-                    ? Cache::remember('actbychan:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
-                        fn() => $this->calculateActivationsByPaymentMethod($compStartBound, $compEndExclusive, $selectedOperator))
-                    : $defaultChannel;
-            } catch (\Exception $e) { Log::error("activationsByChannel - ECHEC: " . $e->getMessage()); }
+                $activationsCurrent = Cache::remember('actbychan:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculateActivationsByPaymentMethod($startBound, $endExclusive, $selectedOperator));
+                $activationsPrevious = ($compStartBound && $compEndExclusive) ? Cache::remember('actbychan:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculateActivationsByPaymentMethod($compStartBound, $compEndExclusive, $selectedOperator)) : $defaultChannel;
+            } catch (\Exception $e) {}
             $elapsed = microtime(true) - $methodStart;
             $timeExceeded = ($elapsed > $maxTimeSec);
         }
         
         $activationsByChannel = [];
         foreach (['cb', 'recharge', 'phone_balance', 'other'] as $ch) {
-            $activationsByChannel[$ch] = [
-                "current" => $activationsCurrent[$ch] ?? 0,
-                "previous" => $activationsPrevious[$ch] ?? 0,
-                "change" => $this->calculatePercentageChange($activationsCurrent[$ch] ?? 0, $activationsPrevious[$ch] ?? 0)
-            ];
+            $activationsByChannel[$ch] = ["current" => $activationsCurrent[$ch] ?? 0, "previous" => $activationsPrevious[$ch] ?? 0, "change" => $this->calculatePercentageChange($activationsCurrent[$ch] ?? 0, $activationsPrevious[$ch] ?? 0)];
         }
         
-        // Plan distribution
         $plansCurrent = $defaultPlan;
         $plansPrevious = $defaultPlan;
         if (!$timeExceeded) {
             try {
-                $plansCurrent = Cache::remember('plandist:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
-                    fn() => $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator));
-                $plansPrevious = ($compStartBound && $compEndExclusive)
-                    ? Cache::remember('plandist:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
-                        fn() => $this->calculatePlanDistribution($compStartBound, $compEndExclusive, $selectedOperator))
-                    : $defaultPlan;
-            } catch (\Exception $e) { Log::error("planDistribution - ECHEC: " . $e->getMessage()); }
+                $plansCurrent = Cache::remember('plandist:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculatePlanDistribution($startBound, $endExclusive, $selectedOperator));
+                $plansPrevious = ($compStartBound && $compEndExclusive) ? Cache::remember('plandist:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculatePlanDistribution($compStartBound, $compEndExclusive, $selectedOperator)) : $defaultPlan;
+            } catch (\Exception $e) {}
             $elapsed = microtime(true) - $methodStart;
             $timeExceeded = ($elapsed > $maxTimeSec);
         }
         
         $planDistribution = [];
         foreach (['daily', 'monthly', 'annual', 'other'] as $pl) {
-            $planDistribution[$pl] = [
-                "current" => $plansCurrent[$pl] ?? 0,
-                "previous" => $plansPrevious[$pl] ?? 0,
-                "change" => $this->calculatePercentageChange($plansCurrent[$pl] ?? 0, $plansPrevious[$pl] ?? 0)
-            ];
+            $planDistribution[$pl] = ["current" => $plansCurrent[$pl] ?? 0, "previous" => $plansPrevious[$pl] ?? 0, "change" => $this->calculatePercentageChange($plansCurrent[$pl] ?? 0, $plansPrevious[$pl] ?? 0)];
         }
         
-        // Cohorts
         $cohorts = [];
         if (!$timeExceeded) {
             try {
-                $cohorts = Cache::remember('cohorts:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
-                    fn() => $this->calculateCohorts($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
-            } catch (\Exception $e) { Log::error("cohorts - ECHEC: " . $e->getMessage()); }
+                $cohorts = Cache::remember('cohorts:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculateCohorts($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+            } catch (\Exception $e) {}
             $elapsed = microtime(true) - $methodStart;
             $timeExceeded = ($elapsed > $maxTimeSec);
         }
         
-        // Renewal, lifespan, reactivation
         $renewalRate = $defaultComparison;
         $averageLifespan = $defaultComparison;
         $reactivationRate = $defaultComparison;
         if (!$timeExceeded) {
             try {
-                $renewalCurrent = Cache::remember('renewal:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
-                    fn() => $this->calculateRenewalRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
-                $renewalPrevious = ($compStartBound && $compEndExclusive)
-                    ? Cache::remember('renewal:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
-                        fn() => $this->calculateRenewalRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator))
-                    : 0;
+                $renewalCurrent = Cache::remember('renewal:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculateRenewalRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+                $renewalPrevious = ($compStartBound && $compEndExclusive) ? Cache::remember('renewal:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculateRenewalRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)) : 0;
                 $renewalRate = ["current" => $renewalCurrent, "previous" => $renewalPrevious, "change" => $this->calculatePercentageChange($renewalCurrent, $renewalPrevious)];
                 
-                $lifespanCurrent = Cache::remember('lifespan:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800,
-                    fn() => $this->calculateAverageLifespan($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
-                $lifespanPrevious = ($compStartBound && $compEndExclusive)
-                    ? Cache::remember('lifespan:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800,
-                        fn() => $this->calculateAverageLifespan($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator))
-                    : 0;
+                $lifespanCurrent = Cache::remember('lifespan:' . md5("{$startBound}:{$endExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculateAverageLifespan($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator));
+                $lifespanPrevious = ($compStartBound && $compEndExclusive) ? Cache::remember('lifespan:' . md5("{$compStartBound}:{$compEndExclusive}:{$selectedOperator}"), 1800, fn() => $this->calculateAverageLifespan($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)) : 0;
                 $averageLifespan = ["current" => $lifespanCurrent, "previous" => $lifespanPrevious, "change" => $this->calculatePercentageChange($lifespanCurrent, $lifespanPrevious)];
                 
                 $reactivationCurrent = $this->calculateReactivationRate($startBound->format('Y-m-d'), $endExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator);
-                $reactivationPrevious = ($compStartBound && $compEndExclusive)
-                    ? $this->calculateReactivationRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator)
-                    : 0;
+                $reactivationPrevious = ($compStartBound && $compEndExclusive) ? $this->calculateReactivationRate($compStartBound->format('Y-m-d'), $compEndExclusive->copy()->subDay()->format('Y-m-d'), $selectedOperator) : 0;
                 $reactivationRate = ["current" => $reactivationCurrent, "previous" => $reactivationPrevious, "change" => $this->calculatePercentageChange($reactivationCurrent, $reactivationPrevious)];
-            } catch (\Exception $e) { Log::error("renewal/lifespan/reactivation - ECHEC: " . $e->getMessage()); }
-            $elapsed = microtime(true) - $methodStart;
-            $timeExceeded = ($elapsed > $maxTimeSec);
+            } catch (\Exception $e) {}
         }
         
-        // Statistiques quotidiennes
         $dailyStatistics = [];
         $dailyStatisticsComparison = [];
         if (!$timeExceeded) {
-            try {
-                $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator);
-            } catch (\Exception $e) {
-                Log::error("dailyStatistics - ECHEC: " . $e->getMessage());
-            }
+            try { $dailyStatistics = $this->getDailyStatistics($startBound, $endExclusive, $selectedOperator); } catch (\Exception $e) {}
             if ($compStartBound && $compEndExclusive) {
-                try {
-                    $dailyStatisticsComparison = $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator);
-                } catch (\Exception $e) {
-                    Log::error("dailyStatisticsComparison - ECHEC: " . $e->getMessage());
-                }
+                try { $dailyStatisticsComparison = $this->getDailyStatistics($compStartBound, $compEndExclusive, $selectedOperator); } catch (\Exception $e) {}
             }
         }
         
-        $timweTransactionsByUser = [];
-        
-        // Grouper les statistiques Timwe par mois avec détails quotidiens
         $timweMonthlyStats = $this->groupTimweStatsByMonth($dailyStatistics);
         $timweMonthlyStatsComparison = $this->groupTimweStatsByMonth($dailyStatisticsComparison);
         
-        // Réinitialiser le timeout MySQL
-        try { DB::statement("SET SESSION max_execution_time=0"); } catch (\Exception $e) { /* ignore */ }
+        try { DB::statement("SET SESSION max_execution_time=0"); } catch (\Exception $e) {}
         
         $totalElapsed = round((microtime(true) - $methodStart) * 1000);
-        Log::info("getSubscriptionsData - COMPLET en {$totalElapsed}ms" . ($timeExceeded ? " (données partielles)" : ""));
+        Log::info("getSubscriptionsData LIVE - COMPLET en {$totalElapsed}ms" . (($elapsed ?? 0) > $maxTimeSec ? " (données partielles)" : ""));
         
         return [
             "daily_activations" => $dailyActivations,
@@ -1663,7 +1868,7 @@ class DashboardService
             "daily_statistics_comparison" => $dailyStatisticsComparison,
             "timwe_monthly_stats" => $timweMonthlyStats,
             "timwe_monthly_stats_comparison" => $timweMonthlyStatsComparison,
-            "timwe_transactions_by_user" => $timweTransactionsByUser,
+            "timwe_transactions_by_user" => [],
             "activations_by_channel" => $activationsByChannel,
             "plan_distribution" => $planDistribution,
             "cohorts" => $cohorts,
@@ -1673,6 +1878,79 @@ class DashboardService
         ];
     }
     
+
+    /**
+     * Materialized retention trend: uses pre-computed activated_count + single batch SQL for "still active".
+     * Much faster than full GROUP BY scan on 353K rows.
+     */
+    private function calculateRetentionTrendMaterialized(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?int $operatorId): array
+    {
+        try {
+            $periodDays = $startBound->diffInDays($endExclusive);
+            $intervalDays = max(1, intval($periodDays / 30));
+            $endDateStr = $endExclusive->copy()->subDay()->toDateString();
+
+            // Step 1: Get activated_count per day from materialized table
+            $matData = DB::table('subscription_daily_stats')
+                ->where('stat_date', '>=', $startBound->toDateString())
+                ->where('stat_date', '<', $endExclusive->toDateString())
+                ->where(function ($q) use ($operatorId) {
+                    if ($operatorId === null) {
+                        $q->whereNull('operator_id');
+                    } else {
+                        $q->where('operator_id', $operatorId);
+                    }
+                })
+                ->pluck('activated_count', 'stat_date')
+                ->toArray();
+
+            // Step 2: Build sample dates
+            $sampleDates = [];
+            $cursor = $startBound->copy();
+            $endDate = $endExclusive->copy()->subDay();
+            while ($cursor->lte($endDate)) {
+                $sampleDates[] = $cursor->toDateString();
+                $cursor->addDays($intervalDays);
+            }
+
+            if (empty($sampleDates)) return [];
+
+            // Step 3: Single batch query - count "still active" subscriptions per creation date
+            // Only for sample dates, not all dates
+            $opFilter = ($operatorId !== null) ? " AND ca.country_payments_methods_id = {$operatorId}" : '';
+            $dateList = "'" . implode("','", $sampleDates) . "'";
+            
+            $activeResults = DB::select("
+                SELECT DATE(ca.client_abonnement_creation) as cdate, COUNT(*) as active_count
+                FROM client_abonnement ca
+                WHERE DATE(ca.client_abonnement_creation) IN ({$dateList})
+                AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration > ?)
+                {$opFilter}
+                GROUP BY DATE(ca.client_abonnement_creation)
+            ", [$endDateStr]);
+
+            $activeMap = [];
+            foreach ($activeResults as $r) {
+                $activeMap[$r->cdate] = (int)$r->active_count;
+            }
+
+            // Step 4: Compute retention rate
+            $trend = [];
+            foreach ($sampleDates as $d) {
+                $activated = $matData[$d] ?? 0;
+                $active = $activeMap[$d] ?? 0;
+                $rate = ($activated > 0) ? round(($active / $activated) * 100, 1) : 100.0;
+                $trend[] = ['date' => $d, 'rate' => $rate, 'value' => $rate];
+            }
+
+            Log::info("calculateRetentionTrendMaterialized - OK", ['points' => count($trend), 'sample_dates' => count($sampleDates)]);
+            return $trend;
+        } catch (\Exception $e) {
+            Log::error("Retention materialized failed, fallback to live: " . $e->getMessage());
+            return $this->calculateRetentionTrendOptimized($startBound, $endExclusive, $selectedOperator);
+        }
+    }
+
     /**
      * Calcule la tendance de rétention jour par jour (VERSION OPTIMISÉE - une seule requête)
      */
@@ -1837,11 +2115,8 @@ class DashboardService
                 $query->addSelect(DB::raw("(SELECT cpm2.country_payments_methods_name FROM country_payments_methods cpm2 WHERE cpm2.country_payments_methods_id = ca.country_payments_methods_id LIMIT 1) as operator"));
             }
             
-            $totalCount = $query->count();
-            
-            Log::info("getSubscriptionDetails - Total abonnements", [
-                'totalCount' => $totalCount, 'operator' => $selectedOperator
-            ]);
+            // Skip expensive COUNT(*) - use materialized data or estimate
+            $totalCount = -1; // Will display "1000+" in frontend
             
             $results = $query->orderByDesc('ca.client_abonnement_creation')->limit($limit)->get();
             
@@ -3169,54 +3444,80 @@ class DashboardService
     private function calculateCohorts(string $startDate, string $endDate, string $operatorFilter): array
     {
         try {
-            $cohorts = [];
-            // Utiliser la date de fin pour calculer les 6 derniers mois (comme dans l'ancien contrôleur)
             $endCarbon = Carbon::parse($endDate);
+            $cohorts = [];
             
+            // Build 6 month boundaries
+            $months = [];
             for ($i = 5; $i >= 0; $i--) {
                 $cohortMonth = $endCarbon->copy()->subMonths($i);
-                $monthStart = $cohortMonth->copy()->startOfMonth();
-                $monthEnd = $cohortMonth->copy()->endOfMonth();
-                
-                $query = DB::table('client_abonnement as ca')
-                    ->whereBetween('ca.client_abonnement_creation', [$monthStart, $monthEnd]);
-                
-                $this->applyOperatorJoinAndFilter($query, $operatorFilter, 'ca');
-                
-                $totalSubscribers = $query->count();
-                
-                if ($totalSubscribers == 0) {
-                    $cohorts[] = [
-                        'month' => $cohortMonth->format('M Y'),
-                        'total' => 0,
-                        'survival_d30' => 0,
-                        'survival_d60' => 0
-                    ];
-                    continue;
-                }
-                
-                // Survivants à J+30
-                $survivalD30 = $query->clone()
-                    ->where(function($q) use ($monthStart) {
-                        $q->whereNull('ca.client_abonnement_expiration')
-                          ->orWhere('ca.client_abonnement_expiration', '>=', $monthStart->copy()->addDays(30));
-                    })->count();
-                
-                // Survivants à J+60
-                $survivalD60 = $query->clone()
-                    ->where(function($q) use ($monthStart) {
-                        $q->whereNull('ca.client_abonnement_expiration')
-                          ->orWhere('ca.client_abonnement_expiration', '>=', $monthStart->copy()->addDays(60));
-                    })->count();
-                
-                $cohorts[] = [
-                    'month' => $cohortMonth->format('M Y'),
-                    'total' => $totalSubscribers,
-                    'survival_d30' => round(($survivalD30 / $totalSubscribers) * 100, 1),
-                    'survival_d60' => round(($survivalD60 / $totalSubscribers) * 100, 1)
+                $months[] = [
+                    'label' => $cohortMonth->format('M Y'),
+                    'start' => $cohortMonth->copy()->startOfMonth(),
+                    'end' => $cohortMonth->copy()->endOfMonth(),
+                    'd30' => $cohortMonth->copy()->startOfMonth()->addDays(30),
+                    'd60' => $cohortMonth->copy()->startOfMonth()->addDays(60),
                 ];
             }
+
+            // Single batch query: compute total, d30, d60 for all 6 months at once
+            $globalStart = $months[0]['start'];
+            $globalEnd = $months[count($months) - 1]['end'];
+
+            // Build CASE expressions for each month
+            $selectParts = [];
+            $bindings = [];
+            foreach ($months as $idx => $m) {
+                $mStart = $m['start']->toDateTimeString();
+                $mEnd = $m['end']->toDateTimeString();
+                $d30 = $m['d30']->toDateTimeString();
+                $d60 = $m['d60']->toDateTimeString();
+
+                $selectParts[] = "SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as total_{$idx}";
+                $bindings[] = $mStart;
+                $bindings[] = $mEnd;
+
+                $selectParts[] = "SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= ?) THEN 1 ELSE 0 END) as d30_{$idx}";
+                $bindings[] = $mStart;
+                $bindings[] = $mEnd;
+                $bindings[] = $d30;
+
+                $selectParts[] = "SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? AND (ca.client_abonnement_expiration IS NULL OR ca.client_abonnement_expiration >= ?) THEN 1 ELSE 0 END) as d60_{$idx}";
+                $bindings[] = $mStart;
+                $bindings[] = $mEnd;
+                $bindings[] = $d60;
+            }
+
+            $selectSql = implode(', ', $selectParts);
             
+            $opJoin = '';
+            $opWhere = '';
+            if ($operatorFilter !== 'ALL' && !empty($operatorFilter)) {
+                $opId = $this->getOperatorId($operatorFilter);
+                if ($opId) {
+                    $opWhere = " AND ca.country_payments_methods_id = {$opId}";
+                }
+            }
+
+            $sql = "SELECT {$selectSql} FROM client_abonnement ca WHERE ca.client_abonnement_creation >= ? AND ca.client_abonnement_creation <= ? {$opWhere}";
+            $bindings[] = $globalStart->toDateTimeString();
+            $bindings[] = $globalEnd->toDateTimeString();
+
+            $result = DB::selectOne($sql, $bindings);
+
+            foreach ($months as $idx => $m) {
+                $total = (int)($result->{"total_{$idx}"} ?? 0);
+                $d30 = (int)($result->{"d30_{$idx}"} ?? 0);
+                $d60 = (int)($result->{"d60_{$idx}"} ?? 0);
+
+                $cohorts[] = [
+                    'month' => $m['label'],
+                    'total' => $total,
+                    'survival_d30' => $total > 0 ? round(($d30 / $total) * 100, 1) : 0,
+                    'survival_d60' => $total > 0 ? round(($d60 / $total) * 100, 1) : 0,
+                ];
+            }
+
             return $cohorts;
         } catch (\Exception $e) {
             Log::error("Erreur calcul cohortes: " . $e->getMessage());

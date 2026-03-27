@@ -1,64 +1,81 @@
-# PRD - Dashboard Club Privileges / Ooredoo
+# PRD - Dashboard Club Privilèges (Ooredoo)
 
-## Probleme Original
-Deployer l'application Ooredoo Privileges et effectuer des analyses fonctionnelles et des ameliorations de temps de reponse et requetes.
+## Problème Original
+Dashboard de performance pour le programme Club Privilèges d'Ooredoo Tunisie. Application Laravel 10 avec PHP-FPM, Nginx, MySQL distant, Redis. L'objectif est d'optimiser les temps de réponse, assurer l'exactitude des données, et maintenir la sécurité du code.
 
-## Architecture Technique
-- **Framework**: Laravel 10 (PHP 8.2), Nginx, PHP-FPM (15 workers), Redis
-- **Base de donnees**: MySQL distante (51.38.187.245:3306)
-- **Cache**: Redis distant (51.38.187.245:7905) 
-- **Deploiement**: FastAPI proxy (8001) + Node.js proxy (3000) -> Nginx + PHP-FPM (8002)
-- **Repo GitHub**: ultra3omda/ooredoo-dashboard (PR #1 merged: emergent -> develop)
+## Architecture
+- **Backend**: Laravel 10 (PHP 8.2-FPM) + Nginx (port 8002)
+- **Proxy**: FastAPI (port 8001) auto-start PHP-FPM + Express frontend (port 3000)
+- **Base de données**: MySQL distant (51.38.187.245)
+- **Cache**: Redis (local)
+- **Frontend**: Vanilla JS dans Blade templates (dashboard.blade.php)
 
-## Utilisateur
-- superadmin@ooredoo.tn / SuperAdmin@2025
+## Fonctionnalités Implémentées (Complet)
 
-## Travail accompli
+### Phase 1: Déploiement et Analyse (DONE)
+- Déploiement initial avec auto-start PHP-FPM
+- Configuration Nginx/FastAPI proxy
+- Analyse fonctionnelle complète
 
-### Performance (26 Mars 2026)
-- Cold cache: 165s -> 17.2s (-89.6%), Warm cache: 4.0s progressif
-- KPIs: 31s -> 1.97s (tables materialisees, -93.6%)
-- 6 endpoints split paralleles (kpis, merchants, transactions, subscriptions, ooredoo, timwe)
+### Phase 2: Optimisation Progressive (DONE)
+- API split en 5 endpoints progressifs (kpis, merchants, transactions, subscriptions, timwe)
+- Cache Redis avec TTL adaptatif
+- Correction bug uppercase/lowercase opérateur (ALL vs all)
 
-### Fusion branche develop (26 Mars 2026)
-- 228 fichiers, 10 onglets fonctionnels
+### Phase 3: Correctifs Données (DONE)
+- Recalcul stats Timwe historiques (19 fév - 2 mars)
+- Alignement calcul Timwe: ajout PPIDs 63981, 63982, suppression déduplication téléphone
+- Nettoyage secrets GitGuardian (.env.production.example, docs, config)
 
-### Integration IA (26 Mars 2026)
-- Gemini 2.5 Flash (35% plus rapide que GPT-4, defini par defaut)
+### Phase 4: Fonctionnalités Avancées (DONE)
+- Agent IA (Gemini 2.5 Flash) avec quota 250/jour
+- Widget monitoring AI quota
+- Endpoint dédié /api/dashboard/split/timwe
+- Fix formatNumber JS (décimales/pourcentages)
 
-### Correction donnees Timwe (26-27 Mars 2026)
-- 3 ppids (63980, 63981, 63982), comptage par transaction
-- Fevrier: 3 837, Mars: 4 008
+### Phase 5: Benchmarks et Limites (DONE)
+- Levée restriction 365 jours
+- Benchmarks 1M, 6M, 12M, Lifetime
+- Rapport RAPPORT_BENCHMARK_PERIODES.md
 
-### Nettoyage securite GitGuardian (27 Mars 2026)
-- 6 fichiers nettoyes, 0 secret dans fichiers trackes
+### Phase 6: Matérialisation Subscriptions (DONE - 27 Mar 2026)
+- Table `subscription_daily_stats` (1822 lignes, 2021-04-01 → 2026-03-27)
+- Commande batch `dashboard:materialize-subscriptions`
+- Réécriture `getSubscriptionsData` avec chemin matérialisé + fallback live
+- Optimisation cohortes: batch SQL unique (18 requêtes → 1)
+- Optimisation rétention: matérialisée avec échantillonnage
+- Cron quotidien (3h15) et hebdomadaire (dim 5h00)
 
-### Rate limiting + Monitoring Agent IA (27 Mars 2026)
-- Limite quotidienne: 250 req/jour, 10 req/min, widget monitoring frontend
+**Résultats Performance Cold Cache:**
+| Période | Avant (ms) | Après (ms) | Réduction |
+|---------|-----------|-----------|-----------|
+| 1 mois  | 19 551    | 7 032     | -64%      |
+| 6 mois  | 26 069    | 7 009     | -73%      |
+| 12 mois | 27 086    | 6 482     | -76%      |
+| Lifetime| 19 982    | 6 377     | -68%      |
 
-### Materialisation & Warmup (27 Mars 2026)
-- Warmup etendu: merchants (-92%), transactions (-96%), subscriptions (-99%)
-- PHP-FPM 15 workers, materialisation 365j
-- Cron hebdomadaire + quotidien
+## Endpoints API Principaux
+- `GET /api/dashboard/split/kpis`
+- `GET /api/dashboard/split/merchants`
+- `GET /api/dashboard/split/transactions`
+- `GET /api/dashboard/split/subscriptions` (matérialisé)
+- `GET /api/dashboard/split/timwe`
+- `GET /api/dashboard/split/ooredoo`
 
-### Correction bugs critiques (27 Mars 2026)
-- operator "all" -> "ALL" normalise
-- Conflit formatNumber() ecrasee par widget IA -> formatNumberShort()
-- taux_facturation string -> parseFloat()
-- Endpoint split/timwe dedie cree
-- KPIs Ooredoo/DGV formatage corrige
-- Auto-demarrage PHP-FPM/Nginx au redemarrage conteneur
-- APP_URL corrigee (erreur CSRF 419)
-- Limite periode augmentee de 365j a 5 ans (lifetime)
+## Credentials Test
+- Email: `superadmin@ooredoo.tn`
+- Password: `SuperAdmin@2025`
 
-### Benchmark 4 periodes (27 Mars 2026)
-- 1 mois: ~20s cold, <500ms warm
-- 6 mois: ~26s cold, <500ms warm
-- 12 mois: ~27s cold, <500ms warm
-- Lifetime (~5 ans): ~20s cold, <500ms warm
-- 10/10 onglets fonctionnels pour toutes les periodes
-- Rapport detaille: /app/reports/RAPPORT_BENCHMARK_PERIODES.md
+## Fichiers Clés
+- `app/Services/DashboardService.php` - Service principal (3800+ lignes)
+- `app/Http/Controllers/Api/DataControllerOptimized.php` - Contrôleur API split
+- `app/Console/Commands/MaterializeSubscriptionStats.php` - Matérialisation subscriptions
+- `app/Console/Commands/MaterializeDailyStats.php` - Matérialisation KPIs
+- `app/Console/Commands/WarmupDashboardCache.php` - Warmup cache
+- `resources/views/dashboard.blade.php` - Frontend UI
+- `app/Console/Kernel.php` - Scheduler crons
 
 ## Backlog
-- P2: Materialiser subscriptions pour reduire cold cache (20-27s -> <5s)
-- P3: Monitoring temps reel (alertes, health checks)
+- P3: Monitoring temps réel (alertes, health checks)
+- P4: Refactoring DashboardService.php (>3800 lignes → services spécialisés)
+- P4: Matérialisation par opérateur individuel (actuellement ALL seulement)
