@@ -4,7 +4,7 @@
 Deployer l'application Ooredoo Privileges et effectuer des analyses fonctionnelles et des ameliorations de temps de reponse et requetes.
 
 ## Architecture Technique
-- **Framework**: Laravel 10 (PHP 8.2), Nginx, PHP-FPM, Redis
+- **Framework**: Laravel 10 (PHP 8.2), Nginx, PHP-FPM (15 workers), Redis
 - **Base de donnees**: MySQL distante (51.38.187.245:3306)
 - **Cache**: Redis distant (51.38.187.245:7905) 
 - **Deploiement**: FastAPI proxy (8001) + Node.js proxy (3000) -> Nginx + PHP-FPM (8002)
@@ -43,18 +43,33 @@ Deployer l'application Ooredoo Privileges et effectuer des analyses fonctionnell
 - Mars recalcule integralement (1-26): 4 008
 
 ### Nettoyage securite GitGuardian (27 Mars 2026)
-- MAIL_PASSWORD supprime de: env.production.example, PRODUCTION_CONFIG.md, PACKAGE_FINAL_README.md, INSTRUCTIONS_ENVOI.md
-- EKLEKTIK_CLIENT_SECRET et CLIENT_ID supprimes de: env.production.example, config/eklektik.php (fallback), EklektikController.php (hardcode)
+- 6 fichiers nettoyes: MAIL_PASSWORD, EKLEKTIK_CLIENT_SECRET/ID supprimes
 - Secrets migres vers .env uniquement (non commite)
 - 0 secret restant dans les fichiers trackes
 
+### Rate limiting Agent IA (27 Mars 2026)
+- Limite quotidienne globale: 250 req/jour (free tier Gemini 2.5 Flash)
+- Limite par minute: 10 req/min
+- Limite par utilisateur: 20 req/5min (existant)
+- Info quota retournee dans chaque reponse API et endpoint /stats
+
+### Materialisation endpoints split (27 Mars 2026)
+- Warmup etendu: merchants, transactions, subscriptions pre-calcules dans Redis
+- Resultats cold cache -> warm cache:
+  - Merchants: 4 167ms -> 322ms (-92%)
+  - Transactions: 2 659ms -> 106ms (-96%)
+  - Subscriptions: 22 088ms -> 212ms (-99%)
+- Cron existant (*/25min) pre-chauffe aussi les endpoints split (3 periodes x 3 operateurs)
+- PHP-FPM augmente a 15 workers (etait 5)
+- Fix permissions storage/logs pour eviter 500 apres warmup
+
 ### Configuration
-- TrustProxies='*', PHP-FPM 10 workers, Nginx timeout 300s
+- TrustProxies='*', PHP-FPM 15 workers, Nginx timeout 300s
 - 11 jobs planifies (scheduler Laravel)
 - TIMWE_BILLING_PPIDS: 63980,63981,63982
+- AI_AGENT_DAILY_LIMIT: 250, AI_AGENT_MINUTE_LIMIT: 10
 
 ## Backlog
-- P2: Monitoring stabilite Agent IA / Gemini 2.5 Flash
-- P2: Materialiser merchants/subscriptions/transactions (cold cache < 5s)
+- P2: Monitoring stabilite Agent IA (dashboard frontend)
 - P3: Materialisation 365 jours
 - P3: Monitoring temps reel

@@ -75,7 +75,7 @@ class AIAgentController extends Controller
             $provider = !empty($available) ? array_key_first($available) : 'openai';
         }
         
-        // Validation rate limiting simple
+        // Validation rate limiting simple (par utilisateur: 20 req / 5 min)
         $recentQuestions = AIConversation::where('user_id', $userId)
             ->where('message_type', 'user')
             ->where('created_at', '>=', now()->subMinutes(5))
@@ -84,8 +84,40 @@ class AIAgentController extends Controller
         if ($recentQuestions >= 20) {
             return response()->json([
                 'success' => false,
-                'error' => '🚫 Trop de questions récentes. Attendez quelques minutes.',
+                'error' => 'Trop de questions récentes. Attendez quelques minutes.',
                 'retry_after' => 300
+            ], 429);
+        }
+
+        // Rate limiting quotidien global Gemini free tier (250 req/jour, 10 req/min)
+        $dailyLimit = (int) env('AI_AGENT_DAILY_LIMIT', 250);
+        $minuteLimit = (int) env('AI_AGENT_MINUTE_LIMIT', 10);
+
+        $todayCount = AIConversation::where('message_type', 'assistant')
+            ->whereNotNull('model_used')
+            ->where('created_at', '>=', now()->startOfDay())
+            ->count();
+
+        if ($todayCount >= $dailyLimit) {
+            return response()->json([
+                'success' => false,
+                'error' => "Quota journalier atteint ({$dailyLimit} requêtes/jour). Le quota se réinitialise à minuit.",
+                'daily_used' => $todayCount,
+                'daily_limit' => $dailyLimit,
+                'retry_after' => now()->endOfDay()->diffInSeconds(now())
+            ], 429);
+        }
+
+        $lastMinuteCount = AIConversation::where('message_type', 'assistant')
+            ->whereNotNull('model_used')
+            ->where('created_at', '>=', now()->subMinute())
+            ->count();
+
+        if ($lastMinuteCount >= $minuteLimit) {
+            return response()->json([
+                'success' => false,
+                'error' => "Limite par minute atteinte ({$minuteLimit} req/min). Réessayez dans quelques secondes.",
+                'retry_after' => 60
             ], 429);
         }
         
@@ -98,8 +130,13 @@ class AIAgentController extends Controller
         
         $response = $this->aiAgent->ask($question, $sessionId, $userId, $provider);
         
-        // Ajouter l'ID de session à la réponse
+        // Ajouter l'ID de session et info quota à la réponse
         $response['session_id'] = $sessionId;
+        $response['quota'] = [
+            'daily_used' => $todayCount + 1,
+            'daily_limit' => $dailyLimit,
+            'remaining' => max(0, $dailyLimit - $todayCount - 1)
+        ];
         
         return response()->json($response);
     }
@@ -263,6 +300,19 @@ class AIAgentController extends Controller
     public function getStats(): JsonResponse
     {
         $stats = AIConversation::getUsageStats(30);
+
+        // Quota journalier
+        $dailyLimit = (int) env('AI_AGENT_DAILY_LIMIT', 250);
+        $todayUsed = AIConversation::where('message_type', 'assistant')
+            ->whereNotNull('model_used')
+            ->where('created_at', '>=', now()->startOfDay())
+            ->count();
+        $stats['daily_quota'] = [
+            'used' => $todayUsed,
+            'limit' => $dailyLimit,
+            'remaining' => max(0, $dailyLimit - $todayUsed),
+            'percentage' => $dailyLimit > 0 ? round(($todayUsed / $dailyLimit) * 100, 1) : 0
+        ];
         
         // Statistiques par utilisateur
         $userStats = AIConversation::where('created_at', '>=', now()->subDays(30))
