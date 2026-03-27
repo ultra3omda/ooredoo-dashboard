@@ -142,8 +142,8 @@ class DataControllerOptimized extends Controller
         
         // Limitation de la période maximale (1 an)
         $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate));
-        if ($periodDays > 365) {
-            throw new \InvalidArgumentException("Période maximale autorisée: 365 jours (demandé: {$periodDays} jours)");
+        if ($periodDays > 1825) {
+            throw new \InvalidArgumentException("Période maximale autorisée: 5 ans (demandé: {$periodDays} jours)");
         }
         
         return [

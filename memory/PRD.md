@@ -21,41 +21,44 @@ Deployer l'application Ooredoo Privileges et effectuer des analyses fonctionnell
 - 6 endpoints split paralleles (kpis, merchants, transactions, subscriptions, ooredoo, timwe)
 
 ### Fusion branche develop (26 Mars 2026)
-- 228 fichiers, 10 onglets: Overview, Subscriptions, Transactions, Merchants, Timwe, Ooredoo/DGV, Eklektik, Comparison, Agent IA, Diagnostic Timwe
+- 228 fichiers, 10 onglets fonctionnels
 
 ### Integration IA (26 Mars 2026)
 - Gemini 2.5 Flash (35% plus rapide que GPT-4, defini par defaut)
 
 ### Correction donnees Timwe (26-27 Mars 2026)
 - 3 ppids (63980, 63981, 63982), comptage par transaction
-- Fevrier: 3 837 (Timwe: 4 012, ecart 4.4% accepte), Mars: 4 008
+- Fevrier: 3 837, Mars: 4 008
 
 ### Nettoyage securite GitGuardian (27 Mars 2026)
 - 6 fichiers nettoyes, 0 secret dans fichiers trackes
 
 ### Rate limiting + Monitoring Agent IA (27 Mars 2026)
-- Limite quotidienne: 250 req/jour, 10 req/min
-- Widget monitoring: quota temps reel, temps moyen, questions 30j, tokens 30j
+- Limite quotidienne: 250 req/jour, 10 req/min, widget monitoring frontend
 
 ### Materialisation & Warmup (27 Mars 2026)
 - Warmup etendu: merchants (-92%), transactions (-96%), subscriptions (-99%)
-- PHP-FPM 15 workers, materialisation 365j lancee
-- Cron hebdomadaire (dimanche 4h30) refresh complet, quotidien (3h00) 7 derniers jours
+- PHP-FPM 15 workers, materialisation 365j
+- Cron hebdomadaire + quotidien
 
 ### Correction bugs critiques (27 Mars 2026)
-- FIX: operator "all" -> "ALL" normalise (merchants/transactions/subscriptions retournaient vide)
-- FIX: Conflit de nom formatNumber() ecrasee par widget IA -> renommee formatNumberShort()
-- FIX: taux_facturation string -> parseFloat() pour calcul correct du taux moyen Timwe
-- FIX: Creation endpoint split/timwe dedie (les KPIs Timwe dependaient des subscriptions lentes)
-- FIX: KPIs Ooredoo/DGV valeurs float brutes -> correctement formatees (46,47%, 0,322 TND)
-- FIX: Auto-demarrage PHP-FPM + Nginx dans le proxy FastAPI au redemarrage conteneur
-- FIX: APP_URL mise a jour vers le bon domaine (corrige erreur CSRF 419)
+- operator "all" -> "ALL" normalise
+- Conflit formatNumber() ecrasee par widget IA -> formatNumberShort()
+- taux_facturation string -> parseFloat()
+- Endpoint split/timwe dedie cree
+- KPIs Ooredoo/DGV formatage corrige
+- Auto-demarrage PHP-FPM/Nginx au redemarrage conteneur
+- APP_URL corrigee (erreur CSRF 419)
+- Limite periode augmentee de 365j a 5 ans (lifetime)
 
-### Analyse complete 10 onglets (27 Mars 2026)
-- Tous les 10 onglets testes et fonctionnels
-- KPIs correctement formates (arrondis, separateurs, unites)
-- Graphiques et tableaux remplis
-- Periodes courte (7j), moyenne (30j) et longue (90j) validees
+### Benchmark 4 periodes (27 Mars 2026)
+- 1 mois: ~20s cold, <500ms warm
+- 6 mois: ~26s cold, <500ms warm
+- 12 mois: ~27s cold, <500ms warm
+- Lifetime (~5 ans): ~20s cold, <500ms warm
+- 10/10 onglets fonctionnels pour toutes les periodes
+- Rapport detaille: /app/reports/RAPPORT_BENCHMARK_PERIODES.md
 
 ## Backlog
+- P2: Materialiser subscriptions pour reduire cold cache (20-27s -> <5s)
 - P3: Monitoring temps reel (alertes, health checks)
