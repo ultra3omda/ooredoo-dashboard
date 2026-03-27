@@ -91,7 +91,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboard/transactions-separate', [DataControllerOptimized::class, 'getTransactions'])->name('api.dashboard.transactions-separate');
         Route::get('/dashboard/subscriptions/{clientId}', [DataControllerOptimized::class, 'getUserSubscriptions'])->name('api.dashboard.user.subscriptions');
         Route::get('/operators', [App\Http\Controllers\Api\OperatorsController::class, 'getOperators']);
-        Route::get('/user-operators', [DataController::class, 'getUserOperators'])->name('api.user.operators');
         Route::get('/eklektik-dashboard/kpis', [App\Http\Controllers\Api\EklektikDashboardController::class, 'getKPIs']);
         Route::get('/eklektik-dashboard/revenue-distribution', [App\Http\Controllers\Api\EklektikDashboardController::class, 'getRevenueDistribution']);
         Route::get('/eklektik-dashboard/sync-status', [App\Http\Controllers\Api\EklektikDashboardController::class, 'getSyncStatus']);
