@@ -2514,7 +2514,7 @@ class DashboardService
      * - revenu_ttc_usd (revenu total TTC en USD)
      * - revenu_ttc_tnd (revenu total TTC en TND)
      */
-    private function getDailyStatistics(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
+    public function getDailyStatistics(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
     {
         try {
             // Essayer d'utiliser la table de cache d'abord
@@ -3433,7 +3433,7 @@ class DashboardService
      * - daily_details (array des jours du mois)
      * - totaux mensuels calculés selon le contrat
      */
-    private function groupTimweStatsByMonth(array $dailyStats): array
+    public function groupTimweStatsByMonth(array $dailyStats): array
     {
         if (empty($dailyStats)) {
             return [];

@@ -5580,10 +5580,11 @@
         // Si un endpoint echoue, on fallback sur le monolithique
         const sections = [
           { name: 'kpis', url: `/api/dashboard/split/kpis?${queryString}`, label: 'KPIs', weight: 20 },
-          { name: 'merchants', url: `/api/dashboard/split/merchants?${queryString}`, label: 'Marchands', weight: 25 },
+          { name: 'merchants', url: `/api/dashboard/split/merchants?${queryString}`, label: 'Marchands', weight: 20 },
           { name: 'transactions', url: `/api/dashboard/split/transactions?${queryString}`, label: 'Transactions', weight: 15 },
-          { name: 'subscriptions', url: `/api/dashboard/split/subscriptions?${queryString}`, label: 'Abonnements', weight: 30 },
-          { name: 'ooredoo_stats', url: `/api/dashboard/split/ooredoo?${queryString}`, label: 'Ooredoo', weight: 10 }
+          { name: 'subscriptions', url: `/api/dashboard/split/subscriptions?${queryString}`, label: 'Abonnements', weight: 25 },
+          { name: 'ooredoo_stats', url: `/api/dashboard/split/ooredoo?${queryString}`, label: 'Ooredoo', weight: 10 },
+          { name: 'timwe_stats', url: `/api/dashboard/split/timwe?${queryString}`, label: 'Timwe', weight: 10 }
         ];
         
         let completedWeight = 0;
@@ -5760,6 +5761,25 @@
             if (json.data) {
               window._dashboardData.ooredoo_stats = json.data;
               dashboardData = window._dashboardData;
+            }
+            break;
+          case 'timwe_stats':
+            if (json.data) {
+              window._dashboardData.timwe_stats = json.data;
+              // Injecter les monthly stats dans subscriptions pour que updateTimweKPIs fonctionne
+              if (!window._dashboardData.subscriptions) window._dashboardData.subscriptions = {};
+              window._dashboardData.subscriptions.timwe_monthly_stats = json.data.timwe_monthly_stats || [];
+              window._dashboardData.subscriptions.timwe_monthly_stats_comparison = json.data.timwe_monthly_stats_comparison || [];
+              window._dashboardData.subscriptions.daily_statistics = json.data.daily_statistics || [];
+              window._dashboardData.subscriptions.daily_statistics_comparison = json.data.daily_statistics_comparison || [];
+              dashboardData = window._dashboardData;
+              // Mettre a jour les KPIs Timwe immediatement
+              if (typeof updateTimweKPIs === 'function') {
+                try { updateTimweKPIs(dashboardData); } catch(e) { console.warn('updateTimweKPIs error:', e); }
+              }
+              if (typeof updateCharts === 'function') {
+                try { updateCharts(window._dashboardData); } catch(e) {}
+              }
             }
             break;
         }
@@ -6503,6 +6523,90 @@
       });
     }
 
+    // Fonction dediee pour mettre a jour les KPIs de l'onglet Timwe
+    function updateTimweKPIs(dashData) {
+      if (!dashData || !dashData.subscriptions || !dashData.subscriptions.timwe_monthly_stats) return;
+      
+      updateTimweStatisticsTable(dashData.subscriptions.timwe_monthly_stats);
+      
+      const monthlyStats = dashData.subscriptions.timwe_monthly_stats || [];
+      const monthlyStatsComparison = dashData.subscriptions.timwe_monthly_stats_comparison || [];
+      const totals = calculateTimweTotals(monthlyStats);
+      const comparisonTotals = monthlyStatsComparison.length > 0 ? calculateTimweComparisonTotals(monthlyStatsComparison) : null;
+      
+      const makeKPI = (current, previous) => {
+        if (previous === null || previous === undefined || !comparisonTotals) return { current, previous: 0, change: 0 };
+        return { current, previous, change: calculateChange(current, previous) };
+      };
+      
+      updateKPI('timwe-active-subs', makeKPI(totals.activeSubsEndOfPeriod, comparisonTotals?.activeSubsEndOfPeriod));
+      updateKPI('timwe-new-subscriptions', makeKPI(totals.newSubs, comparisonTotals?.newSubs));
+      updateKPI('timwe-unsubscriptions', makeKPI(totals.unsubs, comparisonTotals?.unsubs));
+      updateKPI('timwe-simchurn', makeKPI(totals.simchurn, comparisonTotals?.simchurn));
+      
+      updateKPI('timwe-simchurn-revenue', {
+        current: formatNumber(totals.simchurnRevenue, 3),
+        previous: comparisonTotals ? formatNumber(comparisonTotals.simchurnRevenue, 3) : 0,
+        change: comparisonTotals ? calculateChange(totals.simchurnRevenue, comparisonTotals.simchurnRevenue) : 0
+      }, ' TND');
+      
+      updateKPI('timwe-revenue-tnd', {
+        current: formatNumber(totals.revenueTnd, 3),
+        previous: comparisonTotals ? formatNumber(comparisonTotals.revenueTnd, 3) : 0,
+        change: comparisonTotals ? calculateChange(totals.revenueTnd, comparisonTotals.revenueTnd) : 0
+      }, ' TND');
+      
+      updateKPI('timwe-revenue-usd', {
+        current: formatNumber(totals.caBigdealHt, 3),
+        previous: comparisonTotals ? formatNumber(comparisonTotals.caBigdealHt, 3) : 0,
+        change: comparisonTotals ? calculateChange(totals.caBigdealHt, comparisonTotals.caBigdealHt) : 0
+      }, ' TND');
+      
+      // Nombre de jours de la periode
+      const startDate = document.getElementById('start-date')?.value;
+      const endDate = document.getElementById('end-date')?.value;
+      let periodDays = 30;
+      if (startDate && endDate) {
+        const s = new Date(startDate), e = new Date(endDate);
+        periodDays = Math.ceil((e - s) / (1000 * 60 * 60 * 24)) || 30;
+      }
+      
+      // Taux de Croissance Nette
+      const netGrowth = totals.newSubs - totals.unsubs - totals.simchurn;
+      const netGrowthRate = totals.activeSubsEndOfPeriod > 0 ? (netGrowth / totals.activeSubsEndOfPeriod) * 100 : 0;
+      const netGrowthRateComp = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
+        ? ((comparisonTotals.newSubs - comparisonTotals.unsubs - comparisonTotals.simchurn) / comparisonTotals.activeSubsEndOfPeriod) * 100 : null;
+      
+      updateKPI('timwe-net-growth-rate', {
+        current: formatNumber(netGrowthRate, 2),
+        previous: netGrowthRateComp !== null ? formatNumber(netGrowthRateComp, 2) : 0,
+        change: netGrowthRateComp !== null ? calculateChange(netGrowthRate, netGrowthRateComp) : 0
+      }, '%');
+      
+      // ARPU mensuel normalise
+      const arpuValue = totals.activeSubsEndOfPeriod > 0 ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays) : 0;
+      updateKPI('timwe-arpu', { current: formatNumber(arpuValue, 3), previous: 0, change: 0 }, ' TND');
+      
+      // Facturation Timwe depuis timwe_daily_stats
+      const dailyStats = dashData.subscriptions.daily_statistics || [];
+      let totalBillings = 0;
+      let totalBillingRate = 0;
+      let daysWithRate = 0;
+      dailyStats.forEach(d => {
+        totalBillings += (parseInt(d.nb_facturation) || 0);
+        const taux = parseFloat(d.taux_facturation) || 0;
+        if (taux > 0) { totalBillingRate += taux; daysWithRate++; }
+      });
+      const avgBillingRate = daysWithRate > 0 ? totalBillingRate / daysWithRate : 0;
+      
+      updateKPI('timwe-total-billings', { current: totalBillings, previous: 0, change: 0 });
+      updateKPI('timwe-billing-rate', { current: formatNumber(avgBillingRate, 2), previous: 0, change: 0 }, '%');
+      
+      // Revenu moyen par facturation
+      const avgBillingValue = totalBillings > 0 ? totals.revenueTnd / totalBillings : 0;
+      updateKPI('timwe-avg-billing-revenue', { current: formatNumber(avgBillingValue, 3), previous: 0, change: 0 }, ' TND');
+    }
+
     // Update KPI values
     function updateKPIs(kpis) {
       const normalizeKPI = (obj) => (obj && typeof obj.current !== 'undefined') ? obj : { current: 0, previous: 0, change: 0 };
@@ -6533,133 +6637,10 @@
       // Taux de churn doit utiliser la valeur churnRate
       updateKPI('sub-retentionRateTrue', normalizeKPI(kpis?.churnRate), '%');
       
-      // Timwe Tab KPIs (super admin uniquement)
-      if (kpis?.billingRateTimwe) {
-        updateKPI('timwe-billing-rate', normalizeKPI(kpis?.billingRateTimwe), '%');
-        updateKPI('timwe-total-billings', normalizeKPI(kpis?.totalTimweBillings));
-        
-        // Récupérer les statistiques mensuelles groupées Timwe depuis les données du dashboard
-        if (dashboardData && dashboardData.subscriptions && dashboardData.subscriptions.timwe_monthly_stats) {
-          updateTimweStatisticsTable(dashboardData.subscriptions.timwe_monthly_stats);
-          
-          // DÉSACTIVÉ POUR OPTIMISATION: Tableau des transactions Timwe par utilisateur
-          // if (dashboardData.subscriptions.timwe_transactions_by_user) {
-          //   updateTimweTransactionsTable(dashboardData.subscriptions.timwe_transactions_by_user);
-          // } else {
-          //   updateTimweTransactionsTable([]);
-          // }
-          
-          // Calculer les KPIs agrégés avec comparaison (depuis les données mensuelles)
-          const monthlyStats = dashboardData.subscriptions.timwe_monthly_stats || [];
-          const monthlyStatsComparison = dashboardData.subscriptions.timwe_monthly_stats_comparison || [];
-          
-          const totals = calculateTimweTotals(monthlyStats);
-          const comparisonTotals = monthlyStatsComparison.length > 0 
-            ? calculateTimweComparisonTotals(monthlyStatsComparison) 
-            : null;
-          
-          console.log('🔍 [TIMWE] Statistiques:', {
-            current: monthlyStats.length,
-            comparison: monthlyStatsComparison.length,
-            hasSeparateComparison: !!dashboardData.subscriptions.timwe_monthly_stats_comparison
-          });
-          
-          // Helper pour créer un objet KPI avec ou sans comparaison
-          const makeKPI = (current, previous) => {
-            if (previous === null || previous === undefined || !comparisonTotals) {
-              return { current, previous: 0, change: 0 };
-            }
-            return {
-              current,
-              previous,
-              change: calculateChange(current, previous)
-            };
-          };
-          
-          // Mise à jour des KPIs avec comparaison (si disponible)
-          const newSubsKPI = makeKPI(totals.newSubs, comparisonTotals?.newSubs);
-          console.log('🔍 [TIMWE KPI] Nouveaux Abonnements:', newSubsKPI);
-          
-          updateKPI('timwe-active-subs', makeKPI(
-            totals.activeSubsEndOfPeriod,
-            comparisonTotals?.activeSubsEndOfPeriod
-          ));
-          
-          updateKPI('timwe-new-subscriptions', newSubsKPI);
-          
-          updateKPI('timwe-unsubscriptions', makeKPI(
-            totals.unsubs,
-            comparisonTotals?.unsubs
-          ));
-          
-          updateKPI('timwe-simchurn', makeKPI(
-            totals.simchurn,
-            comparisonTotals?.simchurn
-          ));
-          
-          updateKPI('timwe-simchurn-revenue', {
-            current: formatNumber(totals.simchurnRevenue, 3),
-            previous: comparisonTotals ? formatNumber(comparisonTotals.simchurnRevenue, 3) : 0,
-            change: comparisonTotals ? calculateChange(totals.simchurnRevenue, comparisonTotals.simchurnRevenue) : 0
-          }, ' TND');
-          
-          updateKPI('timwe-revenue-tnd', {
-            current: formatNumber(totals.revenueTnd, 3),
-            previous: comparisonTotals ? formatNumber(comparisonTotals.revenueTnd, 3) : 0,
-            change: comparisonTotals ? calculateChange(totals.revenueTnd, comparisonTotals.revenueTnd) : 0
-          }, ' TND');
-          
-          updateKPI('timwe-revenue-usd', {
-            current: formatNumber(totals.caBigdealHt, 3),
-            previous: comparisonTotals ? formatNumber(comparisonTotals.caBigdealHt, 3) : 0,
-            change: comparisonTotals ? calculateChange(totals.caBigdealHt, comparisonTotals.caBigdealHt) : 0
-          }, ' TND');
-          
-          // Calculer le nombre de jours de la période pour normaliser l'ARPU
-          const startDate = document.getElementById('start-date')?.value;
-          const endDate = document.getElementById('end-date')?.value;
-          let periodDays = 30; // Défaut
-          if (startDate && endDate) {
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-            periodDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 30;
-          }
-          
-          // Taux de Croissance Nette = ((New Subs - Unsubs - Simchurn) / Active Subs) * 100
-          const netGrowth = totals.newSubs - totals.unsubs - totals.simchurn;
-          const netGrowthRate = totals.activeSubsEndOfPeriod > 0 
-            ? (netGrowth / totals.activeSubsEndOfPeriod) * 100 
-            : 0;
-          
-          const netGrowthRateComparison = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
-            ? ((comparisonTotals.newSubs - comparisonTotals.unsubs - comparisonTotals.simchurn) / comparisonTotals.activeSubsEndOfPeriod) * 100
-            : null;
-          
-          // Formater le taux de croissance avec 2 décimales
-          const netGrowthFormatted = formatNumber(netGrowthRate, 2);
-          const netGrowthComparisonFormatted = netGrowthRateComparison !== null ? formatNumber(netGrowthRateComparison, 2) : 0;
-          
-          updateKPI('timwe-net-growth-rate', {
-            current: netGrowthFormatted,
-            previous: netGrowthComparisonFormatted,
-            change: netGrowthRateComparison !== null ? calculateChange(netGrowthRate, netGrowthRateComparison) : 0
-          }, '%');
-          
-          // ARPU mensuel normalisé (30 jours)
-          // Formule : (Revenu Total / Active Subs) * (30 / Nombre de jours)
-          const arpuValue = totals.activeSubsEndOfPeriod > 0 
-            ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays)
-            : 0;
-          const arpuFormatted = formatNumber(arpuValue, 3);
-          
-          updateKPI('timwe-arpu', { current: arpuFormatted, previous: 0, change: 0 }, ' TND');
-          
-          const avgBillingValue = kpis?.totalTimweBillings?.current > 0 
-            ? totals.revenueTnd / kpis.totalTimweBillings.current
-            : 0;
-          const avgBillingFormatted = formatNumber(avgBillingValue, 3);
-          updateKPI('timwe-avg-billing-revenue', { current: avgBillingFormatted, previous: 0, change: 0 }, ' TND');
-        }
+      // Timwe Tab KPIs - gérés par le endpoint split/timwe via updateTimweKPIs()
+      // Les KPIs billingRateTimwe et totalTimweBillings sont calculés dans updateTimweKPIs
+      if (dashboardData && dashboardData.subscriptions && dashboardData.subscriptions.timwe_monthly_stats) {
+        updateTimweKPIs(dashboardData);
       }
 
       // Ooredoo/DGV KPIs
@@ -10023,9 +10004,9 @@
         const avgEl = document.getElementById('aiAvgTime');
         if (avgEl) avgEl.textContent = stats.avg_execution_time ? Math.round(stats.avg_execution_time) : '0';
         const questEl = document.getElementById('aiTotalQuestions');
-        if (questEl) questEl.textContent = formatNumber(stats.total_questions || 0);
+        if (questEl) questEl.textContent = formatNumberShort(stats.total_questions || 0);
         const tokEl = document.getElementById('aiTotalTokens');
-        if (tokEl) tokEl.textContent = formatNumber(stats.total_tokens_consumed || 0);
+        if (tokEl) tokEl.textContent = formatNumberShort(stats.total_tokens_consumed || 0);
       }).catch(() => {});
     }
 
@@ -10042,7 +10023,7 @@
       }
     }
 
-    function formatNumber(n) {
+    function formatNumberShort(n) {
       if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
       if (n >= 1000) return (n/1000).toFixed(1) + 'K';
       return n.toString();

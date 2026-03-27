@@ -110,6 +110,11 @@ class DataControllerOptimized extends Controller
         $comparisonEndDate = $request->input("comparison_end_date");
         $selectedOperator = $request->input("operator", "Timwe");
         
+        // Normaliser "all" -> "ALL"
+        if (strtolower($selectedOperator) === 'all') {
+            $selectedOperator = 'ALL';
+        }
+        
         // Validation des dates
         if ($startDate && !$this->isValidDate($startDate)) {
             throw new \InvalidArgumentException("Date de début invalide: {$startDate}");
@@ -740,6 +745,46 @@ class DataControllerOptimized extends Controller
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'section' => 'ooredoo_stats', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Timwe stats seuls (similaire à ooredoo)
+     */
+    public function getTimweStatsSplit(Request $request): JsonResponse
+    {
+        set_time_limit(120);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:timwe:' . md5(json_encode($params));
+            $timweStats = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+                $daily = $this->dashboardService->getDailyStatistics($startBound, $endExclusive, $params['operator']);
+                $dailyComp = $this->dashboardService->getDailyStatistics($compStartBound, $compEndExclusive, $params['operator']);
+                return [
+                    'daily_statistics' => $daily,
+                    'daily_statistics_comparison' => $dailyComp,
+                    'timwe_monthly_stats' => $this->dashboardService->groupTimweStatsByMonth($daily),
+                    'timwe_monthly_stats_comparison' => $this->dashboardService->groupTimweStatsByMonth($dailyComp)
+                ];
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'timwe_stats',
+                'data' => $timweStats,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'timwe_stats', 'error' => $e->getMessage()], 500);
         }
     }
 }
