@@ -24,6 +24,27 @@ class DataControllerOptimized extends Controller
     }
     
     /**
+     * Ultra-fast response from pre-serialized JSON cache.
+     * Returns raw cached JSON string directly, bypassing all PHP serialization.
+     */
+    private function fastCacheResponse(Request $request, string $section): ?\Illuminate\Http\Response
+    {
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            $rawKey = 'split_raw:' . $section . ':' . md5(json_encode($params));
+            $cached = Cache::get($rawKey);
+            if ($cached) {
+                return response($cached, 200)->header('Content-Type', 'application/json');
+            }
+        } catch (\Exception $e) {
+            // Fall through to normal processing
+        }
+        return null;
+    }
+    
+    /**
      * Get complete dashboard data - VERSION OPTIMISÉE
      */
     public function getDashboardData(Request $request): JsonResponse
@@ -582,8 +603,11 @@ class DataControllerOptimized extends Controller
     /**
      * KPIs seuls (rapide ~15s cold, ~1s cached)
      */
-    public function getKpisSplit(Request $request): JsonResponse
+    public function getKpisSplit(Request $request): JsonResponse|\Illuminate\Http\Response
     {
+        $fast = $this->fastCacheResponse($request, 'kpis');
+        if ($fast) return $fast;
+        
         set_time_limit(120);
         $startTime = microtime(true);
         try {
@@ -597,7 +621,7 @@ class DataControllerOptimized extends Controller
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
             $cacheKey = 'split:kpis:' . md5(json_encode($params));
-            $kpis = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+            $kpis = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 return $this->dashboardService->getKPIsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
             });
             
@@ -615,8 +639,11 @@ class DataControllerOptimized extends Controller
     /**
      * Marchands seuls
      */
-    public function getMerchantsSplit(Request $request): JsonResponse
+    public function getMerchantsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
     {
+        $fast = $this->fastCacheResponse($request, 'merchants');
+        if ($fast) return $fast;
+        
         set_time_limit(120);
         $startTime = microtime(true);
         try {
@@ -630,7 +657,7 @@ class DataControllerOptimized extends Controller
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
             $cacheKey = 'split:merchants:' . md5(json_encode($params));
-            $merchants = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+            $merchants = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 return $this->dashboardService->getMerchantsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
             });
             
@@ -649,8 +676,11 @@ class DataControllerOptimized extends Controller
     /**
      * Transactions seules (rapide ~1s)
      */
-    public function getTransactionsSplit(Request $request): JsonResponse
+    public function getTransactionsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
     {
+        $fast = $this->fastCacheResponse($request, 'transactions');
+        if ($fast) return $fast;
+        
         set_time_limit(60);
         $startTime = microtime(true);
         try {
@@ -662,7 +692,7 @@ class DataControllerOptimized extends Controller
             $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
             
             $cacheKey = 'split:transactions:' . md5(json_encode($params));
-            $transactions = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $params) {
+            $transactions = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $params) {
                 return $this->dashboardService->getTransactionsDataPublic($startBound, $endExclusive, $params['operator']);
             });
             
@@ -680,8 +710,11 @@ class DataControllerOptimized extends Controller
     /**
      * Abonnements seuls (le plus lourd)
      */
-    public function getSubscriptionsSplit(Request $request): JsonResponse
+    public function getSubscriptionsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
     {
+        $fast = $this->fastCacheResponse($request, 'subscriptions');
+        if ($fast) return $fast;
+        
         set_time_limit(180);
         $startTime = microtime(true);
         try {
@@ -695,7 +728,7 @@ class DataControllerOptimized extends Controller
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
             $cacheKey = 'split:subscriptions:' . md5(json_encode($params));
-            $subscriptions = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $params, $compStartBound, $compEndExclusive) {
+            $subscriptions = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $params, $compStartBound, $compEndExclusive) {
                 return $this->dashboardService->getSubscriptionsDataPublic($startBound, $endExclusive, $params['operator'], $compStartBound, $compEndExclusive);
             });
             
@@ -713,8 +746,11 @@ class DataControllerOptimized extends Controller
     /**
      * Ooredoo stats seuls (rapide ~1s)
      */
-    public function getOoredooStatsSplit(Request $request): JsonResponse
+    public function getOoredooStatsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
     {
+        $fast = $this->fastCacheResponse($request, 'ooredoo');
+        if ($fast) return $fast;
+        
         set_time_limit(60);
         $startTime = microtime(true);
         try {
@@ -726,7 +762,7 @@ class DataControllerOptimized extends Controller
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
             $cacheKey = 'split:ooredoo:' . md5(json_encode($params));
-            $ooredooStats = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive) {
+            $ooredooStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive) {
                 $daily = $this->dashboardService->getOoredooDailyStatisticsPublic($startBound, $endExclusive);
                 $dailyComp = $this->dashboardService->getOoredooDailyStatisticsPublic($compStartBound, $compEndExclusive);
                 return [
@@ -751,8 +787,11 @@ class DataControllerOptimized extends Controller
     /**
      * Timwe stats seuls (similaire à ooredoo)
      */
-    public function getTimweStatsSplit(Request $request): JsonResponse
+    public function getTimweStatsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
     {
+        $fast = $this->fastCacheResponse($request, 'timwe');
+        if ($fast) return $fast;
+        
         set_time_limit(120);
         $startTime = microtime(true);
         try {
@@ -766,7 +805,7 @@ class DataControllerOptimized extends Controller
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
             $cacheKey = 'split:timwe:' . md5(json_encode($params));
-            $timweStats = Cache::remember($cacheKey, 1800, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+            $timweStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 $daily = $this->dashboardService->getDailyStatistics($startBound, $endExclusive, $params['operator']);
                 $dailyComp = $this->dashboardService->getDailyStatistics($compStartBound, $compEndExclusive, $params['operator']);
                 return [

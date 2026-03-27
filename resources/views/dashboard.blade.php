@@ -5941,10 +5941,10 @@
       const indicator = document.getElementById('performance-indicator');
       if (!indicator) return;
       
-      if (loadTime < 500) {
+      if (loadTime < 3000) {
         // Fast load - likely from cache
         indicator.style.display = 'flex';
-        indicator.querySelector('.performance-text').textContent = 'Cache ⚡';
+        indicator.querySelector('.performance-text').textContent = 'Rapide ⚡';
         indicator.style.background = 'rgba(16, 185, 129, 0.1)';
         indicator.style.borderColor = 'rgba(16, 185, 129, 0.3)';
         indicator.style.color = '#059669';
@@ -5953,7 +5953,7 @@
         setTimeout(() => {
           indicator.style.display = 'none';
         }, 3000);
-      } else if (loadTime < 2000) {
+      } else if (loadTime < 8000) {
         // Medium load
         indicator.style.display = 'flex';
         indicator.querySelector('.performance-text').textContent = `${Math.round(loadTime)}ms`;

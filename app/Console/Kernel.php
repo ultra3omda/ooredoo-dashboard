@@ -62,6 +62,13 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/dashboard-warmup.log'));
+
+            // Warmup split endpoints - Toutes les 50 minutes (< TTL 60 min)
+            $schedule->command('dashboard:warmup-split --ttl=3600')
+                ->cron('*/50 * * * *')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/split-warmup.log'));
             
             // Matérialisation des KPIs quotidiens - Chaque jour à 3h00 (365 jours)
             $schedule->command('dashboard:materialize --days=7')
