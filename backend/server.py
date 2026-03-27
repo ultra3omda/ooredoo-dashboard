@@ -7,7 +7,22 @@ import asyncio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Backend proxy started - proxying to Nginx+PHP-FPM on port 8002")
+    print("Backend proxy started - ensuring PHP-FPM and Nginx are running...")
+    import subprocess
+    # Ensure PHP-FPM is running
+    result = subprocess.run(["pgrep", "-f", "php-fpm"], capture_output=True)
+    if result.returncode != 0:
+        print("Starting PHP-FPM...")
+        subprocess.run(["mkdir", "-p", "/run/php"], check=False)
+        subprocess.run(["php-fpm8.2", "--daemonize"], check=False)
+    # Ensure Nginx has the Laravel config and is serving port 8002
+    result = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8002/"], capture_output=True, text=True)
+    if result.stdout.strip() != "200":
+        print("Reloading Nginx...")
+        subprocess.run(["nginx", "-s", "reload"], check=False, capture_output=True)
+    # Fix storage permissions
+    subprocess.run(["chmod", "-R", "777", "/app/storage/logs/", "/app/storage/framework/"], check=False, capture_output=True)
+    print("Backend proxy ready - proxying to Nginx+PHP-FPM on port 8002")
     yield
 
 app = FastAPI(lifespan=lifespan)
