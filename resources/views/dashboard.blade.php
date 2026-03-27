@@ -3104,6 +3104,57 @@
     <!-- Tab: Agent IA (Style ChatGPT avec Sidebar) -->
     @if(Auth::user()->isSuperAdmin())
     <div id="ai-agent" class="tab-content">
+      <!-- Widget Quota + Monitoring -->
+      <div id="aiQuotaMonitoring" style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+        <!-- Quota du jour -->
+        <div style="flex: 1; min-width: 200px; background: white; border-radius: 10px; border: 1px solid #e5e7eb; padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: #eef2ff; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Quota Aujourd'hui</div>
+            <div style="display: flex; align-items: baseline; gap: 6px;">
+              <span id="aiQuotaUsed" style="font-size: 1.4rem; font-weight: 700; color: #374151;">--</span>
+              <span style="font-size: 0.85rem; color: #9ca3af;">/ <span id="aiQuotaLimit">250</span></span>
+            </div>
+            <div style="margin-top: 6px; height: 5px; background: #f3f4f6; border-radius: 3px; overflow: hidden;">
+              <div id="aiQuotaBar" style="height: 100%; width: 0%; background: #6366f1; border-radius: 3px; transition: width 0.5s ease;"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Temps de reponse moyen -->
+        <div style="flex: 1; min-width: 200px; background: white; border-radius: 10px; border: 1px solid #e5e7eb; padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: #ecfdf5; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Temps moyen</div>
+            <span id="aiAvgTime" style="font-size: 1.4rem; font-weight: 700; color: #374151;">--</span>
+            <span style="font-size: 0.85rem; color: #9ca3af;">ms</span>
+          </div>
+        </div>
+        <!-- Total conversations 30j -->
+        <div style="flex: 1; min-width: 200px; background: white; border-radius: 10px; border: 1px solid #e5e7eb; padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: #fef3c7; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" fill="none" stroke="#f59e0b" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Questions (30j)</div>
+            <span id="aiTotalQuestions" style="font-size: 1.4rem; font-weight: 700; color: #374151;">--</span>
+          </div>
+        </div>
+        <!-- Tokens consommes -->
+        <div style="flex: 1; min-width: 200px; background: white; border-radius: 10px; border: 1px solid #e5e7eb; padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: #fce7f3; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" fill="none" stroke="#ec4899" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Tokens (30j)</div>
+            <span id="aiTotalTokens" style="font-size: 1.4rem; font-weight: 700; color: #374151;">--</span>
+          </div>
+        </div>
+      </div>
+
       <div style="display: flex; gap: 16px; height: 650px;">
         
         <!-- Sidebar Historique -->
@@ -9728,6 +9779,7 @@
       if (aiDashboardInitialized) { loadConversationsFromDatabase(); return; }
       aiDashboardInitialized = true;
       aiSessionDashboard = generateAIUUID();
+      loadAIQuotaStats();
       const sessionEl = document.getElementById('aiCurrentSession');
       const sidebarSessionEl = document.getElementById('aiSessionSidebar');
       if (sessionEl) sessionEl.textContent = aiSessionDashboard.substr(0, 8);
@@ -9925,7 +9977,7 @@
       .then(response => { if (!response.ok) throw new Error('HTTP ' + response.status); const ct = response.headers.get('content-type'); if (!ct || !ct.includes('application/json')) return response.text().then(html => { throw new Error('Serveur a renvoye du HTML au lieu de JSON'); }); return response.json(); })
       .then(data => {
         document.getElementById('aiTypingIndicator').style.display = 'none';
-        if (data.success) { appendAIMessage('assistant', data.message); if (data.session_id) { aiSessionDashboard = data.session_id; document.getElementById('aiCurrentSession').textContent = data.session_id.substr(0, 8); document.getElementById('aiSessionSidebar').textContent = data.session_id.substr(0, 8); } loadConversationsFromDatabase(); }
+        if (data.success) { appendAIMessage('assistant', data.message); if (data.session_id) { aiSessionDashboard = data.session_id; document.getElementById('aiCurrentSession').textContent = data.session_id.substr(0, 8); document.getElementById('aiSessionSidebar').textContent = data.session_id.substr(0, 8); } if (data.quota) { updateQuotaWidget(data.quota.daily_used, data.quota.daily_limit, data.quota.remaining); } loadConversationsFromDatabase(); }
         else { appendAIMessage('assistant', 'Erreur: ' + (data.error || 'Verifiez la configuration API')); }
       })
       .catch(error => { document.getElementById('aiTypingIndicator').style.display = 'none'; appendAIMessage('assistant', 'Erreur reseau ou configuration. Verifiez les cles API dans .env'); })
@@ -9958,6 +10010,42 @@
 
     function generateAIUUID() {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
+    }
+
+    function loadAIQuotaStats() {
+      fetch('/admin/ai-agent/stats', { headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json' } })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) return;
+        const q = data.global_stats?.daily_quota || {};
+        updateQuotaWidget(q.used || 0, q.limit || 250, q.remaining || 250);
+        const stats = data.global_stats || {};
+        const avgEl = document.getElementById('aiAvgTime');
+        if (avgEl) avgEl.textContent = stats.avg_execution_time ? Math.round(stats.avg_execution_time) : '0';
+        const questEl = document.getElementById('aiTotalQuestions');
+        if (questEl) questEl.textContent = formatNumber(stats.total_questions || 0);
+        const tokEl = document.getElementById('aiTotalTokens');
+        if (tokEl) tokEl.textContent = formatNumber(stats.total_tokens_consumed || 0);
+      }).catch(() => {});
+    }
+
+    function updateQuotaWidget(used, limit, remaining) {
+      const usedEl = document.getElementById('aiQuotaUsed');
+      const limitEl = document.getElementById('aiQuotaLimit');
+      const barEl = document.getElementById('aiQuotaBar');
+      if (usedEl) usedEl.textContent = used;
+      if (limitEl) limitEl.textContent = limit;
+      if (barEl) {
+        const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+        barEl.style.width = pct + '%';
+        barEl.style.background = pct > 80 ? '#ef4444' : pct > 50 ? '#f59e0b' : '#6366f1';
+      }
+    }
+
+    function formatNumber(n) {
+      if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+      return n.toString();
     }
   </script>
 

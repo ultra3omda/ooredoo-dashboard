@@ -63,12 +63,19 @@ class Kernel extends ConsoleKernel
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/dashboard-warmup.log'));
             
-            // Matérialisation des KPIs quotidiens - Chaque jour à 3h00
-            $schedule->command('dashboard:materialize --days=3')
+            // Matérialisation des KPIs quotidiens - Chaque jour à 3h00 (365 jours)
+            $schedule->command('dashboard:materialize --days=7')
                 ->dailyAt('03:00')
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/dashboard-materialize.log'));
+
+            // Matérialisation complète 365 jours - Chaque dimanche à 4h30
+            $schedule->command('dashboard:materialize --days=365 --force')
+                ->weeklyOn(0, '04:30')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/dashboard-materialize-full.log'));
 
             // Cache intelligent (contexte agent IA, KPIs, features ML) - Tous les jours à 6h
             $schedule->command('cache:warmup')
