@@ -6592,27 +6592,9 @@
         return { current, previous, change: calculateChange(current, previous) };
       };
       
-      // Cohérence inter-onglets : quand l'opérateur Timwe est sélectionné,
-      // utiliser les KPIs globaux (même source que Overview/Subscriptions)
-      const isTimweOperatorSelected = selectedOperators.some(op => op.toLowerCase().includes('timwe'));
-      const kpis = dashData.kpis || {};
-      
-      if (isTimweOperatorSelected && kpis.activeSubscriptions) {
-        // Active Subs et New Subs depuis les KPIs (identiques à Overview/Subscriptions)
-        updateKPI('timwe-active-subs', {
-          current: kpis.activeSubscriptions.current,
-          previous: kpis.activeSubscriptions.previous,
-          change: kpis.activeSubscriptions.change
-        });
-        updateKPI('timwe-new-subscriptions', {
-          current: kpis.activatedSubscriptions?.current || totals.newSubs,
-          previous: kpis.activatedSubscriptions?.previous || (comparisonTotals?.newSubs || 0),
-          change: kpis.activatedSubscriptions?.change || 0
-        });
-      } else {
-        updateKPI('timwe-active-subs', makeKPI(totals.activeSubsEndOfPeriod, comparisonTotals?.activeSubsEndOfPeriod));
-        updateKPI('timwe-new-subscriptions', makeKPI(totals.newSubs, comparisonTotals?.newSubs));
-      }
+      // Logique originale : calcul depuis timwe_daily_stats (monthly aggregation)
+      updateKPI('timwe-active-subs', makeKPI(totals.activeSubsEndOfPeriod, comparisonTotals?.activeSubsEndOfPeriod));
+      updateKPI('timwe-new-subscriptions', makeKPI(totals.newSubs, comparisonTotals?.newSubs));
       updateKPI('timwe-unsubscriptions', makeKPI(totals.unsubs, comparisonTotals?.unsubs));
       updateKPI('timwe-simchurn', makeKPI(totals.simchurn, comparisonTotals?.simchurn));
       
@@ -6643,13 +6625,9 @@
         periodDays = Math.ceil((e - s) / (1000 * 60 * 60 * 24)) || 30;
       }
       
-      // Base d'actifs pour les ratios - cohérence avec KPIs quand Timwe sélectionné
-      const activeBase = (isTimweOperatorSelected && kpis.activeSubscriptions)
-        ? kpis.activeSubscriptions.current
-        : totals.activeSubsEndOfPeriod;
-      const activeBaseComp = (isTimweOperatorSelected && kpis.activeSubscriptions)
-        ? kpis.activeSubscriptions.previous
-        : (comparisonTotals?.activeSubsEndOfPeriod || 0);
+      // Base d'actifs pour les ratios
+      const activeBase = totals.activeSubsEndOfPeriod;
+      const activeBaseComp = comparisonTotals?.activeSubsEndOfPeriod || 0;
       
       // Taux de Croissance Nette
       const netGrowth = totals.newSubs - totals.unsubs - totals.simchurn;
