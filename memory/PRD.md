@@ -8,70 +8,81 @@ Dashboard haute performance Laravel pour suivi des abonnements, transactions et 
 - MySQL (vues materialisees), Redis (cache ultra-rapide)
 - Chart.js, Vanilla JavaScript
 - FastAPI proxy (port 8001 -> Nginx port 8002)
+- DomPDF pour generation PDF rapports
+- OpenAI GPT-4o via emergentintegrations pour suggestions IA
 
 ## Architecture
-- `app/Services/Dashboard/` : Services domaine
-- `app/Services/DashboardService.php` : Facade legere (~170 lignes)
-- `app/Http/Controllers/Api/DataControllerOptimized.php` : Endpoints split avec cache Redis
-- `resources/views/dashboard.blade.php` : Frontend principal (~5 600 lignes, refactore)
-- `resources/views/monitoring/dashboard.blade.php` : Dashboard monitoring
-- `public/js/dashboard/` : 6 modules JS extraits (~4 860 lignes)
+- `app/Services/Dashboard/` : Services domaine KPIs
+- `app/Services/WeeklyReportService.php` : Generation et envoi des rapports hebdomadaires
+- `app/Http/Controllers/Api/ReportController.php` : CRUD destinataires + envoi manuel
+- `app/Console/Commands/SendWeeklyReports.php` : Commande Artisan schedulee
+- `resources/views/dashboard.blade.php` : Frontend principal (~5 800 lignes, refactore)
+- `resources/views/reports/email/` : Templates email HTML (ceo, marketing, partner)
+- `resources/views/reports/pdf/` : Templates PDF (ceo, marketing, partner)
+- `public/js/dashboard/` : 7 modules JS (incl. reporting.js)
+- `backend/server.py` : Proxy FastAPI + endpoint /api/report-ai-suggestions
 
 ## Design System (Dark Theme - Club Privileges Brand)
 | Variable | Valeur | Usage |
 |----------|--------|-------|
 | --bg | #0D0A1A | Fond page (violet tres sombre) |
 | --card | #161131 | Fond cartes |
-| --card-hover | #1E1745 | Cartes hover |
-| --text-primary | #FFFFFF | Texte principal |
 | --brand-primary | #6C4BA0 | Violet Club Privileges |
 | --brand-secondary | #D4A843 | Or/Dore (accent) |
 | --accent | #D4A843 | Accent dore |
-| --muted | #A1A1AA | Texte secondaire |
 | --border | #2A2350 | Bordures (violet teinte) |
-| --glass-bg | rgba(22,17,49,0.8) | Glassmorphism |
-| Font KPIs | Outfit 700 | Chiffres grands |
-| Font Body | Manrope 400-600 | Texte courant |
 
 ## Navigation Structure
 - **Groupe 1 (Donnees):** Overview | Subscriptions | Transactions | Merchants
 - **Groupe 2 (Operateurs):** Timwe | Ooredoo/DGV | Eklektik
-- **Groupe 3 (Outils):** Comparison
-- **Agent IA:** Bouton flottant bas-droite -> Panel slide-in
-- **Diagnostic Timwe:** Lien dans l'onglet Timwe
+- **Groupe 3 (Outils):** Comparison | Reporting (SuperAdmin only)
 
-## Modules JS Extraits (28/03/2026)
-| Module | Lignes | Description |
-|--------|--------|-------------|
-| eklektik.js | 2 072 | Stats Eklektik |
-| timwe.js | 878 | Stats Timwe |
-| charts.js | 852 | Graphiques Chart.js |
-| tables.js | 703 | Tableaux (daily stats, merchants, subs) |
-| ooredoo.js | 283 | Stats Ooredoo/DGV |
-| utils.js | 72 | Fonctions utilitaires |
+## Systeme de Reporting Hebdomadaire (28/03/2026)
+### Types de rapports
+1. **CEO** : Vue globale tous operateurs + KPIs + top marchands + Eklektik + suggestions IA
+2. **Marketing** : Acquisition, retention, churn, conversion, evolution quotidienne, canaux, operateurs
+3. **Partenaire** : Transactions individuelles (RGPD strict), offres les plus utilisees, clients uniques
 
-## Coherence des Donnees (Analyse 28/03/2026)
-- Activated Subscriptions : 100% coherent (DIFF=0 jour par jour, teste sur 5+ mois)
-- Active Subscriptions : Overview=cohorte, Timwe=base totale (convergent en lifetime)
-- Decision utilisateur : garder logique originale
+### Fonctionnalites
+- Email HTML + PDF en piece jointe
+- Suggestions IA (OpenAI GPT-4o) integrees dans chaque rapport
+- Interface admin de configuration des destinataires (onglet Reporting)
+- Recherche de partenaires pour associer aux rapports
+- Envoi automatique chaque lundi 08:00 (Laravel Scheduler)
+- Envoi manuel par destinataire ou pour tous
+- Historique d'envoi avec statut (envoye/echoue)
+- RGPD : isolation stricte des donnees partenaires
+
+### Endpoints API
+- `GET /api/reports/recipients` - Lister destinataires
+- `POST /api/reports/recipients` - Creer destinataire
+- `PUT /api/reports/recipients/{id}` - Modifier
+- `DELETE /api/reports/recipients/{id}` - Supprimer
+- `POST /api/reports/recipients/{id}/toggle` - Activer/Desactiver
+- `POST /api/reports/send` - Envoyer manuellement
+- `GET /api/reports/logs` - Historique d'envoi
+- `GET /api/reports/partners?q=` - Recherche partenaires
+- `GET /api/reports/schedule` - Config du scheduler
+- `POST /api/report-ai-suggestions` - Suggestions IA (FastAPI)
+
+### Tables DB
+- `report_recipients` (id, name, email, type, partner_id, is_active, schedule_day, schedule_time)
+- `report_logs` (id, recipient_id, report_type, status, period_start, period_end, ai_suggestions, error_message, sent_at)
 
 ## Ce qui est implemente
 - [x] Services domaine (KPIService, MerchantService, etc.)
 - [x] Refactoring DashboardService.php (~4000 -> 170 lignes)
-- [x] Monitoring temps reel
-- [x] Fix dropdown operateurs
-- [x] Analyse coherence donnees
-- [x] Navigation restructuree (groupes, separateurs, Agent IA flottant, Diagnostic dans Timwe)
-- [x] 95+ tooltips explicatifs (audites et corriges 28/03/2026)
-- [x] Refactoring JS : 10 320 -> 5 600 lignes + 6 modules externes
-- [x] Dark theme Club Privileges (violet/or, glassmorphism, animations, fonts) - 28/03/2026
-- [x] Filtres compacts inline (date + comparaison + actions sur 1 ligne)
-- [x] Couleurs marque Club Privileges appliquees (remplacement noir/rouge -> violet/or) - 28/03/2026
-- [x] Audit tooltips KPI (descriptions corrigees pour correspondre aux calculs exacts) - 28/03/2026
+- [x] Navigation restructuree (groupes, separateurs, Agent IA flottant)
+- [x] 95+ tooltips explicatifs (audites et corriges)
+- [x] Dark theme Club Privileges (violet/or)
+- [x] Couleurs marque Club Privileges appliquees
+- [x] Audit tooltips KPI (descriptions = calculs exacts)
+- [x] Systeme de reporting hebdomadaire complet (CRUD, emails, PDF, IA, RGPD)
+- [x] Interface admin Reporting dans le dashboard
 
 ## Backlog
 - Aucune tache en attente
 
-## Credentials Test
+## Credentials
 - Email: superadmin@ooredoo.tn
 - Password: SuperAdmin@2025
