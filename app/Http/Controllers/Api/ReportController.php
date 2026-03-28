@@ -144,6 +144,25 @@ class ReportController extends Controller
         }
     }
 
+    public function previewReport($id)
+    {
+        $recipient = ReportRecipient::with('partner')->findOrFail($id);
+        $periodEnd = Carbon::today();
+        $periodStart = $periodEnd->copy()->subDays(7);
+        $compStart = $periodStart->copy()->subDays(7);
+        $compEnd = $periodStart->copy();
+
+        try {
+            $reportData = $this->reportService->buildPreviewData($recipient, $periodStart, $periodEnd, $compStart, $compEnd);
+            $emailView = "reports.email.{$recipient->type}";
+            $html = view($emailView, $reportData)->render();
+            return response()->json(['html' => $html, 'recipient' => $recipient->name, 'type' => $recipient->type]);
+        } catch (\Exception $e) {
+            Log::error("Report preview failed for {$recipient->email}: " . $e->getMessage());
+            return response()->json(['error' => "Erreur de generation: " . $e->getMessage()], 500);
+        }
+    }
+
     public function getLogs(Request $request)
     {
         $logs = ReportLog::with('recipient:id,name,email,type')

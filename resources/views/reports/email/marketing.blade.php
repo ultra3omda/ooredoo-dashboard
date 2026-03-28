@@ -13,8 +13,9 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f0fa; margin: 
 .kpi-box { flex: 1 1 140px; background: #f8f5ff; border-radius: 8px; padding: 16px; text-align: center; border-left: 3px solid #6C4BA0; }
 .kpi-box .value { font-size: 24px; font-weight: 800; color: #4c3489; }
 .kpi-box .label { font-size: 11px; color: #71717a; text-transform: uppercase; margin-top: 4px; }
-.delta.up { color: #10b981; font-size: 12px; }
-.delta.down { color: #ef4444; font-size: 12px; }
+.delta { font-size: 12px; margin-top: 4px; font-weight: 600; }
+.up { color: #10b981; }
+.down { color: #ef4444; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 table th { background: #f8f5ff; color: #4c3489; text-align: left; padding: 10px 12px; font-weight: 600; border-bottom: 2px solid #ede8f5; }
 table td { padding: 10px 12px; border-bottom: 1px solid #f0ecf7; }
@@ -32,29 +33,33 @@ table td { padding: 10px 12px; border-bottom: 1px solid #f0ecf7; }
 
   <div class="section">
     <div class="section-title">KPIs Acquisition & Retention</div>
+    @php $k = $kpis ?? []; @endphp
     <div class="kpi-grid">
       <div class="kpi-box">
-        <div class="value">{{ number_format($kpis['activatedSubscriptions'] ?? 0) }}</div>
+        <div class="value">{{ number_format($k['activatedSubscriptions']['current'] ?? 0) }}</div>
         <div class="label">Nouveaux Abonnes</div>
+        @if(isset($k['activatedSubscriptions']['change']))
+        <div class="delta {{ ($k['activatedSubscriptions']['change'] ?? 0) >= 0 ? 'up' : 'down' }}">{{ ($k['activatedSubscriptions']['change'] ?? 0) >= 0 ? '+' : '' }}{{ number_format($k['activatedSubscriptions']['change'] ?? 0, 1) }}%</div>
+        @endif
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($kpis['activeSubscriptions'] ?? 0) }}</div>
+        <div class="value">{{ number_format($k['activeSubscriptions']['current'] ?? 0) }}</div>
         <div class="label">Cohorte Active</div>
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($kpis['retentionRate'] ?? 0, 1) }}%</div>
+        <div class="value">{{ number_format($k['retentionRate']['current'] ?? 0, 1) }}%</div>
         <div class="label">Retention</div>
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($kpis['deactivated'] ?? 0) }}</div>
+        <div class="value">{{ number_format($k['periodDeactivated']['current'] ?? $k['deactivatedSubscriptions']['current'] ?? 0) }}</div>
         <div class="label">Desactivations</div>
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($kpis['churnRate'] ?? 0, 1) }}%</div>
+        <div class="value">{{ number_format($k['churnRate']['current'] ?? 0, 1) }}%</div>
         <div class="label">Taux Churn</div>
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($kpis['conversionRate'] ?? 0, 1) }}%</div>
+        <div class="value">{{ number_format($k['conversionRate']['current'] ?? 0, 1) }}%</div>
         <div class="label">Conversion</div>
       </div>
     </div>
@@ -70,7 +75,7 @@ table td { padding: 10px 12px; border-bottom: 1px solid #f0ecf7; }
         <td>{{ \Carbon\Carbon::parse($day->stat_date)->format('d/m') }}</td>
         <td style="color:#10b981;font-weight:600">+{{ number_format($day->activated_count) }}</td>
         <td style="color:#ef4444;font-weight:600">-{{ number_format($day->deactivated_count) }}</td>
-        <td>{{ number_format($day->active_end_count) }}</td>
+        <td>{{ number_format($day->active_snapshot ?? 0) }}</td>
       </tr>
       @endforeach
     </table>
@@ -87,7 +92,8 @@ table td { padding: 10px 12px; border-bottom: 1px solid #f0ecf7; }
         <td>{{ $op->operator_id }}</td>
         <td style="color:#10b981;font-weight:600">+{{ number_format($op->activated) }}</td>
         <td style="color:#ef4444;font-weight:600">-{{ number_format($op->deactivated) }}</td>
-        <td style="font-weight:700;color:{{ ($op->activated - $op->deactivated) >= 0 ? '#10b981' : '#ef4444' }}">{{ ($op->activated - $op->deactivated) >= 0 ? '+' : '' }}{{ number_format($op->activated - $op->deactivated) }}</td>
+        @php $net = $op->activated - $op->deactivated; @endphp
+        <td style="font-weight:700;color:{{ $net >= 0 ? '#10b981' : '#ef4444' }}">{{ $net >= 0 ? '+' : '' }}{{ number_format($net) }}</td>
       </tr>
       @endforeach
     </table>

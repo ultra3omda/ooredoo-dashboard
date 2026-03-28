@@ -3529,6 +3529,17 @@
       </div>
     </div>
 
+    <!-- Modal: Apercu du Rapport -->
+    <div id="previewModal" style="display:none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(13,10,26,0.85); z-index: 10001; justify-content: center; align-items: center;" data-testid="preview-modal">
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 780px; max-width: 95vw; height: 85vh; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--border);">
+          <h3 id="previewTitle" style="margin: 0; color: var(--text-primary); font-size: 1rem; font-weight: 700;">Apercu du rapport</h3>
+          <button onclick="closePreviewModal()" style="background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.4rem; padding: 4px 8px;" data-testid="close-preview-btn">&times;</button>
+        </div>
+        <div id="previewContent" style="flex: 1; overflow: auto; padding: 0;"></div>
+      </div>
+    </div>
+
     <!-- Tab: Agent IA (Style ChatGPT avec Sidebar) -->
     @if(Auth::user()->isSuperAdmin())
     <div id="ai-agent" class="tab-content">

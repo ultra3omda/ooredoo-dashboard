@@ -65,6 +65,9 @@
         <td style="font-size:0.8rem; color:var(--muted);">${r.last_sent || '—'} ${r.last_status === 'failed' ? '<span style="color:#ef4444;">&#9888;</span>' : ''}</td>
         <td>
           <div style="display:flex; gap:4px;">
+            <button onclick="previewReport(${r.id}, '${escHtml(r.name)}')" title="Previsualiser" style="background:none; border:1px solid var(--border); border-radius:6px; padding:4px 8px; cursor:pointer; color:var(--success);" data-testid="preview-recipient-${r.id}">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
             <button onclick="sendReportTo(${r.id}, '${escHtml(r.email)}')" title="Envoyer maintenant" style="background:none; border:1px solid var(--border); border-radius:6px; padding:4px 8px; cursor:pointer; color:var(--brand-primary);">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
             </button>
@@ -113,11 +116,18 @@
   };
 
   window.closeRecipientModal = function() {
-    document.getElementById('recipientModal').style.display = 'none';
+    const modal = document.getElementById('recipientModal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.closePreviewModal = function() {
+    const modal = document.getElementById('previewModal');
+    if (modal) modal.style.display = 'none';
   };
 
   function showModal() {
-    document.getElementById('recipientModal').style.display = 'flex';
+    const modal = document.getElementById('recipientModal');
+    if (modal) modal.style.display = 'flex';
   }
 
   window.togglePartnerField = function() {
@@ -336,6 +346,33 @@
       console.error('Failed to load schedule info:', e);
     }
   }
+
+  // ── Preview ──
+
+  window.previewReport = async function(id, name) {
+    const modal = document.getElementById('previewModal');
+    const content = document.getElementById('previewContent');
+    const title = document.getElementById('previewTitle');
+    if (!modal || !content) return;
+
+    title.textContent = 'Apercu - ' + name;
+    content.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;padding:60px;"><div class="spinner" style="width:32px;height:32px;"></div><span style="margin-left:12px;color:var(--muted);">Generation du rapport avec suggestions IA...</span></div>';
+    modal.style.display = 'flex';
+
+    try {
+      const resp = await fetch(API_BASE + '/preview/' + id);
+      const data = await resp.json();
+      if (!resp.ok) {
+        content.innerHTML = '<div style="padding:40px;text-align:center;color:#ef4444;">' + escHtml(data.error || 'Erreur') + '</div>';
+        return;
+      }
+      content.innerHTML = '<iframe id="previewIframe" style="width:100%;height:100%;border:none;border-radius:8px;background:#fff;" sandbox="allow-same-origin"></iframe>';
+      const iframe = document.getElementById('previewIframe');
+      iframe.srcdoc = data.html;
+    } catch (e) {
+      content.innerHTML = '<div style="padding:40px;text-align:center;color:#ef4444;">Erreur reseau</div>';
+    }
+  };
 
   // ── Helpers ──
 

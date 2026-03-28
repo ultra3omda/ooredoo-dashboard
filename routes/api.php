@@ -98,6 +98,7 @@ Route::prefix('reports')->name('api.reports.')->group(function () {
     Route::delete('/recipients/{id}', [ReportController::class, 'deleteRecipient'])->name('recipients.destroy');
     Route::post('/recipients/{id}/toggle', [ReportController::class, 'toggleRecipient'])->name('recipients.toggle');
     Route::post('/send', [ReportController::class, 'sendNow'])->name('send');
+    Route::get('/preview/{id}', [ReportController::class, 'previewReport'])->name('preview');
     Route::get('/logs', [ReportController::class, 'getLogs'])->name('logs');
     Route::get('/partners', [ReportController::class, 'getPartners'])->name('partners');
     Route::get('/schedule', [ReportController::class, 'getScheduleConfig'])->name('schedule');

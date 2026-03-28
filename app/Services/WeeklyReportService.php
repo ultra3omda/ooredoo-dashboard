@@ -52,6 +52,20 @@ class WeeklyReportService
         return $results;
     }
 
+    public function buildPreviewData(ReportRecipient $recipient, Carbon $periodStart, Carbon $periodEnd, Carbon $compStart, Carbon $compEnd): array
+    {
+        $reportData = $this->gatherReportData($recipient, $periodStart, $periodEnd, $compStart, $compEnd);
+        $aiSuggestions = $this->getAISuggestions($recipient->type, $reportData);
+        $reportData['ai_suggestions'] = $aiSuggestions;
+        $reportData['period_start'] = $periodStart->format('d/m/Y');
+        $reportData['period_end'] = $periodEnd->format('d/m/Y');
+        $reportData['comp_start'] = $compStart->format('d/m/Y');
+        $reportData['comp_end'] = $compEnd->format('d/m/Y');
+        $reportData['recipient'] = $recipient;
+        $reportData['generated_at'] = Carbon::now()->format('d/m/Y H:i');
+        return $reportData;
+    }
+
     public function sendReportToRecipient(ReportRecipient $recipient, Carbon $periodStart, Carbon $periodEnd, Carbon $compStart, Carbon $compEnd): void
     {
         $reportData = $this->gatherReportData($recipient, $periodStart, $periodEnd, $compStart, $compEnd);
@@ -156,7 +170,7 @@ class WeeklyReportService
             ->where('stat_date', '>=', $start->toDateString())
             ->where('stat_date', '<', $end->toDateString())
             ->whereNull('operator_id')
-            ->select('stat_date', 'activated_count', 'deactivated_count', 'active_end_count')
+            ->select('stat_date', 'activated_count', 'deactivated_count', 'active_snapshot')
             ->orderBy('stat_date')
             ->get()
             ->toArray();
@@ -170,14 +184,22 @@ class WeeklyReportService
             ->get()
             ->toArray();
 
-        $channelAcquisition = DB::table('client_abonnement as ca')
-            ->where('ca.client_abonnement_creation', '>=', $start)
-            ->where('ca.client_abonnement_creation', '<', $end)
-            ->selectRaw("COALESCE(ca.entry_by, 'direct') as channel, COUNT(*) as count")
-            ->groupBy('channel')
-            ->orderByDesc('count')
-            ->get()
-            ->toArray();
+        $channelAcquisition = DB::table('subscription_daily_stats')
+            ->where('stat_date', '>=', $start->toDateString())
+            ->where('stat_date', '<', $end->toDateString())
+            ->whereNull('operator_id')
+            ->selectRaw("SUM(channel_cb) as cb, SUM(channel_recharge) as recharge, SUM(channel_phone_balance) as phone_balance, SUM(channel_other) as other")
+            ->first();
+
+        $channels = [];
+        if ($channelAcquisition) {
+            if ($channelAcquisition->cb > 0) $channels[] = (object)['channel' => 'CB', 'count' => $channelAcquisition->cb];
+            if ($channelAcquisition->recharge > 0) $channels[] = (object)['channel' => 'Recharge', 'count' => $channelAcquisition->recharge];
+            if ($channelAcquisition->phone_balance > 0) $channels[] = (object)['channel' => 'Solde Tel', 'count' => $channelAcquisition->phone_balance];
+            if ($channelAcquisition->other > 0) $channels[] = (object)['channel' => 'Autre', 'count' => $channelAcquisition->other];
+            usort($channels, fn($a, $b) => $b->count - $a->count);
+        }
+        $channelAcquisition = $channels;
 
         return [
             'report_type' => 'marketing',
@@ -239,8 +261,8 @@ class WeeklyReportService
             ->where('p.partner_id', $partnerId)
             ->where('h.time', '>=', $start)
             ->where('h.time', '<', $end)
-            ->selectRaw('p.promotion_id, COALESCE(p.promotion_titre, CONCAT("Offre #", p.promotion_id)) as title, COUNT(*) as uses')
-            ->groupBy('p.promotion_id', 'p.promotion_titre')
+            ->selectRaw('p.promotion_id, COALESCE(p.promotion_title, CONCAT("Offre #", p.promotion_id)) as title, COUNT(*) as uses')
+            ->groupBy('p.promotion_id', 'p.promotion_title')
             ->orderByDesc('uses')
             ->limit(5)
             ->get()
@@ -306,11 +328,12 @@ class WeeklyReportService
             case 'ceo':
                 $kpis = $data['global_kpis'] ?? [];
                 $base .= "RAPPORT CEO - Vue globale tous opérateurs :\n";
-                $base .= "- Abonnements activés: " . ($kpis['activatedSubscriptions'] ?? 'N/A') . "\n";
-                $base .= "- Abonnements actifs: " . ($kpis['activeSubscriptions'] ?? 'N/A') . "\n";
-                $base .= "- Taux de rétention: " . ($kpis['retentionRate'] ?? 'N/A') . "%\n";
-                $base .= "- Taux de conversion: " . ($kpis['conversionRate'] ?? 'N/A') . "%\n";
-                $base .= "- Transactions totales: " . ($kpis['totalTransactions'] ?? 'N/A') . "\n";
+                $base .= "- Abonnements activés: " . ($kpis['activatedSubscriptions']['current'] ?? 'N/A') . " (variation: " . ($kpis['activatedSubscriptions']['change'] ?? 'N/A') . "%)\n";
+                $base .= "- Abonnements actifs (cohorte): " . ($kpis['activeSubscriptions']['current'] ?? 'N/A') . "\n";
+                $base .= "- Taux de rétention: " . ($kpis['retentionRate']['current'] ?? 'N/A') . "%\n";
+                $base .= "- Taux de conversion: " . ($kpis['conversionRate']['current'] ?? 'N/A') . "%\n";
+                $base .= "- Transactions totales: " . ($kpis['totalTransactions']['current'] ?? 'N/A') . " (variation: " . ($kpis['totalTransactions']['change'] ?? 'N/A') . "%)\n";
+                $base .= "- Taux de churn: " . ($kpis['churnRate']['current'] ?? 'N/A') . "%\n";
                 $ek = $data['eklektik_stats'] ?? [];
                 $base .= "- Eklektik Revenu TTC: " . ($ek['revenue_ttc'] ?? 'N/A') . " TND\n";
                 $base .= "- Top marchands: " . json_encode(array_map(fn($m) => $m->name . '(' . $m->transactions . ')', $data['top_merchants'] ?? [])) . "\n";
@@ -319,11 +342,11 @@ class WeeklyReportService
             case 'marketing':
                 $kpis = $data['kpis'] ?? [];
                 $base .= "RAPPORT MARKETING - Acquisition & Rétention :\n";
-                $base .= "- Nouveaux abonnés: " . ($kpis['activatedSubscriptions'] ?? 'N/A') . "\n";
-                $base .= "- Cohorte active: " . ($kpis['activeSubscriptions'] ?? 'N/A') . "\n";
-                $base .= "- Rétention: " . ($kpis['retentionRate'] ?? 'N/A') . "%\n";
-                $base .= "- Désactivations: " . ($kpis['deactivated'] ?? 'N/A') . "\n";
-                $base .= "- Churn: " . ($kpis['churnRate'] ?? 'N/A') . "%\n";
+                $base .= "- Nouveaux abonnés: " . ($kpis['activatedSubscriptions']['current'] ?? 'N/A') . " (variation: " . ($kpis['activatedSubscriptions']['change'] ?? 'N/A') . "%)\n";
+                $base .= "- Cohorte active: " . ($kpis['activeSubscriptions']['current'] ?? 'N/A') . "\n";
+                $base .= "- Rétention: " . ($kpis['retentionRate']['current'] ?? 'N/A') . "%\n";
+                $base .= "- Désactivations: " . ($kpis['periodDeactivated']['current'] ?? $kpis['deactivatedSubscriptions']['current'] ?? 'N/A') . "\n";
+                $base .= "- Churn: " . ($kpis['churnRate']['current'] ?? 'N/A') . "%\n";
                 $base .= "- Conversion: " . ($kpis['conversionRate'] ?? 'N/A') . "%\n";
                 $channels = $data['channel_acquisition'] ?? [];
                 $base .= "- Canaux d'acquisition: " . json_encode(array_map(fn($c) => $c->channel . ':' . $c->count, $channels)) . "\n";

@@ -13,9 +13,9 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f0fa; margin: 
 .kpi-box { flex: 1 1 140px; background: #f8f5ff; border-radius: 8px; padding: 16px; text-align: center; border-left: 3px solid #6C4BA0; }
 .kpi-box .value { font-size: 24px; font-weight: 800; color: #4c3489; }
 .kpi-box .label { font-size: 11px; color: #71717a; text-transform: uppercase; margin-top: 4px; }
-.kpi-box .delta { font-size: 12px; margin-top: 4px; }
-.delta.up { color: #10b981; }
-.delta.down { color: #ef4444; }
+.kpi-box .delta { font-size: 12px; margin-top: 4px; font-weight: 600; }
+.up { color: #10b981; }
+.down { color: #ef4444; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 table th { background: #f8f5ff; color: #4c3489; text-align: left; padding: 10px 12px; font-weight: 600; border-bottom: 2px solid #ede8f5; }
 table td { padding: 10px 12px; border-bottom: 1px solid #f0ecf7; }
@@ -35,28 +35,42 @@ table tr:nth-child(even) { background: #fdfbff; }
   <div class="section">
     <div class="section-title">Vue Globale - Tous Operateurs</div>
     <div class="kpi-grid">
+      @php $gk = $global_kpis ?? []; @endphp
       <div class="kpi-box">
-        <div class="value">{{ number_format($global_kpis['activatedSubscriptions'] ?? 0) }}</div>
+        <div class="value">{{ number_format($gk['activatedSubscriptions']['current'] ?? 0) }}</div>
         <div class="label">Activations</div>
-        @if(isset($global_kpis['activatedDelta']))
-        <div class="delta {{ $global_kpis['activatedDelta'] >= 0 ? 'up' : 'down' }}">{{ $global_kpis['activatedDelta'] >= 0 ? '+' : '' }}{{ $global_kpis['activatedDelta'] }}%</div>
+        @if(isset($gk['activatedSubscriptions']['change']))
+        <div class="delta {{ ($gk['activatedSubscriptions']['change'] ?? 0) >= 0 ? 'up' : 'down' }}">{{ ($gk['activatedSubscriptions']['change'] ?? 0) >= 0 ? '+' : '' }}{{ number_format($gk['activatedSubscriptions']['change'] ?? 0, 1) }}%</div>
         @endif
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($global_kpis['activeSubscriptions'] ?? 0) }}</div>
+        <div class="value">{{ number_format($gk['activeSubscriptions']['current'] ?? 0) }}</div>
         <div class="label">Actifs (Cohorte)</div>
+        @if(isset($gk['activeSubscriptions']['change']))
+        <div class="delta {{ ($gk['activeSubscriptions']['change'] ?? 0) >= 0 ? 'up' : 'down' }}">{{ ($gk['activeSubscriptions']['change'] ?? 0) >= 0 ? '+' : '' }}{{ number_format($gk['activeSubscriptions']['change'] ?? 0, 1) }}%</div>
+        @endif
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($global_kpis['retentionRate'] ?? 0, 1) }}%</div>
+        <div class="value">{{ number_format($gk['retentionRate']['current'] ?? 0, 1) }}%</div>
         <div class="label">Retention</div>
+        @if(isset($gk['retentionRate']['change']))
+        <div class="delta {{ ($gk['retentionRate']['change'] ?? 0) >= 0 ? 'up' : 'down' }}">{{ ($gk['retentionRate']['change'] ?? 0) >= 0 ? '+' : '' }}{{ number_format($gk['retentionRate']['change'] ?? 0, 1) }}pts</div>
+        @endif
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($global_kpis['conversionRate'] ?? 0, 1) }}%</div>
+        <div class="value">{{ number_format($gk['conversionRate']['current'] ?? 0, 1) }}%</div>
         <div class="label">Conversion</div>
       </div>
       <div class="kpi-box">
-        <div class="value">{{ number_format($global_kpis['totalTransactions'] ?? 0) }}</div>
+        <div class="value">{{ number_format($gk['totalTransactions']['current'] ?? 0) }}</div>
         <div class="label">Transactions</div>
+        @if(isset($gk['totalTransactions']['change']))
+        <div class="delta {{ ($gk['totalTransactions']['change'] ?? 0) >= 0 ? 'up' : 'down' }}">{{ ($gk['totalTransactions']['change'] ?? 0) >= 0 ? '+' : '' }}{{ number_format($gk['totalTransactions']['change'] ?? 0, 1) }}%</div>
+        @endif
+      </div>
+      <div class="kpi-box">
+        <div class="value">{{ number_format($gk['churnRate']['current'] ?? 0, 1) }}%</div>
+        <div class="label">Churn</div>
       </div>
     </div>
   </div>
