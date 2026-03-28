@@ -84,7 +84,6 @@ class WarmupSplitEndpoints extends Command
                     Cache::put($cacheKey, $data, $ttl);
                     
                     // Store pre-serialized raw JSON response (for ultra-fast path)
-                    $rawKey = 'split_raw:' . $ep . ':' . md5(json_encode($params));
                     $fullResponse = json_encode([
                         'success' => true,
                         'section' => $ep,
@@ -93,7 +92,19 @@ class WarmupSplitEndpoints extends Command
                         '_cached' => true,
                         '_warmed_at' => now()->toIso8601String(),
                     ]);
-                    Cache::put($rawKey, $fullResponse, $ttl);
+                    
+                    // Store with full params key (legacy)
+                    $rawKeyFull = 'split_raw:' . $ep . ':' . md5(json_encode($params));
+                    Cache::put($rawKeyFull, $fullResponse, $ttl);
+                    
+                    // Store with simplified key (start_date + end_date + operator only)
+                    $simpleKey = [
+                        'start_date' => $params['start_date'],
+                        'end_date' => $params['end_date'],
+                        'operator' => $params['operator'],
+                    ];
+                    $rawKeySimple = 'split_raw:' . $ep . ':' . md5(json_encode($simpleKey));
+                    Cache::put($rawKeySimple, $fullResponse, $ttl);
                     
                     $elapsed = round((microtime(true) - $epStart) * 1000);
                     $this->info("  {$ep}: cached in {$elapsed}ms");
@@ -150,10 +161,10 @@ class WarmupSplitEndpoints extends Command
                 'comp_end' => $now->copy()->subYear()->toDateString(),
             ],
             'lifetime' => [
-                'start' => '2021-04-01',
+                'start' => '2021-01-01',
                 'end' => $end,
-                'comp_start' => '2021-01-01',
-                'comp_end' => '2021-04-01',
+                'comp_start' => '2020-07-01',
+                'comp_end' => '2021-01-01',
             ],
             default => null,
         };

@@ -33,8 +33,22 @@ class DataControllerOptimized extends Controller
             $params = $this->validateAndNormalizeParams($request);
             $user = auth()->user();
             $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
-            $rawKey = 'split_raw:' . $section . ':' . md5(json_encode($params));
+            
+            // Try simplified key first (start_date + end_date + operator only)
+            $simpleKey = [
+                'start_date' => $params['start_date'],
+                'end_date' => $params['end_date'],
+                'operator' => $params['operator'],
+            ];
+            $rawKey = 'split_raw:' . $section . ':' . md5(json_encode($simpleKey));
             $cached = Cache::get($rawKey);
+            if ($cached) {
+                return response($cached, 200)->header('Content-Type', 'application/json');
+            }
+            
+            // Fallback: try full params key (legacy)
+            $fullKey = 'split_raw:' . $section . ':' . md5(json_encode($params));
+            $cached = Cache::get($fullKey);
             if ($cached) {
                 return response($cached, 200)->header('Content-Type', 'application/json');
             }
@@ -161,10 +175,10 @@ class DataControllerOptimized extends Controller
             throw new \InvalidArgumentException("La date de début doit être antérieure à la date de fin");
         }
         
-        // Limitation de la période maximale (1 an)
+        // Limitation de la période maximale (6 ans)
         $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate));
-        if ($periodDays > 1825) {
-            throw new \InvalidArgumentException("Période maximale autorisée: 5 ans (demandé: {$periodDays} jours)");
+        if ($periodDays > 2200) {
+            throw new \InvalidArgumentException("Période maximale autorisée: 6 ans (demandé: {$periodDays} jours)");
         }
         
         return [

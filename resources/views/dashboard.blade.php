@@ -2106,8 +2106,13 @@
           }
         });
         
+        // Re-rendre les graphiques quand l'onglet devient visible (fix pour charts créés en mode caché)
+        if (window._dashboardData && typeof updateCharts === 'function') {
+          try { updateCharts(window._dashboardData); } catch(e) {}
+        }
+        
         // Eklektik charts removed - no need to resize
-      }, 100);
+      }, 200);
     }
     </script>
 
@@ -5729,7 +5734,8 @@
           case 'merchants':
             if (json.data) {
               window._dashboardData.merchants = json.data;
-              window._dashboardData.categoryDistribution = json.categoryDistribution || [];
+              // Les catégories peuvent être dans json.data.categories ou json.categoryDistribution
+              window._dashboardData.categoryDistribution = json.data.categories || json.categoryDistribution || [];
               dashboardData = window._dashboardData;
               updateMerchantKPIs(json.data, window._dashboardData.kpis);
             }
@@ -6716,8 +6722,9 @@
         const diversityEl = document.getElementById('merch-diversity');
         const diversityDetailEl = document.getElementById('merch-diversityDetail');
         
-            // Si le backend ne calcule pas la part, on la calcule côté client
-            const enriched = Array.isArray(merchants) ? merchants.slice() : [];
+            // Extraire le tableau de marchands: peut être un tableau direct ou {data: [...], categories: [...]}
+            const merchantsList = Array.isArray(merchants) ? merchants : (Array.isArray(merchants?.data) ? merchants.data : []);
+            const enriched = merchantsList.slice();
             if (enriched.length > 0 && (typeof enriched[0].share === 'undefined' || enriched[0].share === null)) {
               const totalTx = enriched.reduce((s, m) => s + (m.current || 0), 0);
               enriched.forEach(m => { m.share = totalTx > 0 ? +(m.current * 100 / totalTx).toFixed(1) : 0; });
@@ -7124,13 +7131,13 @@
       }
       
       // Use real retention trend data from backend
-      const retentionTrend = data.subscriptions?.retention_trend || [];
-      
-      if (!retentionTrend || retentionTrend.length === 0) {
-        // Afficher un message si pas de données
-        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
+      // Guard: vérifier spécifiquement que retention_trend existe (pas juste subscriptions)
+      if (!data.subscriptions?.retention_trend || data.subscriptions.retention_trend.length === 0) {
+        console.log('[RETENTION] Skipped: no retention_trend data yet');
         return;
       }
+      
+      const retentionTrend = data.subscriptions.retention_trend;
       
       // Aligner les dates avec le graphe Daily Activated Subscriptions
       const mapDateToValue = new Map();
@@ -7200,6 +7207,9 @@
       const ctx = document.getElementById('transactionVolumeChart');
       if (!ctx) return;
       
+      // Guard: ne pas rendre si les données transactions n'ont pas encore chargé
+      if (!data.transactions) return;
+      
       if (charts.transactionVolume) {
         charts.transactionVolume.destroy();
       }
@@ -7261,6 +7271,9 @@
     function createTransactingUsersChart(data) {
       const ctx = document.getElementById('transactingUsersChart');
       if (!ctx) return;
+      
+      // Guard: ne pas rendre si les données transactions n'ont pas encore chargé
+      if (!data.transactions) return;
       
       if (charts.transactingUsers) {
         charts.transactingUsers.destroy();
@@ -7328,7 +7341,12 @@
         charts.topMerchants.destroy();
       }
       
-      const merchants = data.merchants || [];
+      // data.merchants peut être un objet {data: [...], categories: [...]} ou un tableau
+      // Guard: ne pas rendre si les données merchants n'ont pas encore chargé
+      if (!data.merchants) return;
+      
+      const merchantsRaw = data.merchants || {};
+      const merchants = Array.isArray(merchantsRaw) ? merchantsRaw : (Array.isArray(merchantsRaw.data) ? merchantsRaw.data : []);
       
       if (!merchants || merchants.length === 0) {
         // Afficher un message si pas de données
@@ -7372,6 +7390,9 @@
     function createCategoryChart(data) {
       const ctx = document.getElementById('categoryChart');
       if (!ctx) return;
+      
+      // Guard: ne pas rendre si les données merchants n'ont pas encore chargé
+      if (!data.merchants) return;
       
       if (charts.category) {
         charts.category.destroy();
@@ -9049,7 +9070,9 @@
 
     // Update merchants table with enhanced data and pagination
     function updateMerchantsTable(merchants) {
-      allMerchants = merchants || [];
+      // merchants peut être un objet {data: [...], categories: [...]} ou un tableau
+      const merchantsList = Array.isArray(merchants) ? merchants : (Array.isArray(merchants?.data) ? merchants.data : []);
+      allMerchants = merchantsList;
       currentMerchantsPage = 1;
       
       if (!allMerchants || allMerchants.length === 0) {
