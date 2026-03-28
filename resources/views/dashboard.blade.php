@@ -6592,8 +6592,27 @@
         return { current, previous, change: calculateChange(current, previous) };
       };
       
-      updateKPI('timwe-active-subs', makeKPI(totals.activeSubsEndOfPeriod, comparisonTotals?.activeSubsEndOfPeriod));
-      updateKPI('timwe-new-subscriptions', makeKPI(totals.newSubs, comparisonTotals?.newSubs));
+      // Cohérence inter-onglets : quand l'opérateur Timwe est sélectionné,
+      // utiliser les KPIs globaux (même source que Overview/Subscriptions)
+      const isTimweOperatorSelected = selectedOperators.some(op => op.toLowerCase().includes('timwe'));
+      const kpis = dashData.kpis || {};
+      
+      if (isTimweOperatorSelected && kpis.activeSubscriptions) {
+        // Active Subs et New Subs depuis les KPIs (identiques à Overview/Subscriptions)
+        updateKPI('timwe-active-subs', {
+          current: kpis.activeSubscriptions.current,
+          previous: kpis.activeSubscriptions.previous,
+          change: kpis.activeSubscriptions.change
+        });
+        updateKPI('timwe-new-subscriptions', {
+          current: kpis.activatedSubscriptions?.current || totals.newSubs,
+          previous: kpis.activatedSubscriptions?.previous || (comparisonTotals?.newSubs || 0),
+          change: kpis.activatedSubscriptions?.change || 0
+        });
+      } else {
+        updateKPI('timwe-active-subs', makeKPI(totals.activeSubsEndOfPeriod, comparisonTotals?.activeSubsEndOfPeriod));
+        updateKPI('timwe-new-subscriptions', makeKPI(totals.newSubs, comparisonTotals?.newSubs));
+      }
       updateKPI('timwe-unsubscriptions', makeKPI(totals.unsubs, comparisonTotals?.unsubs));
       updateKPI('timwe-simchurn', makeKPI(totals.simchurn, comparisonTotals?.simchurn));
       
@@ -6624,11 +6643,19 @@
         periodDays = Math.ceil((e - s) / (1000 * 60 * 60 * 24)) || 30;
       }
       
+      // Base d'actifs pour les ratios - cohérence avec KPIs quand Timwe sélectionné
+      const activeBase = (isTimweOperatorSelected && kpis.activeSubscriptions)
+        ? kpis.activeSubscriptions.current
+        : totals.activeSubsEndOfPeriod;
+      const activeBaseComp = (isTimweOperatorSelected && kpis.activeSubscriptions)
+        ? kpis.activeSubscriptions.previous
+        : (comparisonTotals?.activeSubsEndOfPeriod || 0);
+      
       // Taux de Croissance Nette
       const netGrowth = totals.newSubs - totals.unsubs - totals.simchurn;
-      const netGrowthRate = totals.activeSubsEndOfPeriod > 0 ? (netGrowth / totals.activeSubsEndOfPeriod) * 100 : 0;
-      const netGrowthRateComp = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
-        ? ((comparisonTotals.newSubs - comparisonTotals.unsubs - comparisonTotals.simchurn) / comparisonTotals.activeSubsEndOfPeriod) * 100 : null;
+      const netGrowthRate = activeBase > 0 ? (netGrowth / activeBase) * 100 : 0;
+      const netGrowthRateComp = comparisonTotals && activeBaseComp > 0
+        ? ((comparisonTotals.newSubs - comparisonTotals.unsubs - comparisonTotals.simchurn) / activeBaseComp) * 100 : null;
       
       updateKPI('timwe-net-growth-rate', {
         current: formatNumber(netGrowthRate, 2),
@@ -6637,7 +6664,7 @@
       }, '%');
       
       // ARPU mensuel normalise
-      const arpuValue = totals.activeSubsEndOfPeriod > 0 ? (totals.revenueTnd / totals.activeSubsEndOfPeriod) * (30 / periodDays) : 0;
+      const arpuValue = activeBase > 0 ? (totals.revenueTnd / activeBase) * (30 / periodDays) : 0;
       updateKPI('timwe-arpu', { current: formatNumber(arpuValue, 3), previous: 0, change: 0 }, ' TND');
       
       // Facturation Timwe depuis timwe_daily_stats

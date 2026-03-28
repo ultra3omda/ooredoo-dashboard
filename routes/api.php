@@ -24,13 +24,12 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-// API pour récupérer les opérateurs
-Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
+// API pour récupérer les opérateurs (route principale dans web.php avec session auth)
+// Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
 
 // Dashboard API routes - Routes legacy stateless (utilisées par des clients API externes)
 // Les routes principales avec auth session sont dans web.php
 Route::prefix('dashboard')->name('api.dashboard.')->group(function () {
-    Route::get('/operators', [DataController::class, 'getUserOperators'])->name('operators');
     Route::get('/partners', [DataController::class, 'getPartnersList'])->name('partners');
 });
 
