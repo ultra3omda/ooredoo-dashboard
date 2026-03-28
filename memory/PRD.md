@@ -1,77 +1,62 @@
-# PRD - Dashboard Club Privilèges Ooredoo
+# Club Privilèges - Performance Dashboard
 
-## Description
-Dashboard haute performance pour la gestion des abonnements, transactions et marchands de Club Privilèges Ooredoo Tunisie. API sub-seconde via Redis, vues matérialisées MySQL, Chart.js frontend.
+## Problème Original
+Dashboard haute performance Laravel pour suivi des abonnements, transactions et KPIs opérateurs (Timwe, Ooredoo/DGV). Objectifs : temps de réponse sub-seconde, statistiques mathématiquement exactes, monitoring temps réel, architecture découplée.
 
-## Architecture Technique
-- **Backend**: Laravel 10, PHP 8.2, Nginx/PHP-FPM
-- **BDD**: MySQL (tables matérialisées: subscription_daily_stats, transaction_daily_stats, dashboard_daily_stats)
-- **Cache**: Redis (JSON brut, warmup cron, TTL adaptatif)
-- **Frontend**: Blade templates, Chart.js, Fetch API
-- **Proxy**: FastAPI (port 8001) → PHP-FPM/Nginx (port 8002)
+## Stack Technique
+- Laravel 10, PHP 8.2, Nginx, PHP-FPM
+- MySQL (vues matérialisées), Redis (cache ultra-rapide)
+- Chart.js, Vanilla JavaScript
+- FastAPI proxy (port 8001 → Nginx port 8002)
 
-## Architecture des Services (Post-P4 Refactoring)
-```
-DashboardService.php (172 lignes - Facade)
-├── Dashboard/KPIService.php (446 lignes)
-├── Dashboard/MerchantService.php (273 lignes)
-├── Dashboard/TransactionService.php (239 lignes)
-├── Dashboard/SubscriptionService.php (636 lignes)
-├── Dashboard/StatisticsService.php (423 lignes)
-├── Traits/OperatorHelper.php (shared)
-└── Traits/TransactionHelper.php (shared)
-```
-
-## Fonctionnalités Implémentées
-
-### Phase 1 - Dashboard Core (DONE)
-- KPIs: activations, abonnements actifs, taux rétention/conversion/churn
-- Graphiques: subscriptions daily, transactions volume, merchants breakdown
-- 6 split endpoints cachés: kpis, subscriptions, transactions, merchants, timwe, ooredoo
-- Warmup cron: `app:warmup-split-endpoints`
-- Smart Comparison: YoY pour périodes > 365 jours
-- Cumulative Active POS: courbe trimestrielle
-
-### Phase 2 - Performance (DONE)
-- Tables matérialisées
-- Redis ultra-fast (5-10ms en cache)
-- Split endpoints asynchrones
-- Frontend race condition fixes (Chart.js canvas)
-
-### Phase 3 - Monitoring & Alertes (DONE - 28/03/2026)
-- **AlertService**: Création/acquittement/purge d'alertes (Redis-backed)
-- **HealthCheckCommand**: Artisan cron, 5 composants (DB, Redis, Warmup, Disk, API)
-- **Endpoints API**:
-  - `GET /api/monitoring/health` - Health check complet
-  - `GET /api/monitoring/alerts` - Liste des alertes + stats
-  - `POST /api/monitoring/alerts/{id}/acknowledge`
-  - `POST /api/monitoring/alerts/acknowledge-all`
-  - `DELETE /api/monitoring/alerts`
-  - `GET /api/monitoring/warmup-status` - Couverture cache détaillée
-- **UI Monitoring**: Dashboard Bootstrap avec auto-refresh 30s, badges sévérité, graphique API latency, health check on-demand
-
-### Phase 4 - Refactoring DashboardService (DONE - 28/03/2026)
-- DashboardService réduit de ~4000 → 172 lignes (thin facade)
-- 5 services de domaine + 2 traits partagés
-- API publique identique (zéro breaking change)
-- Tests: 100% backend (18/18), 95% frontend
+## Architecture
+- `app/Services/Dashboard/` : Services domaine (KPIService, MerchantService, StatisticsService, SubscriptionService, TransactionService)
+- `app/Services/DashboardService.php` : Façade légère (~170 lignes)
+- `app/Http/Controllers/Api/DataControllerOptimized.php` : Endpoints split avec cache Redis
+- `resources/views/dashboard.blade.php` : Frontend principal (10 000+ lignes)
+- `resources/views/monitoring/dashboard.blade.php` : Dashboard monitoring
 
 ## Endpoints API Principaux
-- `GET /api/dashboard/split/kpis`
-- `GET /api/dashboard/split/subscriptions`
-- `GET /api/dashboard/split/transactions`
-- `GET /api/dashboard/split/merchants`
-- `GET /api/dashboard/split/timwe`
-- `GET /api/dashboard/split/ooredoo`
-- `GET /api/monitoring/health`
-- `GET /api/monitoring/alerts`
-- `GET /api/monitoring/warmup-status`
+- `GET /api/dashboard/split/kpis` - KPIs globaux (source: client_abonnement)
+- `GET /api/dashboard/split/subscriptions` - Détails abonnements
+- `GET /api/dashboard/split/timwe` - Stats opérateur Timwe (source: timwe_daily_stats)
+- `GET /api/dashboard/split/ooredoo` - Stats opérateur Ooredoo (source: ooredoo_daily_stats)
+- `GET /api/operators` - Liste opérateurs
+- `GET /api/monitoring/health` - Santé système
+
+## Modèle de Données Clé
+- `client_abonnement` : Table principale abonnements (source de vérité)
+- `timwe_daily_stats` : Stats journalières Timwe (sync quotidienne depuis client_abonnement)
+- `ooredoo_daily_stats` : Stats journalières Ooredoo/DGV (agrégateur distinct)
+- `subscription_daily_stats` / `transaction_daily_stats` : Vues matérialisées
+
+## Cohérence des Données (Analyse Complète - 28/03/2026)
+### Activated Subscriptions (Nouveaux Abonnements)
+- **Overview** (client_abonnement) vs **Timwe tab** (timwe_daily_stats) : **100% cohérent**
+- Testé jour par jour sur Mars 2026, Fév 2026, Juin/Sept/Déc 2025 : **DIFF = 0**
+- Seul écart : jour en cours si sync pas encore faite (~225 subs)
+
+### Active Subscriptions
+- **Overview** : Cohorte période (activés PENDANT la période et encore actifs)
+- **Timwe tab** : Base totale (tous abonnés actifs au dernier jour, quelle que soit leur date d'activation)
+- **En lifetime** : Les 2 convergent (26 063 = 26 063 au 27/03/2026)
+- **En courte période** : Diffèrent par nature (7 265 cohorte vs 24 801 base totale)
+- **Décision utilisateur** : Garder la logique originale (option A) - les 2 métriques sont justes
+
+### Ooredoo/DGV
+- Agrégateur distinct, NON concerné par les modifications Overview/Subscriptions/Timwe
+
+## Ce qui est implémenté ✅
+- [x] Services domaine créés (KPIService, MerchantService, StatisticsService, etc.)
+- [x] Refactoring DashboardService.php (~4000 → 170 lignes)
+- [x] Monitoring temps réel (AlertService, HealthCheckCommand, API routes)
+- [x] Fix dropdown opérateurs
+- [x] Analyse complète cohérence données inter-onglets
+- [x] Restauration logique originale calcul Timwe (logique correcte confirmée)
 
 ## Backlog
-- P5: Notifications externes (email/SMS) pour alertes critiques
-- P5: Export de données (CSV/PDF)
-- P5: Dashboard comparatif multi-opérateurs
+- P2: Refactoring `dashboard.blade.php` (10 000+ lignes → modules JS séparés)
 
-## Credentials
+## Credentials Test
 - Email: superadmin@ooredoo.tn
 - Password: SuperAdmin@2025
