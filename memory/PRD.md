@@ -1,49 +1,50 @@
-# Club Privileges - Performance Dashboard
+# Club Privileges - Performance Dashboard PRD
 
-## Probleme Original
-Dashboard haute performance Laravel pour suivi des abonnements, transactions et KPIs operateurs (Timwe, Ooredoo/DGV). Objectifs : temps de reponse sub-seconde, statistiques exactes, monitoring temps reel, architecture decouplee.
+## Original Problem Statement
+High-performance Laravel dashboard for Club Privileges with mathematically accurate stats, automated weekly reporting with AI suggestions, decoupled architecture, robust navigation, and fully responsive UI matching actual brand colors (purple/gold).
 
-## Stack Technique
-- Laravel 10, PHP 8.2, Nginx, PHP-FPM, MySQL, Redis
-- Chart.js, Vanilla JavaScript modulaire, DomPDF
-- FastAPI proxy + OpenAI GPT-4o via emergentintegrations
+## Architecture
+- Laravel 10 + Nginx/PHP-FPM + Redis + MySQL
+- Frontend: Vanilla JS + Chart.js (modular in public/js/dashboard/)
+- Backend: Laravel Services (Dashboard/, KPI, Merchant, Subscription)
+- AI Reporting: Python FastAPI proxy (server.py) with Emergent LLM integration
+- View: Single Blade template (resources/views/dashboard.blade.php)
 
-## Ce qui est implemente
-- [x] Services domaine KPIs, refactoring DashboardService
-- [x] Navigation restructuree (groupes, Agent IA flottant)
-- [x] Tooltips KPI audites et corriges (descriptions = calculs exacts)
-- [x] Dark theme Club Privileges (violet #6C4BA0 / or #D4A843)
-- [x] Systeme de reporting hebdomadaire (CRUD, emails HTML+PDF, IA, RGPD)
-- [x] Previsualisation des rapports avec suggestions IA
-- [x] Fix deltas inverses : churn, deactivations, unsubscriptions, simchurn, avgInterTxDays (rouge=hausse, vert=baisse)
-- [x] Fix charts : suppression Blade directives dans charts.js, completion tables.js, deduplication eklektik.js
-- [x] Responsive complet : nav scrollable horizontal, filtres empiles, tables scroll, KPIs adaptatifs (768px, 600px, 480px)
+## Key Files
+- `resources/views/dashboard.blade.php` - Main UI/CSS/inline JS
+- `public/js/dashboard/` - charts.js, tables.js, reporting.js, eklektik.js, utils.js
+- `app/Services/Dashboard/` - KPIService, MerchantService, SubscriptionService, StatisticsService
+- `app/Http/Controllers/Api/DataControllerOptimized.php` - Split API endpoints
+- `server.py` - FastAPI AI proxy
 
-## Design System
-| Variable | Valeur |
-|----------|--------|
-| --bg | #0D0A1A |
-| --card | #161131 |
-| --brand-primary | #6C4BA0 |
-| --brand-secondary | #D4A843 |
-| --border | #2A2350 |
-
-## Navigation
-- **Donnees:** Overview | Subscriptions | Transactions | Merchants
-- **Operateurs:** Timwe | Ooredoo/DGV | Eklektik
-- **Outils:** Comparison | Reporting (SuperAdmin)
-
-## Deltas Inverses (hausse = rouge)
-deactivated, Deactivated, churn, Churn, lostSubscriptions, avgInterTxDays, simchurn, unsubscriptions, Unsubscriptions
-
-## Responsive Breakpoints
-- 768px: 2 KPI/ligne, filtres empiles, nav scroll
-- 600px: filtres 1 colonne, tables scroll horizontal
-- 480px: KPI 2/ligne compact, header empile, nav ultra compact
-
-## Backlog
-- Aucune tache en attente
+## Completed Features (All tested)
+- Club Privileges brand theme (Purple/Gold) applied
+- KPI tooltips with mathematical accuracy
+- Automated Weekly Reporting System (DB, Models, Artisan command, UI config, AI summaries)
+- Inverse delta colors for negative KPIs (churn, unsubscriptions)
+- Chart loading bugs fixed (no Blade directives in .js files)
+- Mobile responsiveness: 2 KPIs per row across ALL tabs
+- Merchant data logic: Total Merchants (all partners) >= Active Merchants
+- Comparison tab: Period-over-Period table loads correctly
+- Data tables: Subscriptions (140 items), Merchants (50 items) with pagination
+- Reporting tab: Destinataires table loads, responsive layout
 
 ## Credentials
 - Email: superadmin@ooredoo.tn
 - Password: SuperAdmin@2025
+
+## API Endpoints
+- /api/dashboard/split/kpis
+- /api/dashboard/split/merchants
+- /api/dashboard/split/subscriptions
+- /api/dashboard/split/comparison
+- /api/reports/preview
+
+## DB Schema
+- report_recipients, report_logs, client_abonnement, subscription_daily_stats, transaction_daily_stats, partner, partner_location, history, promotion
+
+## Known Constraints
+- NEVER put Blade directives in .js files
+- Use window._dashboardData to pass PHP data to JS
+- Cache TTL is 1 hour (Redis). Clear with php artisan cache:clear + restart backend
+- KPIService.php provides KPI values displayed in Merchants tab (not MerchantService)

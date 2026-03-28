@@ -367,6 +367,8 @@
     /* Tab Content */
     .tab-content {
       display: none;
+      overflow-x: hidden;
+      max-width: 100%;
     }
     
     .tab-content.active {
@@ -1507,13 +1509,13 @@
       
       /* KPIs Eklektik responsive */
       .kpi-card {
-        grid-column: span 12 !important; /* 1 par ligne sur mobile */
+        grid-column: span 6 !important; /* 2 par ligne sur mobile */
       }
     }
     
     @media (max-width: 600px) {
       .kpi-card {
-        grid-column: span 12 !important; /* 1 par ligne sur petit mobile */
+        grid-column: span 6 !important; /* 2 par ligne sur petit mobile */
         margin-bottom: 12px;
       }
       
@@ -1532,7 +1534,7 @@
     
     @media (max-width: 480px) {
       .kpi-card {
-        grid-column: span 12 !important;
+        grid-column: span 6 !important;
         margin-bottom: 10px;
         padding: 12px;
       }
