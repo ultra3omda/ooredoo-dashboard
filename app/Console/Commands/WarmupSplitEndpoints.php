@@ -163,8 +163,9 @@ class WarmupSplitEndpoints extends Command
             'lifetime' => [
                 'start' => '2021-01-01',
                 'end' => $end,
-                'comp_start' => '2020-07-01',
-                'comp_end' => '2021-01-01',
+                // Pour Lifetime (>365j): comparer dernière année vs année précédente
+                'comp_start' => $now->copy()->subYears(2)->toDateString(),
+                'comp_end' => $now->copy()->subYear()->toDateString(),
             ],
             default => null,
         };

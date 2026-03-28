@@ -2201,7 +2201,7 @@
         </div>
 
                         <div class="action-buttons">
-                  <button class="btn-primary enhanced-btn" onclick="loadDashboardData()" id="refresh-btn">
+                  <button class="btn-primary enhanced-btn" onclick="autoCompareAndLoad()" id="refresh-btn">
                     <span id="refresh-text">📊 Actualiser</span>
                     <span id="refresh-loading" style="display: none;">⏳ Chargement...</span>
                   </button>
@@ -6320,7 +6320,7 @@
       document.getElementById('comparison-end-date').value = comparisonEndDate.toISOString().split('T')[0];
     }
     
-    // Set smart comparison period (same duration as primary, just before)
+    // Set smart comparison period (adapté selon la durée de la période)
     function setSmartComparison() {
       const startDate = new Date(document.getElementById('start-date').value);
       const endDate = new Date(document.getElementById('end-date').value);
@@ -6328,10 +6328,23 @@
       if (startDate && endDate) {
         const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
         
-        const comparisonEndDate = new Date(startDate);
-        comparisonEndDate.setDate(comparisonEndDate.getDate() - 1);
-        const comparisonStartDate = new Date(comparisonEndDate);
-        comparisonStartDate.setDate(comparisonStartDate.getDate() - duration);
+        let comparisonStartDate, comparisonEndDate;
+        
+        if (duration > 365) {
+          // Pour les longues périodes: comparer l'année précédente (end-2ans à end-1an)
+          comparisonEndDate = new Date(endDate);
+          comparisonEndDate.setFullYear(comparisonEndDate.getFullYear() - 1);
+          comparisonStartDate = new Date(endDate);
+          comparisonStartDate.setFullYear(comparisonStartDate.getFullYear() - 2);
+          const dataStart = new Date('2021-01-01');
+          if (comparisonStartDate < dataStart) comparisonStartDate = dataStart;
+        } else {
+          // Pour les courtes/moyennes périodes: même durée juste avant
+          comparisonEndDate = new Date(startDate);
+          comparisonEndDate.setDate(comparisonEndDate.getDate() - 1);
+          comparisonStartDate = new Date(comparisonEndDate);
+          comparisonStartDate.setDate(comparisonStartDate.getDate() - duration);
+        }
         
         document.getElementById('comparison-start-date').value = comparisonStartDate.toISOString().split('T')[0];
         document.getElementById('comparison-end-date').value = comparisonEndDate.toISOString().split('T')[0];
@@ -6339,6 +6352,40 @@
         updateDateRange();
         loadDashboardData();
       }
+    }
+
+    // Auto-calculer les dates de comparaison et charger les données
+    function autoCompareAndLoad() {
+      const startDate = new Date(document.getElementById('start-date').value);
+      const endDate = new Date(document.getElementById('end-date').value);
+      
+      if (startDate && endDate) {
+        const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+        
+        let comparisonStartDate, comparisonEndDate;
+        
+        if (duration > 365) {
+          // Longues périodes: comparer l'année précédente (end-2ans à end-1an)
+          comparisonEndDate = new Date(endDate);
+          comparisonEndDate.setFullYear(comparisonEndDate.getFullYear() - 1);
+          comparisonStartDate = new Date(endDate);
+          comparisonStartDate.setFullYear(comparisonStartDate.getFullYear() - 2);
+          const dataStart = new Date('2021-01-01');
+          if (comparisonStartDate < dataStart) comparisonStartDate = dataStart;
+        } else {
+          // Courtes/moyennes périodes: même durée juste avant
+          comparisonEndDate = new Date(startDate);
+          comparisonEndDate.setDate(comparisonEndDate.getDate() - 1);
+          comparisonStartDate = new Date(comparisonEndDate);
+          comparisonStartDate.setDate(comparisonStartDate.getDate() - duration);
+        }
+        
+        document.getElementById('comparison-start-date').value = comparisonStartDate.toISOString().split('T')[0];
+        document.getElementById('comparison-end-date').value = comparisonEndDate.toISOString().split('T')[0];
+      }
+      
+      updateDateRange();
+      loadDashboardData();
     }
 
     // Update date range display
@@ -7151,7 +7198,7 @@
       
       const sorted = Array.from(mapDateToValue.keys()).sort();
       if (sorted.length === 0) {
-        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de rétention disponible</div>';
+        // Pas de données - ne pas détruire le canvas, juste retourner
         return;
       }
       
@@ -7219,7 +7266,7 @@
       
       if (!dailyTransactions || dailyTransactions.length === 0) {
         // Afficher un message si pas de données
-        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée de transaction disponible</div>';
+        // Pas de données de transaction - ne pas détruire le canvas
         return;
       }
       
@@ -7284,7 +7331,7 @@
       
       if (!dailyTransactions || dailyTransactions.length === 0) {
         // Afficher un message si pas de données
-        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune donnée d\'utilisateurs disponible</div>';
+        // Pas de données d'utilisateurs - ne pas détruire le canvas
         return;
       }
       
@@ -7350,7 +7397,7 @@
       
       if (!merchants || merchants.length === 0) {
         // Afficher un message si pas de données
-        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucun marchand disponible</div>';
+        // Pas de marchands - ne pas détruire le canvas
         return;
       }
       
@@ -7402,7 +7449,7 @@
       
       if (!dist || dist.length === 0) {
         // Afficher un message si pas de données
-        ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Aucune catégorie disponible</div>';
+        // Pas de catégories - ne pas détruire le canvas
         return;
       }
       

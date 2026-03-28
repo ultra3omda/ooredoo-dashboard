@@ -2114,44 +2114,32 @@ class DashboardService
     }
     
     /**
-     * Calcule les points de vente actifs par trimestre (optimisé avec calcul réel par trimestre)
+     * Calcule les points de vente actifs par trimestre (croissance cumulative réelle)
      */
     private function calculateQuarterlyActiveLocations(string $endDate): array
     {
         try {
-            // Version optimisée: une seule requête pour le total actuel,
-            // pas de boucle sur chaque trimestre (économise 14 requêtes DB)
-            $hasPartenerActive = Cache::remember('schema:partner:partener_active', 86400, function() {
-                return Schema::hasColumn('partner', 'partener_active');
-            });
+            // Calculer le total cumulé de points de vente créés par trimestre
+            $quarterlyData = DB::table('partner_location')
+                ->selectRaw('YEAR(partner_location.created_at) as yr, QUARTER(partner_location.created_at) as q, COUNT(DISTINCT partner_location.partner_location_id) as new_count')
+                ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
+                ->whereNotNull('partner_location.created_at')
+                ->groupByRaw('YEAR(partner_location.created_at), QUARTER(partner_location.created_at)')
+                ->orderByRaw('YEAR(partner_location.created_at), QUARTER(partner_location.created_at)')
+                ->get();
             
-            $countLocations = 0;
-            if ($hasPartenerActive) {
-                $countLocations = DB::table('partner_location')
-                    ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
-                    ->where('partner.partener_active', 1)
-                    ->distinct('partner_location.partner_location_id')
-                    ->count('partner_location.partner_location_id');
-            } else {
-                $countLocations = DB::table('partner_location')
-                    ->distinct('partner_location.partner_location_id')
-                    ->count('partner_location.partner_location_id');
-            }
-            
-            // Générer la série trimestrielle avec le même total (données statiques)
+            // Construire la série cumulative
             $quarterlyActiveLocations = [];
-            $quarterCursor = Carbon::parse($endDate)->firstOfQuarter()->subQuarters(7);
-            $quarterEnd = Carbon::parse($endDate)->firstOfQuarter();
-            
-            while ($quarterCursor->lte($quarterEnd)) {
+            $cumulative = 0;
+            foreach ($quarterlyData as $row) {
+                $cumulative += $row->new_count;
                 $quarterlyActiveLocations[] = [
-                    'quarter' => $quarterCursor->format('Y') . '-Q' . $quarterCursor->quarter,
-                    'locations' => (int)$countLocations
+                    'quarter' => $row->yr . '-Q' . $row->q,
+                    'locations' => $cumulative,
+                    'new' => (int)$row->new_count
                 ];
-                $quarterCursor->addQuarter();
             }
             
-            Log::info("calculateQuarterlyActiveLocations - OK", ['quarters' => count($quarterlyActiveLocations), 'locations' => $countLocations]);
             return $quarterlyActiveLocations;
         } catch (\Exception $e) {
             Log::error("Erreur calcul points de vente: " . $e->getMessage());
