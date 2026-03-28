@@ -5278,7 +5278,7 @@
           deltaElement.innerHTML = ''; // Nettoyer d'abord
           
           // Inverser la couleur pour les KPI où une hausse est MAUVAISE (deactivations, churn, durée entre transactions)
-          const inverse = elementId.includes('deactivated') || elementId.includes('Deactivated') || elementId.includes('churn') || elementId.includes('Churn') || elementId.includes('lostSubscriptions') || elementId.includes('avgInterTxDays') || elementId.includes('simchurn');
+          const inverse = elementId.includes('deactivated') || elementId.includes('Deactivated') || elementId.includes('churn') || elementId.includes('Churn') || elementId.includes('lostSubscriptions') || elementId.includes('avgInterTxDays') || elementId.includes('simchurn') || elementId.includes('unsubscriptions') || elementId.includes('Unsubscriptions');
           const positiveClass = inverse ? 'delta-negative' : 'delta-positive';
           const negativeClass = inverse ? 'delta-positive' : 'delta-negative';
           
