@@ -5304,8 +5304,10 @@
         valueElement.innerHTML = ''; // Clear any existing content including loading states
         // Force un nouveau rendu pour éviter les résidus
         valueElement.className = valueElement.className; // Trigger reflow
-        // Utiliser formatNumber avec 0 décimales pour les entiers, sauf si c'est un pourcentage ou déjà formaté
-        const formattedValue = (typeof safe.current === 'string') ? safe.current : formatNumber(safe.current, 0);
+        // Utiliser 1 décimale pour les KPI fractionnels, 0 pour les entiers
+        const isDecimalKpi = elementId.includes('transactionsPerUser') || elementId.includes('avgInterTxDays') || elementId.includes('transactionsPerMerchant');
+        const decimals = isDecimalKpi ? 1 : 0;
+        const formattedValue = (typeof safe.current === 'string') ? safe.current : formatNumber(safe.current, decimals);
         valueElement.textContent = formattedValue + suffix;
       }
       

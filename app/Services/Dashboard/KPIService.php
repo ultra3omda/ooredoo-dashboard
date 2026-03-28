@@ -198,22 +198,77 @@ class KPIService
         $convRatePeriod = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 2) : 0;
         $convRatePeriodComp = $activeComp > 0 ? round(($comparison['transacting_users'] / $activeComp) * 100, 2) : 0;
         
-        $totalActivePartnersDB = Cache::remember('total_active_partners_v2', 3600, fn() => DB::table('partner')->count());
+        $totalActivePartnersDB = Cache::remember('total_partners_with_promo_v3', 3600, function() {
+            // Partenaires avec au moins 1 promotion active ET au moins 1 point de vente
+            // Aligné avec la logique de clubprivileges.app
+            return DB::table('promotion as pr')
+                ->where('pr.promotion_active', 1)
+                ->whereIn('pr.partner_id', DB::table('partner_location')->distinct()->pluck('partner_id'))
+                ->distinct('pr.partner_id')
+                ->count('pr.partner_id');
+        });
         $totalMerchantsEverActive = Cache::remember('total_merchants_ever', 3600, fn() => DB::table('history as h')->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')->distinct('p.partner_id')->count('p.partner_id'));
-        $totalLocationsActive = Cache::remember('total_locations_active_v2', 3600, function() {
-            try { return DB::table('partner_location')->distinct('partner_location_id')->count('partner_location_id'); }
+        $totalLocationsActive = Cache::remember('total_locations_promo_v3', 3600, function() {
+            try {
+                // Points de vente des partenaires ayant au moins 1 promotion active
+                return DB::table('partner_location as pl')
+                    ->whereIn('pl.partner_id', DB::table('promotion')->where('promotion_active', 1)->distinct()->pluck('partner_id'))
+                    ->count();
+            }
             catch (\Exception $e) { return 0; }
         });
         
-        $activeMerchantRatio = $totalActivePartnersDB > 0 ? round(($current['active_merchants'] / $totalActivePartnersDB) * 100, 1) : 0;
-        $activeMerchantRatioComp = $totalActivePartnersDB > 0 ? round(($comparison['active_merchants'] / $totalActivePartnersDB) * 100, 1) : 0;
-        $txPerMerchant = $current['active_merchants'] > 0 ? round($current['transactions'] / $current['active_merchants'], 1) : 0;
-        $txPerMerchantComp = $comparison['active_merchants'] > 0 ? round($comparison['transactions'] / $comparison['active_merchants'], 1) : 0;
+        // Active Merchants: recalculer le vrai compte unique depuis history (pas le SUM des daily stats)
+        $realActiveMerchants = 0;
+        $realActiveMerchantsComp = 0;
+        try {
+            $promoActivePartners = DB::table('promotion')->where('promotion_active', 1)->distinct()->pluck('partner_id');
+            $locationPartners = DB::table('partner_location')->distinct()->pluck('partner_id');
+            
+            $amQuery = DB::table('history as h')
+                ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
+                ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
+                ->where('h.time', '>=', $startBound)->where('h.time', '<', $endExclusive)
+                ->whereNotNull('h.promotion_id')
+                ->whereIn('p.partner_id', $promoActivePartners)
+                ->whereIn('p.partner_id', $locationPartners);
+            $this->applyOperatorJoinAndFilter($amQuery, $selectedOperator, 'ca');
+            $realActiveMerchants = $amQuery->distinct('p.partner_id')->count('p.partner_id');
+
+            $amCompQuery = DB::table('history as h')
+                ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
+                ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
+                ->where('h.time', '>=', $compStartBound)->where('h.time', '<', $compEndExclusive)
+                ->whereNotNull('h.promotion_id')
+                ->whereIn('p.partner_id', $promoActivePartners)
+                ->whereIn('p.partner_id', $locationPartners);
+            $this->applyOperatorJoinAndFilter($amCompQuery, $selectedOperator, 'ca');
+            $realActiveMerchantsComp = $amCompQuery->distinct('p.partner_id')->count('p.partner_id');
+        } catch (\Exception $e) {
+            Log::warning('Real active merchants calculation failed: ' . $e->getMessage());
+            $realActiveMerchants = $current['active_merchants'];
+            $realActiveMerchantsComp = $comparison['active_merchants'];
+        }
+
+        $activeMerchantRatio = $totalActivePartnersDB > 0 ? round(($realActiveMerchants / $totalActivePartnersDB) * 100, 1) : 0;
+        $activeMerchantRatioComp = $totalActivePartnersDB > 0 ? round(($realActiveMerchantsComp / $totalActivePartnersDB) * 100, 1) : 0;
+        $txPerMerchant = $realActiveMerchants > 0 ? round($current['transactions'] / $realActiveMerchants, 1) : 0;
+        $txPerMerchantComp = $realActiveMerchantsComp > 0 ? round($comparison['transactions'] / $realActiveMerchantsComp, 1) : 0;
         
         $billingRateTimweData = $this->calculateTimweBillingRate($startBound, $endExclusive, $selectedOperator);
         $billingRateTimweCompData = $this->calculateTimweBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
         $billingRateOoredooData = $this->calculateOoredooBillingRate($startBound, $endExclusive, $selectedOperator);
         $billingRateOoredooCompData = $this->calculateOoredooBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
+
+        // Calcul durée moyenne entre 2 transactions
+        $avgInterTxDays = 0;
+        $avgInterTxDaysComparison = 0;
+        try {
+            $avgInterTxDays = $this->calculateAvgInterTransactionDays($startBound, $endExclusive, $selectedOperator);
+            $avgInterTxDaysComparison = $this->calculateAvgInterTransactionDays($compStartBound, $compEndExclusive, $selectedOperator);
+        } catch (\Exception $e) {
+            Log::warning('assembleKPIResult avgInterTransactionDays failed: ' . $e->getMessage());
+        }
 
         return [
             "activatedSubscriptions" => ["current" => $current['activated'], "previous" => $comparison['activated'], "change" => $this->calculatePercentageChange($current['activated'], $comparison['activated'])],
@@ -231,7 +286,7 @@ class KPIService
             "churnRate" => ["current" => $churnRate, "previous" => $churnRateComp, "change" => $this->calculatePercentageChange($churnRate, $churnRateComp)],
             "transactionsPerUser" => ["current" => $txPerUser, "previous" => $txPerUserComp, "change" => $this->calculatePercentageChange($txPerUser, $txPerUserComp)],
             "conversionRatePeriod" => ["current" => $convRatePeriod, "previous" => $convRatePeriodComp, "change" => $this->calculatePercentageChange($convRatePeriod, $convRatePeriodComp)],
-            "activeMerchants" => ["current" => $current['active_merchants'], "previous" => $comparison['active_merchants'], "change" => $this->calculatePercentageChange($current['active_merchants'], $comparison['active_merchants'])],
+            "activeMerchants" => ["current" => $realActiveMerchants, "previous" => $realActiveMerchantsComp, "change" => $this->calculatePercentageChange($realActiveMerchants, $realActiveMerchantsComp)],
             "activeMerchantRatio" => ["current" => $activeMerchantRatio, "previous" => $activeMerchantRatioComp, "change" => $this->calculatePercentageChange($activeMerchantRatio, $activeMerchantRatioComp)],
             "totalPartners" => ["current" => $totalActivePartnersDB, "previous" => $totalActivePartnersDB, "change" => 0.0],
             "totalActivePartnersDB" => ["current" => $totalActivePartnersDB, "previous" => $totalActivePartnersDB, "change" => 0.0],
@@ -245,6 +300,8 @@ class KPIService
             "billingRateOoredoo" => ["current" => $billingRateOoredooData['rate'], "previous" => $billingRateOoredooCompData['rate'], "change" => $this->calculatePercentageChange($billingRateOoredooData['rate'], $billingRateOoredooCompData['rate'])],
             "totalOoredooClients" => ["current" => $billingRateOoredooData['total_clients'], "previous" => $billingRateOoredooCompData['total_clients'], "change" => $this->calculatePercentageChange($billingRateOoredooData['total_clients'], $billingRateOoredooCompData['total_clients'])],
             "totalOoreodooBillings" => ["current" => $billingRateOoredooData['total_billings'], "previous" => $billingRateOoredooCompData['total_billings'], "change" => $this->calculatePercentageChange($billingRateOoredooData['total_billings'], $billingRateOoredooCompData['total_billings'])],
+            "avgInterTransactionDays" => ["current" => $avgInterTxDays, "previous" => $avgInterTxDaysComparison, "change" => $this->calculatePercentageChange($avgInterTxDays, $avgInterTxDaysComparison)],
+            "lostSubscriptions" => ["current" => $current['lost'], "previous" => $comparison['lost'], "change" => $this->calculatePercentageChange($current['lost'], $comparison['lost'])],
             "_source" => "materialized"
         ];
     }
@@ -365,6 +422,16 @@ class KPIService
         $billingRateOoredooData = $this->calculateOoredooBillingRate($startBound, $endExclusive, $selectedOperator);
         $billingRateOoredooComparisonData = $this->calculateOoredooBillingRate($compStartBound, $compEndExclusive, $selectedOperator);
         
+        // Calcul durée moyenne entre 2 transactions (en jours)
+        $avgInterTxDays = 0;
+        $avgInterTxDaysComparison = 0;
+        try {
+            $avgInterTxDays = $this->calculateAvgInterTransactionDays($startBound, $endExclusive, $selectedOperator);
+            $avgInterTxDaysComparison = $this->calculateAvgInterTransactionDays($compStartBound, $compEndExclusive, $selectedOperator);
+        } catch (\Exception $e) {
+            Log::warning('avgInterTransactionDays calculation failed: ' . $e->getMessage());
+        }
+        
         return [
             "activatedSubscriptions" => ["current" => $subMetrics->activated_current, "previous" => $subMetrics->activated_comparison, "change" => $this->calculatePercentageChange($subMetrics->activated_current, $subMetrics->activated_comparison)],
             "activeSubscriptions" => ["current" => $subMetrics->active_current, "previous" => $subMetrics->active_comparison, "change" => $this->calculatePercentageChange($subMetrics->active_current, $subMetrics->active_comparison)],
@@ -394,8 +461,52 @@ class KPIService
             "totalTimweBillings" => ["current" => $billingRateTimweData['total_billings'], "previous" => $billingRateTimweComparisonData['total_billings'], "change" => $this->calculatePercentageChange($billingRateTimweData['total_billings'], $billingRateTimweComparisonData['total_billings'])],
             "billingRateOoredoo" => ["current" => $billingRateOoredooData['rate'], "previous" => $billingRateOoredooComparisonData['rate'], "change" => $this->calculatePercentageChange($billingRateOoredooData['rate'], $billingRateOoredooComparisonData['rate'])],
             "totalOoredooClients" => ["current" => $billingRateOoredooData['total_clients'], "previous" => $billingRateOoredooComparisonData['total_clients'], "change" => $this->calculatePercentageChange($billingRateOoredooData['total_clients'], $billingRateOoredooComparisonData['total_clients'])],
-            "totalOoreodooBillings" => ["current" => $billingRateOoredooData['total_billings'], "previous" => $billingRateOoredooComparisonData['total_billings'], "change" => $this->calculatePercentageChange($billingRateOoredooData['total_billings'], $billingRateOoredooComparisonData['total_billings'])]
+            "totalOoreodooBillings" => ["current" => $billingRateOoredooData['total_billings'], "previous" => $billingRateOoredooComparisonData['total_billings'], "change" => $this->calculatePercentageChange($billingRateOoredooData['total_billings'], $billingRateOoredooComparisonData['total_billings'])],
+            "avgInterTransactionDays" => ["current" => $avgInterTxDays, "previous" => $avgInterTxDaysComparison, "change" => $this->calculatePercentageChange($avgInterTxDays, $avgInterTxDaysComparison)],
+            "lostSubscriptions" => ["current" => $lostSubscriptions, "previous" => $lostSubscriptionsComparison, "change" => $this->calculatePercentageChange($lostSubscriptions, $lostSubscriptionsComparison)]
         ];
+    }
+
+    public function calculateAvgInterTransactionDays(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): float
+    {
+        // Calcul: pour les utilisateurs ayant 2+ transactions dans la période,
+        // calculer la durée moyenne en jours entre transactions consécutives
+        $query = DB::table('history as h')
+            ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
+            ->where('h.time', '>=', $startBound)
+            ->where('h.time', '<', $endExclusive)
+            ->whereNotNull('h.promotion_id');
+        $this->applyOperatorJoinAndFilter($query, $selectedOperator, 'ca');
+        
+        // Récupérer les transactions groupées par client, ordonnées par date
+        $transactions = $query
+            ->select('ca.client_id', 'h.time')
+            ->orderBy('ca.client_id')
+            ->orderBy('h.time')
+            ->get();
+        
+        if ($transactions->isEmpty()) return 0;
+        
+        $totalGapDays = 0;
+        $gapCount = 0;
+        $prevClientId = null;
+        $prevTime = null;
+        
+        foreach ($transactions as $tx) {
+            if ($tx->client_id === $prevClientId && $prevTime) {
+                $current = strtotime($tx->time);
+                $prev = strtotime($prevTime);
+                $diffDays = ($current - $prev) / 86400;
+                if ($diffDays > 0) {
+                    $totalGapDays += $diffDays;
+                    $gapCount++;
+                }
+            }
+            $prevClientId = $tx->client_id;
+            $prevTime = $tx->time;
+        }
+        
+        return $gapCount > 0 ? round($totalGapDays / $gapCount, 1) : 0;
     }
 
     public function calculateTimweBillingRate(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array

@@ -56,25 +56,25 @@
     // Configuration spécifique pour les graphiques Eklektik (pas de modification globale)
     console.log('🎨 Configuration des graphiques Eklektik...');
     
-    // Palette de couleurs cohérente avec "Distribution by Category"
+    // Palette de couleurs cohérente avec le thème Club Privilèges (violet/or)
     const eklektikColors = {
-        primary: '#E30613',      // Rouge principal
-        secondary: '#3b82f6',    // Bleu
-        success: '#10b981',      // Vert
-        warning: '#f59e0b',      // Orange/Jaune
-        purple: '#8b5cf6',       // Violet
-        cyan: '#06b6d4',         // Cyan
-        orange: '#f97316',       // Orange vif
-        gray: '#64748b',         // Gris
+        primary: '#6C4BA0',      // Violet principal
+        secondary: '#D4A843',    // Or/Gold
+        success: '#8B6FC0',      // Violet clair
+        warning: '#B8860B',      // Or sombre
+        purple: '#9B7EC8',       // Lavande
+        cyan: '#A0522D',         // Brun doré
+        orange: '#7B68A0',       // Violet gris
+        gray: '#C4A265',         // Or pâle
         // Versions avec transparence
-        primaryAlpha: 'rgba(227, 6, 19, 0.8)',
-        secondaryAlpha: 'rgba(59, 130, 246, 0.8)',
-        successAlpha: 'rgba(16, 185, 129, 0.8)',
-        warningAlpha: 'rgba(245, 158, 11, 0.8)',
-        purpleAlpha: 'rgba(139, 92, 246, 0.8)',
-        cyanAlpha: 'rgba(6, 182, 212, 0.8)',
-        orangeAlpha: 'rgba(249, 115, 22, 0.8)',
-        grayAlpha: 'rgba(100, 116, 139, 0.8)'
+        primaryAlpha: 'rgba(108, 75, 160, 0.8)',
+        secondaryAlpha: 'rgba(212, 168, 67, 0.8)',
+        successAlpha: 'rgba(139, 111, 192, 0.8)',
+        warningAlpha: 'rgba(184, 134, 11, 0.8)',
+        purpleAlpha: 'rgba(155, 126, 200, 0.8)',
+        cyanAlpha: 'rgba(160, 82, 45, 0.8)',
+        orangeAlpha: 'rgba(123, 104, 160, 0.8)',
+        grayAlpha: 'rgba(196, 162, 101, 0.8)'
     };
     
     // Palette de couleurs pour les graphiques multi-opérateurs
@@ -928,17 +928,16 @@
             }, 200);
             }
             
-            // Modifier les couleurs du graphique Operators Distribution
+            // Modifier les couleurs du graphique Operators Distribution pour thème Club Privilèges
             if (revenueDistribution.data?.pie_chart) {
             if (revenueDistribution.data.pie_chart?.datasets?.[0]) {
-                // Couleurs spécifiques: TT (dégradé bleu→blanc), Orange (orange), Taraji (rouge→jaune)
                 const colors = [
-                    'rgba(59, 130, 246, 0.9)', // TT - bleu
-                    '#f97316',                 // Orange
-                    'rgba(239, 68, 68, 0.9)'  // Taraji - rouge
+                    '#6C4BA0',  // Violet principal
+                    '#D4A843',  // Or
+                    '#8B6FC0'   // Violet clair
                 ];
                 revenueDistribution.data.pie_chart.datasets[0].backgroundColor = colors;
-                revenueDistribution.data.pie_chart.datasets[0].borderColor = colors;
+                revenueDistribution.data.pie_chart.datasets[0].borderColor = '#1a1a2e';
                 revenueDistribution.data.pie_chart.datasets[0].borderWidth = 2;
             }
             createChartSafely('eklektik-operators-distribution-chart', 'operatorsDistribution', revenueDistribution.data.pie_chart, 'doughnut', {

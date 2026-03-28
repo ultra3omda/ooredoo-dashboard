@@ -63,13 +63,19 @@ class MerchantService
 
     public function calculateMerchantKPIs(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $selectedOperator, int $transactionsCurrent, int $transactionsComparison): array
     {
+        // Pré-calculer les sets de partenaires éligibles (avec promo active + location)
+        $promoActivePartners = DB::table('promotion')->where('promotion_active', 1)->distinct()->pluck('partner_id');
+        $locationPartners = DB::table('partner_location')->distinct()->pluck('partner_id');
+        
         $activeMerchantsQuery = DB::table('history as h')
             ->join('client_abonnement as ca', 'h.client_abonnement_id', '=', 'ca.client_abonnement_id')
             ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
             ->join('partner as pt', 'p.partner_id', '=', 'pt.partner_id')
             ->where('h.time', '>=', $startBound)
             ->where('h.time', '<', $endExclusive)
-            ->whereNotNull('h.promotion_id');
+            ->whereNotNull('h.promotion_id')
+            ->whereIn('pt.partner_id', $promoActivePartners)
+            ->whereIn('pt.partner_id', $locationPartners);
         $this->applyOperatorJoinAndFilter($activeMerchantsQuery, $selectedOperator, 'ca');
         $activeMerchants = $activeMerchantsQuery->distinct('pt.partner_id')->count('pt.partner_id');
         
@@ -79,14 +85,20 @@ class MerchantService
             ->join('partner as pt', 'p.partner_id', '=', 'pt.partner_id')
             ->where('h.time', '>=', $compStartBound)
             ->where('h.time', '<', $compEndExclusive)
-            ->whereNotNull('h.promotion_id');
+            ->whereNotNull('h.promotion_id')
+            ->whereIn('pt.partner_id', $promoActivePartners)
+            ->whereIn('pt.partner_id', $locationPartners);
         $this->applyOperatorJoinAndFilter($activeMerchantsComparisonQuery, $selectedOperator, 'ca');
         $activeMerchantsComparison = $activeMerchantsComparisonQuery->distinct('pt.partner_id')->count('pt.partner_id');
         
         $totalActivePartnersDB = DB::table('partner')->where('partener_active', 1)->count();
-        // Total Merchants = TOUS les partenaires enregistrés (pas seulement ceux marqués actifs)
-        // Cela garantit que Total Merchants >= Active Merchants (cohérence mathématique)
-        $totalAllPartners = DB::table('partner')->count();
+        // Total Merchants = Partenaires avec au moins 1 promotion active ET au moins 1 point de vente
+        // Aligné avec la logique de clubprivileges.app
+        $totalAllPartners = DB::table('promotion')
+            ->where('promotion_active', 1)
+            ->whereIn('partner_id', DB::table('partner_location')->distinct()->pluck('partner_id'))
+            ->distinct('partner_id')
+            ->count('partner_id');
         $totalPartners = max($totalAllPartners, $activeMerchants);
         
         $totalMerchantsEverActive = DB::table('history as h')
@@ -101,10 +113,10 @@ class MerchantService
         
         $totalLocationsActive = 0;
         try {
-            // Compter TOUS les points de vente (pas seulement ceux des partenaires actifs)
-            $totalLocationsActive = DB::table('partner_location')
-                ->distinct('partner_location.partner_location_id')
-                ->count('partner_location.partner_location_id');
+            // Compter les POS des partenaires avec au moins 1 promotion active
+            $totalLocationsActive = DB::table('partner_location as pl')
+                ->whereIn('pl.partner_id', DB::table('promotion')->where('promotion_active', 1)->distinct()->pluck('partner_id'))
+                ->count();
         } catch (\Exception $e) {
             Log::warning('Impossible de calculer totalLocationsActive', ['error' => $e->getMessage()]);
         }

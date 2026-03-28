@@ -88,29 +88,29 @@ class EklektikDashboardController extends Controller
                     [
                         'label' => 'TT',
                         'data' => [],
-                        'borderColor' => 'rgb(59, 130, 246)',
-                        'backgroundColor' => 'rgba(59, 130, 246, 0.2)',
+                        'borderColor' => '#6C4BA0',
+                        'backgroundColor' => 'rgba(108, 75, 160, 0.2)',
                         'tension' => 0.4
                     ],
                     [
                         'label' => 'Taraji',
                         'data' => [],
-                        'borderColor' => 'rgb(245, 158, 11)',
-                        'backgroundColor' => 'rgba(245, 158, 11, 0.2)',
+                        'borderColor' => '#D4A843',
+                        'backgroundColor' => 'rgba(212, 168, 67, 0.2)',
                         'tension' => 0.4
                     ],
                     [
                         'label' => 'Orange',
                         'data' => [],
-                        'borderColor' => 'rgb(227, 6, 19)',
-                        'backgroundColor' => 'rgba(227, 6, 19, 0.2)',
+                        'borderColor' => '#8B6FC0',
+                        'backgroundColor' => 'rgba(139, 111, 192, 0.2)',
                         'tension' => 0.4
                     ],
                     [
                         'label' => 'CA BigDeal Total',
                         'data' => [],
-                        'borderColor' => 'rgb(16, 185, 129)',
-                        'backgroundColor' => 'rgba(16, 185, 129, 0.2)',
+                        'borderColor' => '#B8860B',
+                        'backgroundColor' => 'rgba(184, 134, 11, 0.2)',
                         'tension' => 0.4
                     ]
                 ]
@@ -171,15 +171,15 @@ class EklektikDashboardController extends Controller
                     [
                         'label' => 'Active Subs',
                         'data' => [],
-                        'borderColor' => 'rgb(227, 6, 19)',
-                        'backgroundColor' => 'rgba(227, 6, 19, 0.2)',
+                        'borderColor' => '#6C4BA0',
+                        'backgroundColor' => 'rgba(108, 75, 160, 0.2)',
                         'tension' => 0.4
                     ],
                     [
                         'label' => 'Abonnements Facturés',
                         'data' => [],
-                        'borderColor' => 'rgb(59, 130, 246)',
-                        'backgroundColor' => 'rgba(59, 130, 246, 0.2)',
+                        'borderColor' => '#D4A843',
+                        'backgroundColor' => 'rgba(212, 168, 67, 0.2)',
                         'tension' => 0.4
                     ]
                 ]
@@ -244,23 +244,23 @@ class EklektikDashboardController extends Controller
             $chartData = [
                 'labels' => [],
                 'datasets' => [
-                    // Barres rouges - Abonnés Actifs
+                    // Barres violettes - Abonnés Actifs
                     [
                         'label' => 'Active Sub',
                         'type' => 'bar',
                         'data' => [],
-                        'backgroundColor' => 'rgba(255, 99, 132, 0.8)',
-                        'borderColor' => 'rgb(255, 99, 132)',
+                        'backgroundColor' => 'rgba(108, 75, 160, 0.8)',
+                        'borderColor' => '#6C4BA0',
                         'borderWidth' => 1,
                         'yAxisID' => 'y-active'
                     ],
-                    // Barres jaunes - CA BigDeal
+                    // Barres dorées - CA BigDeal
                     [
                         'label' => 'CA BigDeal',
                         'type' => 'bar',
                         'data' => [],
-                        'backgroundColor' => 'rgba(255, 205, 86, 0.8)',
-                        'borderColor' => 'rgb(255, 205, 86)',
+                        'backgroundColor' => 'rgba(212, 168, 67, 0.8)',
+                        'borderColor' => '#D4A843',
                         'borderWidth' => 1,
                         'yAxisID' => 'y-bigdeal'
                     ]
@@ -331,11 +331,11 @@ class EklektikDashboardController extends Controller
                     [
                         'data' => [],
                         'backgroundColor' => [
-                            '#FF6384',
-                            '#36A2EB',
-                            '#FFCE56',
-                            '#4BC0C0',
-                            '#9966FF'
+                            '#6C4BA0',
+                            '#D4A843',
+                            '#8B6FC0',
+                            '#B8860B',
+                            '#9B7EC8'
                         ]
                     ]
                 ]
@@ -347,17 +347,17 @@ class EklektikDashboardController extends Controller
                     [
                         'label' => 'CA Opérateur',
                         'data' => [],
-                        'backgroundColor' => 'rgba(255, 99, 132, 0.8)'
+                        'backgroundColor' => 'rgba(108, 75, 160, 0.8)'
                     ],
                     [
                         'label' => 'CA Agrégateur',
                         'data' => [],
-                        'backgroundColor' => 'rgba(54, 162, 235, 0.8)'
+                        'backgroundColor' => 'rgba(212, 168, 67, 0.8)'
                     ],
                     [
                         'label' => 'CA BigDeal',
                         'data' => [],
-                        'backgroundColor' => 'rgba(255, 206, 86, 0.8)'
+                        'backgroundColor' => 'rgba(139, 111, 192, 0.8)'
                     ]
                 ]
             ];

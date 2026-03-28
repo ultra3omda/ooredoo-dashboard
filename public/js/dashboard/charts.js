@@ -569,7 +569,7 @@ function createCategoryChart(data) {
   const labels = top10.map(d => `${d.category || 'Sans catégorie'} (${d.merchants ?? d.merchants_count ?? 0} marchands)`);
   // Utiliser transactions pour représenter le volume par catégorie
   const values = top10.map(d => Number(d.transactions ?? d.transaction_count ?? d.count ?? 0));
-  const colors = ['#E30613','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#f97316','#64748b','#ec4899','#14b8a6'];
+  const colors = ['#6C4BA0','#D4A843','#8B6FC0','#B8860B','#9B7EC8','#A0522D','#7B68A0','#C4A265','#5B3F8A','#E0C87A'];
   
   charts.category = new Chart(ctx, {
     type: 'pie',

@@ -17,7 +17,18 @@ async def lifespan(app: FastAPI):
     if result.returncode != 0:
         print("Starting PHP-FPM...")
         subprocess.run(["mkdir", "-p", "/run/php"], check=False)
-        subprocess.run(["php-fpm8.2", "--daemonize"], check=False)
+        # Try multiple PHP-FPM binary locations
+        for fpm_bin in ["/usr/sbin/php-fpm8.2", "php-fpm8.2", "php-fpm"]:
+            try:
+                subprocess.run([fpm_bin, "--daemonize"], check=False)
+                print(f"Started PHP-FPM via {fpm_bin}")
+                break
+            except FileNotFoundError:
+                continue
+        else:
+            # Fallback: try service command
+            subprocess.run(["service", "php8.2-fpm", "start"], check=False, capture_output=True)
+            print("Started PHP-FPM via service command")
     # Ensure Nginx has the Laravel config and is serving port 8002
     result = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8002/"], capture_output=True, text=True)
     if result.stdout.strip() != "200":

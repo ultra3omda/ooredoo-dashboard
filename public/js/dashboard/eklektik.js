@@ -724,20 +724,19 @@ function createEklektikCharts(chartsData) {
         labels: chartsData.serviceUsage.labels || [],
         datasets: [{
           data: chartsData.serviceUsage.data || [],
-          backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'],
+          backgroundColor: ['#6C4BA0', '#D4A843', '#8B6FC0', '#B8860B', '#9B7EC8'],
           borderWidth: 2,
-          borderColor: '#ffffff'
+          borderColor: '#1a1a2e'
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: {
-          duration: 1000
-        },
+        animation: false,
         plugins: {
           legend: {
-            position: 'bottom'
+            position: 'bottom',
+            labels: { color: '#e0e0e0', font: { size: 11 } }
           }
         }
       }
@@ -755,34 +754,34 @@ function createEklektikCharts(chartsData) {
         datasets: [{
           label: 'Appels API',
           data: chartsData.timeline.data || [],
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderColor: '#6C4BA0',
+          backgroundColor: 'rgba(108, 75, 160, 0.15)',
           tension: 0.4,
-          fill: true
+          fill: true,
+          pointBackgroundColor: '#D4A843',
+          pointBorderColor: '#6C4BA0',
+          pointRadius: 3,
+          borderWidth: 2
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: {
-          duration: 1000
-        },
-        interaction: {
-          intersect: false,
-          mode: 'index'
-        },
+        animation: false,
+        interaction: { intersect: false, mode: 'index' },
         scales: {
           y: {
             beginAtZero: true,
-            grid: {
-              color: 'rgba(0,0,0,0.1)'
-            }
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            ticks: { color: '#aaa' }
           },
           x: {
-            grid: {
-              color: 'rgba(0,0,0,0.1)'
-            }
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            ticks: { color: '#aaa' }
           }
+        },
+        plugins: {
+          legend: { labels: { color: '#e0e0e0' } }
         }
       }
     });
@@ -1255,10 +1254,10 @@ function createEklektikOverviewChart(chartData) {
         title: {
           display: true,
           text: 'Revenue TTC (K TND)',
-          color: 'rgb(54, 162, 235)'
+          color: '#6C4BA0'
         },
         ticks: {
-          color: 'rgb(54, 162, 235)',
+          color: '#6C4BA0',
           callback: function(value) {
             return value + 'K';
           }
@@ -1274,10 +1273,10 @@ function createEklektikOverviewChart(chartData) {
         title: {
           display: true,
           text: 'Active Sub',
-          color: 'rgb(255, 99, 132)'
+          color: '#D4A843'
         },
         ticks: {
-          color: 'rgb(255, 99, 132)',
+          color: '#D4A843',
           callback: function(value) {
             return new Intl.NumberFormat('fr-FR').format(value);
           }
@@ -1293,10 +1292,10 @@ function createEklektikOverviewChart(chartData) {
         title: {
           display: true,
           text: 'Taux Facturation / Part BigDeal (%)',
-          color: 'rgb(75, 192, 192)'
+          color: '#8B6FC0'
         },
         ticks: {
-          color: 'rgb(75, 192, 192)',
+          color: '#8B6FC0',
           callback: function(value) {
             return value.toFixed(1) + '%';
           }
@@ -1646,8 +1645,8 @@ function createEklektikSubscriptionsChart(data) {
           data.kpis?.active_subscriptions || 0,
           data.kpis?.unsub_count || 0
         ],
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderColor: '#6C4BA0',
+        backgroundColor: 'rgba(108, 75, 160, 0.15)',
         tension: 0.4
       }]
     },
@@ -1700,7 +1699,7 @@ function createEklektikRevenueChart(data) {
           data.revenue_by_action?.RENEW || 0,
           data.revenue_by_action?.CHARGE || 0
         ],
-        backgroundColor: ['#10b981', '#f59e0b']
+        backgroundColor: ['#6C4BA0', '#D4A843']
       }]
     },
     options: {
@@ -1748,10 +1747,10 @@ function createEklektikActionsPieChart(data) {
   });
   
   const actions = [
-    { label: 'SUB', value: kpis.new_subscriptions || 0, color: '#3b82f6' },
-    { label: 'RENEW', value: kpis.renewals || 0, color: '#10b981' },
-    { label: 'CHARGE', value: kpis.charges || 0, color: '#f59e0b' },
-    { label: 'UNSUB', value: kpis.unsubscriptions || 0, color: '#ef4444' }
+    { label: 'SUB', value: kpis.new_subscriptions || 0, color: '#6C4BA0' },
+    { label: 'RENEW', value: kpis.renewals || 0, color: '#D4A843' },
+    { label: 'CHARGE', value: kpis.charges || 0, color: '#8B6FC0' },
+    { label: 'UNSUB', value: kpis.unsubscriptions || 0, color: '#B8860B' }
   ];
   
   console.log('📊 [ACTIONS CHART] Actions calculées:', actions);
@@ -1887,12 +1886,12 @@ async function createEklektikOperatorsChart(data) {
   
   // Couleurs pour chaque opérateur
   const colors = {
-    'Orange': '#FF9500',
-    'TT': '#FF6384',
-    'Taraji': '#4BC0C0',
-    'Timwe': '#36A2EB',
-    'Ooredoo': '#FFCE56',
-    'Unknown': '#9E9E9E'
+    'Orange': '#D4A843',
+    'TT': '#6C4BA0',
+    'Taraji': '#8B6FC0',
+    'Timwe': '#B8860B',
+    'Ooredoo': '#9B7EC8',
+    'Unknown': '#666666'
   };
   
   eklektikCharts.operators = new Chart(ctx, {
