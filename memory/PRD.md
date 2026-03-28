@@ -1,56 +1,76 @@
-# PRD - Dashboard Club Privileges (Ooredoo)
+# PRD - Dashboard Club Privilèges Ooredoo
 
-## Probleme Original
-Dashboard de performance pour le programme Club Privileges d'Ooredoo Tunisie, necessitant des temps de reponse ultra-rapides (<1s) pour l'agregation massive de donnees sur 5+ ans.
+## Description
+Dashboard haute performance pour la gestion des abonnements, transactions et marchands de Club Privilèges Ooredoo Tunisie. API sub-seconde via Redis, vues matérialisées MySQL, Chart.js frontend.
 
 ## Architecture Technique
-- **Stack**: Laravel 10 (PHP 8.2) + Nginx/PHP-FPM + Redis + MySQL
-- **Proxy**: FastAPI (port 8001) -> Nginx (port 8002)
-- **Frontend**: Express (port 3000) -> Blade templates + Chart.js
-- **Cache**: Redis avec pre-chauffage cron (WarmupSplitEndpoints)
-- **Materialisation**: Tables `subscription_daily_stats`, `transaction_daily_stats` via artisan commands
+- **Backend**: Laravel 10, PHP 8.2, Nginx/PHP-FPM
+- **BDD**: MySQL (tables matérialisées: subscription_daily_stats, transaction_daily_stats, dashboard_daily_stats)
+- **Cache**: Redis (JSON brut, warmup cron, TTL adaptatif)
+- **Frontend**: Blade templates, Chart.js, Fetch API
+- **Proxy**: FastAPI (port 8001) → PHP-FPM/Nginx (port 8002)
 
-## Ce qui a ete implemente
+## Architecture des Services (Post-P4 Refactoring)
+```
+DashboardService.php (172 lignes - Facade)
+├── Dashboard/KPIService.php (446 lignes)
+├── Dashboard/MerchantService.php (273 lignes)
+├── Dashboard/TransactionService.php (239 lignes)
+├── Dashboard/SubscriptionService.php (636 lignes)
+├── Dashboard/StatisticsService.php (423 lignes)
+├── Traits/OperatorHelper.php (shared)
+└── Traits/TransactionHelper.php (shared)
+```
 
-### Phase 1 - Materialisation (DONE)
-- Table `subscription_daily_stats` + commande artisan
-- Table `transaction_daily_stats` + commande artisan
-- Rewrite de `getSubscriptionsData` et `getKPIsFromMaterialized`
+## Fonctionnalités Implémentées
 
-### Phase 2 - Cache Ultra-Rapide (DONE)
-- `WarmupSplitEndpoints.php` : pre-cache JSON complet dans Redis
-- `DataControllerOptimized.php` : fast-path retournant JSON brut depuis Redis (~5ms)
-- Temps de reponse backend : 5-10ms (vs 20-30s avant)
+### Phase 1 - Dashboard Core (DONE)
+- KPIs: activations, abonnements actifs, taux rétention/conversion/churn
+- Graphiques: subscriptions daily, transactions volume, merchants breakdown
+- 6 split endpoints cachés: kpis, subscriptions, transactions, merchants, timwe, ooredoo
+- Warmup cron: `app:warmup-split-endpoints`
+- Smart Comparison: YoY pour périodes > 365 jours
+- Cumulative Active POS: courbe trimestrielle
 
-### Phase 3 - Correction Bugs Frontend (DONE - 28/03/2026)
-- **Bug P0**: Limite de periode augmentee de 1825 a 2200 jours
-- **Bug P0**: Cle de cache simplifiee (start_date + end_date + operator)
-- **Bug P1**: Race condition Retention Rate Trend corrigee (handler timwe pre-creait subscriptions={})
-- **Bug P1**: Acces donnees merchants corrige (objet vs tableau)
-- **Bug P1**: Source categoryDistribution corrigee
-- **Bug P1**: Table marchands corrigee
-- **Bug P2**: Re-render charts lors du changement d'onglet
+### Phase 2 - Performance (DONE)
+- Tables matérialisées
+- Redis ultra-fast (5-10ms en cache)
+- Split endpoints asynchrones
+- Frontend race condition fixes (Chart.js canvas)
 
-### Verification Complete (DONE - 28/03/2026)
-- 9/9 onglets verifies pour Lifetime (01/01/2021 - 28/03/2026)
-- 0 graphique vide, 0 KPI manquant, 0 tableau bloque
-- Rapport complet : `/app/reports/RAPPORT_VERIFICATION_COMPLETE.md`
+### Phase 3 - Monitoring & Alertes (DONE - 28/03/2026)
+- **AlertService**: Création/acquittement/purge d'alertes (Redis-backed)
+- **HealthCheckCommand**: Artisan cron, 5 composants (DB, Redis, Warmup, Disk, API)
+- **Endpoints API**:
+  - `GET /api/monitoring/health` - Health check complet
+  - `GET /api/monitoring/alerts` - Liste des alertes + stats
+  - `POST /api/monitoring/alerts/{id}/acknowledge`
+  - `POST /api/monitoring/alerts/acknowledge-all`
+  - `DELETE /api/monitoring/alerts`
+  - `GET /api/monitoring/warmup-status` - Couverture cache détaillée
+- **UI Monitoring**: Dashboard Bootstrap avec auto-refresh 30s, badges sévérité, graphique API latency, health check on-demand
+
+### Phase 4 - Refactoring DashboardService (DONE - 28/03/2026)
+- DashboardService réduit de ~4000 → 172 lignes (thin facade)
+- 5 services de domaine + 2 traits partagés
+- API publique identique (zéro breaking change)
+- Tests: 100% backend (18/18), 95% frontend
+
+## Endpoints API Principaux
+- `GET /api/dashboard/split/kpis`
+- `GET /api/dashboard/split/subscriptions`
+- `GET /api/dashboard/split/transactions`
+- `GET /api/dashboard/split/merchants`
+- `GET /api/dashboard/split/timwe`
+- `GET /api/dashboard/split/ooredoo`
+- `GET /api/monitoring/health`
+- `GET /api/monitoring/alerts`
+- `GET /api/monitoring/warmup-status`
 
 ## Backlog
-
-### P3 - Monitoring (A VENIR)
-- Alertes temps reel
-- Health checks
-- Tableau de bord de monitoring
-
-### P4 - Refactoring (FUTUR)
-- Decouplage `DashboardService.php` (~4000 lignes)
-- Creation services dedies : SubscriptionService, TransactionService, MerchantService
-- Tests unitaires et d'integration
-
-## Integrations 3rd Party
-- OpenAI GPT-4 (necessite cle utilisateur)
-- Google Gemini 2.5 Flash (necessite cle utilisateur)
+- P5: Notifications externes (email/SMS) pour alertes critiques
+- P5: Export de données (CSV/PDF)
+- P5: Dashboard comparatif multi-opérateurs
 
 ## Credentials
 - Email: superadmin@ooredoo.tn
