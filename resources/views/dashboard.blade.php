@@ -15,23 +15,23 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <style>
     :root {
-      --brand-primary: #E60000;
-      --brand-secondary: #00E5FF;
+      --brand-primary: #6C4BA0;
+      --brand-secondary: #D4A843;
       --theme-name: 'Club Privilèges';
       --brand-dark: #FFFFFF;
-      --bg: #050505;
-      --card: #121212;
-      --card-hover: #1A1A1A;
+      --bg: #0D0A1A;
+      --card: #161131;
+      --card-hover: #1E1745;
       --muted: #A1A1AA;
       --success: #10b981;
       --warning: #f59e0b;
       --danger: #ef4444;
-      --accent: #00E5FF;
-      --border: #27272A;
+      --accent: #D4A843;
+      --border: #2A2350;
       --brand-red: var(--brand-primary);
       --text-primary: #FFFFFF;
       --text-secondary: #A1A1AA;
-      --glass-bg: rgba(18, 18, 18, 0.8);
+      --glass-bg: rgba(22, 17, 49, 0.8);
     }
     
     * { box-sizing: border-box; }
@@ -68,7 +68,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(5, 5, 5, 0.85);
+      background: rgba(13, 10, 26, 0.85);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       padding: 12px 20px;
@@ -147,7 +147,7 @@
     }
     
     .admin-btn:hover {
-      background: #c20510;
+      background: #5B3FA0;
       text-decoration: none;
     }
     
@@ -170,7 +170,7 @@
     /* Navigation Tabs */
     /* ===== Navigation - Dark Floating Pill Menu ===== */
     .nav-wrapper {
-      background: rgba(18, 18, 18, 0.6);
+      background: rgba(22, 17, 49, 0.6);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-radius: 50px;
@@ -261,7 +261,7 @@
       color: white;
       border: 1px solid rgba(255,255,255,0.1);
       cursor: pointer;
-      box-shadow: 0 8px 32px rgba(230, 0, 0, 0.15);
+      box-shadow: 0 8px 32px rgba(108, 75, 160, 0.15);
       z-index: 1000;
       display: flex;
       align-items: center;
@@ -270,8 +270,8 @@
     }
     .ai-fab:hover {
       transform: scale(1.08);
-      box-shadow: 0 8px 40px rgba(230, 0, 0, 0.3);
-      border-color: rgba(230, 0, 0, 0.3);
+      box-shadow: 0 8px 40px rgba(108, 75, 160, 0.3);
+      border-color: rgba(108, 75, 160, 0.3);
     }
     .ai-fab svg { width: 24px; height: 24px; }
     .ai-fab-tooltip {
@@ -306,7 +306,7 @@
       width: 460px;
       max-width: 90vw;
       height: 100vh;
-      background: #0A0A0A;
+      background: #0A0A1A;
       z-index: 1002;
       transition: right 0.3s ease;
       box-shadow: -4px 0 32px rgba(0,0,0,0.4);
@@ -438,8 +438,8 @@
     
     /* Tracing beam effect for first KPI */
     .kpi-card:first-child {
-      border-color: rgba(230, 0, 0, 0.2);
-      box-shadow: 0 0 24px rgba(230, 0, 0, 0.06), inset 0 1px 0 rgba(230, 0, 0, 0.1);
+      border-color: rgba(108, 75, 160, 0.2);
+      box-shadow: 0 0 24px rgba(108, 75, 160, 0.06), inset 0 1px 0 rgba(108, 75, 160, 0.1);
     }
     
     .kpi-title {
@@ -559,7 +559,7 @@
     .badge-success { background: rgba(16, 185, 129, 0.15); color: #10b981; }
     .badge-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
     .badge-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-    .badge-info { background: rgba(0, 229, 255, 0.1); color: #00E5FF; }
+    .badge-info { background: rgba(212, 168, 67, 0.1); color: #D4A843; }
     .badge-secondary { background: rgba(255,255,255,0.05); color: var(--muted); }
 
     /* Styles pour la pagination */
@@ -708,7 +708,7 @@
     .date-input:focus {
       outline: none;
       border-color: var(--brand-red);
-      box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+      box-shadow: 0 0 0 3px rgba(108, 75, 160, 0.1);
     }
     
     .btn-refresh {
@@ -725,8 +725,8 @@
     }
     
     .btn-refresh:hover {
-      background: #CC0000;
-      box-shadow: 0 4px 16px rgba(230, 0, 0, 0.3);
+      background: #5B3FA0;
+      box-shadow: 0 4px 16px rgba(108, 75, 160, 0.3);
     }
     
     .btn-refresh:active {
@@ -747,7 +747,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(5,5,5,0.7);
+      background: rgba(13, 10, 26, 0.7);
       backdrop-filter: blur(4px);
       display: flex;
       justify-content: center;
@@ -835,9 +835,9 @@
     }
     
     .notification.info {
-      background: rgba(0, 229, 255, 0.1);
-      color: #67e8f9;
-      border-left: 3px solid #00E5FF;
+      background: rgba(212, 168, 67, 0.1);
+      color: #D4A843;
+      border-left: 3px solid #D4A843;
     }
     
     @keyframes slideIn {
@@ -862,17 +862,17 @@
     .operator-select:hover {
       border-color: var(--brand-red);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(108, 75, 160, 0.15);
     }
     
     .operator-select:focus {
       outline: none;
       border-color: var(--brand-red);
-      box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+      box-shadow: 0 0 0 3px rgba(108, 75, 160, 0.1);
     }
     
     .operator-select option {
-      background: #1A1A1A;
+      background: #1E1745;
       color: var(--text-primary);
       padding: 8px;
     }
@@ -1072,9 +1072,9 @@
     .enhanced-date-input:focus {
       outline: none;
       border-color: var(--brand-primary);
-      box-shadow: 0 0 0 3px rgba(230, 0, 0, 0.15);
+      box-shadow: 0 0 0 3px rgba(108, 75, 160, 0.15);
       border-color: var(--brand-red);
-      box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+      box-shadow: 0 0 0 3px rgba(108, 75, 160, 0.1);
     }
 
     .date-separator {
@@ -1130,7 +1130,7 @@
     .enhanced-select:focus {
       outline: none;
       border-color: var(--brand-red);
-      box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+      box-shadow: 0 0 0 3px rgba(108, 75, 160, 0.1);
     }
     
     /* Multi-select styles */
@@ -1156,7 +1156,7 @@
     
     .multi-select-header:hover {
       border-color: var(--brand-primary);
-      box-shadow: 0 0 0 3px rgba(230, 0, 0, 0.1);
+      box-shadow: 0 0 0 3px rgba(108, 75, 160, 0.1);
     }
     
     .dropdown-arrow {
@@ -1174,7 +1174,7 @@
       top: 100%;
       left: 0;
       right: 0;
-      background: #1A1A1A;
+      background: #1E1745;
       border: 1px solid var(--border);
       border-top: none;
       border-radius: 0 0 8px 8px;
@@ -1207,7 +1207,7 @@
     }
     
     .checkbox-label:hover {
-      background: rgba(230, 0, 0, 0.08);
+      background: rgba(108, 75, 160, 0.08);
     }
     
     .checkbox-label input[type="checkbox"] {
@@ -1385,7 +1385,7 @@
     }
     
     .btn-sm.btn-primary:hover {
-      background: #dc2626;
+      background: #5B3FA0;
       transform: translateY(-1px);
     }
     
@@ -1456,7 +1456,7 @@
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
     
     /* Selection color */
-    ::selection { background: rgba(230, 0, 0, 0.3); color: white; }
+    ::selection { background: rgba(108, 75, 160, 0.3); color: white; }
     
     /* Button success style */
     .btn-success {
@@ -1608,9 +1608,9 @@
     }
 
     .btn-primary:hover {
-      background: #CC0000;
+      background: #5B3FA0;
       transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(230, 0, 0, 0.3);
+      box-shadow: 0 4px 16px rgba(108, 75, 160, 0.3);
     }
 
     .btn-secondary {
@@ -2488,22 +2488,22 @@
       <!-- KPIs Row 1 (4 KPI) -->
       <div class="grid">
         <div class="card kpi-card">
-          <div class="kpi-title">Activated Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="PÉRIODE: Nb d'abonnements activés entre start et end (client_abonnement_creation ∈ [start,end)).">ⓘ</span></div>
+          <div class="kpi-title">Activated Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre d'abonnements dont la date de création tombe dans la période sélectionnée (client_abonnement_creation ∈ [start, end)). Tous opérateurs ou filtrés selon le filtre actif.">ⓘ</span></div>
           <div class="kpi-value" id="activatedSubscriptions">Loading...</div>
           <div class="kpi-delta" id="activatedSubscriptionsDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Active Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="PÉRIODE: Activés dans la période et encore actifs à la fin (expiration NULL ou > end).">ⓘ</span></div>
+          <div class="kpi-title">Active Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="COHORTE PÉRIODE : Abonnements créés dans [start, end) ET encore actifs à la fin de la période (expiration NULL ou >= end). Ce n'est PAS la base active totale — uniquement les nouveaux de la période qui sont restés.">ⓘ</span></div>
           <div class="kpi-value" id="activeSubscriptions">Loading...</div>
           <div class="kpi-delta" id="activeSubscriptionsDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Retention Rate <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Pourcentage d’abonnés qui restent actifs à la fin de la période.">ⓘ</span></div>
+          <div class="kpi-title">Retention Rate <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Active Subscriptions / Activated Subscriptions) × 100. Pourcentage des NOUVEAUX abonnés de la période qui sont encore actifs à la fin. Formule : cohorte active ÷ cohorte activée.">ⓘ</span></div>
           <div class="kpi-value" id="overview-retentionRate">Loading...</div>
           <div class="kpi-delta" id="overview-retentionRateDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Conversion Rate <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Part des abonnés qui ont effectué au moins un achat pendant la période.">ⓘ</span></div>
+          <div class="kpi-title">Conversion Rate <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Transacting Users période / Active Subscriptions cohorte) × 100. Part des utilisateurs ayant transigé parmi les abonnés de la cohorte encore actifs.">ⓘ</span></div>
           <div class="kpi-value" id="conversionRate">Loading...</div>
           <div class="progress-bar">
             <div class="progress-fill" id="overview-conversionProgress" style="width: 0%"></div>
@@ -2554,22 +2554,22 @@
       <!-- Subscriptions KPIs: Row 1 (4 KPI) -->
       <div class="sub-kpis-row">
         <div class="card kpi-card">
-          <div class="kpi-title">Activated Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="PÉRIODE: Nb d'abonnements activés (client_abonnement_creation ∈ [start,end)).">ⓘ</span></div>
+          <div class="kpi-title">Activated Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total d'abonnements créés durant la période sélectionnée (client_abonnement_creation ∈ [start, end)). Identique à l'Overview.">ⓘ</span></div>
           <div class="kpi-value" id="sub-activatedSubscriptions">Loading...</div>
           <div class="kpi-delta" id="sub-activatedSubscriptionsDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Active Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="PÉRIODE: Activés dans la période et encore actifs à la fin (expiration NULL ou > end).">ⓘ</span></div>
+          <div class="kpi-title">Active Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="COHORTE : Abonnements créés dans la période ET encore actifs à la fin (expiration NULL ou >= end). Ne représente PAS la base active totale, uniquement la rétention de la cohorte.">ⓘ</span></div>
           <div class="kpi-value" id="sub-activeSubscriptions">Loading...</div>
           <div class="kpi-delta" id="sub-activeSubscriptionsDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Retention Rate <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Sur 100 nouveaux abonnés, combien restent actifs à la fin de la période.">ⓘ</span></div>
+          <div class="kpi-title">Retention Rate <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Active Subs cohorte / Activated Subs) × 100. Sur 100 nouveaux abonnés de la période, combien sont encore actifs à la fin.">ⓘ</span></div>
           <div class="kpi-value" id="sub-retentionRate">Loading...</div>
           <div class="kpi-delta" id="sub-retentionRateDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Conversion Rate (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Parmi les abonnés actifs, part de ceux qui ont payé au moins une fois.">ⓘ</span></div>
+          <div class="kpi-title">Conversion Rate (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Transacting Users période / Active Subs cohorte) × 100. Parmi les abonnés de la cohorte encore actifs, part de ceux ayant effectué au moins une transaction.">ⓘ</span></div>
           <div class="kpi-value" id="sub-conversionRate">Loading...</div>
           <div class="kpi-delta" id="sub-conversionRateDelta">Loading...</div>
         </div>
@@ -2578,22 +2578,22 @@
       <!-- Subscriptions KPIs: Row 2 (2 KPI) -->
       <div class="sub-kpis-row">
         <div class="card kpi-card">
-          <div class="kpi-title">Deactivated (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Période: Tous les abonnements expirés dans la période sélectionnée.">ⓘ</span></div>
+          <div class="kpi-title">Deactivated (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="TOUS les abonnements dont la date d'expiration tombe dans la période, quelle que soit leur date de création.">ⓘ</span></div>
           <div class="kpi-value" id="sub-deactivatedSubscriptions">Loading...</div>
           <div class="kpi-delta" id="sub-deactivatedSubscriptionsDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Deactivated (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Cohorte: Abonnements créés dans [start,end) puis expirés dans la période.">ⓘ</span></div>
+          <div class="kpi-title">Deactivated (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Abonnements créés dans [start, end) ET dont la date d'expiration tombe aussi dans cette même période. Sous-ensemble de la cohorte.">ⓘ</span></div>
           <div class="kpi-value" id="sub-lostSubscriptions">Loading...</div>
           <div class="kpi-delta" id="sub-lostSubscriptionsDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Taux de churn <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Part des nouveaux abonnés qui ont résilié (ont pris fin) pendant la période.">ⓘ</span></div>
+          <div class="kpi-title">Taux de churn <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Deactivated cohorte / Activated) × 100. Part des nouveaux abonnés de la cohorte qui ont été désactivés durant la période.">ⓘ</span></div>
           <div class="kpi-value" id="sub-retentionRateTrue">Loading...</div>
           <div class="kpi-delta" id="sub-retentionRateTrueDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Transactions (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="PÉRIODE: Nb de transactions (history.time ∈ [start,end)).">ⓘ</span></div>
+          <div class="kpi-title">Transactions (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de transactions effectuées dans la période (history.time ∈ [start, end)), tous abonnés confondus.">ⓘ</span></div>
           <div class="kpi-value" id="sub-totalTransactions">Loading...</div>
           <div class="kpi-delta" id="sub-totalTransactionsDelta">Loading...</div>
         </div>
@@ -2737,17 +2737,17 @@
       <div class="trans-kpis-row">
         <!-- Transaction KPIs -->
         <div class="card kpi-card">
-          <div class="kpi-title">Total Transactions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="PÉRIODE: Nb de transactions (history.time ∈ [start,end)).">ⓘ</span></div>
+          <div class="kpi-title">Total Transactions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de transactions effectuées dans la période (history.time ∈ [start, end)), tous abonnés confondus.">ⓘ</span></div>
           <div class="kpi-value" id="trans-totalTransactions">Loading...</div>
           <div class="kpi-delta" id="trans-totalTransactionsDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Total Transactions (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Achats réalisés par les abonnés inscrits pendant la période.">ⓘ</span></div>
+          <div class="kpi-title">Total Transactions (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Transactions effectuées par les abonnés dont la date de création ET la date de transaction tombent dans [start, end). Sous-ensemble des Total Transactions.">ⓘ</span></div>
           <div class="kpi-value" id="trans-cohortTransactions">Loading...</div>
           <div class="kpi-delta" id="trans-cohortTransactionsDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Transacting Users (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de personnes qui ont payé au moins une fois pendant la période.">ⓘ</span></div>
+          <div class="kpi-title">Transacting Users (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre d'utilisateurs uniques (client_id distincts) ayant effectué au moins une transaction dans la période, tous abonnements confondus.">ⓘ</span></div>
           <div class="kpi-value" id="trans-transactingUsers">Loading...</div>
           <div class="kpi-delta" id="trans-transactingUsersDelta">Loading...</div>
         </div>
@@ -2761,22 +2761,22 @@
       <!-- Transactions KPIs: Row 2 (4 KPI alignés comme Overview) -->
       <div class="trans-kpis-row">
         <div class="card kpi-card">
-          <div class="kpi-title">Conversion Rate (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Transacting Users (Cohorte)) / (Active Subscriptions (Période)).">ⓘ</span></div>
+          <div class="kpi-title">Conversion Rate (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Transacting Users Cohorte / Active Subscriptions Cohorte) × 100. Part des abonnés de la cohorte encore actifs qui ont transigé.">ⓘ</span></div>
           <div class="kpi-value" id="trans-convCohort">Loading...</div>
           <div class="kpi-delta" id="trans-convCohortDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Conversion Rate (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Transacting Users (Période)) / (Active Subscriptions (Période)).">ⓘ</span></div>
+          <div class="kpi-title">Conversion Rate (Période) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Transacting Users Période / Active Subscriptions Cohorte) × 100. Part de TOUS les utilisateurs ayant transigé, rapportée à la cohorte active.">ⓘ</span></div>
           <div class="kpi-value" id="trans-convPeriod">Loading...</div>
           <div class="kpi-delta" id="trans-convPeriodDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Transactions/User <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Transactions (période) / Utilisateurs transigeants (période).">ⓘ</span></div>
+          <div class="kpi-title">Transactions/User <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Total Transactions / Transacting Users (Période). Nombre moyen de passages en caisse par utilisateur actif.">ⓘ</span></div>
           <div class="kpi-value" id="trans-transactionsPerUser">Loading...</div>
           <div class="kpi-delta" id="trans-transactionsPerUserDelta">Loading...</div>
         </div>
         <div class="card kpi-card">
-          <div class="kpi-title">Avg. Durée entre 2 transactions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Moyenne des intervalles entre transactions par utilisateur (jours).">ⓘ</span></div>
+          <div class="kpi-title">Avg. Durée entre 2 transactions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Durée moyenne en jours entre deux transactions consécutives pour un même utilisateur. Plus cette valeur est basse, plus les utilisateurs sont fréquents.">ⓘ</span></div>
           <div class="kpi-value" id="trans-avgInterTxDays">Loading...</div>
           <div class="kpi-delta" id="trans-avgInterTxDaysDelta">Loading...</div>
           </div>
@@ -2875,7 +2875,7 @@
         <div class="card kpi-card merchants-kpi">
           <div class="kpi-icon">🔢</div>
           <div class="kpi-content">
-            <div class="kpi-title">Total Transactions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="PÉRIODE: Nb de transactions (history.time ∈ [start,end)).">ⓘ</span></div>
+            <div class="kpi-title">Total Transactions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de transactions effectuées dans la période (history.time ∈ [start, end)), tous abonnés confondus.">ⓘ</span></div>
             <div class="kpi-value" id="merch-totalTransactions">Loading...</div>
             <div class="kpi-delta" id="merch-totalTransactionsDelta">Loading...</div>
           </div>
@@ -3006,22 +3006,22 @@
       <div class="grid">
         <!-- Première ligne - 4 KPIs -->
         <div class="card kpi-card" style="grid-column: span 3;">
-          <div class="kpi-title">Revenus TTC <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus totaux TTC générés via Eklektik">ⓘ</span></div>
+          <div class="kpi-title">Revenus TTC <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus Toutes Taxes Comprises générés via la plateforme Eklektik pour la période sélectionnée (somme des montants facturés).">ⓘ</span></div>
           <div class="kpi-value" id="eklektik-revenue-ttc">Loading...</div>
           <div class="kpi-delta" id="eklektik-revenue-ttc-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
-          <div class="kpi-title">Revenus HT <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus hors taxes calculés selon les formules par opérateur">ⓘ</span></div>
+          <div class="kpi-title">Revenus HT <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus Hors Taxes calculés en appliquant les formules contractuelles spécifiques à chaque opérateur (TVA déduite selon les taux applicables).">ⓘ</span></div>
           <div class="kpi-value" id="eklektik-revenue-ht">Loading...</div>
           <div class="kpi-delta" id="eklektik-revenue-ht-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
-          <div class="kpi-title">CA BigDeal <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Chiffre d'affaires BigDeal (part des revenus)">ⓘ</span></div>
+          <div class="kpi-title">CA BigDeal <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Part du chiffre d'affaires revenant à BigDeal selon les termes contractuels avec chaque opérateur (pourcentage du Revenu HT).">ⓘ</span></div>
           <div class="kpi-value" id="eklektik-ca-bigdeal">Loading...</div>
           <div class="kpi-delta" id="eklektik-ca-bigdeal-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
-          <div class="kpi-title">Active Subs <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre d'abonnés actifs">ⓘ</span></div>
+          <div class="kpi-title">Active Subs <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total d'abonnés actifs sur la plateforme Eklektik à la fin de la période sélectionnée.">ⓘ</span></div>
           <div class="kpi-value" id="eklektik-active-subs">Loading...</div>
           <div class="kpi-delta" id="eklektik-active-subs-delta">Loading...</div>
         </div>
@@ -3099,7 +3099,7 @@
       <div class="grid">
         <!-- Première ligne - 4 KPIs principaux -->
         <div class="card kpi-card" style="grid-column: span 3;">
-          <div class="kpi-title">Taux de Facturation <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Clients facturés) / (Total clients Timwe) * 100. Seules les transactions avec pricepointId=63980 ET mnoDeliveryCode=DELIVERED sont comptées.">ⓘ</span></div>
+          <div class="kpi-title">Taux de Facturation <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Nombre de facturations réussies / Base Active Totale Timwe) × 100. Critères : pricepointId=63980 ET mnoDeliveryCode=DELIVERED uniquement.">ⓘ</span></div>
           <div class="kpi-value" id="timwe-billing-rate">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
@@ -3113,7 +3113,7 @@
           <div class="kpi-delta" id="timwe-total-billings-delta">Loading...</div>
         </div>
         <div class="card kpi-card" style="grid-column: span 3;">
-          <div class="kpi-title">Active Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Base totale d'abonnés Timwe actifs au dernier jour de la période (source: timwe_daily_stats). Inclut tous les abonnés actifs, peu importe leur date d'activation.">ⓘ</span></div>
+          <div class="kpi-title">Active Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="BASE ACTIVE TOTALE Timwe au dernier jour de la période (source : timwe_daily_stats). Inclut TOUS les abonnés actifs quelle que soit leur date d'activation. Diffère de l'Overview qui montre uniquement la cohorte de la période.">ⓘ</span></div>
           <div class="kpi-value" id="timwe-active-subs">Loading...</div>
         </div>
       </div>
@@ -3599,17 +3599,17 @@
   <script>
     // Définition immédiate des couleurs thème - CRITIQUE pour éviter les erreurs
     window.THEME_COLORS = {
-      primary: '#E60000',
-      primaryRgba: 'rgba(230, 0, 0, 0.15)',
-      secondary: '#00E5FF',
-      accent: '#00E5FF',
+      primary: '#6C4BA0',
+      primaryRgba: 'rgba(108, 75, 160, 0.15)',
+      secondary: '#D4A843',
+      accent: '#D4A843',
       success: '#10b981',
       warning: '#f59e0b',
       muted: '#A1A1AA',
       mutedRgba: 'rgba(161, 161, 170, 0.2)',
       gridColor: 'rgba(255, 255, 255, 0.05)',
       textColor: '#A1A1AA',
-      cardBg: '#121212'
+      cardBg: '#161131'
     };
     
     // Alias global immédiat
@@ -3644,17 +3644,17 @@
       
       // Fallback colors
       const fallbackColors = {
-        primary: '#E30613',
-        primaryRgba: 'rgba(227, 6, 19, 0.1)',
-        secondary: '#DC2626',
-        accent: '#3b82f6',
+        primary: '#6C4BA0',
+        primaryRgba: 'rgba(108, 75, 160, 0.1)',
+        secondary: '#D4A843',
+        accent: '#D4A843',
         success: '#10b981',
         warning: '#f59e0b',
         muted: '#64748b',
         mutedRgba: 'rgba(100, 116, 139, 0.2)'
       };
       
-      return fallbackColors[colorName] || '#E60000';
+      return fallbackColors[colorName] || '#6C4BA0';
     }
 
     // Alias sécurisé pour THEME_COLORS
@@ -3669,7 +3669,7 @@
     Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
     Chart.defaults.plugins.legend.labels.color = '#A1A1AA';
     Chart.defaults.plugins.legend.labels.font = { family: 'Manrope', size: 11 };
-    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(18, 18, 18, 0.95)';
+    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(22, 17, 49, 0.95)';
     Chart.defaults.plugins.tooltip.titleColor = '#FFFFFF';
     Chart.defaults.plugins.tooltip.bodyColor = '#A1A1AA';
     Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.1)';
@@ -5258,7 +5258,7 @@
     }
     .ai-conversation-item.active {
       border-left-color: var(--brand-primary) !important;
-      background: rgba(230, 0, 0, 0.08) !important;
+      background: rgba(108, 75, 160, 0.08) !important;
     }
     .ai-sidebar button:hover {
       opacity: 0.8;
@@ -5288,7 +5288,7 @@
       border-color: var(--border) !important;
     }
     #aiSendBtn:hover {
-      background: #CC0000 !important;
+      background: #5B3FA0 !important;
       transform: scale(1.05);
     }
     #aiSendBtn:disabled {
@@ -5448,7 +5448,7 @@
       container.innerHTML = '';
       const currentDiv = document.createElement('div');
       currentDiv.className = 'ai-conversation-item' + (isCurrentActive ? ' active' : '');
-      currentDiv.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isCurrentActive ? 'rgba(230,0,0,0.08)' : 'transparent') + '; border-radius: 8px; border-left: 3px solid ' + (isCurrentActive ? '#E60000' : 'transparent') + '; cursor: pointer; color: #A1A1AA;';
+      currentDiv.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isCurrentActive ? 'rgba(108,75,160,0.08)' : 'transparent') + '; border-radius: 8px; border-left: 3px solid ' + (isCurrentActive ? '#6C4BA0' : 'transparent') + '; cursor: pointer; color: #A1A1AA;';
       currentDiv.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center;"><div style="flex: 1; min-width: 0;" onclick="selectCurrentConversation()"><div style="font-size: 0.85rem; font-weight: 500; color: #374151;">' + currentTitle + '</div></div><button type="button" onclick="event.stopPropagation(); renameCurrentConversation();" style="background: #6366f1; border: none; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Nommer</button></div>';
       container.appendChild(currentDiv);
       aiConversationsFromApi.forEach(function(conv) {
@@ -5457,7 +5457,7 @@
         const title = (conv.title || 'Sans titre');
         const item = document.createElement('div');
         item.className = 'ai-conversation-item' + (isActive ? ' active' : '');
-        item.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isActive ? 'rgba(230,0,0,0.08)' : 'transparent') + '; border-radius: 8px; border-left: 3px solid ' + (isActive ? '#E60000' : 'transparent') + '; cursor: pointer; color: #A1A1AA;';
+        item.style.cssText = 'padding: 12px; margin: 4px 0; background: ' + (isActive ? 'rgba(108,75,160,0.08)' : 'transparent') + '; border-radius: 8px; border-left: 3px solid ' + (isActive ? '#6C4BA0' : 'transparent') + '; cursor: pointer; color: #A1A1AA;';
         item.innerHTML = '<div style="font-size: 0.8rem; font-weight: 500; color: #374151;">' + title + '</div>';
         item.onclick = function() { loadConversationFromApi(conv.session_id); };
         container.appendChild(item);

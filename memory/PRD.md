@@ -17,16 +17,19 @@ Dashboard haute performance Laravel pour suivi des abonnements, transactions et 
 - `resources/views/monitoring/dashboard.blade.php` : Dashboard monitoring
 - `public/js/dashboard/` : 6 modules JS extraits (~4 860 lignes)
 
-## Design System (Dark Theme - Swiss Brutalist Control Room)
+## Design System (Dark Theme - Club Privileges Brand)
 | Variable | Valeur | Usage |
 |----------|--------|-------|
-| --bg | #050505 | Fond page |
-| --card | #121212 | Fond cartes |
+| --bg | #0D0A1A | Fond page (violet tres sombre) |
+| --card | #161131 | Fond cartes |
+| --card-hover | #1E1745 | Cartes hover |
 | --text-primary | #FFFFFF | Texte principal |
-| --brand-primary | #E60000 | Rouge Ooredoo |
-| --accent | #00E5FF | Cyan electrique |
+| --brand-primary | #6C4BA0 | Violet Club Privileges |
+| --brand-secondary | #D4A843 | Or/Dore (accent) |
+| --accent | #D4A843 | Accent dore |
 | --muted | #A1A1AA | Texte secondaire |
-| --border | #27272A | Bordures |
+| --border | #2A2350 | Bordures (violet teinte) |
+| --glass-bg | rgba(22,17,49,0.8) | Glassmorphism |
 | Font KPIs | Outfit 700 | Chiffres grands |
 | Font Body | Manrope 400-600 | Texte courant |
 
@@ -59,10 +62,12 @@ Dashboard haute performance Laravel pour suivi des abonnements, transactions et 
 - [x] Fix dropdown operateurs
 - [x] Analyse coherence donnees
 - [x] Navigation restructuree (groupes, separateurs, Agent IA flottant, Diagnostic dans Timwe)
-- [x] 95 tooltips explicatifs
+- [x] 95+ tooltips explicatifs (audites et corriges 28/03/2026)
 - [x] Refactoring JS : 10 320 -> 5 600 lignes + 6 modules externes
-- [x] Dark theme "Control Room" (CSS variables, glassmorphism, animations, fonts)
+- [x] Dark theme Club Privileges (violet/or, glassmorphism, animations, fonts) - 28/03/2026
 - [x] Filtres compacts inline (date + comparaison + actions sur 1 ligne)
+- [x] Couleurs marque Club Privileges appliquees (remplacement noir/rouge -> violet/or) - 28/03/2026
+- [x] Audit tooltips KPI (descriptions corrigees pour correspondre aux calculs exacts) - 28/03/2026
 
 ## Backlog
 - Aucune tache en attente
