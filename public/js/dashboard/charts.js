@@ -21,11 +21,8 @@ function updateCharts(data) {
   createTransactingUsersChart(data);
   
   // Nouveaux graphiques d'analyse des transactions
-  // Ne pas afficher ces graphiques pour les collaborateurs
-  @if(!Auth::user()->isCollaborator())
   createTransactionsByOperatorChart(data);
   createTransactionsByPlanChart(data);
-  @endif
 
   // Merchants Charts (réactivés)
   createTopMerchantsChart(data);

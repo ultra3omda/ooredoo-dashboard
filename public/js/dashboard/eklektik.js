@@ -20,21 +20,7 @@ function showEklektikStatsLoading() {
 }
 
 // Fonction pour afficher les erreurs des KPIs
-function showEklektikStatsError() {
-  const elements = [
-    'kpi-revenue-ttc',
-    'kpi-revenue-ht',
-    'kpi-ca-bigdeal',
-    'kpi-bigdeal-percentage'
-  ];
-
-  elements.forEach(id => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.innerHTML = '<span class="error-text">❌ Erreur</span>';
-    }
-  });
-}
+// Error handler delegated to function at bottom of file
 
 // Charger les données Eklektik (sera définie plus tard)
 async function loadEklektikData() {

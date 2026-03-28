@@ -189,6 +189,8 @@
       overflow-x: auto;
       scrollbar-width: none;
       -ms-overflow-style: none;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
     }
     .nav-tabs::-webkit-scrollbar { display: none; }
 
@@ -196,6 +198,7 @@
       display: flex;
       align-items: center;
       gap: 2px;
+      flex-shrink: 0;
     }
     .nav-divider {
       width: 1px;
@@ -1874,10 +1877,9 @@
       .kpi-card { grid-column: span 6; } /* 2 par ligne */
       .chart-card { 
         grid-column: span 12; /* 1 par ligne */
-        min-height: 280px; /* Hauteur réduite */
+        min-height: 280px;
       }
       
-      /* Header responsive sur tablet */
       .header {
         padding: 14px 16px;
         flex-wrap: wrap;
@@ -1885,18 +1887,24 @@
       }
       
       .header h1 {
-        font-size: 20px; /* Titre plus petit sur tablet */
+        font-size: 20px;
       }
       
+      /* Navigation horizontale scrollable */
+      .nav-wrapper {
+        margin-bottom: 16px;
+        padding: 6px;
+        border-radius: 10px;
+      }
       .nav-tabs { 
-        flex-wrap: wrap;
-        gap: 4px;
+        flex-wrap: nowrap;
+        gap: 2px;
+        overflow-x: auto;
       }
       .nav-divider { display: none; }
       .nav-tab { 
-        text-align: center; 
         padding: 8px 12px;
-        font-size: 0.8rem;
+        font-size: 0.78rem;
       }
       
       .merchants-kpis-row {
@@ -1922,23 +1930,25 @@
         justify-content: center;
       }
       
-      /* Typography responsive tablet */
       .kpi-value {
-        font-size: clamp(26px, 4.5vw, 32px);
+        font-size: clamp(28px, 4vw, 36px);
       }
       .kpi-label {
-        font-size: clamp(12px, 3vw, 14px);
+        font-size: clamp(13px, 2.5vw, 15px);
       }
       .kpi-change {
         font-size: clamp(10px, 2.5vw, 12px);
       }
       
-      /* Enhanced table responsiveness for tablet */
+      /* Tables scrollables */
+      .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
       .table-wrapper {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       }
       
       .enhanced-table {
@@ -1950,40 +1960,52 @@
       .enhanced-table td {
         padding: 12px 8px;
       }
+
+      /* Filtres empilés */
+      .enhanced-filters-bar {
+        padding: 12px;
+      }
+      .enhanced-filters-bar > div {
+        flex-wrap: wrap;
+      }
     }
     
     /* Mobile Large (480px - 768px) */
     @media (max-width: 600px) {
-      .kpi-card { grid-column: span 6; } /* 2 par ligne maintenu */
+      .kpi-card { grid-column: span 6; }
       .chart-card { min-height: 250px; }
       
-      .container { padding: 16px 12px; }
+      .container { padding: 12px 8px; }
       
-      /* Header alignment sur mobile */
       .header {
-        padding: 12px 12px; /* Même padding que le container */
+        padding: 10px 8px;
+        gap: 8px;
       }
       
-      /* Navigation tabs optimisées pour mobile */
+      /* Navigation scrollable horizontale */
       .nav-wrapper {
-        margin-bottom: 16px;
+        margin-bottom: 12px;
         padding: 4px;
         border-radius: 10px;
         top: 2px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       }
+      .nav-tabs {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        gap: 1px;
+      }
       .nav-divider { display: none; }
       
       .nav-tab {
-        padding: 8px 10px;
-        font-size: 0.78rem;
+        padding: 7px 10px;
+        font-size: 0.72rem;
         min-width: max-content;
-        margin: 0 1px;
+        margin: 0;
       }
       
-      /* KPI values responsive - taille réduite */
       .kpi-value { 
-        font-size: clamp(20px, 4.5vw, 28px); 
+        font-size: clamp(18px, 5vw, 26px); 
       }
       .kpi-label { 
         font-size: clamp(10px, 2.5vw, 12px); 
@@ -1992,73 +2014,117 @@
         font-size: clamp(11px, 2.5vw, 13px); 
       }
       
-      /* Réduction de la hauteur des cartes KPI pour mobile */
       .kpi-card {
-        padding: 12px 16px;
-        min-height: 75px;
+        padding: 10px 12px;
+        min-height: 70px;
       }
       
-      /* Logo responsive sur mobile */
       .logo {
-        width: 100px;
+        width: 90px;
         height: auto;
       }
       
       .header h1 {
-        font-size: 18px;
+        font-size: 16px;
       }
       
-      /* User menu responsive */
       .user-menu {
-        padding: 6px 12px;
+        padding: 6px 10px;
       }
       
       .user-name {
-        font-size: 12px;
+        font-size: 11px;
       }
       
       .user-role {
-        font-size: 10px;
+        font-size: 9px;
       }
       
-      .admin-btn {
+      .admin-btn, .logout-btn {
         padding: 4px 8px;
         font-size: 10px;
       }
+
+      /* Filtres empilés verticalement */
+      .filters-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+      }
+      .operator-row {
+        flex-wrap: wrap;
+      }
+      .operator-row .multi-select-container {
+        max-width: 100% !important;
+        width: 100%;
+      }
+      .enhanced-filters-bar {
+        padding: 10px;
+      }
+      .date-inputs {
+        flex-direction: column;
+        gap: 6px;
+        align-items: stretch;
+      }
+      .date-separator { text-align: center; }
+      .operator-select { width: 100%; }
+
+      /* Tables avec scroll horizontal */
+      .table-container, .table-card {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      table {
+        min-width: 500px;
+      }
+      table th, table td {
+        padding: 8px 6px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+      }
       
-      .logout-btn {
-        padding: 4px 8px;
-        font-size: 10px;
+      /* Chart title */
+      .chart-title {
+        font-size: 12px;
+      }
+      
+      /* Grid gap */
+      .grid {
+        gap: 10px;
       }
     }
     
     /* Mobile Small (<480px) */
     @media (max-width: 480px) {
-      .kpi-card { grid-column: span 12; } /* 1 par ligne sur très petit écran */
-      .chart-card { min-height: 220px; }
+      .kpi-card { grid-column: span 6; }
+      .chart-card { min-height: 200px; }
       
-      .container { padding: 12px 8px; }
+      .container { padding: 8px 6px; }
       
-      /* Navigation tabs ultra compactes */
+      /* Navigation ultra compacte, scroll horizontal forcé */
       .nav-wrapper {
         padding: 3px;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
+        border-radius: 8px;
       }
-      
+      .nav-tabs {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        gap: 1px;
+        padding: 2px 0;
+      }
       .nav-tab {
         padding: 6px 8px;
-        font-size: 0.72rem;
+        font-size: 0.68rem;
         border-radius: 6px;
       }
       .nav-divider { display: none; }
       .ai-fab { width: 44px; height: 44px; bottom: 16px; right: 16px; }
       .ai-panel { width: 100vw; max-width: 100vw; }
       
-      /* Header alignment sur très petit mobile */
       .header {
-        padding: 8px 8px; /* Même padding que le container */
+        padding: 8px 6px;
         flex-direction: column;
-        gap: 12px;
+        gap: 8px;
         text-align: center;
       }
       
@@ -2069,26 +2135,25 @@
       
       .header-left {
         flex-direction: column;
-        gap: 8px;
+        gap: 6px;
       }
       
-      /* Logo très compact sur très petit mobile */
       .logo {
-        width: 80px;
+        width: 70px;
         height: auto;
       }
       
       .header h1 {
-        font-size: 16px;
+        font-size: 14px;
         text-align: center;
       }
       
-      /* User menu stack vertical sur très petit mobile */
       .user-menu {
-        flex-direction: column;
-        gap: 8px;
-        padding: 8px;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 6px;
         align-items: center;
+        justify-content: center;
       }
       
       .user-info {
@@ -2097,51 +2162,74 @@
       }
       
       .admin-btn, .logout-btn {
-        padding: 4px 8px;
+        padding: 3px 6px;
         font-size: 9px;
-        min-width: 60px;
       }
       
       .merchants-kpis-row,
       .trans-kpis-row,
       .sub-kpis-row {
-        grid-template-columns: 1fr;
-        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
       }
       
-      /* Typography ultra mobile */
       .kpi-value { 
-        font-size: clamp(20px, 6vw, 28px); 
+        font-size: clamp(16px, 5vw, 22px); 
       }
       h1, h2 { 
-        font-size: clamp(18px, 5vw, 24px); 
+        font-size: clamp(16px, 5vw, 22px); 
       }
       h3 { 
-        font-size: clamp(16px, 4vw, 20px); 
+        font-size: clamp(14px, 4vw, 18px); 
       }
       
+      /* Filtres empilés en 1 colonne */
+      .filters-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+      }
+      .operator-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .operator-row .multi-select-container {
+        max-width: 100% !important;
+        width: 100%;
+      }
       .enhanced-filters-bar {
-        padding: 16px;
+        padding: 8px;
       }
       
       .date-inputs {
         flex-direction: column;
-        gap: 8px;
+        gap: 6px;
       }
       
       .date-separator {
         text-align: center;
-        margin: 8px 0;
+        margin: 4px 0;
       }
       
-      /* Tables très responsive */
+      /* Tables ultra responsive */
+      .table-container, .table-card {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      table {
+        min-width: 400px;
+      }
+      table th, table td {
+        padding: 6px 4px;
+        font-size: 0.7rem;
+      }
+      
       .table-wrapper {
-        font-size: 11px;
+        font-size: 10px;
         border-radius: 6px;
       }
       
       .enhanced-table {
-        min-width: 320px; /* Largeur minimale pour très petit mobile */
+        min-width: 320px;
       }
       
       .enhanced-table th,
@@ -2154,6 +2242,29 @@
         font-size: 9px;
         text-transform: none;
         letter-spacing: 0;
+      }
+      
+      /* Card padding réduit */
+      .card {
+        padding: 12px;
+        border-radius: 8px;
+      }
+      
+      /* Grid gap réduit */
+      .grid {
+        gap: 8px;
+      }
+      
+      /* Boutons plus petits */
+      .btn-primary, .btn-secondary {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+      }
+      
+      /* Chart title compact */
+      .chart-title {
+        font-size: 11px;
+        padding: 8px 12px;
       }
     }
 
@@ -2420,7 +2531,7 @@
     <!-- Enhanced Date & Filters Bar -->
     <div class="enhanced-filters-bar">
       <!-- Compact single-row layout -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; align-items: end;">
+      <div class="filters-grid" style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; align-items: end;">
         
         <!-- Période Principale -->
         <div>
@@ -2458,7 +2569,7 @@
       </div>
 
       <!-- Operator selector row -->
-      <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+      <div class="operator-row" style="display: flex; align-items: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
         <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); white-space: nowrap;">Opérateurs</div>
         <div class="multi-select-container" style="flex: 1; max-width: 320px;">
           <div class="multi-select-header" onclick="toggleOperatorDropdown()">
@@ -5166,8 +5277,8 @@
           deltaElement.style.display = '';
           deltaElement.innerHTML = ''; // Nettoyer d'abord
           
-          // Inverser la couleur pour les KPI où une baisse est positive (ex: deactivated, churn, durée entre transactions)
-          const inverse = elementId.includes('deactivated') || elementId.includes('churn') || elementId.includes('lostSubscriptions') || elementId.includes('retentionRateTrue') || elementId.includes('avgInterTxDays');
+          // Inverser la couleur pour les KPI où une hausse est MAUVAISE (deactivations, churn, durée entre transactions)
+          const inverse = elementId.includes('deactivated') || elementId.includes('Deactivated') || elementId.includes('churn') || elementId.includes('Churn') || elementId.includes('lostSubscriptions') || elementId.includes('avgInterTxDays') || elementId.includes('simchurn');
           const positiveClass = inverse ? 'delta-negative' : 'delta-positive';
           const negativeClass = inverse ? 'delta-positive' : 'delta-negative';
           
