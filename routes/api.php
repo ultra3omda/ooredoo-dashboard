@@ -82,4 +82,10 @@ if (file_exists(base_path('routes/api_optimized.php'))) {
 Route::prefix('monitoring')->name('api.monitoring.')->group(function () {
     Route::get('/dashboard', [MonitoringController::class, 'dashboard'])->name('dashboard');
     Route::post('/record', [MonitoringController::class, 'recordApiTime'])->name('record');
+    Route::get('/health', [MonitoringController::class, 'healthCheck'])->name('health');
+    Route::get('/alerts', [MonitoringController::class, 'getAlerts'])->name('alerts');
+    Route::post('/alerts/{alertId}/acknowledge', [MonitoringController::class, 'acknowledgeAlert'])->name('alerts.acknowledge');
+    Route::post('/alerts/acknowledge-all', [MonitoringController::class, 'acknowledgeAllAlerts'])->name('alerts.acknowledge-all');
+    Route::delete('/alerts', [MonitoringController::class, 'clearAlerts'])->name('alerts.clear');
+    Route::get('/warmup-status', [MonitoringController::class, 'warmupStatus'])->name('warmup-status');
 });

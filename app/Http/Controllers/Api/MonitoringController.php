@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\AlertService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -11,6 +13,13 @@ use Carbon\Carbon;
 
 class MonitoringController extends Controller
 {
+    protected AlertService $alertService;
+
+    public function __construct(AlertService $alertService)
+    {
+        $this->alertService = $alertService;
+    }
+
     /**
      * Dashboard de monitoring - Métriques temps réel
      */
@@ -160,5 +169,84 @@ class MonitoringController extends Controller
     private function getApiResponseHistory(): array
     {
         return Cache::get('monitoring:api_history', []);
+    }
+
+    public function healthCheck(): JsonResponse
+    {
+        $results = $this->alertService->runHealthChecks();
+        $statusCode = $results['overall_status'] === 'healthy' ? 200 : ($results['overall_status'] === 'critical' ? 503 : 200);
+        return response()->json($results, $statusCode);
+    }
+
+    public function getAlerts(Request $request): JsonResponse
+    {
+        $unackOnly = $request->boolean('unacknowledged_only', false);
+        return response()->json([
+            'alerts' => $this->alertService->getAlerts($unackOnly),
+            'stats' => $this->alertService->getAlertStats(),
+        ]);
+    }
+
+    public function acknowledgeAlert(Request $request, string $alertId): JsonResponse
+    {
+        $success = $this->alertService->acknowledgeAlert($alertId);
+        return response()->json(['success' => $success]);
+    }
+
+    public function acknowledgeAllAlerts(): JsonResponse
+    {
+        $count = $this->alertService->acknowledgeAll();
+        return response()->json(['acknowledged' => $count]);
+    }
+
+    public function clearAlerts(): JsonResponse
+    {
+        $this->alertService->clearAlerts();
+        return response()->json(['cleared' => true]);
+    }
+
+    public function warmupStatus(): JsonResponse
+    {
+        $periods = ['14d', '30d', '90d', 'lifetime'];
+        $sections = ['kpis', 'subscriptions', 'transactions', 'merchants', 'timwe', 'ooredoo'];
+        $operators = ['ALL'];
+        $status = [];
+
+        foreach ($periods as $period) {
+            foreach ($sections as $section) {
+                foreach ($operators as $op) {
+                    $cacheKey = "split:{$section}:{$period}:{$op}";
+                    $exists = Cache::has($cacheKey);
+                    $ttl = 0;
+                    try {
+                        if ($exists) {
+                            $redis = Cache::getStore()->getRedis()->connection();
+                            $prefix = config('cache.prefix', 'laravel_cache');
+                            $ttl = $redis->ttl("{$prefix}:{$cacheKey}");
+                        }
+                    } catch (\Exception $e) {}
+
+                    $status[] = [
+                        'period' => $period,
+                        'section' => $section,
+                        'operator' => $op,
+                        'cached' => $exists,
+                        'ttl_seconds' => max(0, $ttl),
+                        'expires_in' => $ttl > 0 ? Carbon::now()->addSeconds($ttl)->diffForHumans() : 'N/A',
+                    ];
+                }
+            }
+        }
+
+        $totalCached = count(array_filter($status, fn($s) => $s['cached']));
+        $totalExpected = count($status);
+
+        return response()->json([
+            'total_cached' => $totalCached,
+            'total_expected' => $totalExpected,
+            'coverage_pct' => $totalExpected > 0 ? round(($totalCached / $totalExpected) * 100, 1) : 0,
+            'last_warmup' => Cache::get('monitoring:last_warmup', 'N/A'),
+            'details' => $status,
+        ]);
     }
 }

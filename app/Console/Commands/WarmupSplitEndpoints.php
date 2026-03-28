@@ -121,6 +121,13 @@ class WarmupSplitEndpoints extends Command
         $this->info("\n=== Done: {$totalCached} cached, {$totalErrors} errors in {$totalElapsed}s ===");
         Log::info("WarmupSplitEndpoints: {$totalCached} cached, {$totalErrors} errors in {$totalElapsed}s");
 
+        Cache::put('monitoring:last_warmup', [
+            'completed_at' => Carbon::now()->toIso8601String(),
+            'cached' => $totalCached,
+            'errors' => $totalErrors,
+            'duration_seconds' => $totalElapsed,
+        ], 86400);
+
         return $totalErrors > 0 ? 1 : 0;
     }
 

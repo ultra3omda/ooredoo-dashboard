@@ -145,6 +145,13 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/ml-maintenance.log'));
+
+            // Health Check automatique - Toutes les 15 minutes
+            $schedule->command('monitoring:health-check --json')
+                ->everyFifteenMinutes()
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/health-check.log'));
     }
 
     /**
