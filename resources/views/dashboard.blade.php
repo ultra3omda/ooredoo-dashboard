@@ -2304,6 +2304,9 @@
         <!-- Groupe: Outils -->
         <div class="nav-group">
           <button class="nav-tab" data-tab="comparison" onclick="showTab('comparison')">Comparison</button>
+          @if(Auth::user()->isSuperAdmin())
+          <button class="nav-tab" data-tab="reporting" onclick="showTab('reporting')" data-testid="reporting-tab">Reporting</button>
+          @endif
         </div>
       </div>
     </div>
@@ -3372,6 +3375,160 @@
       </div>
     </div>
 
+    <!-- Tab: Reporting Configuration -->
+    @if(Auth::user()->isSuperAdmin())
+    <div id="reporting" class="tab-content" data-testid="reporting-tab-content">
+      <div class="grid" style="grid-template-columns: 1fr; gap: 20px;">
+
+        <!-- Header actions -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 style="margin: 0; color: var(--text-primary); font-size: 1.3rem; font-weight: 700;">Configuration Reporting</h2>
+            <p style="margin: 4px 0 0; color: var(--muted); font-size: 0.85rem;">Gerez les destinataires et l'envoi automatique des rapports hebdomadaires</p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-primary" onclick="openAddRecipientModal()" data-testid="add-recipient-btn" style="font-size: 0.85rem; padding: 8px 16px;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 5v14M5 12h14"/></svg>
+              Ajouter un destinataire
+            </button>
+            <button class="btn-secondary enhanced-btn" onclick="sendAllReportsNow()" data-testid="send-all-btn" style="font-size: 0.85rem; padding: 8px 16px;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align: -2px; margin-right: 4px;"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              Envoyer tous les rapports
+            </button>
+          </div>
+        </div>
+
+        <!-- Schedule info card -->
+        <div class="card" style="padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(108,75,160,0.12); display: flex; align-items: center; justify-content: center;">
+              <svg width="20" height="20" fill="none" stroke="var(--brand-primary)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            </div>
+            <div>
+              <div style="color: var(--text-primary); font-weight: 600; font-size: 0.9rem;">Envoi automatique</div>
+              <div style="color: var(--muted); font-size: 0.8rem;">Chaque lundi a 08:00 - <span id="reportingActiveCount">0</span> destinataires actifs</div>
+            </div>
+          </div>
+          <div style="color: var(--muted); font-size: 0.8rem;">
+            Dernier envoi : <span id="reportingLastRun" style="color: var(--text-primary); font-weight: 500;">--</span>
+          </div>
+        </div>
+
+        <!-- Recipients table -->
+        <div class="card table-card">
+          <div class="chart-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>Destinataires</span>
+            <div style="display: flex; gap: 8px;">
+              <select id="recipientTypeFilter" onchange="loadRecipients()" style="background: var(--card); color: var(--text-primary); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem;">
+                <option value="">Tous les types</option>
+                <option value="ceo">CEO</option>
+                <option value="marketing">Marketing</option>
+                <option value="partner">Partenaire</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nom</th>
+                  <th>Email</th>
+                  <th>Type</th>
+                  <th>Partenaire</th>
+                  <th>Statut</th>
+                  <th>Dernier envoi</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="recipientsTableBody" data-testid="recipients-table">
+                <tr><td colspan="7" class="loading"><div class="spinner"></div> Chargement...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Report Logs -->
+        <div class="card table-card">
+          <div class="chart-title">Historique des envois</div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Destinataire</th>
+                  <th>Type</th>
+                  <th>Periode</th>
+                  <th>Statut</th>
+                  <th>IA</th>
+                  <th>Erreur</th>
+                </tr>
+              </thead>
+              <tbody id="reportLogsTableBody" data-testid="report-logs-table">
+                <tr><td colspan="7" class="loading"><div class="spinner"></div> Chargement...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    @endif
+
+    <!-- Modal: Ajouter/Modifier Destinataire -->
+    <div id="recipientModal" style="display:none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(13,10,26,0.7); z-index: 10000; justify-content: center; align-items: center;" data-testid="recipient-modal">
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 id="recipientModalTitle" style="margin: 0; color: var(--text-primary); font-size: 1.1rem;">Ajouter un destinataire</h3>
+          <button onclick="closeRecipientModal()" style="background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.3rem;">&times;</button>
+        </div>
+        <form id="recipientForm" onsubmit="saveRecipient(event)">
+          <input type="hidden" id="recipientId" value="">
+          <div style="margin-bottom: 14px;">
+            <label style="display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 4px;">Nom *</label>
+            <input type="text" id="recipientName" required class="enhanced-date-input" style="width: 100%; box-sizing: border-box;" data-testid="recipient-name-input">
+          </div>
+          <div style="margin-bottom: 14px;">
+            <label style="display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 4px;">Email *</label>
+            <input type="email" id="recipientEmail" required class="enhanced-date-input" style="width: 100%; box-sizing: border-box;" data-testid="recipient-email-input">
+          </div>
+          <div style="margin-bottom: 14px;">
+            <label style="display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 4px;">Type de rapport *</label>
+            <select id="recipientType" required onchange="togglePartnerField()" class="enhanced-date-input" style="width: 100%; box-sizing: border-box;" data-testid="recipient-type-select">
+              <option value="">Choisir...</option>
+              <option value="ceo">CEO - Rapport complet tous operateurs</option>
+              <option value="marketing">Marketing - Acquisition & Retention</option>
+              <option value="partner">Partenaire - Transactions individuelles</option>
+            </select>
+          </div>
+          <div id="partnerFieldGroup" style="display: none; margin-bottom: 14px;">
+            <label style="display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 4px;">Partenaire associe * <span style="font-size: 0.7rem;">(RGPD: seules les donnees de CE partenaire seront incluses)</span></label>
+            <input type="text" id="partnerSearch" placeholder="Rechercher un partenaire..." class="enhanced-date-input" style="width: 100%; box-sizing: border-box;" oninput="searchPartners()" autocomplete="off">
+            <input type="hidden" id="recipientPartnerId" data-testid="recipient-partner-id">
+            <div id="partnerSearchResults" style="max-height: 150px; overflow-y: auto; margin-top: 4px; border-radius: 6px;"></div>
+          </div>
+          <div style="display: flex; gap: 12px; margin-bottom: 14px;">
+            <div style="flex: 1;">
+              <label style="display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 4px;">Jour d'envoi</label>
+              <select id="recipientDay" class="enhanced-date-input" style="width: 100%; box-sizing: border-box;">
+                <option value="monday">Lundi</option>
+                <option value="tuesday">Mardi</option>
+                <option value="wednesday">Mercredi</option>
+                <option value="thursday">Jeudi</option>
+                <option value="friday">Vendredi</option>
+              </select>
+            </div>
+            <div style="flex: 1;">
+              <label style="display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 4px;">Heure d'envoi</label>
+              <input type="time" id="recipientTime" value="08:00" class="enhanced-date-input" style="width: 100%; box-sizing: border-box;">
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+            <button type="button" onclick="closeRecipientModal()" class="btn-secondary enhanced-btn" style="font-size: 0.85rem; padding: 8px 20px;">Annuler</button>
+            <button type="submit" class="btn-primary" style="font-size: 0.85rem; padding: 8px 20px;" data-testid="save-recipient-btn">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Tab: Agent IA (Style ChatGPT avec Sidebar) -->
     @if(Auth::user()->isSuperAdmin())
     <div id="ai-agent" class="tab-content">
@@ -3595,6 +3752,7 @@
   <script src="/js/dashboard/timwe.js"></script>
   <script src="/js/dashboard/ooredoo.js"></script>
   <script src="/js/dashboard/tables.js"></script>
+  <script src="/js/dashboard/reporting.js"></script>
 
   <script>
     // Définition immédiate des couleurs thème - CRITIQUE pour éviter les erreurs

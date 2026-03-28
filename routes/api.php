@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\EklektikController;
 use App\Http\Controllers\Api\EklektikStatsController;
 use App\Http\Controllers\Api\EklektikDashboardController;
 use App\Http\Controllers\Api\MonitoringController;
+use App\Http\Controllers\Api\ReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -87,4 +88,17 @@ Route::prefix('monitoring')->name('api.monitoring.')->group(function () {
     Route::post('/alerts/acknowledge-all', [MonitoringController::class, 'acknowledgeAllAlerts'])->name('alerts.acknowledge-all');
     Route::delete('/alerts', [MonitoringController::class, 'clearAlerts'])->name('alerts.clear');
     Route::get('/warmup-status', [MonitoringController::class, 'warmupStatus'])->name('warmup-status');
+});
+
+// Reporting routes
+Route::prefix('reports')->name('api.reports.')->group(function () {
+    Route::get('/recipients', [ReportController::class, 'getRecipients'])->name('recipients.index');
+    Route::post('/recipients', [ReportController::class, 'storeRecipient'])->name('recipients.store');
+    Route::put('/recipients/{id}', [ReportController::class, 'updateRecipient'])->name('recipients.update');
+    Route::delete('/recipients/{id}', [ReportController::class, 'deleteRecipient'])->name('recipients.destroy');
+    Route::post('/recipients/{id}/toggle', [ReportController::class, 'toggleRecipient'])->name('recipients.toggle');
+    Route::post('/send', [ReportController::class, 'sendNow'])->name('send');
+    Route::get('/logs', [ReportController::class, 'getLogs'])->name('logs');
+    Route::get('/partners', [ReportController::class, 'getPartners'])->name('partners');
+    Route::get('/schedule', [ReportController::class, 'getScheduleConfig'])->name('schedule');
 });

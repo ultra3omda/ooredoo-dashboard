@@ -63,6 +63,13 @@ class Kernel extends ConsoleKernel
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/dashboard-warmup.log'));
 
+            // Envoi des rapports hebdomadaires - Chaque lundi a 8h00
+            $schedule->command('reports:send-weekly')
+                ->weeklyOn(1, '08:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/weekly-reports.log'));
+
             // Warmup split endpoints - Toutes les 50 minutes (< TTL 60 min)
             $schedule->command('dashboard:warmup-split --ttl=3600')
                 ->cron('*/50 * * * *')
