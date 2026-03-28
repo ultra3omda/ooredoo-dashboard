@@ -1911,6 +1911,11 @@
         grid-template-columns: repeat(2, 1fr);
       }
       
+      .trans-kpis-row,
+      .sub-kpis-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
       .merchants-charts-row {
         grid-template-columns: 1fr;
       }
@@ -2265,6 +2270,24 @@
       .chart-title {
         font-size: 11px;
         padding: 8px 12px;
+      }
+
+      /* Reporting tab responsive */
+      #reporting .grid {
+        grid-template-columns: 1fr !important;
+      }
+      #reporting .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      #reporting table {
+        min-width: 500px;
+      }
+      #reporting .btn-primary,
+      #reporting .btn-secondary {
+        padding: 8px 12px;
+        font-size: 0.78rem;
+        white-space: nowrap;
       }
     }
 
@@ -4144,6 +4167,8 @@
               // Mettre a jour les cartes KPI immediatement
               dashboardData = window._dashboardData;
               updateKPIs(json.data);
+              // Mettre a jour la table de comparaison
+              try { updateComparisonTable(json.data); } catch(e) {}
             }
             break;
           case 'merchants':
@@ -4153,6 +4178,14 @@
               window._dashboardData.categoryDistribution = json.data.categories || json.categoryDistribution || [];
               dashboardData = window._dashboardData;
               updateMerchantKPIs(json.data, window._dashboardData.kpis);
+              // Mettre a jour le tableau des marchands
+              if (typeof updateMerchantsTable === 'function') {
+                try { updateMerchantsTable(json.data); } catch(e) { console.warn('updateMerchantsTable error:', e); }
+              }
+              // Redessiner les graphiques marchands
+              if (typeof updateCharts === 'function') {
+                try { updateCharts(window._dashboardData); } catch(e) {}
+              }
             }
             break;
           case 'transactions':
@@ -4169,12 +4202,16 @@
             if (json.data) {
               window._dashboardData.subscriptions = json.data;
               dashboardData = window._dashboardData;
-              // Mettre a jour les graphiques et tables d'abonnements
+              // Mettre a jour les graphiques d'abonnements
               if (typeof updateCharts === 'function') {
                 try { updateCharts(window._dashboardData); } catch(e) {}
               }
-              if (typeof updateTables === 'function') {
-                try { updateTables(window._dashboardData); } catch(e) {}
+              // Mettre a jour les tableaux d'abonnements et statistiques
+              if (typeof updateDailyStatisticsTable === 'function') {
+                try { updateDailyStatisticsTable(json.data); } catch(e) { console.warn('updateDailyStatisticsTable error:', e); }
+              }
+              if (typeof updateSubscriptionsTable === 'function') {
+                try { updateSubscriptionsTable(json.data); } catch(e) { console.warn('updateSubscriptionsTable error:', e); }
               }
             }
             break;
@@ -4982,13 +5019,33 @@
       
       // Update other components with small delays to avoid blocking
       requestAnimationFrame(() => {
-      updateCharts(data);
+        updateCharts(data);
       
         requestAnimationFrame(() => {
-      updateTables(data);
-      updateMerchantKPIs(data.merchants, data.kpis);
+          updateTables(data);
+          updateMerchantKPIs(data.merchants, data.kpis);
         });
       });
+    }
+
+    // Fonction orchestratrice pour mettre a jour TOUS les tableaux
+    function updateTables(data) {
+      // Tableau statistiques quotidiennes (Subscriptions tab)
+      if (typeof updateDailyStatisticsTable === 'function' && data.subscriptions) {
+        try { updateDailyStatisticsTable(data.subscriptions); } catch(e) { console.warn('updateDailyStatisticsTable error:', e); }
+      }
+      // Tableau marchands (Merchants tab)
+      if (typeof updateMerchantsTable === 'function' && data.merchants) {
+        try { updateMerchantsTable(data.merchants); } catch(e) { console.warn('updateMerchantsTable error:', e); }
+      }
+      // Tableau abonnements (Subscriptions tab)
+      if (typeof updateSubscriptionsTable === 'function' && data.subscriptions) {
+        try { updateSubscriptionsTable(data.subscriptions); } catch(e) { console.warn('updateSubscriptionsTable error:', e); }
+      }
+      // Tableau comparaison (Comparison tab)
+      if (data.kpis) {
+        try { updateComparisonTable(data.kpis); } catch(e) { console.warn('updateComparisonTable error:', e); }
+      }
     }
 
     // Fonction dediee pour mettre a jour les KPIs de l'onglet Timwe
@@ -5418,13 +5475,15 @@
         const isPositive = change > 0;
         const badgeClass = isPositive ? 'badge-success' : change < 0 ? 'badge-danger' : 'badge-info';
         const absoluteChange = current - previous;
+        const isPercent = metric.name.includes('%');
+        const dec = isPercent ? 1 : 0;
         
         return `
           <tr>
             <td><strong>${metric.name}</strong></td>
-            <td>${formatNumber(current)}</td>
-            <td>${formatNumber(previous)}</td>
-            <td>${absoluteChange > 0 ? '+' : ''}${formatNumber(absoluteChange)}</td>
+            <td>${formatNumber(current, dec)}</td>
+            <td>${formatNumber(previous, dec)}</td>
+            <td>${absoluteChange > 0 ? '+' : ''}${formatNumber(absoluteChange, dec)}</td>
             <td>${change > 0 ? '+' : ''}${change.toFixed(1)}%</td>
             <td><span class="badge ${badgeClass}">${isPositive ? 'Improved' : change < 0 ? 'Declined' : 'Stable'}</span></td>
           </tr>

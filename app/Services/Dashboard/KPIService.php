@@ -198,10 +198,10 @@ class KPIService
         $convRatePeriod = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 2) : 0;
         $convRatePeriodComp = $activeComp > 0 ? round(($comparison['transacting_users'] / $activeComp) * 100, 2) : 0;
         
-        $totalActivePartnersDB = Cache::remember('total_active_partners', 3600, fn() => DB::table('partner')->where('partener_active', 1)->count());
+        $totalActivePartnersDB = Cache::remember('total_active_partners_v2', 3600, fn() => DB::table('partner')->count());
         $totalMerchantsEverActive = Cache::remember('total_merchants_ever', 3600, fn() => DB::table('history as h')->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')->distinct('p.partner_id')->count('p.partner_id'));
-        $totalLocationsActive = Cache::remember('total_locations_active', 3600, function() {
-            try { return DB::table('partner_location')->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')->where('partner.partener_active', 1)->distinct('partner_location.partner_location_id')->count('partner_location.partner_location_id'); }
+        $totalLocationsActive = Cache::remember('total_locations_active_v2', 3600, function() {
+            try { return DB::table('partner_location')->distinct('partner_location_id')->count('partner_location_id'); }
             catch (\Exception $e) { return 0; }
         });
         

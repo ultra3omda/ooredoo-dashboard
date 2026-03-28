@@ -84,7 +84,10 @@ class MerchantService
         $activeMerchantsComparison = $activeMerchantsComparisonQuery->distinct('pt.partner_id')->count('pt.partner_id');
         
         $totalActivePartnersDB = DB::table('partner')->where('partener_active', 1)->count();
-        $totalPartners = $totalActivePartnersDB;
+        // Total Merchants = TOUS les partenaires enregistrés (pas seulement ceux marqués actifs)
+        // Cela garantit que Total Merchants >= Active Merchants (cohérence mathématique)
+        $totalAllPartners = DB::table('partner')->count();
+        $totalPartners = max($totalAllPartners, $activeMerchants);
         
         $totalMerchantsEverActive = DB::table('history as h')
             ->join('promotion as p', 'h.promotion_id', '=', 'p.promotion_id')
@@ -98,17 +101,10 @@ class MerchantService
         
         $totalLocationsActive = 0;
         try {
-            if (Schema::hasColumn('partner', 'partener_active')) {
-                $totalLocationsActive = DB::table('partner_location')
-                    ->join('partner', 'partner_location.partner_id', '=', 'partner.partner_id')
-                    ->where('partner.partener_active', 1)
-                    ->distinct('partner_location.partner_location_id')
-                    ->count('partner_location.partner_location_id');
-            } else {
-                $totalLocationsActive = DB::table('partner_location')
-                    ->distinct('partner_location.partner_location_id')
-                    ->count('partner_location.partner_location_id');
-            }
+            // Compter TOUS les points de vente (pas seulement ceux des partenaires actifs)
+            $totalLocationsActive = DB::table('partner_location')
+                ->distinct('partner_location.partner_location_id')
+                ->count('partner_location.partner_location_id');
         } catch (\Exception $e) {
             Log::warning('Impossible de calculer totalLocationsActive', ['error' => $e->getMessage()]);
         }
