@@ -2091,7 +2091,7 @@ function renderEklektikStatisticsTable() {
   if (!tbody) return;
   
   if (!allEklektikMonthlyStats || allEklektikMonthlyStats.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
     return;
   }
   
@@ -2106,6 +2106,7 @@ function renderEklektikStatisticsTable() {
           onclick="toggleEklektikMonth('${month.month_key}')">
         <td style="padding: 12px; text-align: center;">${expandIcon}</td>
         <td style="padding: 12px;">${month.display_label}</td>
+        <td style="padding: 12px; text-align: center;">-</td>
         <td style="padding: 12px; text-align: center;">${formatNumber(month.total_new_sub, 0)}</td>
         <td style="padding: 12px; text-align: center;">${formatNumber(month.total_renewals, 0)}</td>
         <td style="padding: 12px; text-align: center;">${formatNumber(month.total_unsub, 0)}</td>
@@ -2119,10 +2120,13 @@ function renderEklektikStatisticsTable() {
     
     if (isExpanded && month.daily_details && month.daily_details.length > 0) {
       month.daily_details.forEach(day => {
+        const dateStr = (day.date || '').split('T')[0];
+        const offerName = day.offer_name || day.service_name || '-';
         html += `
           <tr style="background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--border);">
             <td style="padding: 8px;"></td>
-            <td style="padding: 8px; padding-left: 30px; font-size: 13px;">${day.date || '-'}</td>
+            <td style="padding: 8px; padding-left: 30px; font-size: 13px;">${dateStr}</td>
+            <td style="padding: 8px; font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${offerName}">${offerName}</td>
             <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.new_subscriptions || 0, 0)}</td>
             <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.renewals || 0, 0)}</td>
             <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.unsubscriptions || 0, 0)}</td>
@@ -2155,14 +2159,16 @@ function exportEklektikStatsToExcel() {
     return;
   }
   
-  let csv = 'Période,New Sub,Renewals,Unsub,Active Sub,NB Facturation,Taux Facturation %,Revenu TTC (TND),CA BigDeal (TND)\n';
+  let csv = 'Date,Offre,New Sub,Renewals,Unsub,Active Sub,NB Facturation,Taux Facturation %,Revenu TTC (TND),CA BigDeal (TND)\n';
   
   allEklektikMonthlyStats.forEach(month => {
-    csv += `${month.display_label},${month.total_new_sub || 0},${month.total_renewals || 0},${month.total_unsub || 0},${month.total_active_sub || 0},${month.total_nb_facturation || 0},${month.total_taux_facturation || 0},${month.total_revenu_ttc_tnd || 0},${month.total_ca_bigdeal || 0}\n`;
+    csv += `${month.display_label},,${month.total_new_sub || 0},${month.total_renewals || 0},${month.total_unsub || 0},${month.total_active_sub || 0},${month.total_nb_facturation || 0},${month.total_taux_facturation || 0},${month.total_revenu_ttc_tnd || 0},${month.total_ca_bigdeal || 0}\n`;
     
     if (month.daily_details) {
       month.daily_details.forEach(day => {
-        csv += `  ${day.date || ''},${day.new_subscriptions || 0},${day.renewals || 0},${day.unsubscriptions || 0},${day.active_subscribers || 0},${day.nb_facturation || 0},${day.billing_rate || 0},${day.revenu_ttc_tnd || 0},${day.ca_bigdeal || 0}\n`;
+        const dateStr = (day.date || '').split('T')[0];
+        const offerName = (day.offer_name || day.service_name || '').replace(/,/g, ' ');
+        csv += `${dateStr},${offerName},${day.new_subscriptions || 0},${day.renewals || 0},${day.unsubscriptions || 0},${day.active_subscribers || 0},${day.nb_facturation || 0},${day.billing_rate || 0},${day.revenu_ttc_tnd || 0},${day.ca_bigdeal || 0}\n`;
       });
     }
   });
@@ -2183,10 +2189,10 @@ function copyEklektikStatsToClipboard() {
     return;
   }
   
-  let text = 'Période\tNew Sub\tRenewals\tUnsub\tActive Sub\tNB Facturation\tTaux Facturation %\tRevenu TTC (TND)\tCA BigDeal (TND)\n';
+  let text = 'Date\tOffre\tNew Sub\tRenewals\tUnsub\tActive Sub\tNB Facturation\tTaux Facturation %\tRevenu TTC (TND)\tCA BigDeal (TND)\n';
   
   allEklektikMonthlyStats.forEach(month => {
-    text += `${month.display_label}\t${month.total_new_sub || 0}\t${month.total_renewals || 0}\t${month.total_unsub || 0}\t${month.total_active_sub || 0}\t${month.total_nb_facturation || 0}\t${month.total_taux_facturation || 0}\t${month.total_revenu_ttc_tnd || 0}\t${month.total_ca_bigdeal || 0}\n`;
+    text += `${month.display_label}\t\t${month.total_new_sub || 0}\t${month.total_renewals || 0}\t${month.total_unsub || 0}\t${month.total_active_sub || 0}\t${month.total_nb_facturation || 0}\t${month.total_taux_facturation || 0}\t${month.total_revenu_ttc_tnd || 0}\t${month.total_ca_bigdeal || 0}\n`;
   });
   
   navigator.clipboard.writeText(text).then(() => {

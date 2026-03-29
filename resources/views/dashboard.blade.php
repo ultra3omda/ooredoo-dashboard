@@ -805,11 +805,12 @@
             </div>
           </div>
           <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-            <table class="stats-table" style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px;" data-testid="eklektik-daily-stats-table">
+            <table class="stats-table" style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 800px;" data-testid="eklektik-daily-stats-table">
               <thead>
                 <tr style="background: var(--card); border-bottom: 2px solid var(--border);">
                   <th style="padding: 10px; width: 30px;"></th>
-                  <th style="padding: 10px; text-align: left;">Période</th>
+                  <th style="padding: 10px; text-align: left;">Date</th>
+                  <th style="padding: 10px; text-align: left;">Offre</th>
                   <th style="padding: 10px; text-align: center;">New Sub</th>
                   <th style="padding: 10px; text-align: center;">Renewals</th>
                   <th style="padding: 10px; text-align: center;">Unsub</th>
@@ -821,7 +822,7 @@
                 </tr>
               </thead>
               <tbody id="eklektikStatsTableBody">
-                <tr><td colspan="10" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Chargement...</td></tr>
+                <tr><td colspan="11" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Chargement...</td></tr>
               </tbody>
             </table>
           </div>

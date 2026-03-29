@@ -317,7 +317,15 @@
           case 'ooredoo_stats':
             if (json.data) {
               window._dashboardData.ooredoo_stats = json.data;
+              // Injecter dans subscriptions pour compatibilité
+              if (!window._dashboardData.subscriptions) window._dashboardData.subscriptions = {};
+              window._dashboardData.subscriptions.ooredoo_monthly_stats = json.data.ooredoo_monthly_stats || [];
+              window._dashboardData.subscriptions.ooredoo_monthly_stats_comparison = json.data.ooredoo_monthly_stats_comparison || [];
               dashboardData = window._dashboardData;
+              // Mettre à jour les KPIs Ooredoo immédiatement
+              if (typeof updateOoredooKPIs === 'function') {
+                try { updateOoredooKPIs(dashboardData); } catch(e) { console.warn('updateOoredooKPIs error:', e); }
+              }
             }
             break;
           case 'timwe_stats':

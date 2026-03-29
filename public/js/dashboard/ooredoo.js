@@ -216,10 +216,11 @@ function renderOoredooStatisticsTable() {
     // Lignes des détails quotidiens (affichées seulement si le mois est expandé)
     if (isExpanded && month.daily_details && month.daily_details.length > 0) {
       month.daily_details.forEach(day => {
+        const dateStr = (day.stat_date || '').split('T')[0];
         html += `
           <tr style="background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--border);">
             <td style="padding: 8px;"></td>
-            <td style="padding: 8px; padding-left: 30px; font-size: 13px;">${day.stat_date}</td>
+            <td style="padding: 8px; padding-left: 30px; font-size: 13px;">${dateStr}</td>
             <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.new_subscriptions || 0, 0)}</td>
             <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.unsubscriptions || 0, 0)}</td>
             <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.active_subscriptions || 0, 0)}</td>
