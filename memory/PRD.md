@@ -7,27 +7,55 @@ Deploy a high-performance Laravel dashboard, mathematically accurate stats match
 - **Backend**: Laravel 10 + Nginx + PHP-FPM + Redis cache
 - **Frontend**: Vanilla JS + Chart.js + Blade templates
 - **AI Reporting**: FastAPI proxy (server.py) using Emergent LLM Key
-- **DB**: MySQL with materialized views, daily stat tables
+- **DB**: MySQL with daily stat tables
 
 ## Key DB Tables
 - `client_abonnement`, `subscription_daily_stats`, `transaction_daily_stats`
 - `ooredoo_daily_stats`, `eklektik_stats_daily`, `timwe_daily_stats`
-- `report_recipients`, `report_logs`
+- `report_recipients`, `report_logs`, `ml_client_features`, `ml_predictions`
 
-## Completed Features (as of 2026-03-29)
-- [x] Full dashboard with Overview, Subscriptions, Transactions, Merchants, Timwe, Ooredoo/DGV, Eklektik, Comparison, Reporting tabs
+## File Structure (Post-Refactoring)
+```
+resources/views/
+  dashboard.blade.php          (1654 lines - lean HTML only)
+  layouts/app.blade.php        (shared layout for admin pages)
+  components/theme-init.blade.php (shared theme CSS partial)
+  admin/ml-dashboard.blade.php (ML Dashboard)
+  admin/users/index.blade.php
+  admin/invitations/index.blade.php
+  sub-stores/dashboard_harmonized.blade.php
+
+public/css/
+  dashboard.css                (2385 lines - all dashboard CSS)
+
+public/js/dashboard/
+  main.js         (loadDashboardData, updateDashboardSection, updateKPI)
+  filters.js      (filter sidebar, notifications)
+  ai-reporting.js (AI agent, theme toggle)
+  eklektik.js     (Eklektik charts, daily table, profile dropdown)
+  charts.js       (Chart.js initialization)
+  tables.js       (subscription tables, modal)
+  timwe.js        (Timwe KPIs, tables)
+  ooredoo.js      (Ooredoo KPIs)
+  utils.js        (formatNumber, formatPercentage helpers)
+  reporting.js    (weekly AI reporting)
+```
+
+## Completed Features
+- [x] Full dashboard with 8 tabs (Overview, Subscriptions, Transactions, Merchants, Timwe, Ooredoo/DGV, Eklektik, Comparison, Reporting)
 - [x] Mathematically accurate KPIs matching clubprivileges.app
 - [x] Automated AI Weekly Reporting System
 - [x] Mobile responsive layout (2 KPIs per row)
 - [x] Redis caching for all heavy queries
-- [x] Chart.js visualizations with Purple/Gold brand colors
-- [x] **Light Mode as default** with Dark/Light toggle (localStorage persistence)
-- [x] **Ooredoo/DGV billing rate** = average of daily rates (not total success/total attempts)
-- [x] **Eklektik "Statistiques Quotidiennes"** expandable monthly/daily table (replaced "Statistiques par Opérateur")
-- [x] **Profile dropdown** menu properly styled and responsive
-- [x] **Subscription details modal** bug fix (clientId validation, JSON error handling)
-- [x] **SubStore dashboard** updated with matching Light/Dark theme variables
-- [x] Admin views (Users, Invitations) updated with brand colors
+- [x] Light Mode default + Dark/Light toggle (localStorage)
+- [x] Ooredoo/DGV billing rate = average of daily rates
+- [x] Eklektik "Statistiques Quotidiennes" expandable table
+- [x] Profile dropdown (z-index: 10000, position: fixed)
+- [x] Subscription details modal bug fix
+- [x] SubStore dashboard with matching theme
+- [x] All admin pages adapted (Users, Invitations, ML Dashboard, Eklektik Config, Sync)
+- [x] ML Dashboard with KPIs, trends, segments, recommendations, predictions, config
+- [x] **Refactored dashboard.blade.php**: 6087 -> 1654 lines (73% reduction)
 
 ## Key API Endpoints
 - `/api/dashboard/split/kpis` - KPIs
@@ -36,24 +64,17 @@ Deploy a high-performance Laravel dashboard, mathematically accurate stats match
 - `/api/dashboard/split/subscriptions` - Subscriptions
 - `/api/dashboard/split/ooredoo` - Ooredoo/DGV stats
 - `/api/dashboard/split/timwe` - Timwe stats
-- `/api/dashboard/split/eklektik` - Eklektik daily stats (NEW)
-- `/api/dashboard/subscriptions/{clientId}` - User subscription details
-
-## Key Files
-- `resources/views/dashboard.blade.php` - Main dashboard (CSS + HTML + JS)
-- `public/js/dashboard/` - JS modules (charts, tables, eklektik, ooredoo, timwe, reporting, utils)
-- `app/Services/Dashboard/KPIService.php` - KPI calculations
-- `app/Services/Dashboard/StatisticsService.php` - Monthly stats grouping
-- `app/Http/Controllers/Api/DataControllerOptimized.php` - API controllers
-- `resources/views/sub-stores/dashboard_harmonized.blade.php` - SubStore dashboard
-- `server.py` - FastAPI for AI reporting
+- `/api/dashboard/split/eklektik` - Eklektik daily stats
+- `/admin/ml-dashboard` - ML Dashboard
+- `/admin/ml-dashboard/data` - ML data API
+- `/admin/ml-dashboard/recommendations/generate` - Generate ML recommendations
 
 ## Business Rules
 - Ooredoo/DGV billing rate = average of daily billing_rate percentages
 - Merchants: activeMerchants <= totalPartners
-- Taux de facturation displayed with 3 decimal places
 - Theme persists via localStorage key 'dashboard-theme'
+- Default theme: Light Mode
 
 ## Testing
-- Test iterations 9, 10, 11 all passed
+- Iterations 9-12 all passed (100% success)
 - Credentials: superadmin@ooredoo.tn / SuperAdmin@2025
