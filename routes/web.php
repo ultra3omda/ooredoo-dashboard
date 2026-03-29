@@ -101,6 +101,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/dashboard/split/subscriptions', [DataControllerOptimized::class, 'getSubscriptionsSplit'])->name('api.dashboard.split.subscriptions');
         Route::get('/api/dashboard/split/ooredoo', [DataControllerOptimized::class, 'getOoredooStatsSplit'])->name('api.dashboard.split.ooredoo');
         Route::get('/api/dashboard/split/timwe', [DataControllerOptimized::class, 'getTimweStatsSplit'])->name('api.dashboard.split.timwe');
+        Route::get('/api/dashboard/split/eklektik', [DataControllerOptimized::class, 'getEklektikStatsSplit'])->name('api.dashboard.split.eklektik');
         
         // DÉSACTIVÉ POUR OPTIMISATION: API pour les transactions Timwe d'un client spécifique
         // Route::get('/api/timwe-client-transactions/{clientId}', [DataControllerOptimized::class, 'getClientTimweTransactions'])->name('api.timwe.client.transactions');

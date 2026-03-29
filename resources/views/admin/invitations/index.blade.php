@@ -29,8 +29,8 @@
                 /* Backward compatibility */
                 --brand-red: var(--brand-primary);
             @else
-                --brand-primary: #6B46C1;
-                --brand-secondary: #8B5CF6;
+                --brand-primary: #6C4BA0;
+                --brand-secondary: #D4A843;
                 --brand-accent: #F59E0B;
                 --brand-dark: #1f2937;
                 --bg: #f8fafc;

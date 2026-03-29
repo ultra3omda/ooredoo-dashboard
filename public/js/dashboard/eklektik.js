@@ -2039,19 +2039,143 @@ function showEklektikStatsError(message) {
 
 // Exporter les statistiques Eklektik
 function exportEklektikStats() {
-  showNotification('📥 Export des statistiques Eklektik en cours...', 'info', 2000);
-  // TODO: Implémenter l'export des statistiques
+  showNotification('Export des statistiques Eklektik en cours...', 'info', 2000);
 }
 
-// Debug pour les événements de redimensionnement (désactivé pour éviter les boucles)
-// window.addEventListener('resize', function() {
-//   console.log('📏 [RESIZE] Redimensionnement détecté');
-//   clearTimeout(resizeTimeout);
-//   resizeTimeout = setTimeout(() => {
-//     console.log('📏 [RESIZE] Redimensionnement terminé, recréation des graphiques');
-//     if (Object.keys(eklektikCharts).length > 0) {
-//       // Les graphiques se rechargent automatiquement
-//     }
-//   }, 300);
-// });
+// ========================================
+// EKLEKTIK DAILY STATISTICS TABLE
+// ========================================
+let allEklektikMonthlyStats = [];
+let expandedEklektikMonths = new Set();
+
+async function loadEklektikDailyStats() {
+  const startDate = document.getElementById('start-date')?.value;
+  const endDate = document.getElementById('end-date')?.value;
+  if (!startDate || !endDate) return;
+  
+  try {
+    const response = await fetch(`/api/dashboard/split/eklektik?start_date=${startDate}&end_date=${endDate}`, {
+      headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' }
+    });
+    const result = await response.json();
+    if (result.success && result.data?.eklektik_monthly_stats) {
+      allEklektikMonthlyStats = result.data.eklektik_monthly_stats;
+      renderEklektikStatisticsTable();
+    }
+  } catch (e) {
+    console.warn('Eklektik daily stats load failed:', e);
+    const tbody = document.getElementById('eklektikStatsTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: var(--muted);">Erreur de chargement</td></tr>';
+  }
+}
+
+function renderEklektikStatisticsTable() {
+  const tbody = document.getElementById('eklektikStatsTableBody');
+  if (!tbody) return;
+  
+  if (!allEklektikMonthlyStats || allEklektikMonthlyStats.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
+    return;
+  }
+  
+  let html = '';
+  
+  allEklektikMonthlyStats.forEach((month) => {
+    const isExpanded = expandedEklektikMonths.has(month.month_key);
+    const expandIcon = isExpanded ? '&#9660;' : '&#9654;';
+    
+    html += `
+      <tr style="background: var(--card); border-bottom: 2px solid var(--border); cursor: pointer; font-weight: 600;" 
+          onclick="toggleEklektikMonth('${month.month_key}')">
+        <td style="padding: 12px; text-align: center;">${expandIcon}</td>
+        <td style="padding: 12px;">${month.display_label}</td>
+        <td style="padding: 12px; text-align: center;">${formatNumber(month.total_new_sub, 0)}</td>
+        <td style="padding: 12px; text-align: center;">${formatNumber(month.total_renewals, 0)}</td>
+        <td style="padding: 12px; text-align: center;">${formatNumber(month.total_unsub, 0)}</td>
+        <td style="padding: 12px; text-align: center;">${formatNumber(month.total_active_sub, 0)}</td>
+        <td style="padding: 12px; text-align: center;">${formatNumber(month.total_nb_facturation, 0)}</td>
+        <td style="padding: 12px; text-align: center;">${formatPercentage(month.total_taux_facturation, 3)}</td>
+        <td style="padding: 12px; text-align: center;">${formatNumber(month.total_revenu_ttc_tnd, 3)} TND</td>
+        <td style="padding: 12px; text-align: center;">${formatNumber(month.total_ca_bigdeal, 3)} TND</td>
+      </tr>
+    `;
+    
+    if (isExpanded && month.daily_details && month.daily_details.length > 0) {
+      month.daily_details.forEach(day => {
+        html += `
+          <tr style="background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--border);">
+            <td style="padding: 8px;"></td>
+            <td style="padding: 8px; padding-left: 30px; font-size: 13px;">${day.date || '-'}</td>
+            <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.new_subscriptions || 0, 0)}</td>
+            <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.renewals || 0, 0)}</td>
+            <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.unsubscriptions || 0, 0)}</td>
+            <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.active_subscribers || 0, 0)}</td>
+            <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.nb_facturation || 0, 0)}</td>
+            <td style="padding: 8px; text-align: center; font-size: 13px;">${formatPercentage(day.billing_rate || 0, 3)}</td>
+            <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.revenu_ttc_tnd || 0, 3)} TND</td>
+            <td style="padding: 8px; text-align: center; font-size: 13px;">${formatNumber(day.ca_bigdeal || 0, 3)} TND</td>
+          </tr>
+        `;
+      });
+    }
+  });
+  
+  tbody.innerHTML = html;
+}
+
+function toggleEklektikMonth(monthKey) {
+  if (expandedEklektikMonths.has(monthKey)) {
+    expandedEklektikMonths.delete(monthKey);
+  } else {
+    expandedEklektikMonths.add(monthKey);
+  }
+  renderEklektikStatisticsTable();
+}
+
+function exportEklektikStatsToExcel() {
+  if (!allEklektikMonthlyStats || allEklektikMonthlyStats.length === 0) {
+    alert('Aucune donnée à exporter');
+    return;
+  }
+  
+  let csv = 'Période,New Sub,Renewals,Unsub,Active Sub,NB Facturation,Taux Facturation %,Revenu TTC (TND),CA BigDeal (TND)\n';
+  
+  allEklektikMonthlyStats.forEach(month => {
+    csv += `${month.display_label},${month.total_new_sub || 0},${month.total_renewals || 0},${month.total_unsub || 0},${month.total_active_sub || 0},${month.total_nb_facturation || 0},${month.total_taux_facturation || 0},${month.total_revenu_ttc_tnd || 0},${month.total_ca_bigdeal || 0}\n`;
+    
+    if (month.daily_details) {
+      month.daily_details.forEach(day => {
+        csv += `  ${day.date || ''},${day.new_subscriptions || 0},${day.renewals || 0},${day.unsubscriptions || 0},${day.active_subscribers || 0},${day.nb_facturation || 0},${day.billing_rate || 0},${day.revenu_ttc_tnd || 0},${day.ca_bigdeal || 0}\n`;
+      });
+    }
+  });
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `eklektik_statistiques_${new Date().toISOString().split('T')[0]}.csv`;
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function copyEklektikStatsToClipboard() {
+  if (!allEklektikMonthlyStats || allEklektikMonthlyStats.length === 0) {
+    alert('Aucune donnée à copier');
+    return;
+  }
+  
+  let text = 'Période\tNew Sub\tRenewals\tUnsub\tActive Sub\tNB Facturation\tTaux Facturation %\tRevenu TTC (TND)\tCA BigDeal (TND)\n';
+  
+  allEklektikMonthlyStats.forEach(month => {
+    text += `${month.display_label}\t${month.total_new_sub || 0}\t${month.total_renewals || 0}\t${month.total_unsub || 0}\t${month.total_active_sub || 0}\t${month.total_nb_facturation || 0}\t${month.total_taux_facturation || 0}\t${month.total_revenu_ttc_tnd || 0}\t${month.total_ca_bigdeal || 0}\n`;
+  });
+  
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Données copiées dans le presse-papier !');
+  }).catch(err => {
+    alert('Erreur lors de la copie');
+  });
+}
 

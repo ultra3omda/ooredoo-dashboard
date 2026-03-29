@@ -539,9 +539,11 @@ class KPIService
             $stats = \App\Models\OoredooDailyStat::getStatsForPeriod($startBound, $endDate);
 
             if ($stats->isNotEmpty()) {
+                // Moyenne des taux quotidiens (pas le taux du dernier jour)
+                $avgRate = $stats->avg('billing_rate');
                 $lastDayStat = $stats->last();
                 return [
-                    'rate' => $lastDayStat->billing_rate,
+                    'rate' => round($avgRate, 2),
                     'total_clients' => $lastDayStat->total_clients,
                     'billed_clients' => 0,
                     'total_billings' => $stats->sum('total_billings')

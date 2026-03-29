@@ -33,7 +33,7 @@
                     style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px; transition: all 0.2s ease;"
                     required
                     placeholder="••••••••"
-                    onfocus="this.style.borderColor='#6B46C1'; this.style.boxShadow='0 0 0 3px rgba(107, 70, 193, 0.1)'"
+                    onfocus="this.style.borderColor='#6C4BA0'; this.style.boxShadow='0 0 0 3px rgba(107, 70, 193, 0.1)'"
                     onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
                 >
                 @error('current_password')
@@ -54,7 +54,7 @@
                     style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px; transition: all 0.2s ease;"
                     required
                     placeholder="••••••••"
-                    onfocus="this.style.borderColor='#6B46C1'; this.style.boxShadow='0 0 0 3px rgba(107, 70, 193, 0.1)'"
+                    onfocus="this.style.borderColor='#6C4BA0'; this.style.boxShadow='0 0 0 3px rgba(107, 70, 193, 0.1)'"
                     onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
                 >
                 @error('password')
@@ -83,7 +83,7 @@
                     style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px; transition: all 0.2s ease;"
                     required
                     placeholder="••••••••"
-                    onfocus="this.style.borderColor='#6B46C1'; this.style.boxShadow='0 0 0 3px rgba(107, 70, 193, 0.1)'"
+                    onfocus="this.style.borderColor='#6C4BA0'; this.style.boxShadow='0 0 0 3px rgba(107, 70, 193, 0.1)'"
                     onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
                 >
             </div>
@@ -91,7 +91,7 @@
             <div style="display: flex; gap: 12px;">
                 <button 
                     type="submit" 
-                    style="flex: 1; padding: 12px 24px; background: linear-gradient(45deg, #6B46C1, #8B5CF6); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;"
+                    style="flex: 1; padding: 12px 24px; background: linear-gradient(45deg, #6C4BA0, #D4A843); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;"
                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 25px rgba(107, 70, 193, 0.3)'"
                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
                 >

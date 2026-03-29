@@ -15,35 +15,40 @@
         :root {
             @if($isOoredoo)
                 --brand-primary: #E30613;
-                --brand-secondary: #B91C1C;
-                --brand-accent: #FBBF24;
-                --brand-dark: #1f2937;
-                --bg: #f8fafc;
-                --card: #ffffff;
-                --muted: #64748b;
-                --success: #10b981;
-                --warning: #f59e0b;
-                --danger: #ef4444;
-                --accent: #3b82f6;
-                --border: #e2e8f0;
-                /* Backward compatibility */
-                --brand-red: var(--brand-primary);
+                --brand-secondary: #DC2626;
             @else
-                --brand-primary: #6B46C1;
-                --brand-secondary: #8B5CF6;
-                --brand-accent: #F59E0B;
-                --brand-dark: #1f2937;
-                --bg: #f8fafc;
-                --card: #ffffff;
-                --muted: #64748b;
-                --success: #10b981;
-                --warning: #f59e0b;
-                --danger: #ef4444;
-                --accent: #3b82f6;
-                --border: #e2e8f0;
-                /* Backward compatibility */
-                --brand-red: var(--brand-primary);
+                --brand-primary: #6C4BA0;
+                --brand-secondary: #D4A843;
             @endif
+            --brand-dark: #1a1a2e;
+            --bg: #f4f4f8;
+            --card: #ffffff;
+            --card-hover: #f0edf5;
+            --muted: #71717a;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --accent: #D4A843;
+            --border: #e2e0ea;
+            --brand-red: var(--brand-primary);
+            --text-primary: #1a1a2e;
+            --text-secondary: #52525b;
+            --input-bg: #ffffff;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .dark-mode {
+            --brand-dark: #FFFFFF;
+            --bg: #0D0A1A;
+            --card: #161131;
+            --card-hover: #1E1745;
+            --muted: #A1A1AA;
+            --border: #2A2350;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A1A1AA;
+            --input-bg: #1E1745;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
         }
         
         * { box-sizing: border-box; }
@@ -51,7 +56,7 @@
             margin: 0; 
             padding: 0; 
             background: var(--bg); 
-            color: var(--brand-dark); 
+            color: var(--text-primary); 
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
         }
@@ -431,5 +436,11 @@
             </div>
         @endif
     </div>
+    <script>
+    (function() {
+        const saved = localStorage.getItem('dashboard-theme');
+        if (saved === 'dark') document.documentElement.classList.add('dark-mode');
+    })();
+    </script>
 </body>
 </html>

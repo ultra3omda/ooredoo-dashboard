@@ -92,13 +92,30 @@ function updateOoredooKPIs(data) {
       };
     };
     
-    // Taux de Facturation
-    const billingRateCurrent = totals.activeSubsEndOfPeriod > 0 
-      ? (totals.billings / totals.activeSubsEndOfPeriod * 100) 
-      : 0;
-    const billingRatePrevious = comparisonTotals && comparisonTotals.activeSubsEndOfPeriod > 0
-      ? (comparisonTotals.billings / comparisonTotals.activeSubsEndOfPeriod * 100)
-      : null;
+    // Taux de Facturation = moyenne des taux quotidiens (calculée côté backend dans total_taux_facturation)
+    // On utilise la moyenne pondérée des mois
+    let billingRateCurrent = 0;
+    let totalDaysCurrent = 0;
+    monthlyStats.forEach(month => {
+      const monthRate = Number(month.total_taux_facturation) || 0;
+      const monthDays = Number(month.days_count) || 0;
+      billingRateCurrent += monthRate * monthDays;
+      totalDaysCurrent += monthDays;
+    });
+    billingRateCurrent = totalDaysCurrent > 0 ? billingRateCurrent / totalDaysCurrent : 0;
+
+    let billingRatePrevious = null;
+    if (monthlyStatsComparison.length > 0) {
+      let totalDaysComp = 0;
+      let sumComp = 0;
+      monthlyStatsComparison.forEach(month => {
+        const monthRate = Number(month.total_taux_facturation) || 0;
+        const monthDays = Number(month.days_count) || 0;
+        sumComp += monthRate * monthDays;
+        totalDaysComp += monthDays;
+      });
+      billingRatePrevious = totalDaysComp > 0 ? sumComp / totalDaysComp : 0;
+    }
     updateKPI('ooredoo-billing-rate', makeKPI(billingRateCurrent, billingRatePrevious, 2), '%');
     
     // Total Facturations

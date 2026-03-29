@@ -17,22 +17,69 @@
     :root {
       --brand-primary: #6C4BA0;
       --brand-secondary: #D4A843;
-      --theme-name: 'Club Privilèges';
+      --theme-name: 'Club Privileges';
+      --brand-dark: #1a1a2e;
+      --bg: #f4f4f8;
+      --card: #ffffff;
+      --card-hover: #f0edf5;
+      --muted: #71717a;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --accent: #D4A843;
+      --border: #e2e0ea;
+      --brand-red: var(--brand-primary);
+      --text-primary: #1a1a2e;
+      --text-secondary: #52525b;
+      --glass-bg: rgba(255, 255, 255, 0.85);
+      --chart-grid: rgba(0, 0, 0, 0.08);
+      --chart-text: #52525b;
+      --input-bg: #ffffff;
+      --input-border: #d4d4d8;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --table-stripe: rgba(108, 75, 160, 0.03);
+      --overlay-bg: rgba(0, 0, 0, 0.4);
+    }
+    .dark-mode {
       --brand-dark: #FFFFFF;
       --bg: #0D0A1A;
       --card: #161131;
       --card-hover: #1E1745;
       --muted: #A1A1AA;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --accent: #D4A843;
       --border: #2A2350;
-      --brand-red: var(--brand-primary);
       --text-primary: #FFFFFF;
       --text-secondary: #A1A1AA;
       --glass-bg: rgba(22, 17, 49, 0.8);
+      --chart-grid: rgba(255, 255, 255, 0.08);
+      --chart-text: #A1A1AA;
+      --input-bg: #1E1745;
+      --input-border: #2A2350;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+      --table-stripe: rgba(255, 255, 255, 0.03);
+      --overlay-bg: rgba(0, 0, 0, 0.7);
     }
+    
+    /* Dropdown menu items */
+    .dropdown-item {
+      display: block;
+      padding: 9px 16px;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background 0.15s ease;
+      border: none;
+    }
+    .dropdown-item:hover {
+      background: var(--card-hover);
+    }
+    
+    /* Theme-aware overrides for hardcoded dark colors */
+    :root .nav-tabs { background: var(--card) !important; border: 1px solid var(--border) !important; }
+    :root .nav-tab { color: var(--text-secondary) !important; }
+    :root .nav-tab:hover { background: var(--card-hover) !important; }
+    :root .nav-tab.active { background: var(--brand-primary) !important; color: #fff !important; }
     
     * { box-sizing: border-box; }
     html, body { 
@@ -52,8 +99,9 @@
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
       pointer-events: none;
       z-index: 0;
-      opacity: 0.5;
+      opacity: 0.15;
     }
+    .dark-mode body::before { opacity: 0.5; }
     
     .container { 
       max-width: 1600px; 
@@ -68,14 +116,14 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(13, 10, 26, 0.85);
+      background: var(--glass-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       padding: 12px 20px;
       border-radius: 16px;
       margin-bottom: 16px;
-      border: 1px solid rgba(255,255,255,0.06);
-      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
       width: 100%;
       box-sizing: border-box;
     }
@@ -112,10 +160,11 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      background: rgba(255,255,255,0.04);
+      background: var(--card-hover);
       padding: 6px 14px;
       border-radius: 10px;
       border: 1px solid var(--border);
+      position: relative;
     }
     
     .user-info {
@@ -168,16 +217,16 @@
     }
     
     /* Navigation Tabs */
-    /* ===== Navigation - Dark Floating Pill Menu ===== */
+    /* ===== Navigation - Floating Pill Menu ===== */
     .nav-wrapper {
-      background: rgba(22, 17, 49, 0.6);
+      background: var(--glass-bg);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-radius: 50px;
       padding: 4px;
       margin-bottom: 16px;
-      border: 1px solid rgba(255,255,255,0.05);
-      box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
       position: sticky;
       top: 8px;
       z-index: 100;
@@ -203,7 +252,7 @@
     .nav-divider {
       width: 1px;
       height: 20px;
-      background: rgba(255,255,255,0.08);
+      background: var(--border);
       margin: 0 4px;
       flex-shrink: 0;
     }
@@ -236,14 +285,14 @@
     }
     
     .nav-tab.active {
-      background: rgba(255,255,255,0.1);
+      background: var(--brand-primary);
       color: #FFFFFF;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+      box-shadow: 0 2px 8px rgba(108, 75, 160, 0.3);
     }
     
     .nav-tab:hover:not(.active) {
-      background: rgba(255,255,255,0.05);
-      color: #FFFFFF;
+      background: var(--card-hover);
+      color: var(--text-primary);
     }
     
     .nav-tab .tab-icon {
@@ -425,14 +474,15 @@
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 20px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-sm);
       transition: all 0.3s ease;
       position: relative;
       overflow: hidden;
     }
     
     .card:hover {
-      border-color: rgba(255,255,255,0.08);
+      border-color: var(--brand-primary);
+      box-shadow: var(--shadow-md);
     }
     
     /* KPI Cards */
@@ -536,7 +586,7 @@
     }
     
     th {
-      background: rgba(255,255,255,0.03);
+      background: var(--table-stripe);
       font-weight: 600;
       color: var(--muted);
       font-size: 11px;
@@ -546,7 +596,7 @@
     }
     
     tr:hover {
-      background: rgba(255,255,255,0.02);
+      background: var(--table-stripe);
     }
     
     td { color: var(--text-secondary); }
@@ -565,7 +615,7 @@
     .badge-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
     .badge-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
     .badge-info { background: rgba(212, 168, 67, 0.1); color: #D4A843; }
-    .badge-secondary { background: rgba(255,255,255,0.05); color: var(--muted); }
+    .badge-secondary { background: var(--table-stripe); color: var(--muted); }
 
     /* Styles pour la pagination */
     .subscriptions-pagination {
@@ -706,7 +756,8 @@
       border-radius: 6px;
       font-size: 14px;
       font-family: inherit;
-      background: rgba(255,255,255,0.04);
+      background: var(--input-bg);
+      color: var(--text-primary);
       transition: border-color 0.2s;
     }
     
@@ -752,7 +803,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(13, 10, 26, 0.7);
+      background: var(--overlay-bg);
       backdrop-filter: blur(4px);
       display: flex;
       justify-content: center;
@@ -765,13 +816,13 @@
       padding: 30px;
       border-radius: 16px;
       text-align: center;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      box-shadow: var(--shadow-md);
       border: 1px solid var(--border);
       color: var(--text-primary);
     }
     
     .spinner {
-      border: 3px solid rgba(255,255,255,0.1);
+      border: 3px solid var(--border);
       border-top: 3px solid var(--brand-primary);
       border-radius: 50%;
       width: 36px;
@@ -877,7 +928,7 @@
     }
     
     .operator-select option {
-      background: #1E1745;
+      background: var(--card);
       color: var(--text-primary);
       padding: 8px;
     }
@@ -1126,7 +1177,7 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       font-size: 14px;
-      background: rgba(255,255,255,0.04);
+      background: var(--input-bg);
       color: var(--text-primary);
       cursor: pointer;
       transition: all 0.2s;
@@ -1151,7 +1202,7 @@
       padding: 10px 12px;
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: rgba(255,255,255,0.04);
+      background: var(--input-bg);
       color: var(--text-primary);
       cursor: pointer;
       transition: all 0.2s;
@@ -1179,11 +1230,11 @@
       top: 100%;
       left: 0;
       right: 0;
-      background: #1E1745;
+      background: var(--card);
       border: 1px solid var(--border);
       border-top: none;
       border-radius: 0 0 8px 8px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--shadow-md);
       z-index: 1000;
       max-height: 250px;
       overflow-y: auto;
@@ -1192,7 +1243,7 @@
     .select-all-option {
       padding: 8px 12px;
       border-bottom: 1px solid var(--border);
-      background: rgba(255,255,255,0.03);
+      background: var(--table-stripe);
     }
     
     .operators-list {
@@ -2375,8 +2426,14 @@
         @endif
       </div>
       <div class="header-right">
-        <span>📊</span>
-        <span>{{ Auth::user()->isSuperAdmin() ? 'Vue Globale' : 'Vue ' . (Auth::user()->getPrimaryOperatorName() ?? 'Opérateur') }}</span>
+        <span style="font-size: 14px;">{{ Auth::user()->isSuperAdmin() ? 'Vue Globale' : 'Vue ' . (Auth::user()->getPrimaryOperatorName() ?? 'Opérateur') }}</span>
+        
+        <button id="theme-toggle-btn" onclick="toggleTheme()" data-testid="theme-toggle-btn" style="background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; color: var(--text-primary); display: flex; align-items: center; gap: 6px; font-size: 13px; transition: all 0.2s ease;">
+          <span id="theme-icon" style="font-size: 16px; line-height: 1;">
+            <svg id="sun-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none;"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg id="moon-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          </span>
+        </button>
         
         <div class="user-menu">
           <div class="user-info" id="profileMenuToggle" style="cursor: pointer;">
@@ -2384,23 +2441,24 @@
             <div class="user-role">{{ Auth::user()->role->display_name ?? 'Aucun rôle' }}</div>
           </div>
 
-          <div id="profileDropdown" class="dropdown" style="display:none; position:absolute; right:20px; top:60px; background: var(--card); border:1px solid var(--border); border-radius: 8px; min-width: 220px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.08);">
+          <div id="profileDropdown" class="dropdown" style="display:none; position:absolute; right:10px; top:56px; background: var(--card); border:1px solid var(--border); border-radius: 10px; min-width: 240px; z-index: 999; box-shadow: var(--shadow-md); padding: 6px 0; overflow: hidden;" data-testid="profile-dropdown">
             @if(Auth::user()->canInviteCollaborators())
-            <a href="{{ route('admin.users.index') }}" class="admin-btn" style="display:block; margin:8px;">Utilisateurs</a>
-            <a href="{{ route('admin.invitations.index') }}" class="admin-btn" style="display:block; margin:8px;">Invitations</a>
+            <a href="{{ route('admin.users.index') }}" class="dropdown-item" data-testid="menu-users">Utilisateurs</a>
+            <a href="{{ route('admin.invitations.index') }}" class="dropdown-item" data-testid="menu-invitations">Invitations</a>
             @endif
-            <a href="{{ route('password.change') }}" class="admin-btn" style="display:block; margin:8px;">🔒 Mot de passe</a>
+            <a href="{{ route('password.change') }}" class="dropdown-item" data-testid="menu-password">Mot de passe</a>
             @if(Auth::user()->canAccessSubStoresDashboard())
-            <a href="{{ route('sub-stores.dashboard') }}" class="admin-btn" style="display:block; margin:8px;">🏪 Sub-Stores</a>
+            <a href="{{ route('sub-stores.dashboard') }}" class="dropdown-item" data-testid="menu-substores">Sub-Stores</a>
             @endif
             @if(Auth::user()->canAccessEklektikConfig())
-            <a href="{{ route('admin.eklektik-cron') }}" class="admin-btn" style="display:block; margin:8px;">⚙️ Configuration Eklektik</a>
-            <a href="{{ route('admin.eklektik.sync') }}" class="admin-btn" style="display:block; margin:8px;">🔄 Gestion des Synchronisations</a>
-            <a href="{{ route('admin.eklektik.sync-tracking') }}" class="admin-btn" style="display:block; margin:8px;">📈 Suivi des Synchronisations</a>
+            <a href="{{ route('admin.eklektik-cron') }}" class="dropdown-item" data-testid="menu-eklektik-config">Configuration Eklektik</a>
+            <a href="{{ route('admin.eklektik.sync') }}" class="dropdown-item" data-testid="menu-eklektik-sync">Gestion Synchronisations</a>
+            <a href="{{ route('admin.eklektik.sync-tracking') }}" class="dropdown-item" data-testid="menu-sync-tracking">Suivi Synchronisations</a>
             @endif
-            <form action="{{ route('auth.logout') }}" method="POST" style="display:block; margin:8px;">
+            <div style="border-top: 1px solid var(--border); margin: 4px 0;"></div>
+            <form action="{{ route('auth.logout') }}" method="POST" style="margin: 0;">
               @csrf
-              <button type="submit" class="logout-btn" style="width:100%;" onclick="return confirm('Êtes-vous sûr de vouloir vous déconnecter ?')">Déconnexion</button>
+              <button type="submit" class="dropdown-item" style="width:100%; text-align: left; color: var(--danger); border: none; background: none; cursor: pointer; font-size: 13px;" onclick="return confirm('Êtes-vous sûr de vouloir vous déconnecter ?')" data-testid="menu-logout">Déconnexion</button>
             </form>
           </div>
         </div>
@@ -3203,15 +3261,34 @@
       </div>
 
       <div class="grid">
-        <div class="card" style="grid-column: span 6;">
-          <div class="chart-title">
-            📊 Statistiques par Opérateur
-            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Détails des statistiques par opérateur">ⓘ</span>
-          </div>
-          <div id="eklektik-operators-stats" style="max-height: 200px; overflow-y: auto;">
-            <div class="text-center" style="padding: 20px;">
-              <i class="fas fa-spinner fa-spin"></i> Chargement...
+        <div class="card" style="grid-column: span 12;">
+          <div class="chart-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <span>Statistiques Quotidiennes Eklektik</span>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="exportEklektikStatsToExcel()" class="btn-sm" style="padding: 4px 10px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-testid="eklektik-export-btn">Export CSV</button>
+              <button onclick="copyEklektikStatsToClipboard()" class="btn-sm" style="padding: 4px 10px; background: var(--brand-primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-testid="eklektik-copy-btn">Copier</button>
             </div>
+          </div>
+          <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+            <table class="stats-table" style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px;" data-testid="eklektik-daily-stats-table">
+              <thead>
+                <tr style="background: var(--card); border-bottom: 2px solid var(--border);">
+                  <th style="padding: 10px; width: 30px;"></th>
+                  <th style="padding: 10px; text-align: left;">Période</th>
+                  <th style="padding: 10px; text-align: center;">New Sub</th>
+                  <th style="padding: 10px; text-align: center;">Renewals</th>
+                  <th style="padding: 10px; text-align: center;">Unsub</th>
+                  <th style="padding: 10px; text-align: center;">Active Sub</th>
+                  <th style="padding: 10px; text-align: center;">NB Facturation</th>
+                  <th style="padding: 10px; text-align: center;">Taux Fact. %</th>
+                  <th style="padding: 10px; text-align: center;">Revenu TTC (TND)</th>
+                  <th style="padding: 10px; text-align: center;">CA BigDeal (TND)</th>
+                </tr>
+              </thead>
+              <tbody id="eklektikStatsTableBody">
+                <tr><td colspan="10" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Chargement...</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -4029,7 +4106,8 @@
           { name: 'transactions', url: `/api/dashboard/split/transactions?${queryString}`, label: 'Transactions', weight: 15 },
           { name: 'subscriptions', url: `/api/dashboard/split/subscriptions?${queryString}`, label: 'Abonnements', weight: 25 },
           { name: 'ooredoo_stats', url: `/api/dashboard/split/ooredoo?${queryString}`, label: 'Ooredoo', weight: 10 },
-          { name: 'timwe_stats', url: `/api/dashboard/split/timwe?${queryString}`, label: 'Timwe', weight: 10 }
+          { name: 'timwe_stats', url: `/api/dashboard/split/timwe?${queryString}`, label: 'Timwe', weight: 10 },
+          { name: 'eklektik_stats', url: `/api/dashboard/split/eklektik?${queryString}`, label: 'Eklektik', weight: 5 }
         ];
         
         let completedWeight = 0;
@@ -4239,6 +4317,18 @@
               }
               if (typeof updateCharts === 'function') {
                 try { updateCharts(window._dashboardData); } catch(e) {}
+              }
+            }
+            break;
+          case 'eklektik_stats':
+            if (json.data) {
+              window._dashboardData.eklektik_stats = json.data;
+              dashboardData = window._dashboardData;
+              if (typeof allEklektikMonthlyStats !== 'undefined') {
+                allEklektikMonthlyStats = json.data.eklektik_monthly_stats || [];
+                if (typeof renderEklektikStatisticsTable === 'function') {
+                  try { renderEklektikStatisticsTable(); } catch(e) { console.warn('renderEklektikStatisticsTable error:', e); }
+                }
               }
             }
             break;
@@ -5925,6 +6015,67 @@
       if (n >= 1000) return (n/1000).toFixed(1) + 'K';
       return n.toString();
     }
+
+    // ========================================
+    // THEME TOGGLE (Light/Dark Mode)
+    // ========================================
+    function initTheme() {
+      const saved = localStorage.getItem('dashboard-theme');
+      // Default is light mode (no class = light)
+      if (saved === 'dark') {
+        document.documentElement.classList.add('dark-mode');
+      } else {
+        document.documentElement.classList.remove('dark-mode');
+      }
+      updateThemeIcons();
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark-mode');
+      localStorage.setItem('dashboard-theme', isDark ? 'dark' : 'light');
+      updateThemeIcons();
+      // Update Chart.js colors for current theme
+      updateChartsTheme();
+    }
+
+    function updateThemeIcons() {
+      const isDark = document.documentElement.classList.contains('dark-mode');
+      const sunIcon = document.getElementById('sun-icon');
+      const moonIcon = document.getElementById('moon-icon');
+      if (sunIcon) sunIcon.style.display = isDark ? 'block' : 'none';
+      if (moonIcon) moonIcon.style.display = isDark ? 'none' : 'block';
+    }
+
+    function updateChartsTheme() {
+      const isDark = document.documentElement.classList.contains('dark-mode');
+      const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+      const textColor = isDark ? '#A1A1AA' : '#52525b';
+      
+      // Update all Chart.js instances
+      if (typeof Chart !== 'undefined') {
+        Chart.defaults.color = textColor;
+        Chart.defaults.borderColor = gridColor;
+        
+        Object.values(Chart.instances || {}).forEach(chart => {
+          if (!chart || !chart.options) return;
+          try {
+            if (chart.options.scales) {
+              Object.values(chart.options.scales).forEach(scale => {
+                if (scale.grid) scale.grid.color = gridColor;
+                if (scale.ticks) scale.ticks.color = textColor;
+              });
+            }
+            if (chart.options.plugins?.legend?.labels) {
+              chart.options.plugins.legend.labels.color = textColor;
+            }
+            chart.update('none');
+          } catch(e) {}
+        });
+      }
+    }
+
+    // Initialize theme immediately
+    initTheme();
   </script>
 
 </body>

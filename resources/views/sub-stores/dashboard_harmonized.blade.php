@@ -19,21 +19,45 @@
       --brand-secondary: #DC2626;
       --theme-name: 'Ooredoo';
       @else
-      --brand-primary: #6B46C1;
-      --brand-secondary: #8B5CF6;
-      --theme-name: 'Club Privilèges';
+      --brand-primary: #6C4BA0;
+      --brand-secondary: #D4A843;
+      --theme-name: 'Club Privileges';
       @endif
-      --brand-dark: #1f2937;
-      --bg: #f8fafc;
+      --brand-dark: #1a1a2e;
+      --bg: #f4f4f8;
       --card: #ffffff;
-      --muted: #64748b;
+      --card-hover: #f0edf5;
+      --muted: #71717a;
       --success: #10b981;
       --warning: #f59e0b;
       --danger: #ef4444;
-      --accent: #3b82f6;
-      --border: #e2e8f0;
-      /* Backward compatibility */
+      --accent: #D4A843;
+      --border: #e2e0ea;
       --brand-red: var(--brand-primary);
+      --text-primary: #1a1a2e;
+      --text-secondary: #52525b;
+      --glass-bg: rgba(255, 255, 255, 0.85);
+      --chart-grid: rgba(0, 0, 0, 0.08);
+      --input-bg: #ffffff;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --table-stripe: rgba(108, 75, 160, 0.03);
+    }
+    .dark-mode {
+      --brand-dark: #FFFFFF;
+      --bg: #0D0A1A;
+      --card: #161131;
+      --card-hover: #1E1745;
+      --muted: #A1A1AA;
+      --border: #2A2350;
+      --text-primary: #FFFFFF;
+      --text-secondary: #A1A1AA;
+      --glass-bg: rgba(22, 17, 49, 0.8);
+      --chart-grid: rgba(255, 255, 255, 0.08);
+      --input-bg: #1E1745;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+      --table-stripe: rgba(255, 255, 255, 0.03);
     }
     
     * { box-sizing: border-box; }
@@ -41,9 +65,10 @@
       margin: 0; 
       padding: 0; 
       background: var(--bg); 
-      color: var(--brand-dark); 
+      color: var(--text-primary); 
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       line-height: 1.5;
+      transition: background 0.3s ease, color 0.3s ease;
     }
     
     .container { 
@@ -638,13 +663,16 @@
         </div>
       </div>
       <div class="header-right">
+        <button id="theme-toggle-btn" onclick="toggleTheme()" data-testid="substore-theme-toggle" style="background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; color: var(--text-primary); display: flex; align-items: center; font-size: 13px;">
+          <svg id="sun-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none;"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg id="moon-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+        </button>
         <div class="user-menu">
           <div class="user-info">
             <div class="user-name">{{ Auth::user()->name ?? 'Utilisateur' }}</div>
             <div class="user-role">{{ Auth::user()->role->name ?? 'Super Administrateur' }}</div>
           </div>
-          <a href="/" class="admin-btn">Dashboard Opérateurs</a>
-          <a href="/admin" class="admin-btn">Administration</a>
+          <a href="/" class="admin-btn">Dashboard</a>
           <form method="POST" action="{{ route('logout') }}" style="display: inline;">
             @csrf
             <button type="submit" class="logout-btn">Déconnexion</button>
@@ -1080,6 +1108,30 @@
     document.getElementById('subStoreSelect').addEventListener('change', loadDashboardData);
     document.getElementById('startDate').addEventListener('change', loadDashboardData);
     document.getElementById('endDate').addEventListener('change', loadDashboardData);
+
+    // Theme toggle - synced with main dashboard
+    function initTheme() {
+      const saved = localStorage.getItem('dashboard-theme');
+      if (saved === 'dark') {
+        document.documentElement.classList.add('dark-mode');
+      } else {
+        document.documentElement.classList.remove('dark-mode');
+      }
+      updateThemeIcons();
+    }
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark-mode');
+      localStorage.setItem('dashboard-theme', isDark ? 'dark' : 'light');
+      updateThemeIcons();
+    }
+    function updateThemeIcons() {
+      const isDark = document.documentElement.classList.contains('dark-mode');
+      const sun = document.getElementById('sun-icon');
+      const moon = document.getElementById('moon-icon');
+      if (sun) sun.style.display = isDark ? 'block' : 'none';
+      if (moon) moon.style.display = isDark ? 'none' : 'block';
+    }
+    initTheme();
   </script>
 </body>
 </html>

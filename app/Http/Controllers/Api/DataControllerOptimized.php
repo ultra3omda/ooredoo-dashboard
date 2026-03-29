@@ -840,5 +840,90 @@ class DataControllerOptimized extends Controller
             return response()->json(['success' => false, 'section' => 'timwe_stats', 'error' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Eklektik daily stats split
+     */
+    public function getEklektikStatsSplit(Request $request): JsonResponse
+    {
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:eklektik:' . md5(json_encode($params));
+            $eklektikStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive) {
+                $daily = \App\Models\EklektikStatsDaily::where('date', '>=', $startBound->toDateString())
+                    ->where('date', '<', $endExclusive->toDateString())
+                    ->orderBy('date', 'asc')
+                    ->get()
+                    ->toArray();
+                
+                return [
+                    'eklektik_monthly_stats' => $this->groupEklektikStatsByMonth($daily),
+                ];
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'eklektik_stats',
+                'data' => $eklektikStats,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'eklektik_stats', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function groupEklektikStatsByMonth(array $dailyStats): array
+    {
+        if (empty($dailyStats)) return [];
+        
+        $grouped = [];
+        
+        foreach ($dailyStats as $stat) {
+            $date = Carbon::parse($stat['date']);
+            $monthKey = $date->format('Y-m');
+            $monthLabel = $date->locale('fr')->isoFormat('MMMM YYYY');
+            
+            if (!isset($grouped[$monthKey])) {
+                $grouped[$monthKey] = [
+                    'month_key' => $monthKey, 'month_label' => $monthLabel,
+                    'daily_details' => [],
+                    'total_new_sub' => 0, 'total_renewals' => 0, 'total_charges' => 0,
+                    'total_unsub' => 0, 'total_nb_facturation' => 0,
+                    'total_active_sub' => 0,
+                    'total_revenu_ttc_tnd' => 0, 'total_ca_bigdeal' => 0,
+                    'sum_billing_rate' => 0, 'total_taux_facturation' => 0,
+                    'days_count' => 0
+                ];
+            }
+            
+            $grouped[$monthKey]['daily_details'][] = $stat;
+            $grouped[$monthKey]['total_new_sub'] += floatval($stat['new_subscriptions'] ?? 0);
+            $grouped[$monthKey]['total_renewals'] += floatval($stat['renewals'] ?? 0);
+            $grouped[$monthKey]['total_charges'] += floatval($stat['charges'] ?? 0);
+            $grouped[$monthKey]['total_unsub'] += floatval($stat['unsubscriptions'] ?? 0);
+            $grouped[$monthKey]['total_nb_facturation'] += floatval($stat['nb_facturation'] ?? 0);
+            $grouped[$monthKey]['total_revenu_ttc_tnd'] += floatval($stat['revenu_ttc_tnd'] ?? 0);
+            $grouped[$monthKey]['total_ca_bigdeal'] += floatval($stat['ca_bigdeal'] ?? 0);
+            $grouped[$monthKey]['sum_billing_rate'] += floatval($stat['billing_rate'] ?? 0);
+            $grouped[$monthKey]['total_active_sub'] = floatval($stat['active_subscribers'] ?? 0);
+            $grouped[$monthKey]['days_count']++;
+        }
+        
+        foreach ($grouped as $monthKey => &$month) {
+            if ($month['days_count'] > 0) {
+                $month['total_taux_facturation'] = $month['sum_billing_rate'] / $month['days_count'];
+            }
+            $month['display_label'] = $month['month_label'] . ' (' . $month['days_count'] . ')';
+            unset($month['sum_billing_rate']);
+        }
+        
+        krsort($grouped);
+        return array_values($grouped);
+    }
 }
 

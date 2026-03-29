@@ -414,23 +414,31 @@ function changeSubscriptionsPerPage(perPage) {
 
 // Fonction pour afficher les détails des abonnements d'un utilisateur
 async function showUserSubscriptionsDetails(clientId, clientName) {
+  // Valider le clientId
+  if (!clientId || isNaN(clientId) || clientId <= 0) {
+    console.warn('showUserSubscriptionsDetails: clientId invalide:', clientId);
+    return;
+  }
+  
   // Supprimer la modale existante si elle existe
   const existing = document.getElementById('user-subscriptions-modal');
   if (existing) existing.remove();
+  
+  const displayName = (clientName && clientName !== '-' && clientName.trim() !== '') ? clientName : 'Client #' + clientId;
   
   // Créer la modale avec indicateur de chargement
   const modal = document.createElement('div');
   modal.id = 'user-subscriptions-modal';
   modal.innerHTML = `
-    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10001; display: flex; align-items: center; justify-content: center;">
-      <div style="background: white; border-radius: 12px; padding: 30px; max-width: 900px; max-height: 80vh; overflow-y: auto; width: 90%;">
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10001; display: flex; align-items: center; justify-content: center; padding: 16px;" onclick="if(event.target===this) document.getElementById('user-subscriptions-modal').remove()">
+      <div style="background: white; border-radius: 12px; padding: 20px; max-width: 900px; max-height: 85vh; overflow-y: auto; width: 95%; box-sizing: border-box;" onclick="event.stopPropagation()">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <h3 style="margin: 0; color: var(--brand-primary); font-size: 20px;">📋 Abonnements de ${clientName}</h3>
-          <button onclick="document.getElementById('user-subscriptions-modal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted); padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">×</button>
+          <h3 style="margin: 0; color: #6C4BA0; font-size: 18px; word-break: break-word;">Abonnements de ${displayName}</h3>
+          <button onclick="document.getElementById('user-subscriptions-modal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">×</button>
         </div>
         <div id="user-subscriptions-content" style="min-height: 200px;">
-          <div style="text-align: center; padding: 40px; color: var(--muted);">
-            <div style="margin-bottom: 10px;">🔄 Chargement des abonnements...</div>
+          <div style="text-align: center; padding: 40px; color: #999;">
+            <div style="margin-bottom: 10px;">Chargement des abonnements...</div>
           </div>
         </div>
       </div>
@@ -440,21 +448,26 @@ async function showUserSubscriptionsDetails(clientId, clientName) {
   
   try {
     // Appeler l'API
-    const response = await fetch(`/api/dashboard/subscriptions/${clientId}`, {
+    const response = await fetch(`/api/dashboard/subscriptions/${parseInt(clientId)}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
       }
     });
+    
+    if (!response.ok) {
+      throw new Error(`Erreur HTTP ${response.status}`);
+    }
     
     const data = await response.json();
     const contentDiv = document.getElementById('user-subscriptions-content');
     
     if (!data.success || !data.subscriptions || data.subscriptions.length === 0) {
       contentDiv.innerHTML = `
-        <div style="text-align: center; padding: 40px; color: var(--muted);">
-          <div style="font-size: 48px; margin-bottom: 10px;">📭</div>
+        <div style="text-align: center; padding: 40px; color: #999;">
+          <div style="font-size: 48px; margin-bottom: 10px;">&#128237;</div>
           <div>Aucun abonnement trouvé pour cet utilisateur</div>
         </div>
       `;
@@ -466,19 +479,20 @@ async function showUserSubscriptionsDetails(clientId, clientName) {
     const totalSubscriptions = data.total_subscriptions || subscriptions.length;
     
     let tableHTML = `
-      <div style="margin-bottom: 15px; color: var(--muted); font-size: 14px;">
+      <div style="margin-bottom: 15px; color: #666; font-size: 14px;">
         Total: <strong>${totalSubscriptions}</strong> abonnement(s)
       </div>
-      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+      <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px;">
         <thead>
-          <tr style="background: var(--bg); border-bottom: 2px solid var(--border);">
-            <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Opérateur</th>
-            <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Plan</th>
-            <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Type</th>
-            <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Date Activation</th>
-            <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Date Fin</th>
-            <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Statut</th>
-            <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--brand-dark);">Prix</th>
+          <tr style="background: #f5f5f5; border-bottom: 2px solid #e0e0e0;">
+            <th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #333;">Opérateur</th>
+            <th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #333;">Plan</th>
+            <th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #333;">Type</th>
+            <th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #333;">Activation</th>
+            <th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #333;">Fin</th>
+            <th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #333;">Statut</th>
+            <th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #333;">Prix</th>
           </tr>
         </thead>
         <tbody>
@@ -487,35 +501,32 @@ async function showUserSubscriptionsDetails(clientId, clientName) {
     subscriptions.forEach(sub => {
       const operator = sub.operator || '-';
       const plan = sub.plan || '-';
-      const subscriptionType = sub.subscription_type || '-';
       const subscriptionName = sub.subscription_name || '-';
       const activationDate = sub.activation_date ? (typeof sub.activation_date === 'string' ? sub.activation_date.substring(0, 10) : sub.activation_date) : '-';
       const endDate = sub.end_date ? (typeof sub.end_date === 'string' ? sub.end_date.substring(0, 10) : sub.end_date) : '-';
       const status = sub.status || 'Inconnu';
-      // ⭐ CORRECTION: Les plans Trial sont gratuits
       const price = (plan === 'Trial' || parseFloat(sub.price) === 0) 
-        ? '<span style="color: var(--success); font-weight: 600;">Gratuit</span>' 
+        ? '<span style="color: #10b981; font-weight: 600;">Gratuit</span>' 
         : (sub.price ? parseFloat(sub.price).toFixed(2) + ' TND' : '-');
       
       const statusBadge = status === 'Actif' ? 
-        '<span style="background: var(--success); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Actif</span>' :
-        '<span style="background: var(--muted); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Expiré</span>';
+        '<span style="background: #10b981; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">Actif</span>' :
+        '<span style="background: #9ca3af; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">Expiré</span>';
       
-      const planBadgeClass = 
-        plan === 'Trial' ? 'var(--brand-primary)' :
-        plan === 'Journalier' ? 'var(--warning)' :
-        plan === 'Mensuel' ? 'var(--accent)' :
-        plan === 'Annuel' ? 'var(--success)' : 'var(--muted)';
+      const planColors = {
+        'Trial': '#6C4BA0', 'Journalier': '#f59e0b', 'Mensuel': '#D4A843', 'Annuel': '#10b981'
+      };
+      const planColor = planColors[plan] || '#9ca3af';
       
       tableHTML += `
-        <tr style="border-bottom: 1px solid var(--border);">
-          <td style="padding: 12px;">${operator}</td>
-          <td style="padding: 12px;"><span style="background: ${planBadgeClass}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${plan}</span></td>
-          <td style="padding: 12px;">${subscriptionName}</td>
-          <td style="padding: 12px;">${activationDate}</td>
-          <td style="padding: 12px;">${endDate}</td>
-          <td style="padding: 12px;">${statusBadge}</td>
-          <td style="padding: 12px;">${price}</td>
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 10px 8px;">${operator}</td>
+          <td style="padding: 10px 8px;"><span style="background: ${planColor}; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">${plan}</span></td>
+          <td style="padding: 10px 8px; font-size: 12px;">${subscriptionName}</td>
+          <td style="padding: 10px 8px;">${activationDate}</td>
+          <td style="padding: 10px 8px;">${endDate}</td>
+          <td style="padding: 10px 8px;">${statusBadge}</td>
+          <td style="padding: 10px 8px;">${price}</td>
         </tr>
       `;
     });
@@ -523,6 +534,7 @@ async function showUserSubscriptionsDetails(clientId, clientName) {
     tableHTML += `
         </tbody>
       </table>
+      </div>
     `;
     
     contentDiv.innerHTML = tableHTML;
@@ -530,13 +542,15 @@ async function showUserSubscriptionsDetails(clientId, clientName) {
   } catch (error) {
     console.error('Erreur lors de la récupération des abonnements:', error);
     const contentDiv = document.getElementById('user-subscriptions-content');
-    contentDiv.innerHTML = `
-      <div style="text-align: center; padding: 40px; color: var(--danger);">
-        <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
-        <div>Erreur lors du chargement des abonnements</div>
-        <div style="font-size: 12px; margin-top: 10px; color: var(--muted);">${error.message}</div>
-      </div>
-    `;
+    if (contentDiv) {
+      contentDiv.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #ef4444;">
+          <div style="font-size: 48px; margin-bottom: 10px;">&#9888;</div>
+          <div style="font-weight: 600;">Erreur lors du chargement des abonnements</div>
+          <div style="font-size: 12px; margin-top: 10px; color: #999;">${error.message || 'Erreur inconnue'}</div>
+        </div>
+      `;
+    }
   }
 }
 
