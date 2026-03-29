@@ -1,67 +1,59 @@
 # Club Privileges - Performance Dashboard PRD
 
 ## Original Problem Statement
-High-performance Laravel dashboard for Club Privileges with mathematically accurate stats, automated weekly reporting with AI suggestions, decoupled architecture, robust navigation, and fully responsive UI matching actual brand colors (purple/gold).
+Deploy a high-performance Laravel dashboard, mathematically accurate stats matching `clubprivileges.app`, automated weekly AI reporting, robust navigation, fully responsive UI with Light/Dark mode theming.
 
 ## Architecture
-- Laravel 10 + Nginx/PHP-FPM + Redis/File Cache + MySQL
-- Frontend: Vanilla JS + Chart.js (modular in public/js/dashboard/)
-- Backend: Laravel Services (Dashboard/, KPI, Merchant, Subscription)
-- AI Reporting: Python FastAPI proxy (server.py) with Emergent LLM integration
-- View: Single Blade template (resources/views/dashboard.blade.php)
-- Eklektik: Blade component (resources/views/components/eklektik-charts.blade.php)
+- **Backend**: Laravel 10 + Nginx + PHP-FPM + Redis cache
+- **Frontend**: Vanilla JS + Chart.js + Blade templates
+- **AI Reporting**: FastAPI proxy (server.py) using Emergent LLM Key
+- **DB**: MySQL with materialized views, daily stat tables
+
+## Key DB Tables
+- `client_abonnement`, `subscription_daily_stats`, `transaction_daily_stats`
+- `ooredoo_daily_stats`, `eklektik_stats_daily`, `timwe_daily_stats`
+- `report_recipients`, `report_logs`
+
+## Completed Features (as of 2026-03-29)
+- [x] Full dashboard with Overview, Subscriptions, Transactions, Merchants, Timwe, Ooredoo/DGV, Eklektik, Comparison, Reporting tabs
+- [x] Mathematically accurate KPIs matching clubprivileges.app
+- [x] Automated AI Weekly Reporting System
+- [x] Mobile responsive layout (2 KPIs per row)
+- [x] Redis caching for all heavy queries
+- [x] Chart.js visualizations with Purple/Gold brand colors
+- [x] **Light Mode as default** with Dark/Light toggle (localStorage persistence)
+- [x] **Ooredoo/DGV billing rate** = average of daily rates (not total success/total attempts)
+- [x] **Eklektik "Statistiques Quotidiennes"** expandable monthly/daily table (replaced "Statistiques par Opérateur")
+- [x] **Profile dropdown** menu properly styled and responsive
+- [x] **Subscription details modal** bug fix (clientId validation, JSON error handling)
+- [x] **SubStore dashboard** updated with matching Light/Dark theme variables
+- [x] Admin views (Users, Invitations) updated with brand colors
+
+## Key API Endpoints
+- `/api/dashboard/split/kpis` - KPIs
+- `/api/dashboard/split/merchants` - Merchants
+- `/api/dashboard/split/transactions` - Transactions
+- `/api/dashboard/split/subscriptions` - Subscriptions
+- `/api/dashboard/split/ooredoo` - Ooredoo/DGV stats
+- `/api/dashboard/split/timwe` - Timwe stats
+- `/api/dashboard/split/eklektik` - Eklektik daily stats (NEW)
+- `/api/dashboard/subscriptions/{clientId}` - User subscription details
 
 ## Key Files
-- `resources/views/dashboard.blade.php` - Main UI/CSS/inline JS
-- `resources/views/components/eklektik-charts.blade.php` - Eklektik charts component
-- `public/js/dashboard/` - charts.js, tables.js, reporting.js, eklektik.js, utils.js
-- `app/Services/Dashboard/` - KPIService, MerchantService, SubscriptionService
-- `app/Http/Controllers/Api/` - DataControllerOptimized, EklektikDashboardController
-- `server.py` - FastAPI AI proxy
+- `resources/views/dashboard.blade.php` - Main dashboard (CSS + HTML + JS)
+- `public/js/dashboard/` - JS modules (charts, tables, eklektik, ooredoo, timwe, reporting, utils)
+- `app/Services/Dashboard/KPIService.php` - KPI calculations
+- `app/Services/Dashboard/StatisticsService.php` - Monthly stats grouping
+- `app/Http/Controllers/Api/DataControllerOptimized.php` - API controllers
+- `resources/views/sub-stores/dashboard_harmonized.blade.php` - SubStore dashboard
+- `server.py` - FastAPI for AI reporting
 
-## Completed Features
-### Phase 1 (Done)
-- Club Privileges brand theme (Purple #6C4BA0, Gold #D4A843) applied everywhere
-- KPI tooltips with mathematical accuracy
-- Automated Weekly Reporting System
-- Inverse delta colors for negative KPIs
-- Chart loading bugs fixed (no Blade directives in .js files)
+## Business Rules
+- Ooredoo/DGV billing rate = average of daily billing_rate percentages
+- Merchants: activeMerchants <= totalPartners
+- Taux de facturation displayed with 3 decimal places
+- Theme persists via localStorage key 'dashboard-theme'
 
-### Phase 2 (Done - 2026-03-28)
-- Merchant data: aligned with clubprivileges.app (636 partners, 1357 POS) using promo_active + has_location logic
-- Active Merchants constrained to Total Merchants set (no more Active > Total)
-- Added avgInterTransactionDays KPI (1.7 j)
-- Fixed transactionsPerUser decimal display (1.3)
-- updateTables() function defined + orchestrates all table updates
-- updateComparisonTable called in progressive loading
-- Comparison table: proper number formatting (0 decimals for integers, 1 for percentages)
-- Eklektik charts: fully harmonized with purple/gold theme (all 5+ charts)
-- Mobile responsive: 2 KPIs per row on ALL tabs (span 6 grid)
-- Reporting tab: responsive layout with overflow control
-- PHP-FPM nginx config on port 8002
-- File cache fallback when Redis is unreachable
-
-## Data Logic
-- **Total Merchants** = Partners with active promotion (promotion_active=1) AND at least 1 location
-- **Active Merchants** = Partners in the "Total Merchants" set who had transactions in the period  
-- **Total POS** = Locations for partners with at least 1 active promotion
-- **Active Merchant Ratio** = Active Merchants / Total Merchants * 100 (always <= 100%)
-- **Transactions/User** = Total Transactions / Distinct Transacting Users
-- **Avg Inter-Transaction Days** = Average days between consecutive transactions per user
-
-## Credentials
-- Email: superadmin@ooredoo.tn
-- Password: SuperAdmin@2025
-
-## Environment Notes
-- PHP 8.2 installed via apt-get (may need reinstall on environment rebuild)
-- Nginx config for Laravel at /etc/nginx/nginx-laravel.conf (port 8002)
-- Socket permissions: chmod 777 /run/php/php8.2-fpm.sock
-- Cache driver: file (Redis external server may be unreachable)
-- OPcache disabled for development
-
-## Known Constraints
-- NEVER put Blade directives in .js files
-- Use window._dashboardData to pass PHP data to JS
-- Eklektik chart colors defined in BOTH controller AND blade component (eklektik-charts.blade.php)
-- activeMerchants must always be <= totalPartners
+## Testing
+- Test iterations 9, 10, 11 all passed
+- Credentials: superadmin@ooredoo.tn / SuperAdmin@2025
