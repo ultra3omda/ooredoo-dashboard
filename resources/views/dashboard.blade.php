@@ -126,6 +126,8 @@
       box-shadow: var(--shadow-md);
       width: 100%;
       box-sizing: border-box;
+      position: relative;
+      z-index: 200;
     }
     
     .header-left {
