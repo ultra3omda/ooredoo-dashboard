@@ -116,7 +116,7 @@
         
         .btn-secondary {
             background: var(--bg);
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border: 1px solid var(--border);
         }
         
@@ -151,7 +151,7 @@
             padding: 16px;
             text-align: left;
             font-weight: 600;
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border-bottom: 1px solid var(--border);
         }
         
@@ -161,7 +161,7 @@
         }
         
         .table tr:hover {
-            background: #f9fafb;
+            background: var(--table-stripe);
         }
         
         .status-badge {
@@ -256,7 +256,7 @@
             padding: 8px 12px;
             border-radius: 6px;
             text-decoration: none;
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border: 1px solid var(--border);
         }
         

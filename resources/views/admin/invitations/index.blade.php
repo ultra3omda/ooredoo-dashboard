@@ -51,7 +51,7 @@
             margin: 0; 
             padding: 0; 
             background: var(--bg); 
-            color: var(--brand-dark); 
+            color: var(--text-primary); 
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
         }
@@ -111,7 +111,7 @@
         
         .btn-secondary {
             background: var(--bg);
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border: 1px solid var(--border);
         }
         
@@ -157,7 +157,7 @@
             padding: 16px;
             text-align: left;
             font-weight: 600;
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border-bottom: 1px solid var(--border);
         }
         
@@ -167,7 +167,7 @@
         }
         
         .table tr:hover {
-            background: #f9fafb;
+            background: var(--table-stripe);
         }
         
         .status-badge {
@@ -285,7 +285,9 @@
         .copy-btn:hover {
             background: var(--bg);
         }
+    .dark-mode { --brand-dark:#FFF; --bg:#0D0A1A; --card:#161131; --card-hover:#1E1745; --muted:#A1A1AA; --border:#2A2350; --text-primary:#FFF; --text-secondary:#A1A1AA; --input-bg:#1E1745; --input-border:#2A2350; --shadow-sm:0 1px 3px rgba(0,0,0,0.3); --shadow-md:0 4px 12px rgba(0,0,0,0.4); --table-stripe:rgba(255,255,255,0.03); --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --accent:#D4A843; }
     </style>
+<script>(function(){var s=localStorage.getItem("dashboard-theme");if(s==="dark")document.documentElement.classList.add("dark-mode");}());</script>
 </head>
 <body>
     <div class="container">

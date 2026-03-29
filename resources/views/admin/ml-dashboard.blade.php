@@ -2,352 +2,276 @@
 
 @section('title', 'ML Dashboard - Optimisation Facturation')
 
-@section('content')
-<div class="container-fluid">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h3 mb-0 text-gray-800">🤖 ML Dashboard - Optimisation Facturation</h1>
-            <p class="mb-0 text-muted">Intelligence artificielle pour maximiser les revenus Timwe</p>
-        </div>
-        <div class="btn-group">
-            <button class="btn btn-primary" onclick="refreshDashboard(event)">
-                <i class="fas fa-sync-alt"></i> Actualiser
-            </button>
-            <button class="btn btn-success" onclick="generateRecommendations()">
-                <i class="fas fa-magic"></i> Nouvelles Recommandations
-            </button>
-        </div>
-    </div>
-
-    @if($errors->any())
-        <div class="alert alert-danger">
-            @foreach($errors->all() as $error)
-                <p class="mb-0">{{ $error }}</p>
-            @endforeach
-        </div>
-    @endif
-
-    <!-- KPIs Principaux -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Taux de Succès Global
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="global-success-rate">
-                                {{ isset($portfolioStats['avg_success_rate']) ? $portfolioStats['avg_success_rate'] . '%' : '...' }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Clients Actifs
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-clients">
-                                {{ isset($portfolioStats['total_clients']) ? number_format($portfolioStats['total_clients']) : '...' }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-users fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Clients à Risque de Churn
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="churn-risk">
-                                {{ isset($portfolioStats['avg_churn_risk']) ? $portfolioStats['avg_churn_risk'] . '%' : '...' }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Recommandations Actives
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="active-recommendations">
-                                {{ isset($recommendations['summary']['total']) ? $recommendations['summary']['total'] : '...' }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-lightbulb fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Graphiques et Segments -->
-    <div class="row">
-        <!-- Graphique Tendances -->
-        <div class="col-xl-8 col-lg-7">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                    <h6 class="m-0 font-weight-bold text-primary">📈 Tendances des Performances</h6>
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary active" onclick="switchTrend('success_rate')">Taux Succès</button>
-                        <button class="btn btn-outline-primary" onclick="switchTrend('revenue')">Revenus</button>
-                        <button class="btn btn-outline-primary" onclick="switchTrend('churn')">Churn Risk</button>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <canvas id="trendsChart" height="100"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Répartition par Segments -->
-        <div class="col-xl-4 col-lg-5">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">🎯 Répartition par Segments</h6>
-                </div>
-                <div class="card-body">
-                    <div class="chart-segments-wrapper" style="height: 200px; position: relative; width: 100%;">
-                        <canvas id="segmentsChart"></canvas>
-                    </div>
-                    <div class="mt-3" id="segments-legend">
-                        @if(isset($segmentStats))
-                            @foreach($segmentStats as $segment)
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="text-sm">{{ ucfirst(str_replace('_', ' ', $segment['segment'])) }}</span>
-                                    <span class="badge badge-primary">{{ number_format($segment['count']) }} clients</span>
-                                </div>
-                            @endforeach
-                        @endif
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recommandations Prioritaires -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">💡 Recommandations Prioritaires</h6>
-                </div>
-                <div class="card-body">
-                    <div id="recommendations-container">
-                        @if(isset($recommendations['recommendations']) && count($recommendations['recommendations']) > 0)
-                            @foreach($recommendations['recommendations'] as $recommendation)
-                                <div class="recommendation-card mb-3 p-3 border rounded" data-id="{{ $recommendation->id }}">
-                                    <div class="row align-items-center">
-                                        <div class="col-md-1">
-                                            <span class="badge badge-{{ $recommendation->priority == 'critical' ? 'danger' : ($recommendation->priority == 'high' ? 'warning' : 'info') }} badge-pill">
-                                                {{ strtoupper($recommendation->priority) }}
-                                            </span>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <small class="text-muted">{{ ucfirst(str_replace('_', ' ', $recommendation->recommendation_type)) }}</small>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <strong>{{ $recommendation->recommended_value }}</strong>
-                                            <br><small class="text-muted">{{ $recommendation->recommendation_reason }}</small>
-                                        </div>
-                                        <div class="col-md-2 text-center">
-                                            <div class="text-success font-weight-bold">
-                                                +{{ $recommendation->expected_improvement_percentage }}%
-                                            </div>
-                                            <small class="text-muted">amélioration attendue</small>
-                                        </div>
-                                        <div class="col-md-1">
-                                            <div class="btn-group-vertical btn-group-sm">
-                                                <button class="btn btn-success btn-sm" onclick="approveRecommendation({{ $recommendation->id }})">
-                                                    <i class="fas fa-check"></i>
-                                                </button>
-                                                <button class="btn btn-info btn-sm" onclick="simulateRecommendation({{ $recommendation->id }})">
-                                                    <i class="fas fa-calculator"></i>
-                                                </button>
-                                                <button class="btn btn-danger btn-sm" onclick="rejectRecommendation({{ $recommendation->id }})">
-                                                    <i class="fas fa-times"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            @endforeach
-                        @else
-                            <div class="text-center text-muted py-4">
-                                <i class="fas fa-magic fa-3x mb-3"></i>
-                                <p>Aucune recommandation disponible. Cliquez sur "Nouvelles Recommandations" pour en générer.</p>
-                            </div>
-                        @endif
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Prédictions Récentes -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">🔮 Prédictions de Paiement Récentes</h6>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-bordered" id="predictions-table">
-                            <thead>
-                                <tr>
-                                    <th>Client</th>
-                                    <th>Téléphone</th>
-                                    <th>Segment</th>
-                                    <th>Probabilité Succès</th>
-                                    <th>Timing Optimal</th>
-                                    <th>Prix Optimal</th>
-                                    <th>Confiance</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="predictions-tbody">
-                                @if(isset($predictions['predictions']) && count($predictions['predictions']) > 0)
-                                    @foreach($predictions['predictions'] as $prediction)
-                                        <tr>
-                                            <td>{{ $prediction->client_nom ?? 'N/A' }} {{ $prediction->client_prenom ?? '' }}</td>
-                                            <td>{{ $prediction->client_telephone ?? 'N/A' }}</td>
-                                            <td>
-                                                <span class="badge badge-secondary">{{ ucfirst(str_replace('_', ' ', $prediction->client_segment ?? 'unknown')) }}</span>
-                                            </td>
-                                            <td>
-                                                <div class="progress" style="height: 20px;">
-                                                    <div class="progress-bar bg-{{ $prediction->payment_success_probability > 0.5 ? 'success' : ($prediction->payment_success_probability > 0.3 ? 'warning' : 'danger') }}" 
-                                                         style="width: {{ ($prediction->payment_success_probability ?? 0) * 100 }}%;">
-                                                        {{ round(($prediction->payment_success_probability ?? 0) * 100, 1) }}%
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <small>{{ $prediction->optimal_billing_time ? \Carbon\Carbon::parse($prediction->optimal_billing_time)->format('d/m H:i') : 'N/A' }}</small>
-                                            </td>
-                                            <td>
-                                                <strong>{{ $prediction->optimal_price ?? 3 }} TND</strong>
-                                                <br><small class="text-muted">{{ $prediction->optimal_frequency ?? 'monthly' }}</small>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-{{ ($prediction->success_confidence ?? 0) > 0.7 ? 'success' : (($prediction->success_confidence ?? 0) > 0.5 ? 'warning' : 'danger') }}">
-                                                    {{ round(($prediction->success_confidence ?? 0) * 100) }}%
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <button class="btn btn-sm btn-info" onclick="viewClientDetails({{ $prediction->client_id }})">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                @endif
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Simulation -->
-<div class="modal fade" id="simulationModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">📊 Simulation d'Impact</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="simulation-content">
-                <!-- Contenu de simulation -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Détails Client -->
-<div class="modal fade" id="clientDetailsModal" tabindex="-1">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">👤 Détails Client ML</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="client-details-content">
-                <!-- Contenu détails client -->
-            </div>
-        </div>
-    </div>
-</div>
-@endsection
-
 @section('styles')
 <style>
-.recommendation-card {
-    transition: all 0.3s ease;
+.ml-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.ml-kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; box-shadow: var(--shadow-sm); border-left: 4px solid var(--brand-primary); min-width: 0; }
+.ml-kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.ml-kpi-value { font-size: 26px; font-weight: 700; color: var(--text-primary); font-family: 'Outfit', sans-serif; }
+.ml-kpi.success { border-left-color: var(--success); }
+.ml-kpi.warning { border-left-color: var(--warning); }
+.ml-kpi.info { border-left-color: #3b82f6; }
+
+.ml-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px; }
+.rec-card { padding: 14px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; transition: box-shadow 0.2s; background: var(--card); }
+.rec-card:hover { box-shadow: var(--shadow-md); }
+.rec-body { flex: 1; min-width: 0; }
+.rec-title { font-weight: 600; font-size: 14px; color: var(--text-primary); margin-bottom: 2px; }
+.rec-reason { font-size: 12px; color: var(--muted); }
+.rec-impact { text-align: center; min-width: 80px; }
+.rec-impact-value { font-size: 18px; font-weight: 700; color: var(--success); }
+.rec-actions { display: flex; gap: 4px; }
+.rec-actions button { padding: 4px 8px; border-radius: 6px; border: none; cursor: pointer; font-size: 11px; }
+
+.pred-prob { display: flex; align-items: center; gap: 8px; }
+.pred-bar { flex: 1; height: 8px; background: var(--table-stripe); border-radius: 4px; overflow: hidden; }
+.pred-bar-fill { height: 100%; border-radius: 4px; }
+.pred-pct { font-size: 12px; font-weight: 600; min-width: 40px; text-align: right; }
+
+.segment-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.segment-item:last-child { border-bottom: none; }
+
+@media (max-width: 768px) {
+    .ml-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .ml-grid { grid-template-columns: 1fr; }
 }
-.recommendation-card:hover {
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    transform: translateY(-2px);
-}
-.border-left-primary {
-    border-left: 0.25rem solid #4e73df !important;
-}
-.border-left-success {
-    border-left: 0.25rem solid #1cc88a !important;
-}
-.border-left-warning {
-    border-left: 0.25rem solid #f6c23e !important;
-}
-.border-left-info {
-    border-left: 0.25rem solid #36b9cc !important;
-}
-.progress {
-    border-radius: 10px;
-}
-.badge-pill {
-    padding: 0.5em 1em;
-    font-size: 0.7em;
+@media (max-width: 480px) {
+    .ml-kpi-grid { grid-template-columns: 1fr; }
 }
 </style>
+@endsection
+
+@section('content')
+<!-- Page Header -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+    <div>
+        <h1 style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0;">
+            <i class="fas fa-brain" style="color: var(--brand-primary);"></i> ML Dashboard
+        </h1>
+        <p style="color: var(--muted); font-size: 13px; margin: 4px 0 0;">Intelligence artificielle pour maximiser les revenus</p>
+    </div>
+    <div class="btn-group">
+        <button class="btn-primary" onclick="refreshDashboard(event)" data-testid="ml-refresh-btn">
+            <i class="fas fa-sync-alt"></i> Actualiser
+        </button>
+        <button class="btn-success" onclick="generateRecommendations()" data-testid="ml-generate-btn">
+            <i class="fas fa-magic"></i> Recommandations
+        </button>
+    </div>
+</div>
+
+@if($errors->any())
+    <div class="alert alert-danger">
+        @foreach($errors->all() as $error)
+            <p style="margin: 0;">{{ $error }}</p>
+        @endforeach
+    </div>
+@endif
+
+<!-- KPIs -->
+<div class="ml-kpi-grid" data-testid="ml-kpi-grid">
+    <div class="ml-kpi">
+        <div class="ml-kpi-label">Taux de Succes Global</div>
+        <div class="ml-kpi-value" id="global-success-rate">{{ isset($portfolioStats['avg_success_rate']) ? $portfolioStats['avg_success_rate'] . '%' : '--' }}</div>
+    </div>
+    <div class="ml-kpi success">
+        <div class="ml-kpi-label">Clients Actifs</div>
+        <div class="ml-kpi-value" id="total-clients">{{ isset($portfolioStats['total_clients']) ? number_format($portfolioStats['total_clients']) : '--' }}</div>
+    </div>
+    <div class="ml-kpi warning">
+        <div class="ml-kpi-label">Risque de Churn</div>
+        <div class="ml-kpi-value" id="churn-risk">{{ isset($portfolioStats['avg_churn_risk']) ? $portfolioStats['avg_churn_risk'] . '%' : '--' }}</div>
+    </div>
+    <div class="ml-kpi info">
+        <div class="ml-kpi-label">Recommandations Actives</div>
+        <div class="ml-kpi-value" id="active-recommendations">{{ isset($recommendations['summary']['total']) ? $recommendations['summary']['total'] : '--' }}</div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="ml-grid">
+    <!-- Trends Chart -->
+    <div class="cp-card">
+        <div class="cp-card-header">
+            <span class="cp-card-title"><i class="fas fa-chart-line" style="color: var(--brand-primary);"></i> Tendances</span>
+            <div class="btn-group">
+                <button class="btn-outline btn-sm active" onclick="switchTrend('success_rate', this)">Taux Succes</button>
+                <button class="btn-outline btn-sm" onclick="switchTrend('revenue', this)">Revenus</button>
+                <button class="btn-outline btn-sm" onclick="switchTrend('churn', this)">Churn</button>
+            </div>
+        </div>
+        <canvas id="trendsChart" height="100" data-testid="ml-trends-chart"></canvas>
+    </div>
+
+    <!-- Segments -->
+    <div class="cp-card">
+        <div class="cp-card-header">
+            <span class="cp-card-title"><i class="fas fa-chart-pie" style="color: var(--brand-primary);"></i> Segments</span>
+        </div>
+        <div style="height: 200px; position: relative;">
+            <canvas id="segmentsChart" data-testid="ml-segments-chart"></canvas>
+        </div>
+        <div id="segments-legend" style="margin-top: 12px;">
+            @if(isset($segmentStats))
+                @foreach($segmentStats as $segment)
+                    <div class="segment-item">
+                        <span style="font-size: 13px; color: var(--text-secondary);">{{ ucfirst(str_replace('_', ' ', $segment['segment'])) }}</span>
+                        <span class="badge badge-primary">{{ number_format($segment['count']) }}</span>
+                    </div>
+                @endforeach
+            @endif
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations -->
+<div class="cp-card" style="margin-bottom: 24px;">
+    <div class="cp-card-header">
+        <span class="cp-card-title"><i class="fas fa-lightbulb" style="color: var(--accent);"></i> Recommandations Prioritaires</span>
+    </div>
+    <div id="recommendations-container" data-testid="ml-recommendations">
+        @if(isset($recommendations['recommendations']) && count($recommendations['recommendations']) > 0)
+            @foreach($recommendations['recommendations'] as $rec)
+                <div class="rec-card" data-id="{{ $rec->id }}">
+                    <span class="badge badge-{{ $rec->priority == 'critical' ? 'danger' : ($rec->priority == 'high' ? 'warning' : 'info') }}">
+                        {{ strtoupper($rec->priority) }}
+                    </span>
+                    <div class="rec-body">
+                        <div class="rec-title">{{ $rec->recommended_value }}</div>
+                        <div class="rec-reason">{{ ucfirst(str_replace('_', ' ', $rec->recommendation_type)) }} - {{ $rec->recommendation_reason }}</div>
+                    </div>
+                    <div class="rec-impact">
+                        <div class="rec-impact-value">+{{ $rec->expected_improvement_percentage }}%</div>
+                        <div style="font-size: 10px; color: var(--muted);">attendu</div>
+                    </div>
+                    <div class="rec-actions">
+                        <button class="btn-success btn-sm" onclick="approveRecommendation({{ $rec->id }})" title="Approuver"><i class="fas fa-check"></i></button>
+                        <button style="background: #3b82f6; color: #fff;" class="btn-sm" onclick="simulateRecommendation({{ $rec->id }})" title="Simuler"><i class="fas fa-calculator"></i></button>
+                        <button class="btn-danger btn-sm" onclick="rejectRecommendation({{ $rec->id }})" title="Rejeter"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+            @endforeach
+        @else
+            <div style="text-align: center; padding: 40px; color: var(--muted);">
+                <i class="fas fa-magic" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+                Aucune recommandation. Cliquez sur "Recommandations" pour en generer.
+            </div>
+        @endif
+    </div>
+</div>
+
+<!-- Predictions Table -->
+<div class="cp-card" style="margin-bottom: 24px;">
+    <div class="cp-card-header">
+        <span class="cp-card-title"><i class="fas fa-crystal-ball" style="color: var(--brand-primary);"></i> Predictions de Paiement</span>
+    </div>
+    <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+        <table class="cp-table" data-testid="ml-predictions-table">
+            <thead>
+                <tr>
+                    <th>Client</th>
+                    <th>Segment</th>
+                    <th>Prob. Succes</th>
+                    <th>Timing Optimal</th>
+                    <th>Prix Optimal</th>
+                    <th>Confiance</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="predictions-tbody">
+                @if(isset($predictions['predictions']) && count($predictions['predictions']) > 0)
+                    @foreach($predictions['predictions'] as $p)
+                        <tr>
+                            <td style="font-weight: 500;">{{ $p->client_nom ?? 'N/A' }} {{ $p->client_prenom ?? '' }}</td>
+                            <td><span class="badge badge-secondary">{{ ucfirst(str_replace('_', ' ', $p->client_segment ?? 'unknown')) }}</span></td>
+                            <td>
+                                <div class="pred-prob">
+                                    <div class="pred-bar">
+                                        <div class="pred-bar-fill" style="width: {{ ($p->payment_success_probability ?? 0) * 100 }}%; background: {{ ($p->payment_success_probability ?? 0) > 0.5 ? 'var(--success)' : (($p->payment_success_probability ?? 0) > 0.3 ? 'var(--warning)' : 'var(--danger)') }};"></div>
+                                    </div>
+                                    <span class="pred-pct">{{ round(($p->payment_success_probability ?? 0) * 100, 1) }}%</span>
+                                </div>
+                            </td>
+                            <td style="font-size: 12px;">{{ $p->optimal_billing_time ? \Carbon\Carbon::parse($p->optimal_billing_time)->format('d/m H:i') : 'N/A' }}</td>
+                            <td><strong>{{ $p->optimal_price ?? 3 }} TND</strong> <span style="font-size: 11px; color: var(--muted);">{{ $p->optimal_frequency ?? 'monthly' }}</span></td>
+                            <td><span class="badge badge-{{ ($p->success_confidence ?? 0) > 0.7 ? 'success' : (($p->success_confidence ?? 0) > 0.5 ? 'warning' : 'danger') }}">{{ round(($p->success_confidence ?? 0) * 100) }}%</span></td>
+                            <td><button class="btn-primary btn-sm" onclick="viewClientDetails({{ $p->client_id }})"><i class="fas fa-eye"></i></button></td>
+                        </tr>
+                    @endforeach
+                @else
+                    <tr><td colspan="7" style="text-align: center; padding: 30px; color: var(--muted);">Aucune prediction disponible</td></tr>
+                @endif
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ML Configuration Section -->
+<div class="cp-card" style="margin-bottom: 24px;">
+    <div class="cp-card-header">
+        <span class="cp-card-title"><i class="fas fa-cog" style="color: var(--muted);"></i> Configuration ML</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+        <!-- Feature Extraction -->
+        <div style="padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
+            <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px;">Extraction de Features</h4>
+            <p style="font-size: 12px; color: var(--muted); margin: 0 0 12px;">Extraire les features clients pour l'entrainement du modele.</p>
+            <button class="btn-primary btn-sm" onclick="extractFeatures()" data-testid="ml-extract-btn">
+                <i class="fas fa-database"></i> Extraire Features
+            </button>
+            <div id="extract-status" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
+        </div>
+        <!-- Model Training -->
+        <div style="padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
+            <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px;">Entrainement du Modele</h4>
+            <p style="font-size: 12px; color: var(--muted); margin: 0 0 12px;">Entrainer le modele ML avec les dernieres donnees.</p>
+            <button class="btn-warning btn-sm" onclick="trainModel()" data-testid="ml-train-btn">
+                <i class="fas fa-graduation-cap"></i> Entrainer Modele
+            </button>
+            <div id="train-status" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
+        </div>
+        <!-- A/B Testing -->
+        <div style="padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
+            <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px;">A/B Testing</h4>
+            <p style="font-size: 12px; color: var(--muted); margin: 0 0 12px;">Lancer un test A/B pour valider les predictions.</p>
+            <button class="btn-primary btn-sm" onclick="startABTest()" data-testid="ml-abtest-btn">
+                <i class="fas fa-flask"></i> Lancer Test A/B
+            </button>
+            <div id="abtest-status" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Simulation Modal -->
+<div id="simulationModal" style="display:none;" data-testid="simulation-modal">
+    <div class="modal-overlay" onclick="if(event.target===this) document.getElementById('simulationModal').style.display='none'">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="cp-card-title"><i class="fas fa-chart-bar" style="color: var(--brand-primary);"></i> Simulation d'Impact</span>
+                <button class="modal-close" onclick="document.getElementById('simulationModal').style.display='none'">&times;</button>
+            </div>
+            <div id="simulation-content"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Client Details Modal -->
+<div id="clientDetailsModal" style="display:none;" data-testid="client-details-modal">
+    <div class="modal-overlay" onclick="if(event.target===this) document.getElementById('clientDetailsModal').style.display='none'">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="cp-card-title"><i class="fas fa-user" style="color: var(--brand-primary);"></i> Details Client ML</span>
+                <button class="modal-close" onclick="document.getElementById('clientDetailsModal').style.display='none'">&times;</button>
+            </div>
+            <div id="client-details-content"></div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @section('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
-// Configuration globale
 const mlDashboard = {
     charts: {},
     currentTrendType: 'success_rate',
@@ -358,17 +282,20 @@ const mlDashboard = {
     ])
 };
 
-// Initialisation
 document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
-    setupEventListeners();
 });
 
-// Remplir le graphique des tendances à partir des données
+function getChartColors() {
+    const isDark = document.documentElement.classList.contains('dark-mode');
+    return {
+        grid: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+        text: isDark ? '#A1A1AA' : '#52525b'
+    };
+}
+
 function applyTrendsToChart() {
-    const trends = mlDashboard.data.trends && mlDashboard.data.trends.daily_trends
-        ? mlDashboard.data.trends.daily_trends
-        : [];
+    const trends = mlDashboard.data.trends?.daily_trends || [];
     const labels = trends.map(t => t.calculation_date ? t.calculation_date.split(' ')[0] : '');
     const successData = trends.map(t => Number(t.avg_success_rate || 0).toFixed(2));
     const revenueData = trends.map(t => Number(t.total_payments || 0));
@@ -377,388 +304,182 @@ function applyTrendsToChart() {
     if (!mlDashboard.charts.trends) return;
     mlDashboard.charts.trends.data.labels = labels;
     mlDashboard.charts.trends.data.datasets = [
-        { label: 'Taux de Succès (%)', data: successData, borderColor: '#4e73df', backgroundColor: 'rgba(78, 115, 223, 0.1)', fill: true, yAxisID: 'y' },
-        { label: 'Revenus (TND)', data: revenueData, borderColor: '#1cc88a', backgroundColor: 'rgba(28, 200, 138, 0.1)', fill: true, yAxisID: 'y1', hidden: true },
-        { label: 'Risque Churn (%)', data: churnData, borderColor: '#f6c23e', backgroundColor: 'rgba(246, 194, 62, 0.1)', fill: true, yAxisID: 'y', hidden: true }
+        { label: 'Taux de Succes (%)', data: successData, borderColor: '#6C4BA0', backgroundColor: 'rgba(108,75,160,0.1)', fill: true, yAxisID: 'y' },
+        { label: 'Revenus (TND)', data: revenueData, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, yAxisID: 'y1', hidden: true },
+        { label: 'Risque Churn (%)', data: churnData, borderColor: '#D4A843', backgroundColor: 'rgba(212,168,67,0.1)', fill: true, yAxisID: 'y', hidden: true }
     ];
     mlDashboard.charts.trends.update('none');
 }
 
-// Initialisation des graphiques
 function initializeCharts() {
     const trendsCtx = document.getElementById('trendsChart');
     if (!trendsCtx) return;
-    const ctx = trendsCtx.getContext('2d');
-    mlDashboard.charts.trends = new Chart(ctx, {
+    const colors = getChartColors();
+    
+    mlDashboard.charts.trends = new Chart(trendsCtx.getContext('2d'), {
         type: 'line',
-        data: {
-            labels: [],
-            datasets: []
-        },
+        data: { labels: [], datasets: [] },
         options: {
-            responsive: true,
-            animation: false,
-            plugins: { legend: { display: true } },
+            responsive: true, animation: false,
+            plugins: { legend: { display: true, labels: { color: colors.text } } },
             scales: {
-                y: { beginAtZero: true, max: 100, type: 'linear', position: 'left' },
-                y1: { beginAtZero: true, type: 'linear', position: 'right', grid: { drawOnChartArea: false } }
+                y: { beginAtZero: true, max: 100, position: 'left', grid: { color: colors.grid }, ticks: { color: colors.text } },
+                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: colors.text } },
+                x: { grid: { color: colors.grid }, ticks: { color: colors.text } }
             }
         }
     });
     applyTrendsToChart();
-    switchTrend(mlDashboard.currentTrendType);
+    switchTrend('success_rate');
 
-    // Graphique des segments (taille fixe + pas d'animation pour éviter boucle infinie / requestAnimationFrame)
-    const segmentsEl = document.getElementById('segmentsChart');
-    if (segmentsEl) {
-        if (mlDashboard.charts.segments) {
-            mlDashboard.charts.segments.destroy();
-            mlDashboard.charts.segments = null;
-        }
-        var segW = segmentsEl.parentElement ? segmentsEl.parentElement.offsetWidth : 300;
-        segmentsEl.width = segW;
-        segmentsEl.height = 200;
-        const segmentLabels = (mlDashboard.data.segments && mlDashboard.data.segments.length > 0)
-            ? mlDashboard.data.segments.map(s => (s.segment || '').replace('_', ' '))
-            : ['Aucune donnée'];
-        const segmentData = (mlDashboard.data.segments && mlDashboard.data.segments.length > 0)
-            ? mlDashboard.data.segments.map(s => Number(s.count || 0))
-            : [0];
-        mlDashboard.charts.segments = new Chart(segmentsEl.getContext('2d'), {
+    const segEl = document.getElementById('segmentsChart');
+    if (segEl) {
+        const segLabels = mlDashboard.data.segments?.length > 0 ? mlDashboard.data.segments.map(s => (s.segment || '').replace('_', ' ')) : ['Aucune donnee'];
+        const segData = mlDashboard.data.segments?.length > 0 ? mlDashboard.data.segments.map(s => Number(s.count || 0)) : [0];
+        mlDashboard.charts.segments = new Chart(segEl.getContext('2d'), {
             type: 'doughnut',
-            data: {
-                labels: segmentLabels,
-                datasets: [{
-                    data: segmentData,
-                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796', '#5a5c69']
-                }]
-            },
-            options: {
-                responsive: false,
-                animation: false,
-                maintainAspectRatio: false,
-                layout: { padding: 8 },
-                plugins: { legend: { display: false } }
-            }
+            data: { labels: segLabels, datasets: [{ data: segData, backgroundColor: ['#6C4BA0', '#10b981', '#3b82f6', '#D4A843', '#ef4444', '#71717a'] }] },
+            options: { responsive: true, animation: false, maintainAspectRatio: false, plugins: { legend: { display: false } } }
         });
     }
 }
 
-// Changer la courbe affichée (Taux Succès / Revenus / Churn)
-function switchTrend(type) {
+function switchTrend(type, btn) {
     mlDashboard.currentTrendType = type;
-    if (!mlDashboard.charts.trends || !mlDashboard.charts.trends.data.datasets) return;
-    mlDashboard.charts.trends.data.datasets.forEach((ds, i) => {
-        const isSuccess = ds.label && ds.label.indexOf('Succès') !== -1;
-        const isRevenue = ds.label && ds.label.indexOf('Revenus') !== -1;
-        const isChurn = ds.label && ds.label.indexOf('Churn') !== -1;
-        ds.hidden = !(type === 'success_rate' && isSuccess) && !(type === 'revenue' && isRevenue) && !(type === 'churn' && isChurn);
+    if (!mlDashboard.charts.trends?.data?.datasets) return;
+    mlDashboard.charts.trends.data.datasets.forEach(ds => {
+        ds.hidden = !(type === 'success_rate' && ds.label.includes('Succes')) && !(type === 'revenue' && ds.label.includes('Revenus')) && !(type === 'churn' && ds.label.includes('Churn'));
     });
-    document.querySelectorAll('.card-header .btn-group-sm .btn, .card-header .btn-group .btn').forEach(btn => {
-        btn.classList.toggle('active', btn.textContent.toLowerCase().indexOf(type === 'success_rate' ? 'succès' : type === 'revenue' ? 'revenus' : 'churn') !== -1);
-    });
+    document.querySelectorAll('.btn-outline.btn-sm').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
     mlDashboard.charts.trends.update('none');
 }
 
-// Remplir le bloc Recommandations Prioritaires (après génération ou actualisation)
-function renderRecommendations(recommendationsData) {
-    const container = document.getElementById('recommendations-container');
-    if (!container) return;
-    const list = (recommendationsData && recommendationsData.recommendations) ? recommendationsData.recommendations : [];
-    if (list.length === 0) {
-        container.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-magic fa-3x mb-3"></i><p>Aucune recommandation disponible. Cliquez sur "Nouvelles Recommandations" pour en générer.</p></div>';
-        return;
-    }
-    const badgeClass = (p) => (p === 'critical' ? 'danger' : (p === 'high' ? 'warning' : 'info'));
-    const html = list.map(function(rec) {
-        const id = rec.id || 0;
-        const priority = (rec.priority || 'medium').toLowerCase();
-        const type = (rec.recommendation_type || '').replace(/_/g, ' ');
-        const value = (rec.recommended_value || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const reason = (rec.recommendation_reason || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const pct = rec.expected_improvement_percentage != null ? Number(rec.expected_improvement_percentage) : 0;
-        return '<div class="recommendation-card mb-3 p-3 border rounded" data-id="' + id + '">' +
-            '<div class="row align-items-center">' +
-            '<div class="col-md-1"><span class="badge badge-' + badgeClass(priority) + ' badge-pill">' + (priority.toUpperCase()) + '</span></div>' +
-            '<div class="col-md-2"><small class="text-muted">' + type + '</small></div>' +
-            '<div class="col-md-6"><strong>' + value + '</strong><br><small class="text-muted">' + reason + '</small></div>' +
-            '<div class="col-md-2 text-center"><div class="text-success font-weight-bold">+' + pct + '%</div><small class="text-muted">amélioration attendue</small></div>' +
-            '<div class="col-md-1"><div class="btn-group-vertical btn-group-sm">' +
-            '<button class="btn btn-success btn-sm" onclick="approveRecommendation(' + id + ')"><i class="fas fa-check"></i></button>' +
-            '<button class="btn btn-info btn-sm" onclick="simulateRecommendation(' + id + ')"><i class="fas fa-calculator"></i></button>' +
-            '<button class="btn btn-danger btn-sm" onclick="rejectRecommendation(' + id + ')"><i class="fas fa-times"></i></button>' +
-            '</div></div></div></div>';
-    }).join('');
-    container.innerHTML = html;
+const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+function refreshDashboard(ev) {
+    const btn = ev?.target?.closest('button');
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Chargement...';
+    fetch('/admin/ml-dashboard/data', { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(data => { if (data.success) updateDashboardData(data.data); showNotification('Dashboard actualise', 'success'); })
+        .catch(e => showNotification('Erreur: ' + e.message, 'error'))
+        .finally(() => { if (btn) btn.innerHTML = '<i class="fas fa-sync-alt"></i> Actualiser'; });
 }
 
-// Mise à jour des données du dashboard (KPIs + graphiques + recommandations) après refresh
 function updateDashboardData(data) {
     if (!data) return;
-    const portfolio = data.portfolio || {};
-    const recommendations = data.recommendations || {};
-    const summary = recommendations.summary || {};
-    const el = (id, value) => { const e = document.getElementById(id); if (e) e.textContent = value; };
-    el('global-success-rate', (portfolio.avg_success_rate != null ? portfolio.avg_success_rate : '...') + (portfolio.avg_success_rate != null ? '%' : ''));
-    el('total-clients', portfolio.total_clients != null ? Number(portfolio.total_clients).toLocaleString() : '...');
-    el('churn-risk', (portfolio.avg_churn_risk != null ? portfolio.avg_churn_risk : '...') + (portfolio.avg_churn_risk != null ? '%' : ''));
-    el('active-recommendations', summary.total != null ? summary.total : '...');
-    if (data.recommendations) {
-        renderRecommendations(data.recommendations);
-    }
-    if (data.trends) {
-        mlDashboard.data.trends = data.trends;
-        applyTrendsToChart();
-        switchTrend(mlDashboard.currentTrendType);
-    }
-    if (data.segments && mlDashboard.charts.segments) {
-        mlDashboard.charts.segments.data.labels = data.segments.map(s => (s.segment || '').replace('_', ' '));
-        mlDashboard.charts.segments.data.datasets[0].data = data.segments.map(s => s.count || 0);
-        mlDashboard.charts.segments.update('none');
-    }
+    const p = data.portfolio || {};
+    const el = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    el('global-success-rate', p.avg_success_rate != null ? p.avg_success_rate + '%' : '--');
+    el('total-clients', p.total_clients != null ? Number(p.total_clients).toLocaleString() : '--');
+    el('churn-risk', p.avg_churn_risk != null ? p.avg_churn_risk + '%' : '--');
+    el('active-recommendations', data.recommendations?.summary?.total ?? '--');
+    if (data.recommendations) renderRecommendations(data.recommendations);
+    if (data.trends) { mlDashboard.data.trends = data.trends; applyTrendsToChart(); switchTrend(mlDashboard.currentTrendType); }
 }
 
-// Actualiser le dashboard
-function refreshDashboard(ev) {
-    const btn = ev && ev.target ? ev.target.closest('button') : null;
-    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualisation...';
-    fetch('/admin/ml-dashboard/data', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                updateDashboardData(data.data);
-                if (btn) showNotification('Dashboard actualisé avec succès', 'success');
-            }
-        })
-        .catch(error => {
-            if (btn) showNotification('Erreur lors de l\'actualisation', 'error');
-            console.error('Erreur:', error);
-        })
-        .finally(() => {
-            if (btn) btn.innerHTML = '<i class="fas fa-sync-alt"></i> Actualiser';
-        });
-}
-
-// Générer de nouvelles recommandations
 function generateRecommendations() {
     const btn = event.target.closest('button');
-    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération...';
-    const csrf = document.querySelector('meta[name="csrf-token"]');
-    fetch('/admin/ml-dashboard/recommendations/generate', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': csrf ? csrf.getAttribute('content') : ''
-        },
-        body: JSON.stringify({})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showNotification('Recommandations générées. Actualisation...', 'success');
-            return fetch('/admin/ml-dashboard/data', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } }).then(r => r.json());
-        }
-        throw new Error(data.message || 'Erreur génération');
-    })
-    .then(function(apiData) {
-        if (apiData && apiData.success && apiData.data) {
-            updateDashboardData(apiData.data);
-            showNotification('Recommandations affichées.', 'success');
-        }
-    })
-    .catch(error => {
-        showNotification('Erreur lors de la génération: ' + (error.message || error), 'error');
-        console.error('Erreur:', error);
-    })
-    .finally(() => {
-        if (btn) btn.innerHTML = '<i class="fas fa-magic"></i> Nouvelles Recommandations';
-    });
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    fetch('/admin/ml-dashboard/recommendations/generate', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: '{}' })
+        .then(r => r.json())
+        .then(data => { if (data.success) { showNotification('Recommandations generees', 'success'); refreshDashboard({}); } else throw new Error(data.message); })
+        .catch(e => showNotification('Erreur: ' + e.message, 'error'))
+        .finally(() => { if (btn) btn.innerHTML = '<i class="fas fa-magic"></i> Recommandations'; });
 }
 
-// Approuver une recommandation
-function approveRecommendation(recommendationId) {
-    updateRecommendationStatus(recommendationId, 'approved');
+function renderRecommendations(recData) {
+    const container = document.getElementById('recommendations-container');
+    if (!container) return;
+    const list = recData?.recommendations || [];
+    if (list.length === 0) { container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><i class="fas fa-magic" style="font-size:32px;margin-bottom:12px;display:block;"></i>Aucune recommandation disponible</div>'; return; }
+    container.innerHTML = list.map(r => {
+        const bc = r.priority === 'critical' ? 'danger' : r.priority === 'high' ? 'warning' : 'info';
+        return `<div class="rec-card" data-id="${r.id}"><span class="badge badge-${bc}">${(r.priority||'').toUpperCase()}</span><div class="rec-body"><div class="rec-title">${(r.recommended_value||'').replace(/</g,'&lt;')}</div><div class="rec-reason">${(r.recommendation_type||'').replace(/_/g,' ')} - ${(r.recommendation_reason||'').replace(/</g,'&lt;')}</div></div><div class="rec-impact"><div class="rec-impact-value">+${r.expected_improvement_percentage||0}%</div><div style="font-size:10px;color:var(--muted);">attendu</div></div><div class="rec-actions"><button class="btn-success btn-sm" onclick="approveRecommendation(${r.id})"><i class="fas fa-check"></i></button><button style="background:#3b82f6;color:#fff;" class="btn-sm" onclick="simulateRecommendation(${r.id})"><i class="fas fa-calculator"></i></button><button class="btn-danger btn-sm" onclick="rejectRecommendation(${r.id})"><i class="fas fa-times"></i></button></div></div>`;
+    }).join('');
 }
 
-// Rejeter une recommandation
-function rejectRecommendation(recommendationId) {
-    updateRecommendationStatus(recommendationId, 'rejected');
+function approveRecommendation(id) { updateRecStatus(id, 'approved'); }
+function rejectRecommendation(id) { updateRecStatus(id, 'rejected'); }
+function updateRecStatus(id, status) {
+    fetch('/admin/ml-dashboard/recommendations/status', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: JSON.stringify({ recommendation_id: id, status }) })
+        .then(r => r.json()).then(d => { if (d.success) { document.querySelector(`[data-id="${id}"]`)?.remove(); showNotification('Statut mis a jour', 'success'); } })
+        .catch(e => showNotification('Erreur', 'error'));
 }
 
-// Mettre à jour le statut d'une recommandation
-function updateRecommendationStatus(recommendationId, status) {
-    fetch('/admin/ml-dashboard/recommendations/status', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: JSON.stringify({
-            recommendation_id: recommendationId,
-            status: status
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            document.querySelector(`[data-id="${recommendationId}"]`).style.display = 'none';
-            showNotification('Statut mis à jour', 'success');
-        }
-    })
-    .catch(error => {
-        showNotification('Erreur lors de la mise à jour', 'error');
-        console.error('Erreur:', error);
-    });
+function simulateRecommendation(id) {
+    fetch('/admin/ml-dashboard/recommendations/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: JSON.stringify({ recommendation_id: id }) })
+        .then(r => r.json()).then(d => { if (d.success) showSimulationModal(d.simulation); })
+        .catch(e => showNotification('Erreur simulation', 'error'));
 }
 
-// Simuler l'impact d'une recommandation
-function simulateRecommendation(recommendationId) {
-    fetch(`/admin/ml-dashboard/recommendations/simulate`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: JSON.stringify({
-            recommendation_id: recommendationId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showSimulationModal(data.simulation);
-        }
-    })
-    .catch(error => {
-        showNotification('Erreur lors de la simulation', 'error');
-        console.error('Erreur:', error);
-    });
-}
-
-// Afficher le modal de simulation
-function showSimulationModal(simulation) {
-    const content = `
-        <div class="row">
-            <div class="col-md-6">
-                <h6>📊 Métriques Actuelles</h6>
-                <ul class="list-group">
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Taux de succès</span>
-                        <strong>${simulation.current_metrics.success_rate}%</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Revenus mensuels</span>
-                        <strong>${simulation.current_metrics.monthly_revenue.toLocaleString()} TND</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Clients actifs</span>
-                        <strong>${simulation.current_metrics.active_clients.toLocaleString()}</strong>
-                    </li>
-                </ul>
+function showSimulationModal(sim) {
+    document.getElementById('simulation-content').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px;">
+            <div><h4 style="font-size:14px;color:var(--muted);margin:0 0 8px;">Metriques Actuelles</h4>
+                <div style="padding:12px;border:1px solid var(--border);border-radius:8px;">
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Taux succes</span><strong>${sim.current_metrics.success_rate}%</strong></div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);"><span>Revenus</span><strong>${sim.current_metrics.monthly_revenue?.toLocaleString()} TND</strong></div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);"><span>Clients actifs</span><strong>${sim.current_metrics.active_clients?.toLocaleString()}</strong></div>
+                </div>
             </div>
-            <div class="col-md-6">
-                <h6>🚀 Métriques Projetées</h6>
-                <ul class="list-group">
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Taux de succès</span>
-                        <strong class="text-success">${simulation.projected_metrics.success_rate.toFixed(2)}%</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Revenus mensuels</span>
-                        <strong class="text-success">${simulation.projected_metrics.monthly_revenue.toLocaleString()} TND</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Clients actifs</span>
-                        <strong>${simulation.projected_metrics.active_clients.toLocaleString()}</strong>
-                    </li>
-                </ul>
+            <div><h4 style="font-size:14px;color:var(--success);margin:0 0 8px;">Metriques Projetees</h4>
+                <div style="padding:12px;border:1px solid var(--success);border-radius:8px;">
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Taux succes</span><strong style="color:var(--success);">${sim.projected_metrics.success_rate?.toFixed(2)}%</strong></div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);"><span>Revenus</span><strong style="color:var(--success);">${sim.projected_metrics.monthly_revenue?.toLocaleString()} TND</strong></div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);"><span>Clients actifs</span><strong>${sim.projected_metrics.active_clients?.toLocaleString()}</strong></div>
+                </div>
             </div>
         </div>
-        <div class="alert alert-info mt-3">
-            <h6>⏰ Timeline d'implémentation</h6>
-            <p><strong>Temps d'implémentation:</strong> ${simulation.timeline.implementation_time}<br>
-            <strong>Impact complet:</strong> ${simulation.timeline.full_impact_time}<br>
-            <strong>Période de mesure:</strong> ${simulation.timeline.measurement_period}</p>
-        </div>
-    `;
-    
-    document.getElementById('simulation-content').innerHTML = content;
-    new bootstrap.Modal(document.getElementById('simulationModal')).show();
+        <div class="alert alert-info"><strong>Timeline:</strong> ${sim.timeline?.implementation_time || 'N/A'} | Impact complet: ${sim.timeline?.full_impact_time || 'N/A'}</div>`;
+    document.getElementById('simulationModal').style.display = 'block';
 }
 
-// Voir les détails d'un client
 function viewClientDetails(clientId) {
-    fetch(`/admin/ml-dashboard/client/${clientId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showClientDetailsModal(data.client);
-            }
-        })
-        .catch(error => {
-            showNotification('Erreur lors du chargement des détails', 'error');
-            console.error('Erreur:', error);
-        });
+    fetch(`/admin/ml-dashboard/client/${clientId}`, { headers: { 'Accept': 'application/json' } })
+        .then(r => r.json()).then(d => { if (d.success) showClientModal(d.client); })
+        .catch(e => showNotification('Erreur chargement details', 'error'));
 }
 
-// Afficher les détails client
-function showClientDetailsModal(client) {
-    const content = `
-        <div class="row">
-            <div class="col-md-4">
-                <h6>📋 Informations Client</h6>
-                <p><strong>ID:</strong> ${client.client_id}<br>
-                <strong>Segment:</strong> ${client.features?.client_segment || 'N/A'}<br>
-                <strong>Taux succès:</strong> ${((client.features?.payment_success_rate || 0) * 100).toFixed(2)}%</p>
+function showClientModal(client) {
+    document.getElementById('client-details-content').innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;">
+                <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px;">Informations</h4>
+                <p style="margin:0;font-size:13px;"><strong>ID:</strong> ${client.client_id}<br><strong>Segment:</strong> ${client.features?.client_segment || 'N/A'}<br><strong>Taux succes:</strong> ${((client.features?.payment_success_rate||0)*100).toFixed(2)}%</p>
             </div>
-            <div class="col-md-4">
-                <h6>🔮 Prédiction</h6>
-                <p><strong>Prob. succès:</strong> ${((client.prediction?.payment_success_probability || 0) * 100).toFixed(2)}%<br>
-                <strong>Prix optimal:</strong> ${client.prediction?.optimal_price || 3} TND<br>
-                <strong>Timing:</strong> ${client.prediction?.optimal_billing_time || 'N/A'}</p>
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;">
+                <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px;">Prediction</h4>
+                <p style="margin:0;font-size:13px;"><strong>Prob. succes:</strong> ${((client.prediction?.payment_success_probability||0)*100).toFixed(2)}%<br><strong>Prix optimal:</strong> ${client.prediction?.optimal_price||3} TND<br><strong>Timing:</strong> ${client.prediction?.optimal_billing_time||'N/A'}</p>
             </div>
-            <div class="col-md-4">
-                <h6>⚠️ Risques</h6>
-                <p><strong>Churn:</strong> ${((client.features?.churn_probability || 0) * 100).toFixed(2)}%<br>
-                <strong>Échecs consécutifs:</strong> ${client.features?.consecutive_failures || 0}<br>
-                <strong>Client de valeur:</strong> ${client.features?.is_high_value_client ? 'Oui' : 'Non'}</p>
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;">
+                <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px;">Risques</h4>
+                <p style="margin:0;font-size:13px;"><strong>Churn:</strong> ${((client.features?.churn_probability||0)*100).toFixed(2)}%<br><strong>Echecs consecutifs:</strong> ${client.features?.consecutive_failures||0}<br><strong>Haute valeur:</strong> ${client.features?.is_high_value_client ? 'Oui' : 'Non'}</p>
             </div>
-        </div>
-    `;
-    
-    document.getElementById('client-details-content').innerHTML = content;
-    new bootstrap.Modal(document.getElementById('clientDetailsModal')).show();
+        </div>`;
+    document.getElementById('clientDetailsModal').style.display = 'block';
 }
 
-// Notifications
-function showNotification(message, type = 'info') {
-    const alertClass = type === 'success' ? 'alert-success' : 
-                     type === 'error' ? 'alert-danger' : 'alert-info';
-    
-    const notification = document.createElement('div');
-    notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    notification.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.remove();
-    }, 5000);
+function extractFeatures() {
+    document.getElementById('extract-status').textContent = 'Extraction en cours...';
+    fetch('/admin/ml-dashboard/features/extract', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: '{}' })
+        .then(r => r.json()).then(d => { document.getElementById('extract-status').textContent = d.success ? 'Extraction terminee !' : 'Erreur: ' + (d.message || ''); })
+        .catch(e => { document.getElementById('extract-status').textContent = 'Erreur: ' + e.message; });
 }
 
-// Event listeners
-function setupEventListeners() {
-    // Actualisation automatique toutes les 10 minutes, uniquement si l'onglet est visible
-    setInterval(function() {
-        if (document.visibilityState === 'visible') refreshDashboard();
-    }, 10 * 60 * 1000);
+function trainModel() {
+    document.getElementById('train-status').textContent = 'Entrainement en cours...';
+    fetch('/admin/ml-dashboard/train', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: '{}' })
+        .then(r => r.json()).then(d => { document.getElementById('train-status').textContent = d.success ? 'Entrainement termine !' : 'Erreur: ' + (d.message || ''); })
+        .catch(e => { document.getElementById('train-status').textContent = 'Erreur: ' + e.message; });
+}
+
+function startABTest() {
+    document.getElementById('abtest-status').textContent = 'Lancement du test...';
+    fetch('/admin/ml-dashboard/ab-test/start', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: '{}' })
+        .then(r => r.json()).then(d => { document.getElementById('abtest-status').textContent = d.success ? 'Test A/B lance ! ID: ' + (d.test_id || '') : 'Erreur: ' + (d.message || ''); })
+        .catch(e => { document.getElementById('abtest-status').textContent = 'Erreur: ' + e.message; });
 }
 </script>
 @endsection

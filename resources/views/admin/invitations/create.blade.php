@@ -29,7 +29,7 @@
                 /* Backward compatibility */
                 --brand-red: var(--brand-primary);
             @else
-                --brand-primary: #6B46C1;
+                --brand-primary: #6C4BA0;
                 --brand-secondary: #8B5CF6;
                 --brand-accent: #F59E0B;
                 --brand-dark: #1f2937;
@@ -51,7 +51,7 @@
             margin: 0; 
             padding: 0; 
             background: var(--bg); 
-            color: var(--brand-dark); 
+            color: var(--text-primary); 
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
         }
@@ -105,7 +105,7 @@
         
         .btn-secondary {
             background: var(--bg);
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border: 1px solid var(--border);
         }
         
@@ -139,7 +139,7 @@
             display: block;
             font-weight: 600;
             margin-bottom: 8px;
-            color: var(--brand-dark);
+            color: var(--text-primary);
         }
         
         .form-input, .form-select, .form-textarea {
@@ -244,7 +244,9 @@
                 flex-direction: column;
             }
         }
+    .dark-mode { --brand-dark:#FFF; --bg:#0D0A1A; --card:#161131; --card-hover:#1E1745; --muted:#A1A1AA; --border:#2A2350; --text-primary:#FFF; --text-secondary:#A1A1AA; --input-bg:#1E1745; --input-border:#2A2350; --shadow-sm:0 1px 3px rgba(0,0,0,0.3); --shadow-md:0 4px 12px rgba(0,0,0,0.4); --table-stripe:rgba(255,255,255,0.03); --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --accent:#D4A843; }
     </style>
+<script>(function(){var s=localStorage.getItem("dashboard-theme");if(s==="dark")document.documentElement.classList.add("dark-mode");}());</script>
 </head>
 <body>
     <div class="container">

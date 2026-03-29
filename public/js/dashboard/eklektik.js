@@ -230,11 +230,28 @@ document.addEventListener('DOMContentLoaded', async function() {
   if (toggle && dropdown) {
     toggle.addEventListener('click', function(e) {
       e.stopPropagation();
-      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+      const isVisible = dropdown.style.display !== 'none';
+      if (isVisible) {
+        dropdown.style.display = 'none';
+      } else {
+        // Position the dropdown near the toggle button
+        const rect = toggle.getBoundingClientRect();
+        const dropW = 250;
+        let left = rect.right - dropW;
+        if (left < 8) left = 8;
+        if (left + dropW > window.innerWidth - 8) left = window.innerWidth - dropW - 8;
+        dropdown.style.top = (rect.bottom + 6) + 'px';
+        dropdown.style.left = left + 'px';
+        dropdown.style.display = 'block';
+      }
     });
-    document.addEventListener('click', function() {
-      dropdown.style.display = 'none';
+    document.addEventListener('click', function(e) {
+      if (!dropdown.contains(e.target) && !toggle.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
     });
+    // Close on scroll to avoid mispositioned dropdown
+    window.addEventListener('scroll', function() { dropdown.style.display = 'none'; }, { passive: true });
   }
   // Configuration globale Chart.js pour désactiver les animations
   if (typeof Chart !== 'undefined') {
