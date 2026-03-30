@@ -326,13 +326,17 @@ class KPIService
     }
 
     /**
-     * Nombre d'utilisateurs uniques inscrits (distinct client_id) dans la période
+     * Nombre d'utilisateurs uniques ayant un abonnement actif pendant la période
+     * (inscrit avant la fin ET non expiré avant le début)
      */
     private function queryRegisteredUsers(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): int
     {
         $query = DB::table('client_abonnement as ca')
-            ->where('ca.client_abonnement_creation', '>=', $startBound)
-            ->where('ca.client_abonnement_creation', '<', $endExclusive);
+            ->where('ca.client_abonnement_creation', '<', $endExclusive)
+            ->where(function ($q) use ($startBound) {
+                $q->whereNull('ca.client_abonnement_expiration')
+                  ->orWhere('ca.client_abonnement_expiration', '>=', $startBound);
+            });
         if ($operatorId !== null) {
             $query->where('ca.country_payments_methods_id', $operatorId);
         }
@@ -539,10 +543,13 @@ class KPIService
             $stats = TimweDailyStat::getStatsForPeriod($startBound, $endDate);
 
             if ($stats->isNotEmpty()) {
-                $lastDayStat = $stats->last();
+                // Moyenne des taux quotidiens (exclure les jours à 0 = données incomplètes)
+                $validStats = $stats->filter(fn($s) => $s->billing_rate > 0);
+                $avgRate = $validStats->isNotEmpty() ? round($validStats->avg('billing_rate'), 2) : 0;
+                $lastValidStat = $validStats->isNotEmpty() ? $validStats->last() : $stats->last();
                 return [
-                    'rate' => $lastDayStat->billing_rate,
-                    'total_clients' => $lastDayStat->total_clients,
+                    'rate' => $avgRate,
+                    'total_clients' => $lastValidStat->total_clients,
                     'billed_clients' => 0,
                     'total_billings' => $stats->sum('total_billings')
                 ];
@@ -562,12 +569,13 @@ class KPIService
             $stats = \App\Models\OoredooDailyStat::getStatsForPeriod($startBound, $endDate);
 
             if ($stats->isNotEmpty()) {
-                // Moyenne des taux quotidiens (pas le taux du dernier jour)
-                $avgRate = $stats->avg('billing_rate');
-                $lastDayStat = $stats->last();
+                // Moyenne des taux quotidiens (exclure les jours à 0 = données incomplètes)
+                $validStats = $stats->filter(fn($s) => $s->billing_rate > 0);
+                $avgRate = $validStats->isNotEmpty() ? round($validStats->avg('billing_rate'), 2) : 0;
+                $lastValidStat = $validStats->isNotEmpty() ? $validStats->last() : $stats->last();
                 return [
-                    'rate' => round($avgRate, 2),
-                    'total_clients' => $lastDayStat->total_clients,
+                    'rate' => $avgRate,
+                    'total_clients' => $lastValidStat->total_clients,
                     'billed_clients' => 0,
                     'total_billings' => $stats->sum('total_billings')
                 ];
