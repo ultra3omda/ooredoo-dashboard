@@ -214,27 +214,58 @@
     <div id="model-performance-container" data-testid="ml-model-performance">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
             @php
+                $mm = $modelMetrics ?? [];
+                $trainedAt = isset($mm['trained_at']) ? \Carbon\Carbon::parse($mm['trained_at'])->format('d/m/Y H:i') : 'Jamais';
+                $featureImp = $mm['feature_importance'] ?? [];
+                arsort($featureImp);
+                $topFeatures = array_slice($featureImp, 0, 5, true);
+                
                 $models = [
-                    ['name' => 'Payment Success Predictor', 'version' => 'rule_based_v1.0', 'accuracy' => 72, 'precision' => 68, 'recall' => 75, 'f1' => 71, 'status' => 'active'],
-                    ['name' => 'Optimal Timing Predictor', 'version' => 'v1.0', 'accuracy' => 65, 'precision' => 60, 'recall' => 70, 'f1' => 65, 'status' => 'in_development'],
-                    ['name' => 'Churn Risk Classifier', 'version' => 'v1.0', 'accuracy' => 78, 'precision' => 75, 'recall' => 82, 'f1' => 78, 'status' => 'in_development'],
+                    ['name' => 'Billing Success Predictor (LightGBM)', 'version' => 'v3.0', 
+                     'accuracy' => $mm['accuracy'] ?? 0, 'precision' => $mm['precision'] ?? 0, 
+                     'recall' => $mm['recall'] ?? 0, 'f1' => $mm['f1'] ?? 0, 
+                     'auc_roc' => $mm['auc_roc'] ?? 0, 'status' => 'active',
+                     'samples' => ($mm['samples_train'] ?? 0) + ($mm['samples_test'] ?? 0),
+                     'trained_at' => $trainedAt],
                 ];
             @endphp
             @foreach($models as $m)
             <div style="padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0;">{{ $m['name'] }}</h4>
-                    <span class="badge badge-{{ $m['status'] === 'active' ? 'success' : 'warning' }}">{{ $m['status'] === 'active' ? 'Actif' : 'Dev' }}</span>
+                    <span class="badge badge-success">Actif</span>
                 </div>
-                <div style="font-size: 11px; color: var(--muted); margin-bottom: 10px;">Version: {{ $m['version'] }}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <div><span style="font-size: 11px; color: var(--muted);">Precision</span><div class="progress" style="margin-top: 4px;"><div class="progress-bar {{ $m['accuracy'] >= 70 ? 'bg-success' : 'bg-warning' }}" style="width: {{ $m['precision'] }}%"></div></div><span style="font-size: 12px; font-weight: 600;">{{ $m['precision'] }}%</span></div>
-                    <div><span style="font-size: 11px; color: var(--muted);">Recall</span><div class="progress" style="margin-top: 4px;"><div class="progress-bar {{ $m['recall'] >= 70 ? 'bg-success' : 'bg-warning' }}" style="width: {{ $m['recall'] }}%"></div></div><span style="font-size: 12px; font-weight: 600;">{{ $m['recall'] }}%</span></div>
-                    <div><span style="font-size: 11px; color: var(--muted);">Accuracy</span><div class="progress" style="margin-top: 4px;"><div class="progress-bar {{ $m['accuracy'] >= 70 ? 'bg-success' : 'bg-warning' }}" style="width: {{ $m['accuracy'] }}%"></div></div><span style="font-size: 12px; font-weight: 600;">{{ $m['accuracy'] }}%</span></div>
-                    <div><span style="font-size: 11px; color: var(--muted);">F1 Score</span><div class="progress" style="margin-top: 4px;"><div class="progress-bar {{ $m['f1'] >= 70 ? 'bg-success' : 'bg-warning' }}" style="width: {{ $m['f1'] }}%"></div></div><span style="font-size: 12px; font-weight: 600;">{{ $m['f1'] }}%</span></div>
+                <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px;">Version: {{ $m['version'] }} | Entraine: {{ $m['trained_at'] }} | {{ number_format($m['samples']) }} samples</div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
+                    @foreach(['Accuracy' => $m['accuracy'], 'Precision' => $m['precision'], 'Recall' => $m['recall'], 'F1 Score' => $m['f1'], 'AUC-ROC' => $m['auc_roc']] as $label => $val)
+                    <div>
+                        <span style="font-size: 10px; color: var(--muted);">{{ $label }}</span>
+                        <div class="progress" style="margin: 3px 0;"><div class="progress-bar {{ $val >= 70 ? 'bg-success' : ($val >= 50 ? 'bg-warning' : 'bg-danger') }}" style="width: {{ min($val, 100) }}%"></div></div>
+                        <span style="font-size: 12px; font-weight: 700;">{{ $val }}%</span>
+                    </div>
+                    @endforeach
                 </div>
             </div>
             @endforeach
+            
+            <!-- Feature Importance -->
+            <div style="padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
+                <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 12px;">Importance des Features</h4>
+                @if(count($topFeatures) > 0)
+                    @php $maxImp = max(array_values($topFeatures)) ?: 1; @endphp
+                    @foreach($topFeatures as $fname => $fval)
+                    <div style="margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+                            <span style="color: var(--text-secondary);">{{ str_replace('_', ' ', ucfirst($fname)) }}</span>
+                            <span style="font-weight: 600;">{{ $fval }}</span>
+                        </div>
+                        <div class="progress"><div class="progress-bar bg-success" style="width: {{ round($fval / $maxImp * 100) }}%"></div></div>
+                    </div>
+                    @endforeach
+                @else
+                    <p style="font-size: 13px; color: var(--muted);">Aucune donnee. Entrainez le modele.</p>
+                @endif
+            </div>
         </div>
     </div>
 </div>

@@ -57,12 +57,16 @@ class MLDashboardController extends Controller
             // Données pour les graphiques
             $trendData = $this->getTrendData();
             
+            // Real model metrics from trained model
+            $modelMetrics = $this->loadModelMetrics();
+            
             return view('admin.ml-dashboard', compact(
                 'portfolioStats',
                 'segmentStats', 
                 'recommendations',
                 'predictions',
-                'trendData'
+                'trendData',
+                'modelMetrics'
             ));
 
         } catch (\Exception $e) {
@@ -436,5 +440,22 @@ class MLDashboardController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Load real model metrics from the trained model's JSON file
+     */
+    private function loadModelMetrics(): array
+    {
+        $metricsPath = base_path('ml_models/model_metrics.json');
+        if (file_exists($metricsPath)) {
+            $json = json_decode(file_get_contents($metricsPath), true);
+            if ($json) return $json;
+        }
+        return [
+            'accuracy' => 0, 'precision' => 0, 'recall' => 0, 'f1' => 0,
+            'auc_roc' => 0, 'samples_train' => 0, 'samples_test' => 0,
+            'feature_importance' => [], 'trained_at' => null
+        ];
     }
 }

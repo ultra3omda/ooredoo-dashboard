@@ -34,15 +34,12 @@ class MLPythonBridgeService
      */
     public function predictPaymentSuccess(array $features): array
     {
-        $featuresJson = json_encode($features);
+        $featuresJson = json_encode(['features' => $features]);
 
         $process = new Process([
             $this->pythonPath,
             $this->predictScriptPath,
-            '--features',
             $featuresJson,
-            '--model-path',
-            $this->modelPath,
         ], base_path(), null, null, 30);
 
         $process->run();
@@ -58,13 +55,13 @@ class MLPythonBridgeService
         $output = trim($process->getOutput());
         $decoded = json_decode($output, true);
 
-        if (json_last_error() !== JSON_ERROR_NONE || ! isset($decoded['probability'])) {
+        if (json_last_error() !== JSON_ERROR_NONE || ! isset($decoded['payment_success_probability'])) {
             Log::error('MLPythonBridge - Réponse invalide', ['output' => $output]);
             throw new \RuntimeException('Réponse invalide du script Python: '.$output);
         }
 
         return [
-            'probability' => (float) ($decoded['probability'] ?? 0),
+            'probability' => (float) ($decoded['payment_success_probability'] ?? 0),
             'confidence' => (float) ($decoded['confidence'] ?? 0.5),
         ];
     }

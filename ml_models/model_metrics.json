@@ -1,0 +1,31 @@
+{
+  "accuracy": 99.99,
+  "precision": 99.93,
+  "recall": 100.0,
+  "f1": 99.97,
+  "auc_roc": 100.0,
+  "samples_train": 64000,
+  "samples_test": 16000,
+  "positive_rate": 18.62,
+  "feature_importance": {
+    "payment_success_rate": 0,
+    "consecutive_failures": 0,
+    "total_payments": 0,
+    "churn_probability": 0,
+    "payment_reliability_score": 0,
+    "days_since_last_payment": 0,
+    "subscription_age_days": 12,
+    "is_high_value_client": 0,
+    "timwe_success_rate": 486,
+    "eklektik_success_rate": 332,
+    "ooredoo_success_rate": 426,
+    "timwe_total_attempts": 31,
+    "eklektik_total_attempts": 62,
+    "ooredoo_total_attempts": 80,
+    "engagement_score": 216,
+    "lifetime_value_score": 52,
+    "total_attempts": 0,
+    "payment_frequency": 0
+  },
+  "trained_at": "2026-03-29T01:42:38.695144"
+}
