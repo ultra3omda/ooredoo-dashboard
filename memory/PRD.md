@@ -1,52 +1,65 @@
-# Club Privileges - Performance Dashboard PRD
+# Club Privileges - Performance Dashboard
 
-## Original Problem Statement
-Deploy a high-performance Laravel dashboard, mathematically accurate stats matching `clubprivileges.app`, automated weekly AI reporting, robust navigation, fully responsive UI with Light/Dark mode theming.
+## Problem Statement
+Deploy and optimize a Laravel 10 dashboard with mathematically accurate stats matching `clubprivileges.app`, automated weekly reporting, ML-powered predictions, and responsive UI with Light/Dark mode.
 
 ## Architecture
-- **Backend**: Laravel 10 + Nginx + PHP-FPM + Redis cache
-- **Frontend**: Vanilla JS + Chart.js + Blade templates
-- **AI Reporting**: FastAPI proxy (server.py) using Emergent LLM Key
-- **DB**: MySQL with daily stat tables
+- **Backend**: Laravel 10 + PHP 8.2 FPM + Nginx (port 8002)
+- **Frontend Proxy**: Node.js (port 3000) → PHP (port 8002)
+- **Backend Proxy**: FastAPI (port 8001) → PHP (port 8002) + AI endpoints
+- **DB**: External MySQL (51.38.187.245)
+- **Cache**: File-based (Redis unreachable from container)
+- **ML**: Python (scikit-learn, LightGBM) via Symfony Process
 
-## File Structure (Post-Refactoring)
-```
-resources/views/
-  dashboard.blade.php          (1654 lines - lean HTML only)
-  layouts/app.blade.php        (shared layout for admin pages)
-  components/theme-init.blade.php
-  admin/ml-dashboard.blade.php
-  admin/users/index.blade.php
-  admin/invitations/index.blade.php
-  sub-stores/dashboard_harmonized.blade.php
+## Key Files
+- `app/Services/Dashboard/KPIService.php` - Main KPI calculations
+- `app/Services/Dashboard/SubscriptionService.php` - Subscription data
+- `app/Services/Dashboard/TransactionService.php` - Transaction data
+- `app/Services/Dashboard/MerchantService.php` - Merchant data
+- `app/Http/Controllers/Api/DataControllerOptimized.php` - API endpoints
+- `app/Http/Controllers/Admin/MLDashboardController.php` - ML Dashboard
+- `resources/views/dashboard.blade.php` - Main dashboard view
+- `public/js/dashboard/main.js` - Frontend JS
+- `public/css/dashboard.css` - Dashboard CSS
 
-public/css/dashboard.css       (2385 lines - all dashboard CSS)
-public/js/dashboard/
-  main.js, filters.js, ai-reporting.js, eklektik.js,
-  charts.js, tables.js, timwe.js, ooredoo.js, utils.js, reporting.js
-```
+## What's Been Implemented (Latest Session - March 30, 2026)
 
-## Completed Features
-- [x] Full dashboard with 8 tabs + Comparison + Reporting
-- [x] Mathematically accurate KPIs
-- [x] Automated AI Weekly Reporting
-- [x] Mobile responsive (2 KPIs per row)
-- [x] Redis caching
-- [x] Light Mode default + Dark/Light toggle (localStorage)
-- [x] Ooredoo/DGV billing rate = average of daily rates
-- [x] Eklektik "Statistiques Quotidiennes" with Offre column
-- [x] Profile dropdown (z-index: 10000, position: fixed)
-- [x] All admin pages adapted (theme coherence)
-- [x] ML Dashboard (KPIs, trends, segments, recommendations, predictions, model performance, config)
-- [x] Refactored dashboard.blade.php: 6087 -> 1654 lines
-- [x] Ooredoo/DGV tab refresh on date change
-- [x] Date formatting: YYYY-MM-DD (no timestamps) in all tables
+### Bug Fixes
+1. **Conversion Rate 180% → 48%**: Changed formula from `transacting_users / active_subscriptions` to `transacting_users / users_with_active_sub_during_period` (queryRegisteredUsers)
+2. **Retention Rate 101% → 96%**: Root cause was mismatch between materialized (dashboard_daily_stats) and direct (client_abonnement) data sources. Today's stats missing from materialized table caused denominator to be smaller than numerator. Fixed by using direct queries for both.
+3. **Timwe Billing Rate 0% → 2.71%**: Was using last day's rate (today = 0 because incomplete). Now uses average of daily rates, filtering out days with rate=0.
+4. **Trial 30j pricing**: Priority order fixed - ppid check before duration check, so free trials correctly show 0 TND.
+5. **Churn Rate**: Now calculated as `(directActivated - stillActive) / directActivated * 100` for consistency.
 
-## Business Rules
-- Ooredoo/DGV billing rate = average of daily billing_rate percentages
-- Taux de facturation displayed with 3 decimal places
-- Theme persists via localStorage key 'dashboard-theme', default: light
+### UI Fixes
+6. **Emoji icons removed** from merchant KPI cards
+7. **"Tous" pagination option** added to merchant ranking table
+8. **Date shortcuts**: Added 3 mois, 6 mois, 12 mois (replaced "Ce mois" / "Mois dernier")
 
-## Testing
-- Iterations 9-13 all passed (100% success)
-- Credentials: superadmin@ooredoo.tn / SuperAdmin@2025
+### ML Pipeline
+9. **trainModel endpoint** added to MLDashboardController
+10. **startABTest endpoint** added to MLDashboardController
+11. ML model metrics display verified working
+
+### Infrastructure (This Container)
+- PHP 8.2 + FPM installed and configured
+- Nginx configured on port 8002 for Laravel
+- AlertService Redis error fixed (graceful fallback)
+- Cache directories created for file driver
+
+## Credentials
+- Email: superadmin@ooredoo.tn
+- Password: SuperAdmin@2025
+
+## Prioritized Backlog
+### P1
+- Verify ML Pipeline UI Actions end-to-end (Extract → Train → A/B Test)
+- Add ML Insights Widget to Overview Tab
+
+### P2
+- Refactor MLPythonBridgeService to use Laravel Queue/Jobs
+- Historical Ooredoo billing rate data investigation (all showing 100%)
+
+### P3
+- Performance optimization for long-period queries
+- Dashboard export/PDF functionality

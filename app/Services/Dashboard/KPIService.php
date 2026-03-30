@@ -183,8 +183,12 @@ class KPIService
         $activeCurrent = $this->queryActivatedStillActive($startBound, $endExclusive, $operatorId);
         $activeComp = $this->queryActivatedStillActive($compStartBound, $compEndExclusive, $operatorId);
         
-        $retentionRate = $current['activated'] > 0 ? round(($activeCurrent / $current['activated']) * 100, 1) : 0;
-        $retentionRateComp = $comparison['activated'] > 0 ? round(($activeComp / $comparison['activated']) * 100, 1) : 0;
+        // Utiliser le comptage DIRECT pour le dénominateur (pas materialized) pour éviter le mismatch
+        $directActivatedCurrent = $this->queryDirectActivated($startBound, $endExclusive, $operatorId);
+        $directActivatedComp = $this->queryDirectActivated($compStartBound, $compEndExclusive, $operatorId);
+        
+        $retentionRate = $directActivatedCurrent > 0 ? min(round(($activeCurrent / $directActivatedCurrent) * 100, 1), 100) : 0;
+        $retentionRateComp = $directActivatedComp > 0 ? min(round(($activeComp / $directActivatedComp) * 100, 1), 100) : 0;
         
         // Conversion Rate = transacting users / registered users (distinct client_id inscrits dans la période)
         $registeredUsersCurrent = $this->queryRegisteredUsers($startBound, $endExclusive, $operatorId);
@@ -193,8 +197,8 @@ class KPIService
         $conversionRate = $registeredUsersCurrent > 0 ? round(($current['transacting_users'] / $registeredUsersCurrent) * 100, 1) : 0;
         $conversionRateComp = $registeredUsersComp > 0 ? round(($comparison['transacting_users'] / $registeredUsersComp) * 100, 1) : 0;
         
-        $churnRate = $current['activated'] > 0 ? round(($current['lost'] / $current['activated']) * 100, 1) : 0;
-        $churnRateComp = $comparison['activated'] > 0 ? round(($comparison['lost'] / $comparison['activated']) * 100, 1) : 0;
+        $churnRate = $directActivatedCurrent > 0 ? round((($directActivatedCurrent - $activeCurrent) / $directActivatedCurrent) * 100, 1) : 0;
+        $churnRateComp = $directActivatedComp > 0 ? round((($directActivatedComp - $activeComp) / $directActivatedComp) * 100, 1) : 0;
         
         $txPerUser = $current['transacting_users'] > 0 ? round($current['transactions'] / $current['transacting_users'], 1) : 0;
         $txPerUserComp = $comparison['transacting_users'] > 0 ? round($comparison['transactions'] / $comparison['transacting_users'], 1) : 0;
@@ -275,7 +279,7 @@ class KPIService
         }
 
         return [
-            "activatedSubscriptions" => ["current" => $current['activated'], "previous" => $comparison['activated'], "change" => $this->calculatePercentageChange($current['activated'], $comparison['activated'])],
+            "activatedSubscriptions" => ["current" => $directActivatedCurrent, "previous" => $directActivatedComp, "change" => $this->calculatePercentageChange($directActivatedCurrent, $directActivatedComp)],
             "activeSubscriptions" => ["current" => $activeCurrent, "previous" => $activeComp, "change" => $this->calculatePercentageChange($activeCurrent, $activeComp)],
             "deactivatedSubscriptions" => ["current" => $current['deactivated'], "previous" => $comparison['deactivated'], "change" => $this->calculatePercentageChange($current['deactivated'], $comparison['deactivated'])],
             "periodDeactivated" => ["current" => $current['deactivated'], "previous" => $comparison['deactivated'], "change" => $this->calculatePercentageChange($current['deactivated'], $comparison['deactivated'])],
@@ -342,6 +346,22 @@ class KPIService
         }
         return $query->distinct('ca.client_id')->count('ca.client_id');
     }
+
+    /**
+     * Comptage DIRECT des abonnements activés dans la période (depuis client_abonnement)
+     * Évite le décalage avec les données matérialisées (dashboard_daily_stats)
+     */
+    private function queryDirectActivated(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): int
+    {
+        $query = DB::table('client_abonnement as ca')
+            ->where('ca.client_abonnement_creation', '>=', $startBound)
+            ->where('ca.client_abonnement_creation', '<', $endExclusive);
+        if ($operatorId !== null) {
+            $query->where('ca.country_payments_methods_id', $operatorId);
+        }
+        return $query->count();
+    }
+
 
     private function aggregateMaterialized(string $startDate, string $endDate, ?int $operatorId): ?array
     {
@@ -414,9 +434,12 @@ class KPIService
         $this->applyOperatorJoinAndFilter($cohortUsersCompQuery, $selectedOperator, 'ca');
         $cohortTransactingUsersComparison = $cohortUsersCompQuery->distinct('ca.client_id')->count('ca.client_id');
         
-        // Rates
-        $retentionRate = $subMetrics->activated_current > 0 ? round(($subMetrics->active_current / $subMetrics->activated_current) * 100, 1) : 0;
-        $retentionRateComparison = $subMetrics->activated_comparison > 0 ? round(($subMetrics->active_comparison / $subMetrics->activated_comparison) * 100, 1) : 0;
+        // Rates - utiliser des comptages directs pour cohérence
+        $directActivatedCurrent = $this->queryDirectActivated($startBound, $endExclusive, $operatorId);
+        $directActivatedComp = $this->queryDirectActivated($compStartBound, $compEndExclusive, $operatorId);
+        
+        $retentionRate = $directActivatedCurrent > 0 ? min(round(($subMetrics->active_current / $directActivatedCurrent) * 100, 1), 100) : 0;
+        $retentionRateComparison = $directActivatedComp > 0 ? min(round(($subMetrics->active_comparison / $directActivatedComp) * 100, 1), 100) : 0;
         
         // Conversion Rate = transacting users / registered users (distinct client_id inscrits)
         $operatorId = ($selectedOperator === 'ALL') ? null : ($this->getOperatorId($selectedOperator));
@@ -434,8 +457,8 @@ class KPIService
         $this->applyOperatorJoinAndFilter($lostCompQuery, $selectedOperator, 'ca');
         $lostSubscriptionsComparison = $lostCompQuery->count();
         
-        $churnRate = $subMetrics->activated_current > 0 ? round(($lostSubscriptions / $subMetrics->activated_current) * 100, 1) : 0;
-        $churnRateComparison = $subMetrics->activated_comparison > 0 ? round(($lostSubscriptionsComparison / $subMetrics->activated_comparison) * 100, 1) : 0;
+        $churnRate = $directActivatedCurrent > 0 ? round((($directActivatedCurrent - $subMetrics->active_current) / $directActivatedCurrent) * 100, 1) : 0;
+        $churnRateComparison = $directActivatedComp > 0 ? round((($directActivatedComp - $subMetrics->active_comparison) / $directActivatedComp) * 100, 1) : 0;
         
         $merchantKPIs = $this->merchantService->calculateMerchantKPIs($startBound, $endExclusive, $compStartBound, $compEndExclusive, $selectedOperator, $txMetrics->transactions_current, $txMetrics->transactions_comparison);
         
@@ -460,7 +483,7 @@ class KPIService
         }
         
         return [
-            "activatedSubscriptions" => ["current" => $subMetrics->activated_current, "previous" => $subMetrics->activated_comparison, "change" => $this->calculatePercentageChange($subMetrics->activated_current, $subMetrics->activated_comparison)],
+            "activatedSubscriptions" => ["current" => $directActivatedCurrent, "previous" => $directActivatedComp, "change" => $this->calculatePercentageChange($directActivatedCurrent, $directActivatedComp)],
             "activeSubscriptions" => ["current" => $subMetrics->active_current, "previous" => $subMetrics->active_comparison, "change" => $this->calculatePercentageChange($subMetrics->active_current, $subMetrics->active_comparison)],
             "deactivatedSubscriptions" => ["current" => $subMetrics->deactivated_current, "previous" => $subMetrics->deactivated_comparison, "change" => $this->calculatePercentageChange($subMetrics->deactivated_current, $subMetrics->deactivated_comparison)],
             "periodDeactivated" => ["current" => $subMetrics->deactivated_current, "previous" => $subMetrics->deactivated_comparison, "change" => $this->calculatePercentageChange($subMetrics->deactivated_current, $subMetrics->deactivated_comparison)],
