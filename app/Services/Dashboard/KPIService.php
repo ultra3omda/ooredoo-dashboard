@@ -592,8 +592,8 @@ class KPIService
             $stats = \App\Models\OoredooDailyStat::getStatsForPeriod($startBound, $endDate);
 
             if ($stats->isNotEmpty()) {
-                // Moyenne des taux quotidiens (exclure les jours à 0 = données incomplètes)
-                $validStats = $stats->filter(fn($s) => $s->billing_rate > 0);
+                // Exclure les jours à 0 (incomplets) ET les jours à 100.00 (données placeholder historiques)
+                $validStats = $stats->filter(fn($s) => $s->billing_rate > 0 && $s->billing_rate < 100);
                 $avgRate = $validStats->isNotEmpty() ? round($validStats->avg('billing_rate'), 2) : 0;
                 $lastValidStat = $validStats->isNotEmpty() ? $validStats->last() : $stats->last();
                 return [

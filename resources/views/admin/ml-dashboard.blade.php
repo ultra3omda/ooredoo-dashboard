@@ -528,23 +528,59 @@ function showClientModal(client) {
 function extractFeatures() {
     const today = new Date().toISOString().split('T')[0];
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    document.getElementById('extract-status').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Extraction en cours...';
+    const statusEl = document.getElementById('extract-status');
+    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Lancement de l\'extraction...';
     fetch('/admin/ml-dashboard/features/extract', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: JSON.stringify({ start_date: thirtyDaysAgo, end_date: today }) })
-        .then(r => r.json()).then(d => { document.getElementById('extract-status').innerHTML = d.success ? '<span style="color:var(--success)"><i class="fas fa-check"></i> ' + (d.message || 'Extraction terminee') + ' (' + (d.total_processed||0) + ' features)</span>' : '<span style="color:var(--danger)"><i class="fas fa-times"></i> ' + (d.message || 'Erreur') + '</span>'; })
-        .catch(e => { document.getElementById('extract-status').innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> Erreur: ' + e.message + '</span>'; });
+        .then(r => r.json()).then(d => {
+            if (d.success && d.async) {
+                statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Extraction en arriere-plan...';
+                pollTaskStatus(d.task_id, statusEl);
+            } else if (!d.success) {
+                statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> ' + (d.message || 'Erreur') + '</span>';
+            }
+        })
+        .catch(e => { statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> Erreur: ' + e.message + '</span>'; });
 }
 
 function trainModel() {
-    document.getElementById('train-status').textContent = 'Entrainement en cours...';
+    const statusEl = document.getElementById('train-status');
+    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Lancement de l\'entrainement...';
     fetch('/admin/ml-dashboard/train', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: '{}' })
-        .then(r => r.json()).then(d => { document.getElementById('train-status').textContent = d.success ? 'Entrainement termine !' : 'Erreur: ' + (d.message || ''); })
-        .catch(e => { document.getElementById('train-status').textContent = 'Erreur: ' + e.message; });
+        .then(r => r.json()).then(d => {
+            if (d.success && d.async) {
+                statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrainement en arriere-plan...';
+                pollTaskStatus(d.task_id, statusEl);
+            } else if (!d.success) {
+                statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> ' + (d.message || 'Erreur') + '</span>';
+            }
+        })
+        .catch(e => { statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> Erreur: ' + e.message + '</span>'; });
+}
+
+function pollTaskStatus(taskId, statusEl) {
+    const interval = setInterval(() => {
+        fetch('/admin/ml-dashboard/task-status?task_id=' + taskId, { headers: { 'Accept': 'application/json' } })
+            .then(r => r.json()).then(d => {
+                if (!d.success || !d.task) { clearInterval(interval); return; }
+                const t = d.task;
+                if (t.status === 'running') {
+                    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (t.message || 'En cours...') + ' (' + (t.progress || 0) + '%)';
+                } else if (t.status === 'completed') {
+                    clearInterval(interval);
+                    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check"></i> ' + (t.message || 'Termine') + '</span>';
+                    if (t.metrics) { showNotification('Modele mis a jour !', 'success'); setTimeout(() => location.reload(), 2000); }
+                } else if (t.status === 'failed') {
+                    clearInterval(interval);
+                    statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> ' + (t.message || 'Echec') + '</span>';
+                }
+            }).catch(() => clearInterval(interval));
+    }, 3000);
 }
 
 function startABTest() {
     document.getElementById('abtest-status').textContent = 'Lancement du test...';
     fetch('/admin/ml-dashboard/ab-test/start', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: '{}' })
-        .then(r => r.json()).then(d => { document.getElementById('abtest-status').textContent = d.success ? 'Test A/B lance ! ID: ' + (d.test_id || '') : 'Erreur: ' + (d.message || ''); })
+        .then(r => r.json()).then(d => { document.getElementById('abtest-status').textContent = d.success ? 'Test A/B lance ! ID: ' + (d.test_id || '') : 'Erreur: ' + (d.message || d.error || ''); })
         .catch(e => { document.getElementById('abtest-status').textContent = 'Erreur: ' + e.message; });
 }
 </script>

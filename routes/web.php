@@ -181,6 +181,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/recommendations/simulate', [MLDashboardController::class, 'simulateRecommendationImpact'])->name('recommendations.simulate');
             Route::post('/features/extract', [MLDashboardController::class, 'extractFeatures'])->name('features.extract');
             Route::post('/train', [MLDashboardController::class, 'trainModel'])->name('train');
+            Route::get('/task-status', [MLDashboardController::class, 'getTaskStatus'])->name('task.status');
+            Route::get('/insights', [MLDashboardController::class, 'getMLInsights'])->name('insights');
             Route::post('/ab-test/start', [MLDashboardController::class, 'startABTest'])->name('ab-test.start');
             Route::get('/ab-test/results/{testId}', [MLDashboardController::class, 'getABTestResults'])->name('ab-test.results');
             Route::post('/ab-test/{testId}/end', [MLDashboardController::class, 'endABTest'])->name('ab-test.end');

@@ -204,6 +204,9 @@
         updatePerformanceIndicator(loadTime);
         hideLoading();
         
+        // Charger les ML insights en parallele (non bloquant)
+        loadMLInsights();
+        
         const operatorLabel = selectedOperator === 'ALL' ? 'globales' : selectedOperator;
         setTimeout(() => {
           showNotification(`Donnees ${operatorLabel} mises a jour! (${(loadTime/1000).toFixed(1)}s)`, 'success');
@@ -1634,3 +1637,35 @@
       
       list.innerHTML = items.map(item => `<li>${item}</li>`).join('');
     }
+
+
+    // ML Insights Widget loader
+    async function loadMLInsights() {
+      try {
+        const response = await fetch('/admin/ml-dashboard/insights', {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success) return;
+        
+        const accEl = document.getElementById('ml-model-accuracy');
+        const churnEl = document.getElementById('ml-churn-risk');
+        const successEl = document.getElementById('ml-success-rate');
+        const trainedEl = document.getElementById('ml-last-trained');
+        
+        if (accEl) accEl.textContent = data.accuracy ? data.accuracy.toFixed(1) + '%' : 'N/A';
+        if (churnEl) churnEl.textContent = (data.churn_risk_count || 0).toLocaleString();
+        if (successEl) successEl.textContent = data.avg_success_rate ? data.avg_success_rate + '%' : 'N/A';
+        if (trainedEl && data.trained_at) {
+          const d = new Date(data.trained_at);
+          trainedEl.textContent = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+      } catch (e) {
+        console.warn('ML Insights load error:', e);
+      }
+    }
+    // Auto-load on page init
+    document.addEventListener('DOMContentLoaded', () => { setTimeout(loadMLInsights, 2000); });
+    window.loadMLInsights = loadMLInsights;

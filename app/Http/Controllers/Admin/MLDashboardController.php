@@ -9,6 +9,7 @@ use App\Services\MLRecommendationService;
 use App\Services\MLFeatureExtractionService;
 use App\Services\MLABTestingService;
 use App\Services\MLModelTrainingService;
+use App\Services\MLAsyncTaskService;
 use App\Models\MLClientFeature;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -25,6 +26,7 @@ class MLDashboardController extends Controller
     private MLFeatureExtractionService $featureService;
     private MLABTestingService $abTestingService;
     private MLModelTrainingService $modelTrainingService;
+    private MLAsyncTaskService $asyncTaskService;
 
     public function __construct(
         MLPredictionService $predictionService,
@@ -32,7 +34,8 @@ class MLDashboardController extends Controller
         MLRecommendationService $recommendationService,
         MLFeatureExtractionService $featureService,
         MLABTestingService $abTestingService,
-        MLModelTrainingService $modelTrainingService
+        MLModelTrainingService $modelTrainingService,
+        MLAsyncTaskService $asyncTaskService
     ) {
         $this->predictionService = $predictionService;
         $this->predictionServiceV2 = $predictionServiceV2;
@@ -40,6 +43,7 @@ class MLDashboardController extends Controller
         $this->featureService = $featureService;
         $this->abTestingService = $abTestingService;
         $this->modelTrainingService = $modelTrainingService;
+        $this->asyncTaskService = $asyncTaskService;
     }
 
     /**
@@ -217,58 +221,111 @@ class MLDashboardController extends Controller
         ]);
 
         try {
-            $startDate = Carbon::parse($request->input('start_date'));
-            $endDate = Carbon::parse($request->input('end_date'));
-            
-            $totalProcessed = 0;
-            $currentDate = $startDate->copy();
-            
-            while ($currentDate->lte($endDate)) {
-                $processedCount = $this->featureService->extractAndStoreFeaturesForDate($currentDate);
-                $totalProcessed += $processedCount;
-                $currentDate->addDay();
-            }
+            $taskId = $this->asyncTaskService->startTask('extract_features', [
+                'start_date' => $request->input('start_date'),
+                'end_date' => $request->input('end_date'),
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => "Features extraites pour la période",
-                'period' => "{$startDate->toDateString()} à {$endDate->toDateString()}",
-                'total_processed' => $totalProcessed
+                'message' => "Extraction lancée en arrière-plan",
+                'task_id' => $taskId,
+                'async' => true
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de l\'extraction des features',
+                'message' => 'Erreur lors du lancement de l\'extraction',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Entraîner le modèle ML avec les dernières données
+     * Entraîner le modèle ML en arrière-plan
      */
     public function trainModel(Request $request): JsonResponse
     {
         try {
-            $modelName = $request->input('model_name', 'lightgbm_v1');
-            $options = $request->input('options', []);
-            
-            $results = $this->modelTrainingService->trainLightGBModel($modelName, $options);
+            $taskId = $this->asyncTaskService->startTask('train_model', [
+                'model_name' => $request->input('model_name', 'lightgbm_v1'),
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Modèle entraîné avec succès',
-                'results' => $results
+                'message' => 'Entraînement lancé en arrière-plan',
+                'task_id' => $taskId,
+                'async' => true
             ]);
 
         } catch (\Exception $e) {
             Log::error("MLDashboard trainModel error: " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de l\'entraînement du modèle',
+                'message' => 'Erreur lors du lancement de l\'entraînement',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Vérifier le statut d'une tâche async
+     */
+    public function getTaskStatus(Request $request): JsonResponse
+    {
+        $taskId = $request->input('task_id');
+        if (!$taskId) {
+            $extract = $this->asyncTaskService->getLatestTaskOfType('extract_features');
+            $train = $this->asyncTaskService->getLatestTaskOfType('train_model');
+            return response()->json([
+                'success' => true,
+                'extract_features' => $extract,
+                'train_model' => $train,
+            ]);
+        }
+        
+        $status = $this->asyncTaskService->getTaskStatus($taskId);
+        if (!$status) {
+            return response()->json(['success' => false, 'message' => 'Tâche non trouvée'], 404);
+        }
+        return response()->json(['success' => true, 'task' => $status]);
+    }
+
+    /**
+     * Insights ML rapides pour le widget Overview
+     */
+    public function getMLInsights(): JsonResponse
+    {
+        try {
+            // Métriques du modèle depuis le fichier JSON
+            $metricsFile = base_path('ml_models/model_metrics.json');
+            $modelMetrics = file_exists($metricsFile) ? json_decode(file_get_contents($metricsFile), true) : null;
+            
+            // Clients à risque de churn (features récentes)
+            $churnRiskCount = DB::table('ml_client_features')
+                ->where('churn_probability', '>', 0.6)
+                ->where('calculation_date', '>=', now()->subDays(60))
+                ->distinct('client_id')
+                ->count('client_id');
+            
+            // Taux de succès moyen des prédictions
+            $avgSuccessRate = DB::table('ml_client_features')
+                ->where('calculation_date', '>=', now()->subDays(60))
+                ->where('payment_success_rate', '>', 0)
+                ->avg('payment_success_rate') ?? 0;
+            
+            return response()->json([
+                'success' => true,
+                'accuracy' => $modelMetrics['accuracy'] ?? null,
+                'f1_score' => $modelMetrics['f1'] ?? null,
+                'churn_risk_count' => $churnRiskCount,
+                'avg_success_rate' => round($avgSuccessRate * 100, 1),
+                'trained_at' => $modelMetrics['trained_at'] ?? null,
+                'samples_train' => $modelMetrics['samples_train'] ?? 0,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 
@@ -306,7 +363,7 @@ class MLDashboardController extends Controller
     /**
      * Résultats d'un test A/B
      */
-    public function getABTestResults(int $testId): JsonResponse
+    public function getABTestResults(string $testId): JsonResponse
     {
         try {
             $results = $this->abTestingService->calculateTestResults($testId);
@@ -319,7 +376,7 @@ class MLDashboardController extends Controller
     /**
      * Terminer un test A/B
      */
-    public function endABTest(int $testId): JsonResponse
+    public function endABTest(string $testId): JsonResponse
     {
         try {
             $this->abTestingService->endTest($testId, 'Manual end from dashboard');

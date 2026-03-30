@@ -279,6 +279,37 @@
       </div>
 
       <!-- Global snapshots row removed on request -->
+
+      <!-- ML Insights Widget -->
+      <div style="margin-top: 16px;">
+        <div class="card" style="padding: 20px;" data-testid="ml-insights-widget">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite;"></div>
+              <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Predictions ML</h3>
+            </div>
+            <a href="/admin/ml-dashboard" style="font-size: 13px; color: var(--accent); text-decoration: none;">Voir Dashboard ML &rarr;</a>
+          </div>
+          <div id="ml-insights-content" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+            <div style="padding: 14px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border);">
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">Precision du Modele</div>
+              <div id="ml-model-accuracy" style="font-size: 22px; font-weight: 700; color: var(--accent);">--</div>
+            </div>
+            <div style="padding: 14px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border);">
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">Clients a Risque Churn</div>
+              <div id="ml-churn-risk" style="font-size: 22px; font-weight: 700; color: var(--danger);">--</div>
+            </div>
+            <div style="padding: 14px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border);">
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">Taux Succes Predit</div>
+              <div id="ml-success-rate" style="font-size: 22px; font-weight: 700; color: var(--success);">--</div>
+            </div>
+            <div style="padding: 14px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border);">
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">Derniere Mise a Jour</div>
+              <div id="ml-last-trained" style="font-size: 14px; font-weight: 600; color: var(--text);">--</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Tab 2: Detailed Subscription Analysis -->
