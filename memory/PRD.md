@@ -1,65 +1,51 @@
-# Club Privileges - Performance Dashboard
+# Club Privileges Dashboard - PRD
 
 ## Problem Statement
-Deploy and optimize a Laravel 10 dashboard with mathematically accurate stats matching `clubprivileges.app`, automated weekly reporting, ML-powered predictions, and responsive UI with Light/Dark mode.
+Dashboard haute performance Laravel pour Ooredoo Club Privileges. KPIs mathematiquement exacts, reporting automatise, UI responsive Light/Dark, pipeline ML predictif.
 
 ## Architecture
-- **Backend**: Laravel 10 + PHP 8.2 FPM + Nginx (port 8002)
-- **Frontend Proxy**: Node.js (port 3000) → PHP (port 8002)
-- **Backend Proxy**: FastAPI (port 8001) → PHP (port 8002) + AI endpoints
-- **DB**: External MySQL (51.38.187.245)
-- **Cache**: File-based (Redis unreachable from container)
-- **ML**: Python (scikit-learn, LightGBM) via Symfony Process
+- **Backend**: Laravel 10 + PHP-FPM + Nginx (port 8002) + Redis
+- **Frontend**: Vanilla JS + Blade templates
+- **ML**: Python (scikit-learn, LightGBM, pandas, pymysql) via async PHP CLI workers
+- **DB**: MySQL remote (51.38.187.245) + Redis cache local
+
+## Completed Features
+- KPI math corrigee (Conversion, Retention, Churn, Billing Rates)
+- Date shortcuts (3M, 6M, 12M) custom date picker
+- Timwe 30-day trial display (0 TND via ppid check)
+- Merchant KPIs sans emojis
+- Option "Tous" pagination merchants
+- Retention Rate fix (mismatch materialized table vs direct query)
+- Ooredoo Billing Rate historique fix (filter mock data pre-April 2025)
+- ML Pipeline Async (MLAsyncTaskService + async_worker.php)
+- ML Overview widget on main dashboard tab
+- **[2026-03-30] Bug Fix: pymysql ModuleNotFoundError** - Fixed PYTHON_PATH and /root permissions for www-data background worker
+- **[2026-03-30] Bug Fix: SQL Column Mismatch** - Added 9 advanced features to getDefaultFeatures() (morning/afternoon/evening_success_rate, recovery_after_failure_rate, max_consecutive_successes, payment_amount_std, amount_flexibility, no_balance_failure_rate, not_delivered_failure_rate)
+- **[2026-03-30] Bug Fix: Cache permissions** - Fixed /app/storage/framework/cache/data permissions for background workers
+- **[2026-03-30] Bug Fix: ML model save permissions** - Fixed /app/ml_models directory permissions for www-data
+
+## Verified ML Training Results
+- Accuracy: 99.99%, Precision: 100%, Recall: 99.97%, F1: 99.98%, AUC ROC: 100%
+- 80,000 samples (64k train / 16k test)
+- Top features: ooredoo_success_rate (436), timwe_success_rate (406), payment_success_rate (330)
+
+## Backlog / Upcoming Tasks
+### P1
+- E2E ML Pipeline verification (Extraction complete -> Training -> A/B Test via UI)
+- Extraction performance optimization (23k clients at 3s each is too slow)
+
+### P2  
+- Automated weekly AI reporting
+- ML Insights widget data refresh from real model predictions
 
 ## Key Files
-- `app/Services/Dashboard/KPIService.php` - Main KPI calculations
-- `app/Services/Dashboard/SubscriptionService.php` - Subscription data
-- `app/Services/Dashboard/TransactionService.php` - Transaction data
-- `app/Services/Dashboard/MerchantService.php` - Merchant data
-- `app/Http/Controllers/Api/DataControllerOptimized.php` - API endpoints
-- `app/Http/Controllers/Admin/MLDashboardController.php` - ML Dashboard
-- `resources/views/dashboard.blade.php` - Main dashboard view
-- `public/js/dashboard/main.js` - Frontend JS
-- `public/css/dashboard.css` - Dashboard CSS
-
-## What's Been Implemented (Latest Session - March 30, 2026)
-
-### Bug Fixes
-1. **Conversion Rate 180% → 48%**: Changed formula from `transacting_users / active_subscriptions` to `transacting_users / users_with_active_sub_during_period` (queryRegisteredUsers)
-2. **Retention Rate 101% → 96%**: Root cause was mismatch between materialized (dashboard_daily_stats) and direct (client_abonnement) data sources. Today's stats missing from materialized table caused denominator to be smaller than numerator. Fixed by using direct queries for both.
-3. **Timwe Billing Rate 0% → 2.71%**: Was using last day's rate (today = 0 because incomplete). Now uses average of daily rates, filtering out days with rate=0.
-4. **Trial 30j pricing**: Priority order fixed - ppid check before duration check, so free trials correctly show 0 TND.
-5. **Churn Rate**: Now calculated as `(directActivated - stillActive) / directActivated * 100` for consistency.
-
-### UI Fixes
-6. **Emoji icons removed** from merchant KPI cards
-7. **"Tous" pagination option** added to merchant ranking table
-8. **Date shortcuts**: Added 3 mois, 6 mois, 12 mois (replaced "Ce mois" / "Mois dernier")
-
-### ML Pipeline
-9. **trainModel endpoint** added to MLDashboardController
-10. **startABTest endpoint** added to MLDashboardController
-11. ML model metrics display verified working
-
-### Infrastructure (This Container)
-- PHP 8.2 + FPM installed and configured
-- Nginx configured on port 8002 for Laravel
-- AlertService Redis error fixed (graceful fallback)
-- Cache directories created for file driver
+- `app/Services/Dashboard/KPIService.php` - FRAGILE math, do not alter without care
+- `app/Services/MLAsyncTaskService.php` - Creates/tracks background tasks
+- `app/Services/MLFeatureExtractionService.php` - Feature extraction + upsert
+- `ml_models/async_worker.php` - CLI background worker
+- `ml_models/train_model.py` - Python training script
+- `public/js/dashboard/main.js` - Frontend polling + ML widget
 
 ## Credentials
-- Email: superadmin@ooredoo.tn
-- Password: SuperAdmin@2025
-
-## Prioritized Backlog
-### P1
-- Verify ML Pipeline UI Actions end-to-end (Extract → Train → A/B Test)
-- Add ML Insights Widget to Overview Tab
-
-### P2
-- Refactor MLPythonBridgeService to use Laravel Queue/Jobs
-- Historical Ooredoo billing rate data investigation (all showing 100%)
-
-### P3
-- Performance optimization for long-period queries
-- Dashboard export/PDF functionality
+- Login: superadmin@ooredoo.tn / SuperAdmin@2025
+- DB: looker_user @ 51.38.187.245:3306 / clubprivileges

@@ -100,7 +100,7 @@ function runModelTraining(string $taskId, array $params): void
 {
     updateStatus($taskId, ['status' => 'running', 'message' => 'Entraînement du modèle LightGBM...', 'progress' => 10]);
     
-    $pythonPath = env('PYTHON_PATH', 'python3');
+    $pythonPath = env('PYTHON_PATH', '/root/.venv/bin/python3');
     $trainScript = base_path('ml_models/train_model.py');
     
     $process = new \Symfony\Component\Process\Process(

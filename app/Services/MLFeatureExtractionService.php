@@ -652,6 +652,16 @@ class MLFeatureExtractionService
             'engagement_score' => 0,
             'lifetime_value_score' => 0,
             'client_segment' => 'unknown',
+            // Advanced features v2.0
+            'morning_success_rate' => 0,
+            'afternoon_success_rate' => 0,
+            'evening_success_rate' => 0,
+            'recovery_after_failure_rate' => 0,
+            'max_consecutive_successes' => 0,
+            'payment_amount_std' => 0,
+            'amount_flexibility' => 0,
+            'no_balance_failure_rate' => 0,
+            'not_delivered_failure_rate' => 0,
         ];
     }
 
