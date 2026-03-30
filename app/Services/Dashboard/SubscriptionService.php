@@ -89,11 +89,24 @@ class SubscriptionService
                     if ($relevantTransaction && $relevantTransaction->result) {
                         $ppid = $this->extractPricepointId($relevantTransaction->result);
                         
-                        if ($duration === 3) { $subArray['plan'] = 'Trial'; $subArray['price'] = 0; }
-                        elseif ($duration >= 20 && $duration <= 40) { $subArray['plan'] = 'Mensuel'; }
-                        elseif ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) { $subArray['plan'] = 'Trial'; $subArray['price'] = 0; }
+                        // Check ppid FIRST (trial detection has priority over duration)
+                        if ($ppid === $trial3DaysPpid || $ppid === $trial30DaysPpid) { $subArray['plan'] = 'Trial'; $subArray['price'] = 0; }
+                        elseif ($duration === 3) { $subArray['plan'] = 'Trial'; $subArray['price'] = 0; }
                         elseif ($ppid === $billingPpid) { $subArray['plan'] = 'Mensuel'; }
+                        elseif ($duration >= 20 && $duration <= 40) { $subArray['plan'] = 'Mensuel'; }
                         else { $subArray['plan'] = 'Trial'; $subArray['price'] = 0; }
+                    } else {
+                        // No matching transaction - check if it's a first subscription (trial)
+                        if ($duration === 3) { $subArray['plan'] = 'Trial'; $subArray['price'] = 0; }
+                        elseif ($duration >= 28 && $duration <= 31) {
+                            // 30-day sub without billing transaction = likely free trial
+                            $hasOlderSub = $subscriptions->contains(fn($s) => 
+                                $s->client_abonnement_id !== $subscription->client_abonnement_id 
+                                && $s->activation_date < $activationDate
+                            );
+                            if (!$hasOlderSub) { $subArray['plan'] = 'Trial'; $subArray['price'] = 0; }
+                            else { $subArray['plan'] = 'Mensuel'; }
+                        }
                     }
                 }
                 

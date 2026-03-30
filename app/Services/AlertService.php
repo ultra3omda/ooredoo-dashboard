@@ -174,9 +174,12 @@ class AlertService
 
             $cacheKeys = 0;
             try {
-                $redis = Cache::getStore()->getRedis()->connection();
-                $info = $redis->info();
-                $cacheKeys = $info['Keyspace']['db0']['keys'] ?? ($info['db0'] ?? 'N/A');
+                $store = Cache::getStore();
+                if (method_exists($store, 'getRedis')) {
+                    $redis = $store->getRedis()->connection();
+                    $info = $redis->info();
+                    $cacheKeys = $info['Keyspace']['db0']['keys'] ?? ($info['db0'] ?? 'N/A');
+                }
             } catch (\Exception $e) {}
 
             if ($latency > 100) {

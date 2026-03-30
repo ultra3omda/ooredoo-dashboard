@@ -1497,8 +1497,9 @@
         { label: '7 derniers jours', days: 7 },
         { label: '14 derniers jours', days: 14 },
         { label: '30 derniers jours', days: 30 },
-        { label: 'Ce mois', type: 'month' },
-        { label: 'Mois dernier', type: 'lastMonth' }
+        { label: '3 mois', type: 'nMonths', months: 3 },
+        { label: '6 mois', type: 'nMonths', months: 6 },
+        { label: '12 mois', type: 'nMonths', months: 12 }
       ];
       
       // Create modal for shortcuts
@@ -1553,6 +1554,10 @@
         endDate = new Date(today);
         startDate = new Date(today);
         startDate.setDate(startDate.getDate() - shortcut.days + 1);
+      } else if (shortcut.type === 'nMonths') {
+        endDate = new Date(today);
+        startDate = new Date(today);
+        startDate.setMonth(startDate.getMonth() - shortcut.months);
       } else if (shortcut.type === 'month') {
         startDate = new Date(today.getFullYear(), today.getMonth(), 1);
         endDate = new Date(today);

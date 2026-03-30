@@ -186,8 +186,12 @@ class KPIService
         $retentionRate = $current['activated'] > 0 ? round(($activeCurrent / $current['activated']) * 100, 1) : 0;
         $retentionRateComp = $comparison['activated'] > 0 ? round(($activeComp / $comparison['activated']) * 100, 1) : 0;
         
-        $conversionRate = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 1) : 0;
-        $conversionRateComp = $activeComp > 0 ? round(($comparison['transacting_users'] / $activeComp) * 100, 1) : 0;
+        // Conversion Rate = transacting users / registered users (distinct client_id inscrits dans la période)
+        $registeredUsersCurrent = $this->queryRegisteredUsers($startBound, $endExclusive, $operatorId);
+        $registeredUsersComp = $this->queryRegisteredUsers($compStartBound, $compEndExclusive, $operatorId);
+        
+        $conversionRate = $registeredUsersCurrent > 0 ? round(($current['transacting_users'] / $registeredUsersCurrent) * 100, 1) : 0;
+        $conversionRateComp = $registeredUsersComp > 0 ? round(($comparison['transacting_users'] / $registeredUsersComp) * 100, 1) : 0;
         
         $churnRate = $current['activated'] > 0 ? round(($current['lost'] / $current['activated']) * 100, 1) : 0;
         $churnRateComp = $comparison['activated'] > 0 ? round(($comparison['lost'] / $comparison['activated']) * 100, 1) : 0;
@@ -195,8 +199,8 @@ class KPIService
         $txPerUser = $current['transacting_users'] > 0 ? round($current['transactions'] / $current['transacting_users'], 1) : 0;
         $txPerUserComp = $comparison['transacting_users'] > 0 ? round($comparison['transactions'] / $comparison['transacting_users'], 1) : 0;
         
-        $convRatePeriod = $activeCurrent > 0 ? round(($current['transacting_users'] / $activeCurrent) * 100, 2) : 0;
-        $convRatePeriodComp = $activeComp > 0 ? round(($comparison['transacting_users'] / $activeComp) * 100, 2) : 0;
+        $convRatePeriod = $registeredUsersCurrent > 0 ? round(($current['transacting_users'] / $registeredUsersCurrent) * 100, 2) : 0;
+        $convRatePeriodComp = $registeredUsersComp > 0 ? round(($comparison['transacting_users'] / $registeredUsersComp) * 100, 2) : 0;
         
         $totalActivePartnersDB = Cache::remember('total_partners_with_promo_v3', 3600, function() {
             // Partenaires avec au moins 1 promotion active ET au moins 1 point de vente
@@ -321,6 +325,20 @@ class KPIService
         return $query->count();
     }
 
+    /**
+     * Nombre d'utilisateurs uniques inscrits (distinct client_id) dans la période
+     */
+    private function queryRegisteredUsers(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): int
+    {
+        $query = DB::table('client_abonnement as ca')
+            ->where('ca.client_abonnement_creation', '>=', $startBound)
+            ->where('ca.client_abonnement_creation', '<', $endExclusive);
+        if ($operatorId !== null) {
+            $query->where('ca.country_payments_methods_id', $operatorId);
+        }
+        return $query->distinct('ca.client_id')->count('ca.client_id');
+    }
+
     private function aggregateMaterialized(string $startDate, string $endDate, ?int $operatorId): ?array
     {
         $query = DB::table('dashboard_daily_stats')
@@ -395,8 +413,13 @@ class KPIService
         // Rates
         $retentionRate = $subMetrics->activated_current > 0 ? round(($subMetrics->active_current / $subMetrics->activated_current) * 100, 1) : 0;
         $retentionRateComparison = $subMetrics->activated_comparison > 0 ? round(($subMetrics->active_comparison / $subMetrics->activated_comparison) * 100, 1) : 0;
-        $conversionRate = $subMetrics->active_current > 0 ? round(($txMetrics->users_current / $subMetrics->active_current) * 100, 1) : 0;
-        $conversionRateComparison = $subMetrics->active_comparison > 0 ? round(($txMetrics->users_comparison / $subMetrics->active_comparison) * 100, 1) : 0;
+        
+        // Conversion Rate = transacting users / registered users (distinct client_id inscrits)
+        $operatorId = ($selectedOperator === 'ALL') ? null : ($this->getOperatorId($selectedOperator));
+        $registeredUsersCurrent = $this->queryRegisteredUsers($startBound, $endExclusive, $operatorId);
+        $registeredUsersComp = $this->queryRegisteredUsers($compStartBound, $compEndExclusive, $operatorId);
+        $conversionRate = $registeredUsersCurrent > 0 ? round(($txMetrics->users_current / $registeredUsersCurrent) * 100, 1) : 0;
+        $conversionRateComparison = $registeredUsersComp > 0 ? round(($txMetrics->users_comparison / $registeredUsersComp) * 100, 1) : 0;
         
         // Lost subscriptions
         $lostQuery = DB::table('client_abonnement as ca')->whereBetween('ca.client_abonnement_creation', [$startBound->toDateString(), $endExclusive->copy()->subDay()->toDateString()])->whereNotNull('ca.client_abonnement_expiration')->whereBetween('ca.client_abonnement_expiration', [$startBound->toDateString(), $endExclusive->copy()->subDay()->toDateString()]);
@@ -414,8 +437,8 @@ class KPIService
         
         $transactionsPerUser = $txMetrics->users_current > 0 ? round($txMetrics->transactions_current / $txMetrics->users_current, 1) : 0;
         $transactionsPerUserComparison = $txMetrics->users_comparison > 0 ? round($txMetrics->transactions_comparison / $txMetrics->users_comparison, 1) : 0;
-        $conversionRatePeriod = $subMetrics->active_current > 0 ? round(($txMetrics->users_current / $subMetrics->active_current) * 100, 2) : 0;
-        $conversionRatePeriodComparison = $subMetrics->active_comparison > 0 ? round(($txMetrics->users_comparison / $subMetrics->active_comparison) * 100, 2) : 0;
+        $conversionRatePeriod = $registeredUsersCurrent > 0 ? round(($txMetrics->users_current / $registeredUsersCurrent) * 100, 2) : 0;
+        $conversionRatePeriodComparison = $registeredUsersComp > 0 ? round(($txMetrics->users_comparison / $registeredUsersComp) * 100, 2) : 0;
         
         $billingRateTimweData = $this->calculateTimweBillingRate($startBound, $endExclusive, $selectedOperator);
         $billingRateTimweComparisonData = $this->calculateTimweBillingRate($compStartBound, $compEndExclusive, $selectedOperator);

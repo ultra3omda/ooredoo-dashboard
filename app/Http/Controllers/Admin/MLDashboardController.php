@@ -246,6 +246,90 @@ class MLDashboardController extends Controller
     }
 
     /**
+     * Entraîner le modèle ML avec les dernières données
+     */
+    public function trainModel(Request $request): JsonResponse
+    {
+        try {
+            $modelName = $request->input('model_name', 'lightgbm_v1');
+            $options = $request->input('options', []);
+            
+            $results = $this->modelTrainingService->trainLightGBModel($modelName, $options);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Modèle entraîné avec succès',
+                'results' => $results
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("MLDashboard trainModel error: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'entraînement du modèle',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Lancer un test A/B pour valider les prédictions ML
+     */
+    public function startABTest(Request $request): JsonResponse
+    {
+        try {
+            $config = [
+                'name' => $request->input('name', 'ML Prediction Test'),
+                'description' => $request->input('description', 'Test A/B pour valider les prédictions ML'),
+                'target_group_size' => $request->input('target_group_size', 1000),
+                'duration_days' => $request->input('duration_days', 14),
+            ];
+            
+            $testId = $this->abTestingService->createMLRolloutTest($config);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Test A/B lancé avec succès',
+                'test_id' => $testId
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("MLDashboard startABTest error: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du lancement du test A/B',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Résultats d'un test A/B
+     */
+    public function getABTestResults(int $testId): JsonResponse
+    {
+        try {
+            $results = $this->abTestingService->calculateTestResults($testId);
+            return response()->json(['success' => true, 'results' => $results]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Terminer un test A/B
+     */
+    public function endABTest(int $testId): JsonResponse
+    {
+        try {
+            $this->abTestingService->endTest($testId, 'Manual end from dashboard');
+            return response()->json(['success' => true, 'message' => 'Test A/B terminé']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Données de tendance pour les graphiques
      */
     private function getTrendData(int $days = 30): array

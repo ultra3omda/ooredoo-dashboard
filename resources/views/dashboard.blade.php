@@ -570,7 +570,6 @@
       <!-- KPIs Section - 8 cartes (2 lignes de 4) -->
       <div class="merchants-kpis-row">
         <div class="card kpi-card merchants-kpi">
-          <div class="kpi-icon">🏪</div>
           <div class="kpi-content">
             <div class="kpi-title">Total Merchants <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de partenaires (table partner).">ⓘ</span></div>
             <div class="kpi-value" id="merch-totalPartners">Loading...</div>
@@ -578,7 +577,6 @@
           </div>
         </div>
         <div class="card kpi-card merchants-kpi">
-          <div class="kpi-icon">📈</div>
           <div class="kpi-content">
             <div class="kpi-title">Active Merchants <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Marchands ayant eu au moins une transaction dans la période (history.time ∈ [start,end)).">ⓘ</span></div>
             <div class="kpi-value" id="merch-activeMerchants">Loading...</div>
@@ -586,7 +584,6 @@
           </div>
         </div>
         <div class="card kpi-card merchants-kpi">
-          <div class="kpi-icon">📍</div>
           <div class="kpi-content">
             <div class="kpi-title">Total Points de Vente <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de points de vente (partner_location) des marchands actifs.">ⓘ</span></div>
             <div class="kpi-value" id="merch-totalLocationsActive">Loading...</div>
@@ -594,7 +591,6 @@
           </div>
         </div>
         <div class="card kpi-card merchants-kpi">
-          <div class="kpi-icon">% </div>
           <div class="kpi-content">
             <div class="kpi-title">Active Merchant Ratio <span style="margin-left:4px; cursor: help; color: var(--muted);" title="(Active Merchants) / (Total Merchants) × 100.">ⓘ</span></div>
             <div class="kpi-value" id="merch-activeMerchantRatio">Loading...</div>
@@ -605,7 +601,6 @@
 
       <div class="merchants-kpis-row">
         <div class="card kpi-card merchants-kpi">
-          <div class="kpi-icon">🔢</div>
           <div class="kpi-content">
             <div class="kpi-title">Total Transactions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de transactions effectuées dans la période (history.time ∈ [start, end)), tous abonnés confondus.">ⓘ</span></div>
             <div class="kpi-value" id="merch-totalTransactions">Loading...</div>
@@ -613,7 +608,6 @@
           </div>
         </div>
         <div class="card kpi-card merchants-kpi">
-          <div class="kpi-icon">💳</div>
           <div class="kpi-content">
             <div class="kpi-title">Transactions/Merchant <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Transactions opérateur chez marchands / Marchands actifs (période).">ⓘ</span></div>
             <div class="kpi-value" id="merch-transactionsPerMerchant">Loading...</div>
@@ -621,7 +615,6 @@
           </div>
         </div>
         <div class="card kpi-card merchants-kpi">
-          <div class="kpi-icon">🏆</div>
           <div class="kpi-content">
             <div class="kpi-title">Top Merchant <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Meilleur marchand par volume (part de marché période).">ⓘ</span></div>
             <div class="kpi-value" id="merch-topMerchantShare">Loading...</div>
@@ -629,7 +622,6 @@
           </div>
         </div>
         <div class="card kpi-card merchants-kpi">
-          <div class="kpi-icon">🎯</div>
           <div class="kpi-content">
             <div class="kpi-title">Diversity <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Niveau basé sur le nombre de marchands actifs (période).">ⓘ</span></div>
             <div class="kpi-value" id="merch-diversity">Loading...</div>
@@ -642,7 +634,7 @@
       <div class="merchants-charts-row">
         <div class="card chart-card merchants-chart">
           <div class="chart-header">
-            <div class="chart-title">🏪 Top Merchants by Volume <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Les marchands avec le plus de transactions dans la période.">ⓘ</span></div>
+            <div class="chart-title">Top Merchants by Volume <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Les marchands avec le plus de transactions dans la période.">ⓘ</span></div>
             <div class="chart-subtitle">Transactions par marchand</div>
           </div>
           <div class="chart-container">
@@ -652,7 +644,7 @@
 
         <div class="card chart-card merchants-chart">
           <div class="chart-header">
-            <div class="chart-title">📊 Distribution by Category <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Classement des transactions par types de magasins (ex: restaurants, mode).">ⓘ</span></div>
+            <div class="chart-title">Distribution by Category <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Classement des transactions par types de magasins (ex: restaurants, mode).">ⓘ</span></div>
             <div class="chart-subtitle">Répartition par catégorie</div>
           </div>
           <div class="chart-container">
@@ -682,6 +674,7 @@
                 <option value="25" selected>25 par page</option>
                 <option value="50">50 par page</option>
                 <option value="100">100 par page</option>
+                <option value="9999">Tous</option>
               </select>
               <button class="btn-secondary" onclick="exportMerchantsData()">📥 Exporter</button>
             </div>
