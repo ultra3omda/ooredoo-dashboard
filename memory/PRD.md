@@ -35,25 +35,42 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. Inclu
 - Multiple recipient profiles: CEO, Marketing, Associe, Store, Sub-store
 - ML data enrichment in reports
 - PDF/Email templates for all profiles
+- **Enriched with merchant recommendation data** (2026-04-02)
 
-### Pluxee B2B Campaign Support (DONE - 2026-03-31)
+### Pluxee B2B Campaign Support (DONE)
 - Pluxee campaigns bypass carte_recharge_client checks
 - Dedicated user access control (pluxee_campaign_access column)
 - Admin UI: /admin/pluxee/users management page
 
-### Sub-Store Dashboard Refactoring (DONE - 2026-03-31)
+### Sub-Store Dashboard Refactoring (DONE)
 - SubStoreController refactored from ~2500 to ~900 lines
 - Split into 5 concurrent API endpoints: kpis, stores, charts, merchants, users
 - Frontend uses Promise.allSettled for parallel loading
-- Cleaned up obsolete files and code
+- DataControllerOptimized.php fully cleaned up
 
 ### ML Merchant Recommendation Engine (DONE - 2026-04-02)
-- **Phase 1 - DB Infrastructure**: 4 tables created (cp_user_merchant_history, cp_merchants_catalog, cp_user_profile, cp_user_offer_interactions) + ml_recommendations enum extended
-- **Phase 2 - Feature Extraction & Training**: LightGBM Ranker trained on 139K samples (576 merchants, 19K user profiles, 57K user-merchant pairs). NDCG@5 = 1.0
-- **Phase 3 - FastAPI API**: POST /api/merchant-recommendations (personalized + cold-start), GET /health, POST /track, GET /stats, POST /retrain
-- **Phase 4 - Laravel Service**: MLMerchantRecommendationService.php + Artisan command (status, recommend, retrain)
-- **Phase 5 - Feedback Loop**: Interaction tracking (impression/click/redeem/dismiss/share) + weekly retrain scheduler (Sunday 06:30)
-- **Testing**: 18/18 backend tests passed (iteration_18.json)
+- **Phase 1 - DB Infrastructure**: 4 tables (cp_user_merchant_history, cp_merchants_catalog, cp_user_profile, cp_user_offer_interactions) + ml_recommendations enum extended
+- **Phase 2 - Feature Extraction & Training**: LightGBM Ranker on 139K samples (576 merchants, 19K user profiles). NDCG@5 = 1.0
+- **Phase 3 - FastAPI API**: POST /api/merchant-recommendations, /health, /track, /stats, /retrain
+- **Phase 4 - Laravel Service**: MLMerchantRecommendationService.php + Artisan command
+- **Phase 5 - Feedback Loop**: Interaction tracking + weekly retrain scheduler (Sunday 06:30)
+
+### Merchant Recommendations Dashboard (DONE - 2026-04-02)
+- **Admin page**: /admin/merchant-recommendations
+- **KPIs panel**: Model status, 576 active merchants, 19K user profiles, interaction count
+- **Personalized search**: Search by client_id with ML-scored recommendations + ML Model/Popularity tag
+- **Popular merchants panel**: Top 10 with gold/silver/bronze rank badges, scores, promos
+- **Stats panel**: 7-day interaction tracking stats table
+- **Model performance panel**: NDCG@5/10 metrics, training info, top feature importances
+- **Retrain button**: Trigger model retraining from UI
+- **Category filter**: Filter recommendations by merchant category
+- **Navigation**: Menu link from main dashboard dropdown
+- **Testing**: 100% pass (iteration_19.json)
+
+### Enriched AI Weekly Reports (DONE - 2026-04-02)
+- generate_report.py now includes merchant catalog stats, top categories, top merchants, interaction stats
+- Report prompt includes recommendation engine data for GPT-4o analysis
+- Report snapshot stores merchant_reco_snapshot
 
 ## Key API Endpoints
 
@@ -65,34 +82,34 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. Inclu
 - GET /sub-stores/api/split/users
 
 ### ML Merchant Recommendations (FastAPI)
-- POST /api/merchant-recommendations (client_id, top_k, category_id, exclude_visited)
+- POST /api/merchant-recommendations
 - GET /api/merchant-recommendations/health
 - POST /api/merchant-recommendations/track
 - GET /api/merchant-recommendations/stats
 - POST /api/merchant-recommendations/retrain
 
-### Other APIs
-- POST /api/report-ai-suggestions (AI weekly report)
-- Various Eklektik/Ooredoo/Timwe dashboard APIs
+### Admin Dashboard Routes
+- GET /admin/merchant-recommendations (Dashboard)
+- POST /admin/merchant-recommendations/recommend
+- GET /admin/merchant-recommendations/popular
+- POST /admin/merchant-recommendations/retrain
+- GET /admin/merchant-recommendations/health
 
 ## Key Files
-- `app/Http/Controllers/SubStoreController.php` - Sub-store dashboard
-- `app/Http/Controllers/Api/DataControllerOptimized.php` - Operator dashboard
-- `app/Services/MLMerchantRecommendationService.php` - ML recommendation service
-- `app/Console/Commands/MerchantRecommendationCommand.php` - Artisan command
-- `backend/server.py` - FastAPI (AI Reports, ML endpoints, recommendation API)
-- `ml_models/train_merchant_recommender.py` - LightGBM Ranker training pipeline
-- `ml_models/predict_merchant.py` - Inference engine
-- `resources/views/sub-stores/dashboard.blade.php` - Sub-store dashboard UI
+- `app/Http/Controllers/SubStoreController.php`
+- `app/Http/Controllers/Api/DataControllerOptimized.php`
+- `app/Http/Controllers/Admin/MerchantRecommendationController.php`
+- `app/Services/MLMerchantRecommendationService.php`
+- `app/Console/Commands/MerchantRecommendationCommand.php`
+- `backend/server.py` (FastAPI)
+- `ml_models/train_merchant_recommender.py`
+- `ml_models/predict_merchant.py`
+- `ml_models/generate_report.py`
+- `resources/views/admin/merchant-recommendations.blade.php`
+- `resources/views/sub-stores/dashboard.blade.php`
 
 ## DB Schema (Key Tables)
-- `stores`: store_id, store_name, store_type, is_sub_store
-- `partner`: partner_id, partner_name, partner_category_id (merchants)
-- `partner_category`: categories (Restaurants, Sport, Mode, etc.)
-- `promotion`: partner_id, promotion_title, promotion_discount
-- `history`: client_id, promotion_id (redemption history)
-- `client`: client_id, sub_store, client_gender, client_age
-- `client_abonnement`: subscriptions
+- `stores`, `partner`, `partner_category`, `promotion`, `history`, `client`, `client_abonnement`
 - `cp_user_merchant_history`: pre-computed user-merchant interaction features
 - `cp_merchants_catalog`: enriched merchant catalog for ML
 - `cp_user_profile`: aggregated user features for ML
@@ -100,8 +117,7 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. Inclu
 
 ## Pending / Backlog
 - P2: Performance optimization (query caching, index tuning)
-- P2: AI reporting enrichment with merchant recommendations
-- P3: Frontend dashboard for merchant recommendations visualization
+- P3: Client-facing recommendation widget in mobile app/web
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
