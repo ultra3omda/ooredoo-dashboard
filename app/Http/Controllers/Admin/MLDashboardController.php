@@ -361,6 +361,66 @@ class MLDashboardController extends Controller
     }
 
     /**
+     * Générer un rapport IA hebdomadaire
+     */
+    public function generateReport(Request $request): JsonResponse
+    {
+        try {
+            $taskId = $this->asyncTaskService->startTask('generate_report', [
+                'type' => 'weekly',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Génération du rapport lancée en arrière-plan',
+                'task_id' => $taskId,
+                'async' => true
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du lancement du rapport',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Récupérer le dernier rapport IA généré
+     */
+    public function getLatestReport(): JsonResponse
+    {
+        try {
+            $reportsDir = storage_path('app/ml_reports');
+            $reports = glob($reportsDir . '/weekly_report_*.json');
+            
+            if (empty($reports)) {
+                return response()->json([
+                    'success' => true,
+                    'report' => null,
+                    'message' => 'Aucun rapport disponible'
+                ]);
+            }
+            
+            sort($reports);
+            $latestFile = end($reports);
+            $data = json_decode(file_get_contents($latestFile), true);
+            
+            return response()->json([
+                'success' => true,
+                'report' => $data['report'] ?? null,
+                'generated_at' => $data['generated_at'] ?? null,
+                'filename' => basename($latestFile)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Résultats d'un test A/B
      */
     public function getABTestResults(string $testId): JsonResponse

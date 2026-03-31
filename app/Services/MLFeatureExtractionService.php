@@ -753,6 +753,354 @@ class MLFeatureExtractionService
     }
 
     /**
+     * ========================================================
+     * BATCH EXTRACTION v2.0 - Optimisation majeure
+     * Réduit de ~13 requêtes/client à ~3 requêtes/500 clients
+     * ========================================================
+     */
+    public function extractAndStoreFeaturesForDateBatch(Carbon $calculationDate, ?callable $progressCallback = null): int
+    {
+        $activeClients = $this->getActiveClientIds($calculationDate);
+        $total = count($activeClients);
+
+        if ($total === 0) {
+            Log::warning("MLFeatureExtractionService Batch - Aucun client actif");
+            return 0;
+        }
+
+        Log::info("MLFeatureExtractionService Batch - Début pour {$calculationDate->toDateString()}, {$total} clients");
+
+        $startDate = $calculationDate->copy()->subMonths(6);
+        $recentStart = $calculationDate->copy()->subDays(30);
+        $billingPpid = env('TIMWE_BILLING_PPID', '63980');
+        $periodDays = max(1, $startDate->diffInDays($calculationDate));
+        $processedCount = 0;
+        $chunkSize = 500;
+        $chunks = array_chunk($activeClients, $chunkSize);
+        $totalChunks = count($chunks);
+        $chunkIndex = 0;
+
+        foreach ($chunks as $clientChunk) {
+            $chunkIndex++;
+            try {
+                // BATCH QUERY 1: Billing transactions (RENEWED_NOTIF + CHARGE_DELIVERED) for 6 months
+                $billingTransactions = DB::table('transactions_history as th')
+                    ->whereIn('th.client_id', $clientChunk)
+                    ->where(function ($q) {
+                        $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
+                          ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
+                    })
+                    ->whereBetween('th.created_at', [$startDate, $calculationDate])
+                    ->whereNotNull('th.result')
+                    ->orderBy('th.created_at')
+                    ->get(['th.client_id', 'th.created_at', 'th.status', 'th.result'])
+                    ->groupBy('client_id');
+
+                // BATCH QUERY 2: All TIMWE transactions (for usage counts, status distribution)
+                $allTimweTrans = DB::table('transactions_history')
+                    ->whereIn('client_id', $clientChunk)
+                    ->where('status', 'LIKE', '%TIMWE_%')
+                    ->whereBetween('created_at', [$startDate, $calculationDate])
+                    ->get(['client_id', 'status', 'result', 'created_at'])
+                    ->groupBy('client_id');
+
+                // BATCH QUERY 3: Subscription info
+                $subscriptions = DB::table('client_abonnement as ca')
+                    ->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id')
+                    ->whereIn('ca.client_id', $clientChunk)
+                    ->whereRaw("TRIM(cpm.country_payments_methods_name) LIKE '%timwe%'")
+                    ->select('ca.client_id', 'ca.client_abonnement_creation', 'cpm.country_payments_methods_name')
+                    ->orderBy('ca.client_abonnement_creation')
+                    ->get()
+                    ->unique('client_id')
+                    ->keyBy('client_id');
+
+                // Process each client from pre-loaded data
+                $featuresData = [];
+                foreach ($clientChunk as $clientId) {
+                    try {
+                        $clientBilling = $billingTransactions->get($clientId, collect());
+                        $clientTimwe = $allTimweTrans->get($clientId, collect());
+                        $subscription = $subscriptions->get($clientId);
+
+                        $features = $this->computeFeaturesFromBatchData(
+                            (int)$clientId, $calculationDate, $startDate, $recentStart,
+                            $clientBilling, $clientTimwe, $subscription,
+                            $billingPpid, $periodDays
+                        );
+                        $featuresData[] = $features;
+                    } catch (\Exception $e) {
+                        $featuresData[] = $this->getDefaultFeatures((int)$clientId, $calculationDate);
+                    }
+                    $processedCount++;
+                }
+
+                if (!empty($featuresData)) {
+                    DB::table('ml_client_features')->upsert(
+                        $featuresData,
+                        ['client_id', 'calculation_date'],
+                        array_keys($featuresData[0])
+                    );
+                }
+
+                if ($progressCallback) {
+                    $progressCallback($chunkIndex, $totalChunks, $processedCount, $total);
+                }
+
+                Log::info("MLFeatureExtractionService Batch - Chunk {$chunkIndex}/{$totalChunks}, total: {$processedCount}");
+
+            } catch (\Exception $e) {
+                Log::error("MLFeatureExtractionService Batch - Erreur chunk {$chunkIndex}", [
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        Log::info("MLFeatureExtractionService Batch - Terminé: {$processedCount} features pour {$calculationDate->toDateString()}");
+        return $processedCount;
+    }
+
+    /**
+     * Calcule TOUTES les features d'un client à partir de données pré-chargées (0 requêtes DB)
+     */
+    private function computeFeaturesFromBatchData(
+        int $clientId, Carbon $calculationDate, Carbon $startDate, Carbon $recentStart,
+        $billingTrans, $timweTrans, $subscription,
+        string $billingPpid, int $periodDays
+    ): array {
+        $features = [
+            'client_id' => $clientId,
+            'calculation_date' => $calculationDate->toDateString(),
+        ];
+
+        // === Parse billing transactions once ===
+        $totalAttempts = 0;
+        $totalPayments = 0;
+        $totalAmount = 0;
+        $consecutiveFailures = 0;
+        $lastPaymentDate = null;
+        $successes = [];
+        $failures = [];
+        $amounts = [];
+        $successByDayOfWeek = [];
+        $successByHour = [];
+        $endMonthSuccesses = 0;
+        $beginningMonthSuccesses = 0;
+        $recentFailureCount = 0;
+        $recentTotalCount = 0;
+        $recentSuccessfulPayments = 0;
+        $failureStreak = 0;
+        $failureStreakCounting = true;
+
+        // Sort descending for failure streak calculation
+        $billingDesc = $billingTrans->sortByDesc('created_at');
+        // Sort ascending for normal processing
+        $billingAsc = $billingTrans->sortBy('created_at');
+
+        // Calculate failure streak (from most recent)
+        foreach ($billingDesc as $transaction) {
+            $result = is_string($transaction->result) ? json_decode($transaction->result, true) : $transaction->result;
+            if (!is_array($result)) continue;
+            $ppid = $result['pricepointId'] ?? null;
+            $delivery = $result['mnoDeliveryCode'] ?? null;
+            $totalCharged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
+            if ((string)$ppid === $billingPpid && $delivery === 'DELIVERED' && $totalCharged > 0) {
+                break;
+            }
+            $failureStreak++;
+        }
+
+        // Process all billing transactions (ascending)
+        foreach ($billingAsc as $transaction) {
+            $resultRaw = $transaction->result;
+            $result = is_string($resultRaw) ? json_decode($resultRaw, true) : $resultRaw;
+            if (!is_array($result)) continue;
+
+            $ppid = $result['pricepointId'] ?? null;
+            $delivery = $result['mnoDeliveryCode'] ?? null;
+            $totalCharged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
+            $createdAt = $transaction->created_at;
+            $date = Carbon::parse($createdAt);
+            $totalAttempts++;
+
+            $isRecent = $date->gte($recentStart);
+            if ($isRecent) $recentTotalCount++;
+
+            $isSuccess = (string)$ppid === $billingPpid && $delivery === 'DELIVERED' && $totalCharged > 0;
+
+            if ($isSuccess) {
+                $totalPayments++;
+                $totalAmount += $totalCharged / 1000;
+                $consecutiveFailures = 0;
+                $lastPaymentDate = $createdAt;
+                $amounts[] = $totalCharged / 1000;
+                $successes[] = ['date' => $date, 'amount' => $totalCharged / 1000];
+
+                // Temporal features
+                $dayOfWeek = $date->dayOfWeek == 0 ? 7 : $date->dayOfWeek;
+                $successByDayOfWeek[$dayOfWeek] = ($successByDayOfWeek[$dayOfWeek] ?? 0) + 1;
+                $successByHour[$date->hour] = ($successByHour[$date->hour] ?? 0) + 1;
+                if ($date->day > 25) $endMonthSuccesses++;
+                elseif ($date->day <= 5) $beginningMonthSuccesses++;
+
+                if ($isRecent) $recentSuccessfulPayments++;
+            } else {
+                $consecutiveFailures++;
+                $failures[] = ['date' => $date, 'delivery' => $delivery];
+                if ($isRecent) {
+                    if ($delivery === 'NO_BALANCE' || $delivery === 'NOT_DELIVERED') {
+                        $recentFailureCount++;
+                    }
+                }
+            }
+        }
+
+        // === 1. Payment Features ===
+        $paymentSuccessRate = $totalAttempts > 0 ? $totalPayments / $totalAttempts : 0;
+        $avgPaymentAmount = $totalPayments > 0 ? $totalAmount / $totalPayments : 0;
+        $daysSinceLastPayment = $lastPaymentDate ? Carbon::parse($lastPaymentDate)->diffInDays($calculationDate) : null;
+        $paymentFrequency = $periodDays > 0 ? $totalPayments / $periodDays : 0;
+
+        $features['payment_success_rate'] = round($paymentSuccessRate, 4);
+        $features['consecutive_failures'] = $consecutiveFailures;
+        $features['days_since_last_payment'] = $daysSinceLastPayment;
+        $features['avg_payment_amount'] = round($avgPaymentAmount, 3);
+        $features['payment_frequency'] = round($paymentFrequency, 4);
+        $features['total_payments'] = $totalPayments;
+        $features['total_attempts'] = $totalAttempts;
+
+        // === 2. Balance Features (from TIMWE transactions) ===
+        $noBalanceCount = 0;
+        $totalTimweCount = $timweTrans->count();
+        foreach ($timweTrans as $t) {
+            $r = is_string($t->result) ? json_decode($t->result, true) : null;
+            if (is_array($r) && ($r['mnoDeliveryCode'] ?? '') === 'NO_BALANCE') {
+                $noBalanceCount++;
+            } elseif (is_string($t->result) && str_contains($t->result, 'NO_BALANCE')) {
+                $noBalanceCount++;
+            }
+        }
+        $balanceTrend = 'unknown';
+        if ($totalTimweCount > 0) {
+            $noBalanceRate = $noBalanceCount / $totalTimweCount;
+            $balanceTrend = $noBalanceRate > 0.8 ? 'decreasing' : ($noBalanceRate < 0.3 ? 'stable' : 'increasing');
+        }
+
+        $features['avg_balance'] = null;
+        $features['balance_volatility'] = 0;
+        $features['recharge_frequency'] = 0;
+        $features['recharge_amount_avg'] = 0;
+        $features['days_since_recharge'] = null;
+        $features['balance_trend'] = $balanceTrend;
+
+        // === 3. Temporal Features ===
+        $totalSuccesses = count($successes);
+        $bestBillingDayWeek = !empty($successByDayOfWeek) ? array_keys($successByDayOfWeek, max($successByDayOfWeek))[0] : null;
+        $bestBillingHour = !empty($successByHour) ? array_keys($successByHour, max($successByHour))[0] : null;
+        $endMonthSuccessRate = $totalSuccesses > 0 ? $endMonthSuccesses / $totalSuccesses : 0;
+        $beginningMonthSuccessRate = $totalSuccesses > 0 ? $beginningMonthSuccesses / $totalSuccesses : 0;
+
+        $seasonalPattern = [];
+        $quarters = ['Q1' => [1,2,3], 'Q2' => [4,5,6], 'Q3' => [7,8,9], 'Q4' => [10,11,12]];
+        foreach ($quarters as $quarter => $months) {
+            $qCount = collect($successes)->filter(fn($s) => in_array($s['date']->month, $months))->count();
+            $seasonalPattern[$quarter] = $totalSuccesses > 0 ? round($qCount / $totalSuccesses, 4) : 0;
+        }
+
+        $features['best_billing_day_week'] = $bestBillingDayWeek;
+        $features['best_billing_hour'] = $bestBillingHour;
+        $features['seasonal_pattern'] = json_encode($seasonalPattern);
+        $features['end_month_success_rate'] = round($endMonthSuccessRate, 4);
+        $features['beginning_month_success_rate'] = round($beginningMonthSuccessRate, 4);
+
+        // === 4. Usage Features (from TIMWE transactions) ===
+        $statusDistribution = [];
+        foreach ($timweTrans as $t) {
+            $s = $t->status;
+            $statusDistribution[$s] = ($statusDistribution[$s] ?? 0) + 1;
+        }
+
+        $features['total_transactions'] = $totalTimweCount;
+        $features['avg_transactions_per_day'] = round($totalTimweCount / max(1, $periodDays), 4);
+        $features['unique_statuses_count'] = count($statusDistribution);
+        $features['status_distribution'] = json_encode($statusDistribution);
+
+        // === 5. Demographic Features ===
+        $subscriptionAgeDays = 0;
+        $operatorType = 'unknown';
+        if ($subscription) {
+            $subscriptionAgeDays = Carbon::parse($subscription->client_abonnement_creation)->diffInDays($calculationDate);
+            $operatorType = 'timwe';
+        }
+        $firstTrans = $timweTrans->sortBy('created_at')->first();
+        $lastTrans = $timweTrans->sortByDesc('created_at')->first();
+
+        $features['subscription_age_days'] = $subscriptionAgeDays;
+        $features['region'] = null;
+        $features['operator_type'] = $operatorType;
+        $features['first_transaction'] = $firstTrans ? $firstTrans->created_at : null;
+        $features['last_transaction'] = $lastTrans ? $lastTrans->created_at : null;
+
+        // === 6. Risk Indicators ===
+        $hasRecentFailures = $recentFailureCount > 0;
+        $churnProbability = 0;
+        if ($recentTotalCount > 0) {
+            $rfRate = $recentFailureCount / $recentTotalCount;
+            $churnProbability = $rfRate > 0.9 ? 0.8 : ($rfRate > 0.7 ? 0.5 : ($rfRate > 0.5 ? 0.3 : 0));
+        }
+        $isHighValueClient = $recentSuccessfulPayments >= 10;
+
+        $features['churn_probability'] = round($churnProbability, 4);
+        $features['has_recent_failures'] = $hasRecentFailures;
+        $features['failure_streak'] = $failureStreak;
+        $features['is_high_value_client'] = $isHighValueClient;
+
+        // === 7. Computed Scores ===
+        $features['payment_reliability_score'] = round($paymentSuccessRate, 4);
+        $features['engagement_score'] = round($this->calculateEngagementScore($features), 4);
+        $features['lifetime_value_score'] = round($this->calculateLifetimeValueScore($features), 4);
+        $features['client_segment'] = $this->determineClientSegment(
+            $features['payment_reliability_score'],
+            $features['engagement_score'],
+            $features['lifetime_value_score'],
+            $features
+        );
+
+        // === 8. Advanced Features v2.0 ===
+        $morningSuccesses = collect($successes)->filter(fn($s) => $s['date']->hour >= 6 && $s['date']->hour < 12)->count();
+        $afternoonSuccesses = collect($successes)->filter(fn($s) => $s['date']->hour >= 12 && $s['date']->hour < 18)->count();
+        $eveningSuccesses = collect($successes)->filter(fn($s) => $s['date']->hour >= 18 && $s['date']->hour < 22)->count();
+
+        $features['morning_success_rate'] = $totalSuccesses > 0 ? round($morningSuccesses / $totalSuccesses, 4) : 0;
+        $features['afternoon_success_rate'] = $totalSuccesses > 0 ? round($afternoonSuccesses / $totalSuccesses, 4) : 0;
+        $features['evening_success_rate'] = $totalSuccesses > 0 ? round($eveningSuccesses / $totalSuccesses, 4) : 0;
+
+        // Recovery after failure
+        $totalFailures = count($failures);
+        $recoveryCount = 0;
+        for ($i = 0; $i < $totalFailures; $i++) {
+            $failDate = $failures[$i]['date'];
+            $hasRecovery = collect($successes)->contains(fn($s) => $s['date']->gt($failDate) && $s['date']->diffInDays($failDate) <= 7);
+            if ($hasRecovery) $recoveryCount++;
+        }
+        $features['recovery_after_failure_rate'] = $totalFailures > 0 ? round($recoveryCount / $totalFailures, 4) : 0;
+        $features['max_consecutive_successes'] = $this->calculateMaxConsecutiveSuccesses($successes, $failures);
+
+        // Amount stability
+        $features['payment_amount_std'] = count($amounts) > 1 ? round($this->standardDeviation($amounts), 4) : 0;
+        $uniqueAmounts = collect($successes)->pluck('amount')->unique()->count();
+        $features['amount_flexibility'] = $totalSuccesses > 0 ? round(min($uniqueAmounts / $totalSuccesses, 1.0), 4) : 0;
+
+        // Failure patterns
+        $noBalanceFailures = collect($failures)->filter(fn($f) => $f['delivery'] === 'NO_BALANCE')->count();
+        $notDeliveredFailures = collect($failures)->filter(fn($f) => $f['delivery'] === 'NOT_DELIVERED')->count();
+        $features['no_balance_failure_rate'] = $totalFailures > 0 ? round($noBalanceFailures / $totalFailures, 4) : 0;
+        $features['not_delivered_failure_rate'] = $totalFailures > 0 ? round($notDeliveredFailures / $totalFailures, 4) : 0;
+
+        return $features;
+    }
+
+    /**
      * Nettoie les anciennes données de features (garde 1 an)
      */
     public function cleanOldFeatures(): int

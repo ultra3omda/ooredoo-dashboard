@@ -44,6 +44,9 @@ try {
         case 'train_model':
             runModelTraining($taskId, $params);
             break;
+        case 'generate_report':
+            runReportGeneration($taskId, $params);
+            break;
         default:
             updateStatus($taskId, ['status' => 'failed', 'message' => "Type de tâche inconnu: $taskType"]);
     }
@@ -61,7 +64,7 @@ function runFeatureExtraction(string $taskId, array $params): void
     $startDate = \Carbon\Carbon::parse($params['start_date'] ?? now()->subDays(30));
     $endDate = \Carbon\Carbon::parse($params['end_date'] ?? now());
     
-    updateStatus($taskId, ['status' => 'running', 'message' => 'Extraction des features...', 'progress' => 5]);
+    updateStatus($taskId, ['status' => 'running', 'message' => 'Extraction batch optimisée...', 'progress' => 5]);
     
     $featureService = app(\App\Services\MLFeatureExtractionService::class);
     $totalProcessed = 0;
@@ -70,14 +73,26 @@ function runFeatureExtraction(string $taskId, array $params): void
     $daysDone = 0;
     
     while ($currentDate->lte($endDate)) {
-        $processedCount = $featureService->extractAndStoreFeaturesForDate($currentDate);
-        $totalProcessed += $processedCount;
         $daysDone++;
-        $progress = min(95, round(($daysDone / $totalDays) * 100));
+        $dayBaseProgress = (($daysDone - 1) / $totalDays) * 100;
+        $dayEndProgress = ($daysDone / $totalDays) * 100;
+        
+        $progressCallback = function (int $chunkIdx, int $totalChunks, int $processed, int $total) use ($taskId, $currentDate, $daysDone, $totalDays, $dayBaseProgress, $dayEndProgress) {
+            $chunkProgress = $dayBaseProgress + (($chunkIdx / $totalChunks) * ($dayEndProgress - $dayBaseProgress));
+            $progress = min(95, round($chunkProgress));
+            updateStatus($taskId, [
+                'status' => 'running',
+                'progress' => $progress,
+                'message' => "Jour {$daysDone}/{$totalDays} - {$currentDate->toDateString()} (chunk {$chunkIdx}/{$totalChunks}, {$processed}/{$total} clients)",
+            ]);
+        };
+        
+        $processedCount = $featureService->extractAndStoreFeaturesForDateBatch($currentDate, $progressCallback);
+        $totalProcessed += $processedCount;
         
         updateStatus($taskId, [
             'status' => 'running',
-            'progress' => $progress,
+            'progress' => min(95, round(($daysDone / $totalDays) * 100)),
             'message' => "Jour {$daysDone}/{$totalDays} - {$currentDate->toDateString()} ({$processedCount} features)",
             'total_processed' => $totalProcessed
         ]);
@@ -88,12 +103,12 @@ function runFeatureExtraction(string $taskId, array $params): void
     updateStatus($taskId, [
         'status' => 'completed',
         'progress' => 100,
-        'message' => "Extraction terminée: {$totalProcessed} features extraites pour {$totalDays} jours",
+        'message' => "Extraction batch terminée: {$totalProcessed} features extraites pour {$totalDays} jours",
         'total_processed' => $totalProcessed,
         'finished_at' => now()->toIso8601String()
     ]);
     
-    Log::info("MLAsyncWorker - Extraction terminée", ['task_id' => $taskId, 'total' => $totalProcessed]);
+    Log::info("MLAsyncWorker - Extraction batch terminée", ['task_id' => $taskId, 'total' => $totalProcessed]);
 }
 
 function runModelTraining(string $taskId, array $params): void
@@ -151,4 +166,67 @@ function runModelTraining(string $taskId, array $params): void
     ]);
     
     Log::info("MLAsyncWorker - Entraînement terminé", ['task_id' => $taskId]);
+}
+
+
+function runReportGeneration(string $taskId, array $params): void
+{
+    updateStatus($taskId, ['status' => 'running', 'message' => 'Génération du rapport IA...', 'progress' => 10]);
+    
+    $pythonPath = env('PYTHON_PATH', '/root/.venv/bin/python3');
+    $reportScript = base_path('ml_models/generate_report.py');
+    
+    $process = new \Symfony\Component\Process\Process(
+        [$pythonPath, $reportScript],
+        base_path(),
+        [
+            'DB_HOST' => env('DB_HOST'),
+            'DB_PORT' => env('DB_PORT', '3306'),
+            'DB_USERNAME' => env('DB_USERNAME'),
+            'DB_PASSWORD' => env('DB_PASSWORD'),
+            'DB_DATABASE' => env('DB_DATABASE'),
+            'EMERGENT_LLM_KEY' => env('EMERGENT_LLM_KEY'),
+        ],
+        null,
+        300
+    );
+    
+    updateStatus($taskId, ['progress' => 30, 'message' => 'Collecte des métriques...']);
+    
+    $process->run(function ($type, $buffer) use ($taskId) {
+        $line = trim($buffer);
+        if ($line !== '') {
+            if (str_contains($line, 'Generating')) {
+                updateStatus($taskId, ['progress' => 50, 'message' => 'Génération IA en cours...']);
+            } elseif (str_contains($line, 'Report saved')) {
+                updateStatus($taskId, ['progress' => 90, 'message' => 'Rapport sauvegardé']);
+            }
+        }
+    });
+    
+    if (!$process->isSuccessful()) {
+        updateStatus($taskId, [
+            'status' => 'failed',
+            'message' => 'Erreur génération rapport: ' . $process->getErrorOutput(),
+            'finished_at' => now()->toIso8601String()
+        ]);
+        return;
+    }
+    
+    // Find the latest report file
+    $reportsDir = storage_path('app/ml_reports');
+    $reports = glob($reportsDir . '/weekly_report_*.json');
+    $latestReport = !empty($reports) ? end($reports) : null;
+    $reportData = $latestReport ? json_decode(file_get_contents($latestReport), true) : null;
+    
+    updateStatus($taskId, [
+        'status' => 'completed',
+        'progress' => 100,
+        'message' => 'Rapport IA généré avec succès',
+        'report' => $reportData['report'] ?? null,
+        'report_file' => $latestReport ? basename($latestReport) : null,
+        'finished_at' => now()->toIso8601String()
+    ]);
+    
+    Log::info("MLAsyncWorker - Rapport généré", ['task_id' => $taskId]);
 }

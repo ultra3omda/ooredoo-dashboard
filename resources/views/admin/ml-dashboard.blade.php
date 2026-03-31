@@ -303,6 +303,31 @@
             </button>
             <div id="abtest-status" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
         </div>
+        <!-- AI Report Generation -->
+        <div style="padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
+            <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px;">Rapport IA Hebdomadaire</h4>
+            <p style="font-size: 12px; color: var(--muted); margin: 0 0 12px;">Generer un rapport d'analyse IA avec GPT-4o.</p>
+            <button class="btn-primary btn-sm" onclick="generateAIReport()" data-testid="ml-report-btn" style="background: linear-gradient(135deg, #6C4BA0, #3b82f6); border: none;">
+                <i class="fas fa-file-alt"></i> Generer Rapport IA
+            </button>
+            <div id="report-status" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Report Section -->
+<div class="cp-card" style="margin-bottom: 24px;" id="report-section">
+    <div class="cp-card-header">
+        <span class="cp-card-title"><i class="fas fa-file-alt" style="color: #3b82f6;"></i> Dernier Rapport IA</span>
+        <button class="btn-outline btn-sm" onclick="loadLatestReport()" data-testid="ml-load-report-btn">
+            <i class="fas fa-sync-alt"></i> Charger
+        </button>
+    </div>
+    <div id="ai-report-container" data-testid="ml-ai-report" style="padding: 8px;">
+        <div style="text-align: center; padding: 40px; color: var(--muted);">
+            <i class="fas fa-robot" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+            Aucun rapport. Cliquez "Generer Rapport IA" pour en creer un.
+        </div>
     </div>
 </div>
 
@@ -557,7 +582,7 @@ function trainModel() {
         .catch(e => { statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> Erreur: ' + e.message + '</span>'; });
 }
 
-function pollTaskStatus(taskId, statusEl) {
+function pollTaskStatus(taskId, statusEl, onComplete) {
     const interval = setInterval(() => {
         fetch('/admin/ml-dashboard/task-status?task_id=' + taskId, { headers: { 'Accept': 'application/json' } })
             .then(r => r.json()).then(d => {
@@ -569,6 +594,7 @@ function pollTaskStatus(taskId, statusEl) {
                     clearInterval(interval);
                     statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check"></i> ' + (t.message || 'Termine') + '</span>';
                     if (t.metrics) { showNotification('Modele mis a jour !', 'success'); setTimeout(() => location.reload(), 2000); }
+                    if (typeof onComplete === 'function') onComplete(t);
                 } else if (t.status === 'failed') {
                     clearInterval(interval);
                     statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> ' + (t.message || 'Echec') + '</span>';
@@ -582,6 +608,106 @@ function startABTest() {
     fetch('/admin/ml-dashboard/ab-test/start', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: '{}' })
         .then(r => r.json()).then(d => { document.getElementById('abtest-status').textContent = d.success ? 'Test A/B lance ! ID: ' + (d.test_id || '') : 'Erreur: ' + (d.message || d.error || ''); })
         .catch(e => { document.getElementById('abtest-status').textContent = 'Erreur: ' + e.message; });
+}
+
+function generateAIReport() {
+    const statusEl = document.getElementById('report-status');
+    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Lancement de la generation IA...';
+    fetch('/admin/ml-dashboard/report/generate', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: '{}' })
+        .then(r => r.json()).then(d => {
+            if (d.success && d.async) {
+                statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rapport IA en cours de generation...';
+                pollTaskStatus(d.task_id, statusEl, function() { loadLatestReport(); });
+            } else {
+                statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> ' + (d.message || 'Erreur') + '</span>';
+            }
+        })
+        .catch(e => { statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times"></i> Erreur: ' + e.message + '</span>'; });
+}
+
+function loadLatestReport() {
+    const container = document.getElementById('ai-report-container');
+    container.innerHTML = '<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin" style="font-size:20px;color:var(--brand-primary);"></i></div>';
+    fetch('/admin/ml-dashboard/report/latest', { headers: { 'Accept': 'application/json' } })
+        .then(r => r.json()).then(d => {
+            if (d.success && d.report) {
+                renderAIReport(d.report, d.generated_at);
+            } else {
+                container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><i class="fas fa-robot" style="font-size:32px;margin-bottom:12px;display:block;"></i>Aucun rapport disponible.</div>';
+            }
+        })
+        .catch(e => { container.innerHTML = '<div style="color:var(--danger);padding:16px;">Erreur: ' + e.message + '</div>'; });
+}
+
+function renderAIReport(report, generatedAt) {
+    const container = document.getElementById('ai-report-container');
+    let html = '';
+    
+    // Header
+    html += '<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--brand-primary);">';
+    html += '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin:0;">' + (report.titre || 'Rapport IA') + '</h3>';
+    if (generatedAt) html += '<span style="font-size:11px;color:var(--muted);">Genere le ' + new Date(generatedAt).toLocaleString('fr-FR') + '</span>';
+    html += '</div>';
+    
+    // Executive summary
+    if (report.resume_executif) {
+        html += '<div style="padding:12px;background:var(--table-stripe);border-radius:8px;margin-bottom:16px;font-size:13px;color:var(--text-secondary);line-height:1.6;">' + report.resume_executif + '</div>';
+    }
+    
+    // KPIs
+    if (report.kpis && report.kpis.length > 0) {
+        html += '<h4 style="font-size:14px;font-weight:600;margin:0 0 8px;">KPIs Cles</h4>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:16px;">';
+        report.kpis.forEach(kpi => {
+            const tColor = kpi.tendance === 'hausse' ? 'var(--success)' : (kpi.tendance === 'baisse' ? 'var(--danger)' : 'var(--muted)');
+            const tIcon = kpi.tendance === 'hausse' ? 'fa-arrow-up' : (kpi.tendance === 'baisse' ? 'fa-arrow-down' : 'fa-minus');
+            html += '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;">';
+            html += '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;">' + kpi.nom + '</div>';
+            html += '<div style="font-size:18px;font-weight:700;color:var(--text-primary);">' + kpi.valeur + ' <i class="fas ' + tIcon + '" style="font-size:12px;color:' + tColor + ';"></i></div>';
+            if (kpi.commentaire) html += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">' + kpi.commentaire + '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+    }
+    
+    // Alerts
+    if (report.alertes && report.alertes.length > 0) {
+        html += '<h4 style="font-size:14px;font-weight:600;margin:0 0 8px;">Alertes</h4>';
+        report.alertes.forEach(a => {
+            const colors = { critique: '#ef4444', attention: '#D4A843', info: '#3b82f6' };
+            html += '<div style="padding:8px 12px;border-left:3px solid ' + (colors[a.niveau] || '#71717a') + ';background:var(--table-stripe);border-radius:0 6px 6px 0;margin-bottom:6px;font-size:12px;">';
+            html += '<strong style="text-transform:uppercase;font-size:10px;color:' + (colors[a.niveau] || '#71717a') + ';">' + a.niveau + '</strong> ' + a.message;
+            html += '</div>';
+        });
+    }
+    
+    // Recommendations
+    if (report.recommandations && report.recommandations.length > 0) {
+        html += '<h4 style="font-size:14px;font-weight:600;margin:12px 0 8px;">Recommandations</h4>';
+        html += '<div style="display:grid;gap:8px;margin-bottom:16px;">';
+        report.recommandations.forEach(r => {
+            html += '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:10px;">';
+            html += '<span class="badge badge-' + (r.priorite === 'P0' ? 'danger' : r.priorite === 'P1' ? 'warning' : 'info') + '">' + r.priorite + '</span>';
+            html += '<div style="flex:1;"><div style="font-size:13px;font-weight:500;">' + r.action + '</div>';
+            if (r.impact_estime) html += '<div style="font-size:11px;color:var(--success);">Impact: ' + r.impact_estime + '</div>';
+            html += '</div></div>';
+        });
+        html += '</div>';
+    }
+    
+    // Model status
+    if (report.modele_ml) {
+        html += '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;">';
+        html += '<strong style="font-size:12px;">Modele ML:</strong> Accuracy ' + (report.modele_ml.accuracy || 'N/A') + '% - ' + (report.modele_ml.statut || '') + ' - ' + (report.modele_ml.commentaire || '');
+        html += '</div>';
+    }
+    
+    // Raw text fallback
+    if (report.raw) {
+        html += '<div style="white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--text-secondary);">' + report.resume_executif + '</div>';
+    }
+    
+    container.innerHTML = html;
 }
 </script>
 @endsection

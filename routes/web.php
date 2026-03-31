@@ -186,6 +186,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/ab-test/start', [MLDashboardController::class, 'startABTest'])->name('ab-test.start');
             Route::get('/ab-test/results/{testId}', [MLDashboardController::class, 'getABTestResults'])->name('ab-test.results');
             Route::post('/ab-test/{testId}/end', [MLDashboardController::class, 'endABTest'])->name('ab-test.end');
+            Route::post('/report/generate', [MLDashboardController::class, 'generateReport'])->name('report.generate');
+            Route::get('/report/latest', [MLDashboardController::class, 'getLatestReport'])->name('report.latest');
         });
 
         // === AI AGENT ROUTES ===

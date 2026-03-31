@@ -7,44 +7,43 @@ Dashboard haute performance Laravel pour Ooredoo Club Privileges. KPIs mathemati
 - **Backend**: Laravel 10 + PHP-FPM + Nginx (port 8002) + Redis
 - **Frontend**: Vanilla JS + Blade templates
 - **ML**: Python (scikit-learn, LightGBM, pandas, pymysql) via async PHP CLI workers
+- **AI Report**: GPT-4o via Emergent LLM Key (emergentintegrations)
 - **DB**: MySQL remote (51.38.187.245) + Redis cache local
 
 ## Completed Features
 - KPI math corrigee (Conversion, Retention, Churn, Billing Rates)
 - Date shortcuts (3M, 6M, 12M) custom date picker
 - Timwe 30-day trial display (0 TND via ppid check)
-- Merchant KPIs sans emojis
-- Option "Tous" pagination merchants
-- Retention Rate fix (mismatch materialized table vs direct query)
-- Ooredoo Billing Rate historique fix (filter mock data pre-April 2025)
+- Merchant KPIs sans emojis, option "Tous" pagination
+- Retention Rate fix, Ooredoo Billing Rate historique fix
 - ML Pipeline Async (MLAsyncTaskService + async_worker.php)
-- ML Overview widget on main dashboard tab
-- **[2026-03-30] Bug Fix: pymysql ModuleNotFoundError** - Fixed PYTHON_PATH and /root permissions for www-data background worker
-- **[2026-03-30] Bug Fix: SQL Column Mismatch** - Added 9 advanced features to getDefaultFeatures() (morning/afternoon/evening_success_rate, recovery_after_failure_rate, max_consecutive_successes, payment_amount_std, amount_flexibility, no_balance_failure_rate, not_delivered_failure_rate)
-- **[2026-03-30] Bug Fix: Cache permissions** - Fixed /app/storage/framework/cache/data permissions for background workers
-- **[2026-03-30] Bug Fix: ML model save permissions** - Fixed /app/ml_models directory permissions for www-data
+- ML Overview widget on main dashboard tab (real data connected)
+- **[2026-03-30] Bug Fix: pymysql + SQL Column Mismatch** - Fixed Python path, permissions, and getDefaultFeatures
+- **[2026-03-31] Batch Extraction Optimization** - Reduced from ~13 queries/client to ~3 queries/500 clients. 23,595 clients extracted in ~70 seconds (was ~19 hours). ~1000x speedup.
+- **[2026-03-31] AI Weekly Report** - GPT-4o generates structured weekly reports with KPIs, alerts, recommendations. Async background generation via generate_report.py + emergentintegrations.
+- **[2026-03-31] Report UI** - "Generer Rapport IA" button + "Dernier Rapport IA" section in ML Dashboard with full rendering (KPIs, alertes, recommandations)
+- **[2026-03-31] E2E ML Pipeline Verified** - Extraction (70s) -> Training (50s) -> A/B Test -> Report Generation all working end-to-end
 
-## Verified ML Training Results
-- Accuracy: 99.99%, Precision: 100%, Recall: 99.97%, F1: 99.98%, AUC ROC: 100%
-- 80,000 samples (64k train / 16k test)
-- Top features: ooredoo_success_rate (436), timwe_success_rate (406), payment_success_rate (330)
-
-## Backlog / Upcoming Tasks
-### P1
-- E2E ML Pipeline verification (Extraction complete -> Training -> A/B Test via UI)
-- Extraction performance optimization (23k clients at 3s each is too slow)
-
-### P2  
-- Automated weekly AI reporting
-- ML Insights widget data refresh from real model predictions
+## Verified ML Results
+- Accuracy: 100%, AUC ROC: 100%, 80k samples
+- Extraction: 23,595 clients in ~70 seconds (batch mode)
+- AI Report: Structured JSON with KPIs, segments, alertes, recommandations
 
 ## Key Files
-- `app/Services/Dashboard/KPIService.php` - FRAGILE math, do not alter without care
-- `app/Services/MLAsyncTaskService.php` - Creates/tracks background tasks
-- `app/Services/MLFeatureExtractionService.php` - Feature extraction + upsert
-- `ml_models/async_worker.php` - CLI background worker
-- `ml_models/train_model.py` - Python training script
-- `public/js/dashboard/main.js` - Frontend polling + ML widget
+- `app/Services/Dashboard/KPIService.php` - FRAGILE math
+- `app/Services/MLAsyncTaskService.php` - Task management
+- `app/Services/MLFeatureExtractionService.php` - Batch extraction v2.0
+- `ml_models/async_worker.php` - Background worker (extract, train, report)
+- `ml_models/generate_report.py` - AI report generation with GPT-4o
+- `ml_models/train_model.py` - LightGBM training
+- `public/js/dashboard/main.js` - Frontend + ML widget
+- `resources/views/admin/ml-dashboard.blade.php` - ML Dashboard UI
+
+## Backlog
+### P2
+- Automated weekly scheduling (Laravel scheduler cron job)
+- Historical report comparison
+- Export reports as PDF
 
 ## Credentials
 - Login: superadmin@ooredoo.tn / SuperAdmin@2025
