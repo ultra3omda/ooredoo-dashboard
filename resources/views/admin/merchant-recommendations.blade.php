@@ -364,7 +364,7 @@ async function searchRecommendations() {
                 <span><strong>Inactif depuis:</strong> ${uc.days_since_last_activity || 0}j</span>
             </div>`;
         }
-        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceLabel} | ${recos.length} résultats pour client #${clientId}</div>${contextHtml}`;
+        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceLabel} | ${recos.length} résultats pour client #${clientId} <a href="${baseUrl}/api/merchant-recommendations/explain/${clientId}?top_k=10" target="_blank" style="color: var(--brand-primary); text-decoration: underline; font-weight: 600;">Voir rapport détaillé</a></div>${contextHtml}`;
         renderMerchants(recos, 'recoResults', true);
     } catch (e) {
         container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
@@ -375,21 +375,43 @@ function renderMerchants(merchants, containerId, append) {
     const container = document.getElementById(containerId);
     let html = append ? container.innerHTML : '';
 
+    const typeColors = {
+        'DISCOVERY': {bg: '#eff6ff', color: '#3b82f6', label: 'Decouvrir'},
+        'RE_ENGAGEMENT': {bg: '#fffbeb', color: '#f59e0b', label: 'Re-visiter'},
+        'LOYALTY': {bg: '#ecfdf5', color: '#10b981', label: 'Favori'},
+        'TRENDING': {bg: '#f5f3ff', color: '#8b5cf6', label: 'Tendance'},
+        'COLD_START': {bg: '#f9fafb', color: '#6b7280', label: 'Nouveau'},
+    };
+
     merchants.forEach(m => {
         const rank = m.rank || 0;
         const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-default';
         const scoreNorm = m.score_normalized != null ? parseFloat(m.score_normalized) : parseFloat(m.score || 0);
         const scoreColor = scoreNorm >= 80 ? 'var(--success)' : scoreNorm >= 40 ? 'var(--warning)' : 'var(--muted)';
-        const visitedTag = m.already_visited ? '<span class="tag tag-visited">Visité</span>' : '<span class="tag tag-new">Nouveau</span>';
+        const visitedTag = m.already_visited ? `<span class="tag tag-visited">Visite (${m.visit_count || 0}x)</span>` : '<span class="tag tag-new">Nouveau</span>';
         const promosTag = (m.active_promotions || 0) > 0 ? ` <span class="tag tag-promos">${m.active_promotions} promos</span>` : '';
         const discount = m.avg_discount ? parseFloat(m.avg_discount).toFixed(0) + '% remise' : '';
-        const visitInfo = m.visit_count > 0 ? `<span style="font-size: 10px; color: var(--muted);">${m.visit_count} visites</span>` : '';
 
-        // Explanation tooltip
+        // Recommendation type badge
+        const rt = m.recommendation_type || '';
+        const tc = typeColors[rt] || typeColors['DISCOVERY'];
+        const typeBadge = rt ? `<span style="background:${tc.bg};color:${tc.color};padding:1px 7px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;">${tc.label}</span>` : '';
+
+        // "Because you visited" links
+        let becauseHtml = '';
+        if (m.because_you_visited && m.because_you_visited.length > 0) {
+            const links = m.because_you_visited.slice(0, 2).map(b => `<strong>${b.partner_name}</strong>`).join(', ');
+            becauseHtml = `<div style="font-size: 10px; color: #166534; margin-top: 2px;">Parce que: ${links}</div>`;
+        }
+
+        // Collaborative signal
+        const collabHtml = m.similar_users_count > 0 ? `<div style="font-size: 10px; color: #1e40af; margin-top: 2px;">${m.similar_users_count} clients similaires</div>` : '';
+
+        // Explanation
         let explanationHtml = '';
         if (m.explanation) {
             const ex = m.explanation;
-            const factors = (ex.factors || []).map(f => `<div style="font-size: 10px; color: var(--text-secondary); padding: 1px 0;">→ ${f}</div>`).join('');
+            const factors = (ex.factors || []).slice(0, 4).map(f => `<div style="font-size: 10px; color: var(--text-secondary); padding: 1px 0;">&rarr; ${f}</div>`).join('');
             explanationHtml = `<div style="margin-top: 4px; padding: 6px 8px; background: var(--table-stripe); border-radius: 6px; font-size: 11px;">
                 <div style="color: var(--text-primary); font-weight: 500; margin-bottom: 3px;">${ex.summary || ''}</div>
                 ${factors}
@@ -399,9 +421,11 @@ function renderMerchants(merchants, containerId, append) {
         html += `<div class="merchant-card" data-testid="merchant-card-${m.partner_id}">
             <div class="merchant-rank ${rankClass}">${rank}</div>
             <div class="merchant-info">
-                <div class="merchant-name">${m.partner_name || 'N/A'}</div>
-                <div class="merchant-cat">${m.category_name || 'Autre'} ${visitedTag}${promosTag} ${visitInfo}</div>
+                <div class="merchant-name">${m.partner_name || 'N/A'} ${typeBadge}</div>
+                <div class="merchant-cat">${m.category_name || 'Autre'} ${visitedTag}${promosTag}</div>
                 <div class="merchant-reason">${m.reason || ''}</div>
+                ${becauseHtml}
+                ${collabHtml}
                 ${explanationHtml}
             </div>
             <div class="merchant-score">

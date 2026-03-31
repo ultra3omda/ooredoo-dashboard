@@ -506,6 +506,7 @@ curl -s https://preprod.dashboard.clubprivileges.app/api/merchant-recommendation
 | POST    | `/api/merchant-recommendations`                  | Obtenir des recommandations pour un client |
 | GET     | `/api/merchant-recommendations/health`           | Statut du moteur ML (modèle, métriques)  |
 | POST    | `/api/merchant-recommendations/retrain`          | Lancer le re-entraînement (synchrone, attend la fin) |
+| GET     | `/api/merchant-recommendations/explain/{id}`     | **Rapport HTML** visuel des recommandations pour un client |
 | POST    | `/api/merchant-recommendations/track`            | Tracker une interaction utilisateur      |
 | GET     | `/api/merchant-recommendations/stats`            | Statistiques d'utilisation (7 jours)     |
 | GET     | `/api/merchant-recommendations/stats/timeline`   | Timeline des interactions (30 jours)     |

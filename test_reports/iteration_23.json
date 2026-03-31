@@ -1,0 +1,84 @@
+{
+  "summary": "Backend API testing for AWS Personalize-inspired Merchant Recommendations features - All 17 new tests PASSED (37 total with regression). Fixed bug in cold-start HTML explain endpoint (missing max_discount, location_count fields).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_aws_personalize_features.py",
+    "/app/backend/tests/test_merchant_reco_v3.py",
+    "/app/test_reports/pytest/pytest_aws_personalize.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_aws_personalize_features.py",
+    "/app/backend/tests/test_merchant_reco_v3.py",
+    "/app/backend/server.py",
+    "/app/ml_models/predict_merchant.py"
+  ],
+  "success_rate": {
+    "backend": "100% (37/37 tests passed - 17 new + 20 regression)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "ml_client_ids": "118580 (555 visits, 252 merchants), 130212 (137 visits, 1 merchant), 49949 (115 visits, 12 merchants)",
+    "fallback_client_ids": "0, 1"
+  },
+  "seed_data_creation": "No new seed data. Used existing production data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 23 verified all AWS Personalize-inspired features. Fixed bug: cold-start HTML explain endpoint was failing with KeyError 'max_discount' - fixed by using .get() with defaults in server.py and adding missing fields in predict_merchant.py fallback.",
+  "features_verified": {
+    "recommendation_type field (client 118580)": "PASS - returns DISCOVERY, RE_ENGAGEMENT, LOYALTY, or TRENDING",
+    "recommendation_type with exclude_visited=true (client 49949)": "PASS - returns only DISCOVERY or TRENDING",
+    "recommendation_type for cold-start (client 0)": "PASS - returns TRENDING or DISCOVERY",
+    "because_you_visited array (client 118580)": "PASS - contains partner_name, visit_count, link_reason",
+    "because_you_visited empty for cold-start": "PASS - empty array for client 0",
+    "similar_users_count field": "PASS - integer >= 0 for all recommendations",
+    "user_context with total_visits, unique_merchants, loyalty_score": "PASS - verified for client 130212",
+    "explanation.model_type contains 'LightGBM'": "PASS - all explanations mention LightGBM",
+    "explanation.exploration_weight present": "PASS - value 0.15 for ML model, 0 for fallback",
+    "GET /api/merchant-recommendations/explain/118580 returns HTML 200": "PASS",
+    "HTML contains 'Rapport de Recommandations'": "PASS",
+    "HTML contains 'Profil Client'": "PASS",
+    "HTML contains type badges (A decouvrir, A re-visiter, Favori, Tendance)": "PASS",
+    "HTML explain with exclude_visited=true": "PASS - contains DISCOVERY cards",
+    "HTML explain for cold-start (client 0)": "PASS - returns valid HTML with fallback indicator",
+    "HTML contains LightGBM model reference": "PASS",
+    "HTML contains score /100 display": "PASS"
+  },
+  "bugs_fixed": {
+    "cold_start_html_explain_keyerror": {
+      "issue": "GET /api/merchant-recommendations/explain/0 returned 500 with KeyError 'max_discount'",
+      "root_cause": "Fallback JSON data missing max_discount, location_count fields; HTML template accessed them directly without .get()",
+      "fix_applied": [
+        "server.py line 242: Changed r['max_discount'] to r.get('max_discount', 0)",
+        "server.py line 242: Changed r['location_count'] to r.get('location_count', 0)",
+        "predict_merchant.py: Added max_discount, location_count, active_promotions fields to fallback return"
+      ]
+    }
+  },
+  "api_response_samples": {
+    "recommendation_type_distribution_118580": {
+      "DISCOVERY": "varies",
+      "RE_ENGAGEMENT": "varies",
+      "LOYALTY": "varies",
+      "TRENDING": "varies"
+    },
+    "because_you_visited_sample": {
+      "partner_name": "string",
+      "visit_count": "int",
+      "link_reason": "string (e.g., 'Meme categorie (Mode & accessoires)')"
+    },
+    "explanation_sample": {
+      "model_type": "LightGBM LambdaRank + Exploration/Exploitation",
+      "exploration_weight": 0.15
+    }
+  }
+}

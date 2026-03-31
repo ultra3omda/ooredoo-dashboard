@@ -2793,6 +2793,14 @@
       const container = document.getElementById(containerId);
       let html = append ? container.innerHTML : '';
       
+      const typeColors = {
+        'DISCOVERY': {bg: '#eff6ff', color: '#3b82f6', label: 'Decouvrir'},
+        'RE_ENGAGEMENT': {bg: '#fffbeb', color: '#f59e0b', label: 'Re-visiter'},
+        'LOYALTY': {bg: '#ecfdf5', color: '#10b981', label: 'Favori'},
+        'TRENDING': {bg: '#f5f3ff', color: '#8b5cf6', label: 'Tendance'},
+        'COLD_START': {bg: '#f9fafb', color: '#6b7280', label: 'Nouveau'},
+      };
+      
       merchants.forEach(m => {
         const rank = m.rank || 0;
         const scoreNorm = m.score_normalized != null ? parseFloat(m.score_normalized) : parseFloat(m.score || 0);
@@ -2800,32 +2808,51 @@
         const rankBg = rankColors[rank] || 'var(--table-stripe)';
         const rankColor = rank <= 3 ? '#fff' : 'var(--muted)';
         const scoreColor = scoreNorm >= 80 ? 'var(--success)' : scoreNorm >= 40 ? 'var(--warning)' : 'var(--muted)';
+
+        // Type badge
+        const rt = m.recommendation_type || '';
+        const tc = typeColors[rt] || typeColors['DISCOVERY'];
+        const typeBadge = rt ? `<span style="background:${tc.bg};color:${tc.color};padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;">${tc.label}</span>` : '';
+
         const visitTag = m.already_visited 
-          ? `<span style="background: rgba(16,185,129,0.12); color: var(--success); padding: 1px 6px; border-radius: 4px; font-size: 10px;">Visité${m.visit_count > 0 ? ' ('+m.visit_count+'x)' : ''}</span>`
-          : '<span style="background: rgba(59,130,246,0.12); color: #3b82f6; padding: 1px 6px; border-radius: 4px; font-size: 10px;">Nouveau</span>';
-        const promoTag = (m.active_promotions || 0) > 0 ? ` <span style="background: rgba(245,158,11,0.12); color: var(--warning); padding: 1px 6px; border-radius: 4px; font-size: 10px;">${m.active_promotions} promos</span>` : '';
+          ? `<span style="background:rgba(16,185,129,0.12);color:var(--success);padding:1px 6px;border-radius:4px;font-size:10px;">${m.visit_count || 0}x visite</span>`
+          : '';
+        const promoTag = (m.active_promotions || 0) > 0 ? ` <span style="background:rgba(245,158,11,0.12);color:var(--warning);padding:1px 6px;border-radius:4px;font-size:10px;">${m.active_promotions} promos</span>` : '';
         
-        // Explanation section
+        // "Because you visited" compact
+        let becauseHtml = '';
+        if (m.because_you_visited && m.because_you_visited.length > 0) {
+          const names = m.because_you_visited.slice(0, 2).map(b => b.partner_name).join(', ');
+          becauseHtml = `<div style="font-size:10px;color:#166534;margin-top:2px;">Parce que: <strong>${names}</strong></div>`;
+        }
+
+        // Collaborative
+        const collabHtml = m.similar_users_count > 0 ? `<div style="font-size:10px;color:#1e40af;margin-top:1px;">${m.similar_users_count} clients similaires</div>` : '';
+
+        // Explanation (compact)
         let explanationHtml = '';
-        if (m.explanation && m.explanation.factors && m.explanation.factors.length > 0) {
-            const factors = m.explanation.factors.slice(0, 3).map(f => `<div style="font-size: 10px; color: var(--text-secondary); padding: 1px 0;">→ ${f}</div>`).join('');
-            explanationHtml = `<div style="margin-top: 4px; padding: 4px 8px; background: var(--table-stripe); border-radius: 4px;">
-                <div style="font-size: 10px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px;">${m.explanation.summary || ''}</div>
-                ${factors}
+        if (m.explanation && m.explanation.summary) {
+            explanationHtml = `<div style="margin-top:4px;padding:4px 8px;background:var(--table-stripe);border-radius:4px;">
+                <div style="font-size:10px;font-weight:500;color:var(--text-primary);">${m.explanation.summary}</div>
             </div>`;
         }
 
-        html += `<div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--card); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'" data-testid="reco-card-${m.partner_id}">
-          <div style="min-width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background: ${rankBg}; color: ${rankColor}; flex-shrink: 0; margin-top: 2px;">${rank}</div>
-          <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.partner_name || 'N/A'}</div>
-            <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">${m.category_name || 'Autre'} ${visitTag}${promoTag}</div>
-            ${m.reason ? `<div style="font-size: 10px; color: var(--brand-primary); margin-top: 3px;">${m.reason}</div>` : ''}
+        html += `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--card);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'" data-testid="reco-card-${m.partner_id}">
+          <div style="min-width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;background:${rankBg};color:${rankColor};flex-shrink:0;margin-top:2px;">${rank}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-weight:600;font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.partner_name || 'N/A'}</span>
+              ${typeBadge}
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">${m.category_name || 'Autre'} ${visitTag}${promoTag}</div>
+            ${m.reason ? `<div style="font-size:10px;color:var(--brand-primary);margin-top:3px;">${m.reason}</div>` : ''}
+            ${becauseHtml}
+            ${collabHtml}
             ${explanationHtml}
           </div>
-          <div style="text-align: right; min-width: 55px; flex-shrink: 0;">
-            <div style="font-size: 16px; font-weight: 700; color: ${scoreColor};">${scoreNorm.toFixed(0)}<span style="font-size: 10px; font-weight: 400;">/100</span></div>
-            ${m.avg_discount ? `<div style="font-size: 10px; color: var(--muted);">${parseFloat(m.avg_discount).toFixed(0)}% remise</div>` : ''}
+          <div style="text-align:right;min-width:55px;flex-shrink:0;">
+            <div style="font-size:16px;font-weight:700;color:${scoreColor};">${scoreNorm.toFixed(0)}<span style="font-size:10px;font-weight:400;">/100</span></div>
+            ${m.avg_discount ? `<div style="font-size:10px;color:var(--muted);">${parseFloat(m.avg_discount).toFixed(0)}% remise</div>` : ''}
           </div>
         </div>`;
       });

@@ -184,8 +184,8 @@ class TestFallbackRecommendations:
         
         print(f"✓ Fallback scores distributed: min={min(scores)}, max={max(scores)}, unique={len(unique_scores)}")
     
-    def test_fallback_no_user_context(self):
-        """Fallback recommendations should not have user_context (or it's None)"""
+    def test_fallback_user_context_empty(self):
+        """Fallback recommendations should have empty user_context (zeros)"""
         response = requests.post(
             f"{BASE_URL}/api/merchant-recommendations",
             json={"client_id": 0, "top_k": 5}
@@ -193,11 +193,13 @@ class TestFallbackRecommendations:
         assert response.status_code == 200
         data = response.json()
         
-        # user_context should either be missing or None for fallback
-        if "user_context" in data:
-            assert data["user_context"] is None, f"user_context should be None for fallback, got {data['user_context']}"
+        # user_context should be present but with empty/zero values for fallback
+        if "user_context" in data and data["user_context"] is not None:
+            uc = data["user_context"]
+            assert uc.get("total_visits", 0) == 0, "Fallback user should have 0 total_visits"
+            assert uc.get("unique_merchants", 0) == 0, "Fallback user should have 0 unique_merchants"
         
-        print("✓ Fallback correctly has no user_context")
+        print("✓ Fallback correctly has empty user_context")
 
 
 class TestExcludeVisitedFilter:
