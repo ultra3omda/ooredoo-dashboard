@@ -1,7 +1,7 @@
 # Club Privileges Dashboard - PRD
 
 ## Original Problem Statement
-High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-powered predictive recommendations inspired by AWS Personalize. Merchant Intelligence powered by Gemini AI. Digital Presence Scoring with real web scraping.
+High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-powered predictive recommendations inspired by AWS Personalize. Merchant Intelligence powered by Gemini AI. Digital Presence Scoring with real web scraping. Role-based campaign access for collaborators.
 
 ## Tech Stack
 - **Backend**: Laravel 10, FastAPI (Python), Redis Cache
@@ -19,36 +19,54 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 
 ### ML Recommendation Engine v2.0 — AWS Personalize-inspired (DONE)
 - Types: DISCOVERY, RE_ENGAGEMENT, LOYALTY, TRENDING
-- "Because you visited X" contextual linking, Collaborative signals
-- Score normalization 0-100, Cold-start fallback
+- Score normalization 0-100, Cold-start fallback, Collaborative signals
 
 ### P2: Client-Facing Recommendation Widget (DONE)
-- GET /api/merchant-recommendations/widget/{client_id} — JSON + HTML
 
 ### Merchant Intelligence Engine (DONE)
 - Analyze, Digest, Report (Gemini AI), Report HTML, Weekly Email Preview
 
 ### P3: Analytics Temporel (DONE)
-- Timeline 30/60/90 days with Chart.js, Source breakdown, Category doughnut
+- Timeline 30/60/90 days with Chart.js
 
 ### P3: A/B Test Framework (DONE)
-- ML Model vs Popularity, Deterministic MD5 hash assignment
-- Uplift metrics: CTR, Conversion Rate, Winner detection
+- ML Model vs Popularity, Uplift CTR/Conversion
 
-### Digital Presence Scoring (DONE - NEW)
-- **Real web scraping** of merchant websites, Facebook, Instagram, Google
-- Score 0-100 with breakdown: Website (30pts), Facebook (25pts), Instagram (25pts), Google (20pts)
-- Levels: EXCELLENT (70+), BON (50-69), MOYEN (30-49), FAIBLE (<30)
-- Per-merchant AI audit via Gemini with:
-  - Diagnostic, Points forts/faibles
-  - Prioritized recommendations (P0/P1/P2) per canal
-  - Score potentiel, Strategie de contenu
-- Dashboard admin: Scanner button, KPI cards, sortable table, modal audit overlay
-- HTML report standalone page
+### Digital Presence Scoring (DONE)
+- Real web scraping (websites, Facebook, Instagram, Google)
+- Score 0-100, AI audit via Gemini
+
+### Collaborateur Role with Campaign Access Control (DONE - NEW)
+**Architecture:**
+- `pluxee_campaign_access` column: TEXT type storing JSON array (e.g., `["Campagne pilote Pluxee","test tarek"]`)
+- NULL or empty = full access (can see all campaigns + can invite others)
+- Non-empty = restricted (can only see assigned campaigns, cannot invite)
+
+**User Model Methods:**
+- `getAllowedCampaigns()`: Decodes JSON, returns array of campaign names
+- `hasCampaignRestriction()`: Returns true if user has restricted access
+- `canInviteCollaborators()`: SuperAdmin/Admin always true; Collaborator only if unrestricted
+
+**Invitation Flow:**
+- Form shows multi-campaign checkboxes when sub-store is selected
+- Campaigns loaded dynamically via `/admin/invitations/campaigns?store_name=X`
+- `campaign_access[]` stored in `invitations.additional_data` JSON
+- On acceptance: `pluxee_campaign_access` set on user record
+
+**Dashboard Enforcement:**
+- `SubStoreController.normalizeSubStoreParams()`: Forces campaign filter for restricted users
+- `getSubStores()` API: Returns `has_campaign_restriction`, `allowed_campaigns`, `can_invite`
+- Campaign dropdown: Disabled/filtered for restricted users, shows all for admins
+
+**Permission Matrix:**
+| Role | See All Campaigns | Invite Others |
+|---|---|---|
+| Super Admin | Yes | Yes |
+| Admin Sub-Store | Yes | Yes |
+| Collaborator (no restriction) | Yes | Yes |
+| Collaborator (with campaigns) | Only assigned | No |
 
 ### Weekly Reports with Intelligence Integration (DONE)
-- gatherMerchantIntelligenceData() calls FastAPI digest endpoint
-- Intelligence data injected into CEO, Marketing, Associe report prompts
 
 ## All API Endpoints
 - POST /api/merchant-recommendations
@@ -80,6 +98,7 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - iteration_24: 18/18 Widget P2 + Intelligence (100%)
 - iteration_25: 23/23 Analytics Temporel + A/B Test + Email Preview (100%)
 - iteration_26: 10/10 Digital Scoring + scraping + Gemini audit (100%)
+- iteration_27: 17/17 Campaign Restriction + regression (100%)
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
