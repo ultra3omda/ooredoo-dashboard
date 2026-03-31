@@ -66,3 +66,11 @@ storage/logs/*.csv
 *.env.*
 api_dump.json
 dgv_statuses_analysis.txt
+-e 
+# Environment files
+*.env
+*.env.*
+-e 
+# Environment files
+*.env
+*.env.*
