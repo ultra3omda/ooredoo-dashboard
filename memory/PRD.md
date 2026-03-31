@@ -9,65 +9,66 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. Inclu
 - **ML**: LightGBM (Churn + Merchant Ranker), scikit-learn
 - **AI**: OpenAI GPT-4o via litellm (Emergent LLM Key)
 - **Frontend**: Blade templates, Vanilla JS, Chart.js
-- **Cache**: Redis (51.38.187.245:7905)
-
-## Architecture
-- Laravel: port 8002 (nginx/php-fpm)
-- Frontend proxy: port 3000 → 8002
-- FastAPI: port 8001 (ML + AI endpoints)
-- Kubernetes ingress: /api/* → 8001, rest → 3000
+- **Cache**: Redis (51.38.187.245:7905, CACHE_DRIVER=redis)
 
 ## What's Been Implemented
 
 ### Core Dashboard (DONE)
-- Main dashboard with KPIs, merchants, subscriptions
-- Sub-store dashboard with full data segmentation
-- Period comparison (current vs previous period)
-- Export functionality
+- Main + Sub-store dashboards with KPIs, merchants, subscriptions, period comparison, export
 
 ### ML Pipeline v1 - Churn Prediction (DONE)
 - Feature extraction, LightGBM training, A/B testing, ML Dashboard UI
 
 ### AI Weekly Reporting (DONE)
-- Automated reports via FastAPI, multiple profiles, ML + merchant reco data enrichment
+- Automated reports, multiple profiles, ML + merchant reco enrichment
+- **Email templates enriched** (CEO + Marketing) with top marchands, catégories tendances (2026-04-02)
 
 ### Pluxee B2B Campaign Support (DONE)
-- Pluxee campaigns bypass carte_recharge_client checks
-- Dedicated user access control
-- Admin UI: /admin/pluxee/users
-- **Campaign dropdown**: When selecting "Club Privilèges By Pluxee" sub-store, a campaign selector appears showing 3 Pluxee campaigns (2026-04-02)
+- Campaign dropdown when selecting "Club Privilèges By Pluxee" sub-store (3 campaigns)
+- Bypass carte_recharge_client, dedicated user access, admin UI
 
 ### Sub-Store Dashboard Refactoring (DONE)
-- SubStoreController split into 5 endpoints with Promise.allSettled
-- **8 Merchant KPIs** fully implemented (2026-04-02):
-  - Total Merchants (576), Active Merchants (136, +7.9%)
-  - Total Locations Active (549), Active Merchant Ratio (23.6%, +7.8%)
-  - Total Transactions (2017), Transactions per Merchant (14.8)
-  - Top Merchant Share (PATHÉ 18.6%), Diversity (Excellent 100)
+- 5 split endpoints with Promise.allSettled
+- **8 Merchant KPIs** fully implemented
 - **Redis caching**: CACHE_DRIVER=redis → 14x faster (4651ms → 320ms)
-- **Fixed**: `.nav-link.active` → `.nav-tab.active` selector bug preventing KPI updates
-- **Fixed**: Diversity KPI displaying [object Object] → "Excellent (100)"
 
 ### ML Merchant Recommendation Engine (DONE)
-- LightGBM Ranker (139K samples, NDCG@5=1.0)
-- FastAPI endpoints: recommend, health, track, stats, retrain
-- Laravel service + Artisan command + Dashboard at /admin/merchant-recommendations
+- LightGBM Ranker (139K samples, NDCG@5=1.0, 576 marchands, 19K profils)
+- FastAPI: /api/merchant-recommendations (POST recommend, GET health, POST track, GET stats, POST retrain, GET stats/timeline, GET categories)
+- Laravel service + Artisan command + Admin dashboard at /admin/merchant-recommendations
 - Feedback loop with interaction tracking + weekly retrain
 
-## Key API Endpoints
-- Sub-Store Split: /sub-stores/api/split/{kpis,stores,charts,merchants,users}
-- ML Recommendations: /api/merchant-recommendations, /health, /track, /stats, /retrain
-- Admin Dashboard: /admin/merchant-recommendations
+### Recommendations Widget in Sub-Store Dashboard (DONE - 2026-04-02)
+- **New "Recommandations" tab** (5th tab) in sub-store dashboard
+- KPIs: Model status, active merchants, profiled users, interactions
+- Client search with ML Model/Popularity source tags
+- Top 10 popular merchants panel with ranked cards
+- Category dropdown filter (11 categories)
+- Interaction evolution chart (Chart.js, stacked bar, 30 days)
+
+### DB Performance Optimization (DONE - 2026-04-02)
+- **12 new indexes** on critical tables:
+  - `history`: client_id, (client_id, time), (promotion_id, client_id)
+  - `client`: sub_store, client_active, (sub_store, client_active)
+  - `promotion`: promotion_active
+  - `partner`: partener_active
+  - `carte_recharge`: stores, campain_name
+  - `stores`: store_name, store_active
+
+### Email Reporting Enrichment (DONE - 2026-04-02)
+- CEO template: merchant_reco section with KPIs grid, top 5 marchands table, catégories tendances
+- Marketing template: insights marchands section with KPIs, top 10 marchands, catégories
+- WeeklyReportService: gatherMerchantRecoData() method fetches live data from cp_merchants_catalog
 
 ## Test Reports
-- iteration_18.json: ML recommendation API (18/18 passed)
-- iteration_19.json: Merchant reco dashboard (100%)
-- iteration_20.json: Merchant KPIs + Redis + Pluxee campaigns (12/12 + 100% frontend)
+- iteration_18: ML recommendation API (18/18)
+- iteration_19: Merchant reco dashboard (100%)
+- iteration_20: Merchant KPIs + Redis + Pluxee campaigns (12/12 + 100%)
+- iteration_21: Indexes + Reco widget + Timeline + Email enrichment (90% backend + 100% frontend)
 
 ## Pending / Backlog
-- P2: Performance optimization (index tuning, query optimization for slow sub-stores)
-- P3: Client-facing recommendation widget
-- P3: Temporal analytics charts for recommendation interactions
+- P3: Client-facing recommendation widget for end users (mobile app/web)
+- P3: A/B testing framework for ML vs popularity recommendations
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
