@@ -237,17 +237,20 @@ class SubStoreService
      */
     public function getAvailableSubStoresForUser($user): array
     {
-        // Pluxee campaign user: only their assigned campaign
-        if (!empty($user->pluxee_campaign_access)) {
-            $store = DB::table('stores')
-                ->where('store_name', $user->pluxee_campaign_access)
-                ->where('store_active', 1)
-                ->select('store_name as name', 'store_id')
-                ->first();
-            if ($store) {
-                return [(array) $store];
+        // Pluxee campaign user with restrictions: show their sub-store
+        if ($user->hasCampaignRestriction()) {
+            $primaryOperator = $user->primaryOperator();
+            if ($primaryOperator) {
+                $store = DB::table('stores')
+                    ->where('store_name', $primaryOperator->operator_name)
+                    ->where('store_active', 1)
+                    ->select('store_name as name', 'store_id')
+                    ->first();
+                if ($store) {
+                    return [(array) $store];
+                }
+                return [['name' => $primaryOperator->operator_name, 'store_id' => null]];
             }
-            return [['name' => $user->pluxee_campaign_access, 'store_id' => null]];
         }
 
         // Super Admin : tous les sub-stores
@@ -258,9 +261,15 @@ class SubStoreService
         // Admin Sub-Store ou Collaborateur : seulement leur sub-store assigné
         $primaryOperator = $user->primaryOperator();
         if ($primaryOperator && $this->isSubStoreOperator($primaryOperator->operator_name)) {
-            return [
-                ['name' => $primaryOperator->operator_name, 'store_id' => null]
-            ];
+            $store = DB::table('stores')
+                ->where('store_name', $primaryOperator->operator_name)
+                ->where('store_active', 1)
+                ->select('store_name as name', 'store_id')
+                ->first();
+            if ($store) {
+                return [(array) $store];
+            }
+            return [['name' => $primaryOperator->operator_name, 'store_id' => null]];
         }
         
         // Autres cas : chercher par opérateur assigné
@@ -287,9 +296,12 @@ class SubStoreService
      */
     public function getDefaultSubStoreForUser($user): ?string
     {
-        // Pluxee campaign user: their campaign
-        if (!empty($user->pluxee_campaign_access)) {
-            return $user->pluxee_campaign_access;
+        // User with campaign restriction: their sub-store
+        if ($user->hasCampaignRestriction()) {
+            $primaryOperator = $user->primaryOperator();
+            if ($primaryOperator) {
+                return $primaryOperator->operator_name;
+            }
         }
 
         // Super Admin : ALL par défaut

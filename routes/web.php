@@ -142,6 +142,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/invitations/{invitation}/resend', [InvitationController::class, 'resend'])->name('invitations.resend');
             Route::patch('/invitations/{invitation}/cancel', [InvitationController::class, 'cancel'])->name('invitations.cancel');
             Route::delete('/invitations/{invitation}', [InvitationController::class, 'destroy'])->name('invitations.destroy');
+            Route::get('/invitations/campaigns', [InvitationController::class, 'getCampaigns'])->name('invitations.campaigns');
         });
         
         // Configuration du Cron Eklektik (Super Admin seulement)

@@ -364,6 +364,51 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user can invite other collaborators
+     * Admin, SuperAdmin, or Collaborator assigned to a sub-store WITHOUT campaign restrictions
+     */
+    public function canInviteCollaborators(): bool
+    {
+        if ($this->isSuperAdmin() || $this->isAdminOperator() || $this->isAdminSubStore()) {
+            return true;
+        }
+        
+        // Collaborator with sub-store access and NO campaign restriction
+        if ($this->isCollaborator() && $this->isSubStoreUser()) {
+            return empty($this->pluxee_campaign_access);
+        }
+        
+        return false;
+    }
+
+    /**
+     * Get the list of campaigns this user is allowed to access
+     * Returns empty array if the user has full access (admin or unrestricted collaborator)
+     */
+    public function getAllowedCampaigns(): array
+    {
+        if (empty($this->pluxee_campaign_access)) {
+            return []; // Full access
+        }
+        
+        $decoded = json_decode($this->pluxee_campaign_access, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+        
+        // Legacy: single campaign string
+        return [$this->pluxee_campaign_access];
+    }
+
+    /**
+     * Check if user has restricted campaign access
+     */
+    public function hasCampaignRestriction(): bool
+    {
+        return !empty($this->pluxee_campaign_access);
+    }
+
+    /**
      * Vérifier si l'utilisateur est un utilisateur sub-stores
      * Inclut les admins sub-store ET les collaborateurs sub-store
      */
@@ -520,15 +565,6 @@ class User extends Authenticatable
     public function canViewTimweSection(): bool
     {
         return $this->isSuperAdmin();
-    }
-
-    /**
-     * Vérifier si l'utilisateur peut inviter des collaborateurs
-     * Seuls les admins (tous types) peuvent inviter des collaborateurs
-     */
-    public function canInviteCollaborators(): bool
-    {
-        return $this->isAdmin() || $this->isSuperAdmin();
     }
 
     // Méthodes privées

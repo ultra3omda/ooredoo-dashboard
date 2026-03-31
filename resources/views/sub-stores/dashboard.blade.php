@@ -3763,39 +3763,46 @@
         const select = document.getElementById('subStoreSelect');
         select.innerHTML = '';
         
-        // Vérifier si l'utilisateur est super admin
         const isSuperAdmin = data.user_role === 'super_admin';
+        const hasCampaignRestriction = data.has_campaign_restriction || false;
+        
+        // Store restriction info globally
+        window.hasCampaignRestriction = hasCampaignRestriction;
+        window.allowedCampaigns = data.allowed_campaigns || [];
+        window.canInvite = data.can_invite || false;
         
         if (isSuperAdmin) {
-          // Super admin voit tous les sub-stores + option "ALL"
           const defaultOption = document.createElement('option');
           defaultOption.value = 'ALL';
           defaultOption.textContent = 'Tous les sub-stores';
           select.appendChild(defaultOption);
           
-          // Add sub-stores options
           data.sub_stores.forEach(store => {
             const option = document.createElement('option');
             option.value = store.name;
-            option.textContent = `🏪 ${store.name}`;
+            option.textContent = store.name;
             if (store.name === data.default_sub_store) {
               option.selected = true;
             }
             select.appendChild(option);
           });
         } else {
-          // Admin/Collaborateur voit seulement son sub-store assigné
+          // Admin/Collaborateur voit seulement son sub-store assigne
           const assignedStore = data.sub_stores.find(store => store.name === data.default_sub_store);
           if (assignedStore) {
             const option = document.createElement('option');
             option.value = assignedStore.name;
-            option.textContent = `🏪 ${assignedStore.name}`;
+            option.textContent = assignedStore.name;
             option.selected = true;
             select.appendChild(option);
           }
+          // Disable dropdown for restricted users
+          if (hasCampaignRestriction) {
+            select.disabled = true;
+          }
         }
         
-        debugLog('✅ Sub-stores chargés:', data.sub_stores.length, 'Super Admin:', isSuperAdmin);
+        debugLog('Sub-stores charges:', data.sub_stores.length, 'Restriction campagne:', hasCampaignRestriction);
 
         // Store campaigns data for Pluxee dropdown
         window.pluxeeCampaigns = data.campaigns || {};
@@ -3804,7 +3811,7 @@
         return data;
         
       } catch (error) {
-        debugError('❌ Erreur lors du chargement des sub-stores:', error);
+        debugError('Erreur lors du chargement des sub-stores:', error);
         return { sub_stores: [] };
       }
     }
@@ -3812,10 +3819,12 @@
     // Campaign dropdown for Pluxee sub-stores
     function updateCampaignDropdown(selectedSubStore) {
       const campaignSelect = document.getElementById('campaignSelect');
-      const isPluxee = selectedSubStore && (selectedSubStore.toLowerCase().includes('pluxee') || selectedSubStore.toLowerCase().includes('privilèges by pluxee'));
+      const isPluxee = selectedSubStore && (selectedSubStore.toLowerCase().includes('pluxee') || selectedSubStore.toLowerCase().includes('privilèges by pluxee') || selectedSubStore.toLowerCase().includes('privileges by pluxee'));
       const campaigns = window.pluxeeCampaigns || {};
+      const hasCampaignRestriction = window.hasCampaignRestriction || false;
+      const allowedCampaigns = window.allowedCampaigns || [];
       
-      // Find campaigns for this sub-store
+      // Find campaigns for this sub-store (already filtered by backend for restricted users)
       let storeCampaigns = [];
       for (const [storeName, campList] of Object.entries(campaigns)) {
         if (selectedSubStore === storeName || (isPluxee && storeName.toLowerCase().includes('pluxee'))) {
@@ -3826,16 +3835,41 @@
       
       if (isPluxee && storeCampaigns.length > 0) {
         campaignSelect.style.display = 'block';
-        campaignSelect.innerHTML = '<option value="">Toutes les campagnes (' + storeCampaigns.length + ')</option>';
-        storeCampaigns.forEach(c => {
+        
+        if (hasCampaignRestriction && storeCampaigns.length === 1) {
+          // User restricted to a single campaign: auto-select, disable dropdown
+          campaignSelect.innerHTML = '';
           const opt = document.createElement('option');
-          opt.value = c.name;
-          opt.textContent = c.name + (c.cards ? ' (' + c.cards + ' cartes)' : '');
+          opt.value = storeCampaigns[0].name;
+          opt.textContent = storeCampaigns[0].name + (storeCampaigns[0].cards ? ' (' + storeCampaigns[0].cards + ' cartes)' : '');
+          opt.selected = true;
           campaignSelect.appendChild(opt);
-        });
+          campaignSelect.disabled = true;
+        } else if (hasCampaignRestriction && storeCampaigns.length > 1) {
+          // Multiple allowed campaigns but restricted
+          campaignSelect.innerHTML = '<option value="">Mes campagnes (' + storeCampaigns.length + ')</option>';
+          storeCampaigns.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.name;
+            opt.textContent = c.name + (c.cards ? ' (' + c.cards + ' cartes)' : '');
+            campaignSelect.appendChild(opt);
+          });
+          campaignSelect.disabled = false;
+        } else {
+          // Unrestricted: show all
+          campaignSelect.innerHTML = '<option value="">Toutes les campagnes (' + storeCampaigns.length + ')</option>';
+          storeCampaigns.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.name;
+            opt.textContent = c.name + (c.cards ? ' (' + c.cards + ' cartes)' : '');
+            campaignSelect.appendChild(opt);
+          });
+          campaignSelect.disabled = false;
+        }
       } else {
         campaignSelect.style.display = 'none';
         campaignSelect.innerHTML = '<option value="">Toutes les campagnes</option>';
+        campaignSelect.disabled = false;
       }
     }
 

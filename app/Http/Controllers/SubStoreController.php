@@ -55,9 +55,6 @@ class SubStoreController extends Controller
 
         if (strtolower($subStore) === 'all') $subStore = 'ALL';
 
-        // Store campaign for use by Pluxee methods
-        $this->currentCampaign = $campaign ?: null;
-
         if (!$startDate || !$endDate) {
             $endDate = Carbon::now()->toDateString();
             $startDate = Carbon::now()->subDays(364)->toDateString();
@@ -77,6 +74,21 @@ class SubStoreController extends Controller
         $user = auth()->user();
         $subStore = $this->validateSubStoreAccess($user, $subStore);
 
+        // Apply campaign restriction for users with limited access
+        $allowedCampaigns = $user->getAllowedCampaigns();
+        if (!empty($allowedCampaigns)) {
+            if (empty($campaign)) {
+                // User has restrictions but no campaign selected: force first allowed campaign
+                $campaign = $allowedCampaigns[0];
+            } elseif (!in_array($campaign, $allowedCampaigns)) {
+                // Selected campaign not in allowed list: force first allowed
+                $campaign = $allowedCampaigns[0];
+            }
+        }
+
+        // Store campaign for use by Pluxee methods
+        $this->currentCampaign = $campaign ?: null;
+
         return [
             'start_date' => $startDate,
             'end_date' => $endDate,
@@ -85,6 +97,7 @@ class SubStoreController extends Controller
             'sub_store' => $subStore,
             'campaign' => $this->currentCampaign,
             'period_days' => $periodDays,
+            'allowed_campaigns' => $allowedCampaigns,
         ];
     }
 
@@ -108,8 +121,12 @@ class SubStoreController extends Controller
 
     private function validateSubStoreAccess($user, string $requestedSubStore): string
     {
-        if (!empty($user->pluxee_campaign_access)) {
-            return $user->pluxee_campaign_access;
+        // Users with campaign restrictions: force their assigned sub-store
+        if ($user->hasCampaignRestriction()) {
+            $primaryOperator = $user->primaryOperator();
+            if ($primaryOperator) {
+                return $primaryOperator->operator_name;
+            }
         }
         if ($user->isSuperAdmin()) return $requestedSubStore;
         if ($user->isAdmin() && $user->isPrimarySubStoreUser()) return $requestedSubStore;
@@ -150,17 +167,25 @@ class SubStoreController extends Controller
 
         // Fetch campaigns for Pluxee sub-stores
         $campaigns = [];
+        $allowedCampaigns = $user->getAllowedCampaigns();
+        
         foreach ($availableSubStores as $store) {
             $storeName = is_array($store) ? ($store['name'] ?? '') : ($store->name ?? '');
             if (stripos($storeName, 'pluxee') !== false || stripos($storeName, 'Pluxee') !== false) {
                 $storeId = is_array($store) ? ($store['store_id'] ?? null) : ($store->store_id ?? null);
                 if ($storeId) {
-                    $storeCampaigns = DB::table('carte_recharge')
+                    $query = DB::table('carte_recharge')
                         ->where('stores', $storeId)
                         ->select('campain_name', DB::raw('COUNT(*) as total_batches'), DB::raw('SUM(card_generated_number) as total_cards'))
                         ->groupBy('campain_name')
-                        ->orderBy('campain_name')
-                        ->get()
+                        ->orderBy('campain_name');
+                    
+                    // Filter by allowed campaigns if user has restrictions
+                    if (!empty($allowedCampaigns)) {
+                        $query->whereIn('campain_name', $allowedCampaigns);
+                    }
+                    
+                    $storeCampaigns = $query->get()
                         ->map(fn($c) => [
                             'name' => $c->campain_name,
                             'batches' => (int) $c->total_batches,
@@ -176,6 +201,9 @@ class SubStoreController extends Controller
             'default_sub_store' => $defaultSubStore,
             'user_role' => $user->role ? $user->role->name : 'unknown',
             'campaigns' => $campaigns,
+            'has_campaign_restriction' => $user->hasCampaignRestriction(),
+            'allowed_campaigns' => $allowedCampaigns,
+            'can_invite' => $user->canInviteCollaborators(),
         ]);
     }
 

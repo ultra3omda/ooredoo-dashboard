@@ -359,6 +359,17 @@
                                     @endif
                                     <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
                                         {{ $invitation->operator_name }}
+                                        @php
+                                            $additionalData = $invitation->additional_data;
+                                            $campaigns = is_array($additionalData) ? ($additionalData['campaign_access'] ?? []) : [];
+                                        @endphp
+                                        @if(!empty($campaigns))
+                                            <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px;">
+                                                @foreach($campaigns as $camp)
+                                                    <span style="background: rgba(59,130,246,0.1); color: #2563eb; padding: 1px 6px; border-radius: 4px; font-size: 10px;">{{ $camp }}</span>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                             </td>

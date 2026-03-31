@@ -385,8 +385,8 @@
                         
                         <div class="form-group" id="substore_selection" style="display: none;">
                             <label for="substore_name" class="form-label">Sub-Store *</label>
-                            <select id="substore_name" name="substore_name" class="form-select">
-                                <option value="">Sélectionner un sub-store</option>
+                            <select id="substore_name" name="substore_name" class="form-select" onchange="loadCampaigns()">
+                                <option value="">Selectionner un sub-store</option>
                                 @foreach($subStores as $subStoreKey => $subStoreName)
                                     <option value="{{ $subStoreName }}" {{ old('substore_name') == $subStoreName ? 'selected' : '' }}>
                                         {{ $subStoreName }}
@@ -413,11 +413,11 @@
                             @enderror
                         </div>
                         <input type="hidden" name="type_selection" value="operator">
-                    @elseif(Auth::user()->isAdminSubStore())
+                    @elseif(Auth::user()->isAdminSubStore() || Auth::user()->canInviteCollaborators())
                         <div class="form-group">
                             <label for="substore_name" class="form-label">Sub-Store *</label>
-                            <select id="substore_name" name="substore_name" class="form-select" required>
-                                <option value="">Sélectionner un sub-store</option>
+                            <select id="substore_name" name="substore_name" class="form-select" required onchange="loadCampaigns()">
+                                <option value="">Selectionner un sub-store</option>
                                 @foreach($subStores as $subStoreKey => $subStoreName)
                                     <option value="{{ $subStoreName }}" {{ old('substore_name') == $subStoreName ? 'selected' : '' }}>
                                         {{ $subStoreName }}
@@ -430,6 +430,23 @@
                         </div>
                         <input type="hidden" name="type_selection" value="substore">
                     @endif
+                    
+                    <!-- Campaign Selection Section (dynamic) -->
+                    <div class="form-group full-width" id="campaign_section" style="display: none;">
+                        <label class="form-label">Campagnes accessibles</label>
+                        <div style="font-size: 13px; color: var(--muted); margin-bottom: 8px;">
+                            Si aucune campagne n'est selectionnee, le collaborateur aura acces a <strong>toutes les campagnes</strong> et pourra inviter d'autres collaborateurs.
+                        </div>
+                        <div id="campaign_checkboxes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 300px; overflow-y: auto; padding: 12px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px;">
+                            <div style="text-align: center; padding: 16px; color: var(--muted); grid-column: span 2;">
+                                Selectionnez d'abord un sub-store pour charger les campagnes...
+                            </div>
+                        </div>
+                        <div style="margin-top: 8px; display: flex; gap: 8px;">
+                            <button type="button" onclick="selectAllCampaigns()" class="btn btn-secondary" style="font-size: 12px; padding: 4px 12px;">Tout selectionner</button>
+                            <button type="button" onclick="deselectAllCampaigns()" class="btn btn-secondary" style="font-size: 12px; padding: 4px 12px;">Tout deselectionner</button>
+                        </div>
+                    </div>
                     
                     <div class="form-group full-width">
                         <label for="message" class="form-label">Message personnalisé (optionnel)</label>
@@ -467,17 +484,16 @@
             const substoreSelection = document.getElementById('substore_selection');
             const operatorName = document.getElementById('operator_name');
             const substoreName = document.getElementById('substore_name');
+            const campaignSection = document.getElementById('campaign_section');
             
-            // Vérifier si les éléments existent (seulement pour super admin)
             if (!typeSelection || !operatorSelection || !substoreSelection) {
                 return;
             }
             
-            // Masquer les deux listes par défaut
             operatorSelection.style.display = 'none';
             substoreSelection.style.display = 'none';
+            if (campaignSection) campaignSection.style.display = 'none';
             
-            // Désactiver les champs
             if (operatorName) {
                 operatorName.required = false;
                 operatorName.value = '';
@@ -487,7 +503,6 @@
                 substoreName.value = '';
             }
             
-            // Afficher la liste appropriée selon le type sélectionné
             if (typeSelection.value === 'operator') {
                 operatorSelection.style.display = 'block';
                 if (operatorName) operatorName.required = true;
@@ -496,10 +511,64 @@
                 if (substoreName) substoreName.required = true;
             }
         }
+
+        async function loadCampaigns() {
+            const substoreName = document.getElementById('substore_name');
+            const campaignSection = document.getElementById('campaign_section');
+            const campaignCheckboxes = document.getElementById('campaign_checkboxes');
+            
+            if (!substoreName || !campaignSection || !campaignCheckboxes) return;
+            
+            const storeName = substoreName.value;
+            if (!storeName) {
+                campaignSection.style.display = 'none';
+                return;
+            }
+            
+            campaignSection.style.display = 'block';
+            campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Chargement des campagnes...</div>';
+            
+            try {
+                const res = await fetch(`{{ route('admin.invitations.campaigns') }}?store_name=${encodeURIComponent(storeName)}`);
+                const data = await res.json();
+                
+                if (!data.campaigns || data.campaigns.length === 0) {
+                    campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Aucune campagne trouvee pour ce sub-store.</div>';
+                    return;
+                }
+                
+                let html = '';
+                data.campaigns.forEach((c, i) => {
+                    html += `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--input-border);border-radius:6px;cursor:pointer;transition:all 0.15s;background:var(--card);" 
+                                  onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--input-border)'">
+                        <input type="checkbox" name="campaign_access[]" value="${c.name}" style="width:16px;height:16px;accent-color:var(--accent);">
+                        <div>
+                            <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${c.name}</div>
+                            <div style="font-size:11px;color:var(--muted);">${c.cards} cartes · ${c.batches} lots</div>
+                        </div>
+                    </label>`;
+                });
+                campaignCheckboxes.innerHTML = html;
+            } catch (e) {
+                campaignCheckboxes.innerHTML = `<div style="text-align:center;padding:16px;color:var(--danger);grid-column:span 2;">Erreur: ${e.message}</div>`;
+            }
+        }
+
+        function selectAllCampaigns() {
+            document.querySelectorAll('#campaign_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = true);
+        }
+
+        function deselectAllCampaigns() {
+            document.querySelectorAll('#campaign_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
         
-        // Initialiser l'affichage au chargement de la page
         document.addEventListener('DOMContentLoaded', function() {
             toggleOperatorLists();
+            // Auto-load campaigns if sub-store is pre-selected
+            const substoreName = document.getElementById('substore_name');
+            if (substoreName && substoreName.value) {
+                loadCampaigns();
+            }
         });
     </script>
 </body>
