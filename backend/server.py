@@ -137,22 +137,47 @@ async def merchant_recommendations_health():
         "eval_results": metrics.get("eval_results", {}),
     })
 
+retrain_state = {"status": "idle", "error": None, "started_at": None, "finished_at": None}
+
 @app.post("/api/merchant-recommendations/retrain")
 async def merchant_recommendations_retrain(request: Request):
-    """Trigger model retraining."""
-    try:
-        import subprocess
-        result = subprocess.run(
-            ["python3", os.path.join(os.path.dirname(__file__), '..', 'ml_models', 'train_merchant_recommender.py')],
-            capture_output=True, text=True, timeout=300
-        )
-        return JSONResponse({
-            "success": result.returncode == 0,
-            "output": result.stdout[-2000:] if result.stdout else "",
-            "errors": result.stderr[-500:] if result.stderr else "",
-        })
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    """Trigger model retraining (async background)."""
+    import asyncio as _asyncio
+    if retrain_state["status"] == "running":
+        return JSONResponse({"started": True, "message": "Retrain déjà en cours"})
+    
+    retrain_state["status"] = "running"
+    retrain_state["error"] = None
+    retrain_state["started_at"] = __import__('datetime').datetime.now().isoformat()
+    retrain_state["finished_at"] = None
+
+    def _run_retrain_sync():
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["python3", os.path.join(os.path.dirname(__file__), '..', 'ml_models', 'train_merchant_recommender.py')],
+                capture_output=True, text=True, timeout=300
+            )
+            if result.returncode == 0:
+                retrain_state["status"] = "completed"
+            else:
+                retrain_state["status"] = "failed"
+                retrain_state["error"] = (result.stderr or result.stdout)[-500:]
+        except Exception as e:
+            retrain_state["status"] = "failed"
+            retrain_state["error"] = str(e)
+        retrain_state["finished_at"] = __import__('datetime').datetime.now().isoformat()
+
+    async def _run_in_bg():
+        await _asyncio.to_thread(_run_retrain_sync)
+
+    _asyncio.get_event_loop().create_task(_run_in_bg())
+    return JSONResponse({"started": True, "message": "Retrain lancé en arrière-plan"})
+
+@app.get("/api/merchant-recommendations/retrain/status")
+async def retrain_status():
+    """Check retrain status."""
+    return JSONResponse(retrain_state)
 
 @app.post("/api/merchant-recommendations/track")
 async def track_interaction(request: Request):

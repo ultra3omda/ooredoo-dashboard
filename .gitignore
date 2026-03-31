@@ -86,3 +86,7 @@ dgv_statuses_analysis.txt
 # Environment files
 *.env
 *.env.*
+-e 
+# Environment files
+*.env
+*.env.*

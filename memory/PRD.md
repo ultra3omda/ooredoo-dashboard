@@ -21,44 +21,43 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. Inclu
 
 ### AI Weekly Reporting (DONE)
 - Automated reports, multiple profiles, ML + merchant reco enrichment
-- **Email templates enriched** (CEO + Marketing) with top marchands, catégories tendances (2026-04-02)
+- Email templates enriched (CEO + Marketing) with top marchands, categories tendances
 
 ### Pluxee B2B Campaign Support (DONE)
-- Campaign dropdown when selecting "Club Privilèges By Pluxee" sub-store (3 campaigns)
+- Campaign dropdown when selecting "Club Privileges By Pluxee" sub-store (3 campaigns)
 - Bypass carte_recharge_client, dedicated user access, admin UI
 
 ### Sub-Store Dashboard Refactoring (DONE)
 - 5 split endpoints with Promise.allSettled
-- **8 Merchant KPIs** fully implemented
-- **Redis caching**: CACHE_DRIVER=redis → 14x faster (4651ms → 320ms)
+- 8 Merchant KPIs fully implemented
+- Redis caching: CACHE_DRIVER=redis -> 14x faster (4651ms -> 320ms)
 
 ### ML Merchant Recommendation Engine (DONE)
 - LightGBM Ranker (139K samples, NDCG@5=1.0, 576 marchands, 19K profils)
-- FastAPI: /api/merchant-recommendations (POST recommend, GET health, POST track, GET stats, POST retrain, GET stats/timeline, GET categories)
+- FastAPI: /api/merchant-recommendations (POST recommend, GET health, POST track, GET stats, POST retrain, GET retrain/status, GET stats/timeline, GET categories)
 - Laravel service + Artisan command + Admin dashboard at /admin/merchant-recommendations
 - Feedback loop with interaction tracking + weekly retrain
 
-### Recommendations Widget in Sub-Store Dashboard (DONE - 2026-04-02)
-- **New "Recommandations" tab** (5th tab) in sub-store dashboard
+### Recommendations Widget in Sub-Store Dashboard (DONE)
+- New "Recommandations" tab (5th tab) in sub-store dashboard
 - KPIs: Model status, active merchants, profiled users, interactions
 - Client search with ML Model/Popularity source tags
 - Top 10 popular merchants panel with ranked cards
 - Category dropdown filter (11 categories)
 - Interaction evolution chart (Chart.js, stacked bar, 30 days)
 
-### DB Performance Optimization (DONE - 2026-04-02)
-- **12 new indexes** on critical tables:
-  - `history`: client_id, (client_id, time), (promotion_id, client_id)
-  - `client`: sub_store, client_active, (sub_store, client_active)
-  - `promotion`: promotion_active
-  - `partner`: partener_active
-  - `carte_recharge`: stores, campain_name
-  - `stores`: store_name, store_active
+### DB Performance Optimization (DONE)
+- 12 new indexes on critical tables (history, client, promotion, partner, carte_recharge, stores)
 
-### Email Reporting Enrichment (DONE - 2026-04-02)
-- CEO template: merchant_reco section with KPIs grid, top 5 marchands table, catégories tendances
-- Marketing template: insights marchands section with KPIs, top 10 marchands, catégories
-- WeeklyReportService: gatherMerchantRecoData() method fetches live data from cp_merchants_catalog
+### Email Reporting Enrichment (DONE)
+- CEO template: merchant_reco section with KPIs grid, top 5 marchands table, categories tendances
+- Marketing template: insights marchands section with KPIs, top 10 marchands, categories
+
+### Fix Retrain Button 504 Timeout (DONE - 2026-04-02)
+- JS calls FastAPI directly instead of Laravel proxy (bypass CSRF + timeout)
+- Retrain runs async in background thread (asyncio.to_thread)
+- New polling endpoint GET /api/merchant-recommendations/retrain/status
+- UI shows real-time progress with polling every 5s
 
 ## Test Reports
 - iteration_18: ML recommendation API (18/18)
@@ -67,8 +66,10 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. Inclu
 - iteration_21: Indexes + Reco widget + Timeline + Email enrichment (90% backend + 100% frontend)
 
 ## Pending / Backlog
-- P3: Client-facing recommendation widget for end users (mobile app/web)
-- P3: A/B testing framework for ML vs popularity recommendations
+- P2: Optimize ML queries in predict_merchant.py (batch scoring instead of N+1)
+- P2: Client-facing recommendation widget for end users (mobile app/web)
+- P3: Dashboard Analytics Temporel (Chart.js graphs 30/60/90 days)
+- P3: A/B testing framework ML vs Popularity recommendations
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
