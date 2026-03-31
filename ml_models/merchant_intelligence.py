@@ -139,6 +139,10 @@ def analyze_merchant_traffic(partner_id: int = None, days: int = 90):
             health_score = round(activity_score + trend_score + consistency_score)
 
             promo = promo_map.get(pid, {})
+            # Convert Decimal to native types
+            for pk in promo:
+                if hasattr(promo[pk], 'as_integer_ratio'):
+                    promo[pk] = float(promo[pk])
 
             # Classify merchant status
             if health_score >= 70:
@@ -162,8 +166,8 @@ def analyze_merchant_traffic(partner_id: int = None, days: int = 90):
                 'worst_day': worst_day,
                 'spikes': spikes[:5],
                 'drops': drops[:5],
-                'active_promos': promo.get('active_promos', 0),
-                'total_promos': promo.get('total_promos', 0),
+                'active_promos': int(promo.get('active_promos', 0) or 0),
+                'total_promos': int(promo.get('total_promos', 0) or 0),
                 'avg_discount': round(float(promo.get('avg_discount', 0) or 0), 1),
                 'period_days': total_days,
             })

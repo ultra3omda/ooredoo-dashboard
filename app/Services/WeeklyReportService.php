@@ -109,22 +109,65 @@ class WeeklyReportService
     {
         $mlData = $this->gatherMLData();
         $merchantReco = $this->gatherMerchantRecoData();
+        $merchantIntel = $this->gatherMerchantIntelligenceData();
 
         switch ($recipient->type) {
             case 'ceo':
-                return array_merge($this->gatherCEOReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco]);
+                return array_merge($this->gatherCEOReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco, 'merchant_intelligence' => $merchantIntel]);
             case 'marketing':
-                return array_merge($this->gatherMarketingReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco]);
+                return array_merge($this->gatherMarketingReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco, 'merchant_intelligence' => $merchantIntel]);
             case 'partner':
                 return array_merge($this->gatherPartnerReport($recipient, $start, $end, $compStart, $compEnd), ['ml' => $mlData]);
             case 'associe':
-                return array_merge($this->gatherAssocieReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco]);
+                return array_merge($this->gatherAssocieReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco, 'merchant_intelligence' => $merchantIntel]);
             case 'store':
                 return array_merge($this->gatherStoreReport($recipient, $start, $end, $compStart, $compEnd), ['ml' => $mlData]);
             case 'sub-store':
                 return array_merge($this->gatherSubStoreReport($recipient, $start, $end, $compStart, $compEnd), ['ml' => $mlData]);
             default:
                 return ['ml' => $mlData];
+        }
+    }
+
+    protected function gatherMerchantIntelligenceData(): array
+    {
+        try {
+            $response = Http::timeout(60)->get('http://127.0.0.1:8001/api/merchant-intelligence/digest', [
+                'limit' => 10,
+            ]);
+
+            if (!$response->successful() || !$response->json('success')) {
+                return [];
+            }
+
+            $data = $response->json();
+
+            return [
+                'available' => true,
+                'stats' => $data['stats'] ?? [],
+                'to_boost' => array_map(fn($m) => [
+                    'partner_name' => $m['partner_name'],
+                    'category' => $m['category'],
+                    'health_score' => $m['health_score'],
+                    'avg_daily_tx' => $m['avg_daily_tx'],
+                    'trend_7d_pct' => $m['trend_7d_pct'],
+                    'active_promos' => $m['active_promos'],
+                    'best_day' => $m['best_day'],
+                ], array_slice($data['to_boost'] ?? [], 0, 5)),
+                'to_watch' => array_map(fn($m) => [
+                    'partner_name' => $m['partner_name'],
+                    'health_score' => $m['health_score'],
+                    'trend_7d_pct' => $m['trend_7d_pct'],
+                ], array_slice($data['to_watch'] ?? [], 0, 5)),
+                'top_performers' => array_map(fn($m) => [
+                    'partner_name' => $m['partner_name'],
+                    'health_score' => $m['health_score'],
+                    'total_transactions' => $m['total_transactions'],
+                ], array_slice($data['top_performers'] ?? [], 0, 3)),
+            ];
+        } catch (\Exception $e) {
+            Log::warning("Merchant intelligence data unavailable: " . $e->getMessage());
+            return [];
         }
     }
 
@@ -580,6 +623,33 @@ class WeeklyReportService
             }
         }
 
+        // Merchant Intelligence context
+        $intel = $data['merchant_intelligence'] ?? [];
+        $intelContext = '';
+        if (!empty($intel['available'])) {
+            $stats = $intel['stats'] ?? [];
+            $intelContext = "\n--- INTELLIGENCE MARCHANDS (30 derniers jours) ---\n";
+            $intelContext .= "- Performants: " . ($stats['performant'] ?? 0) . " | A surveiller: " . ($stats['a_surveiller'] ?? 0) . " | A booster: " . ($stats['a_booster'] ?? 0) . "\n";
+            if (!empty($intel['to_boost'])) {
+                $intelContext .= "- Marchands a BOOSTER (action urgente):\n";
+                foreach ($intel['to_boost'] as $m) {
+                    $intelContext .= "  * {$m['partner_name']} ({$m['category']}): score={$m['health_score']}/100, {$m['avg_daily_tx']} tx/jour, tendance 7j={$m['trend_7d_pct']}%, {$m['active_promos']} promos, meilleur jour={$m['best_day']}\n";
+                }
+            }
+            if (!empty($intel['to_watch'])) {
+                $intelContext .= "- Marchands a SURVEILLER:\n";
+                foreach ($intel['to_watch'] as $m) {
+                    $intelContext .= "  * {$m['partner_name']}: score={$m['health_score']}/100, tendance={$m['trend_7d_pct']}%\n";
+                }
+            }
+            if (!empty($intel['top_performers'])) {
+                $intelContext .= "- Top PERFORMEURS:\n";
+                foreach ($intel['top_performers'] as $m) {
+                    $intelContext .= "  * {$m['partner_name']}: {$m['total_transactions']} tx, score={$m['health_score']}/100\n";
+                }
+            }
+        }
+
         switch ($reportType) {
             case 'ceo':
                 $kpis = $data['global_kpis'] ?? [];
@@ -594,7 +664,8 @@ class WeeklyReportService
                 $base .= "- Eklektik Revenu TTC: " . ($ek['revenue_ttc'] ?? 'N/A') . " TND\n";
                 $base .= "- Top marchands: " . json_encode(array_map(fn($m) => $m->name . '(' . $m->transactions . ')', $data['top_merchants'] ?? [])) . "\n";
                 $base .= $mlContext;
-                $base .= "\nPour le CEO, focus sur: ROI global, risques strategiques (churn), opportunites de croissance basees sur les predictions ML, et recommandations d'investissement. Inclure des projections basees sur les donnees ML.";
+                $base .= $intelContext;
+                $base .= "\nPour le CEO, focus sur: ROI global, risques strategiques (churn), opportunites de croissance basees sur les predictions ML, marchands a booster/surveiller, et recommandations d'investissement. Inclure des projections basees sur les donnees ML et l'intelligence marchands.";
                 break;
 
             case 'marketing':
@@ -609,7 +680,8 @@ class WeeklyReportService
                 $channels = $data['channel_acquisition'] ?? [];
                 $base .= "- Canaux d'acquisition: " . json_encode(array_map(fn($c) => $c->channel . ':' . $c->count, $channels)) . "\n";
                 $base .= $mlContext;
-                $base .= "\nPour le Marketing, focus sur: campagnes de reactivation pour les segments 'high_risk' et 'struggling_payers', optimisation des canaux d'acquisition, et actions de retention basees sur les predictions ML de churn.";
+                $base .= $intelContext;
+                $base .= "\nPour le Marketing, focus sur: campagnes de reactivation pour les segments 'high_risk' et 'struggling_payers', optimisation des canaux d'acquisition, actions de retention basees sur les predictions ML de churn, et strategies pour booster les marchands en difficulte.";
                 break;
 
             case 'partner':
@@ -639,7 +711,8 @@ class WeeklyReportService
                 $cats = $data['top_categories'] ?? [];
                 $base .= "- Top categories: " . json_encode(array_map(fn($c) => $c->category . '(' . $c->transactions . ' trans, ' . $c->partners . ' partenaires)', $cats)) . "\n";
                 $base .= $mlContext;
-                $base .= "\nPour l'Associe, focus sur: sante financiere du programme, diversification du reseau partenaire, et risques lies au churn identifies par le ML.";
+                $base .= $intelContext;
+                $base .= "\nPour l'Associe, focus sur: sante financiere du programme, diversification du reseau partenaire, risques lies au churn identifies par le ML, et performance des marchands (a booster vs performants).";
                 break;
 
             case 'store':
