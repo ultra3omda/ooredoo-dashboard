@@ -3162,7 +3162,7 @@
       
       // Générer les lignes du tableau avec deltas colorés
       tbody.innerHTML = currentPageMerchants.map((merchant, index) => {
-        const delta = merchant.delta || 0;
+        const delta = merchant.delta || merchant.change || 0;
         let deltaClass = 'neutral';
         let deltaIcon = '→';
         const rank = startIndex + index + 1;
@@ -3190,8 +3190,8 @@
             <td>${rankBadge}</td>
             <td><strong>${merchant.name}</strong></td>
             <td>${merchant.category}</td>
-            <td>${merchant.current.toLocaleString()}</td>
-            <td>${merchant.share}%</td>
+            <td>${(merchant.current || merchant.transactions || 0).toLocaleString()}</td>
+            <td>${(merchant.share || 0).toFixed ? (merchant.share || 0).toFixed(1) : (merchant.share || 0)}%</td>
             <td>
               <span class="delta-badge delta-${deltaClass}">
                 ${deltaIcon} ${delta > 0 ? '+' : ''}${delta.toFixed(1)}%
