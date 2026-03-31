@@ -1,77 +1,75 @@
 # Club Privileges Dashboard - PRD
 
-## Problem Statement
-Dashboard haute performance Laravel pour Ooredoo Club Privileges. KPIs mathematiquement exacts, reporting automatise, UI responsive Light/Dark, pipeline ML predictif.
+## Original Problem Statement
+High-performance Laravel 10 dashboard for Club Privileges loyalty program. Includes mathematically accurate stats, automated AI weekly reporting, ML-powered predictive dashboard, B2B sub-store campaign management, and a merchant recommendation engine.
+
+## Tech Stack
+- **Backend**: Laravel 10 (PHP 8.2), FastAPI (Python), Redis Cache
+- **Database**: MySQL (remote: 51.38.187.245:3306 / clubprivileges)
+- **ML**: LightGBM, scikit-learn
+- **AI**: OpenAI GPT-4o via litellm (Emergent LLM Key)
+- **Frontend**: Blade templates, Vanilla JS, Chart.js
 
 ## Architecture
-- **Backend**: Laravel 10 + PHP-FPM + Nginx (port 8002) + Redis
-- **Frontend**: Vanilla JS + Blade templates
-- **ML**: Python (scikit-learn, LightGBM, pandas, pymysql) via async PHP CLI workers
-- **AI Report**: GPT-4o via Emergent LLM Key (emergentintegrations)
-- **DB**: MySQL remote (51.38.187.245) + Redis cache local
-- **Proxy**: FastAPI on port 8001 proxies to PHP-FPM on port 8002
+- Laravel: port 8002 (nginx/php-fpm)
+- Frontend proxy: port 3000 → 8002
+- FastAPI: port 8001 (ML + AI endpoints)
+- Kubernetes ingress: /api/* → 8001, rest → 3000
 
-## Completed Features
-### Core Dashboard
-- KPI math corrigee (Conversion, Retention, Churn, Billing Rates)
-- Date shortcuts (3M, 6M, 12M), Timwe 30-day trial display
-- Merchant KPIs, option "Tous" pagination
-- Retention Rate fix, Ooredoo Billing Rate historique fix
-- Light/Dark mode theming
+## What's Been Implemented
 
-### ML Pipeline
-- Async background worker (async_worker.php)
-- Batch extraction optimisee (~1000x : 23k clients en 70s vs 19h)
-- LightGBM training (Accuracy 100%, AUC ROC 100%)
-- A/B Testing framework
-- ML Insights Widget on main Overview (real data)
+### Core Dashboard (DONE)
+- Main dashboard with KPIs, merchants, subscriptions
+- Sub-store dashboard with full data segmentation
+- Period comparison (current vs previous period)
+- Export functionality
 
-### Weekly Reports (6 types)
-- **CEO** : Rapport strategique complet + ML predictions (churn, segments) + AI suggestions
-- **Marketing** : Acquisition, Retention, Ciblage ML (segments cibles campagnes) + AI suggestions
-- **Partner** : Transactions individuelles, top offres + AI suggestions
-- **Associe** : Performance reseau, financier, top categories + ML insights + AI suggestions
-- **Store** : Performance point de vente, affluence horaire, daily transactions + ML insights + AI suggestions
-- **Sub-Store** : Meme que Store, scoped au sous-point de vente
-- CRUD destinataires complet (add, edit, delete, toggle)
-- Envoi automatique programme (chaque lundi)
-- Preview avec generation AI en temps reel
-- Templates PDF premium avec sections ML integrees
+### ML Pipeline (DONE)
+- Feature extraction with batch processing (~70s for full DB)
+- LightGBM model training (churn prediction, CLV)
+- A/B testing framework
+- ML Dashboard UI
 
-### AI Report Generation (ML Dashboard)
-- Generation rapport IA via GPT-4o (emergentintegrations)
-- Section dediee dans ML Dashboard avec viewer integre
-- Rendu structuré : KPIs, alertes, recommandations, modele ML
+### AI Weekly Reporting (DONE)
+- Automated report generation via FastAPI
+- Multiple recipient profiles: CEO, Marketing, Associe, Store, Sub-store
+- ML data enrichment in reports
+- PDF/Email templates for all profiles
 
-## [2026-03-31] Changes
-- Fixed pymysql + SQL column mismatch + permissions
-- Batch extraction optimization (1000x speedup)
-- Added 3 new report types (associe, store, sub-store) with templates
-- Enhanced CEO and Marketing PDF templates with ML Predictions sections
-- Enhanced AI prompts with ML context per profile
-- Updated frontend dropdowns and forms for 6 types
-- Database ENUM column updated for new types
-- AI Report generation button + viewer in ML Dashboard
-- E2E ML Pipeline verified (Extraction -> Training -> A/B Test -> Report)
+### Pluxee B2B Campaign Support (DONE - 2026-03-31)
+- **Bug Fix**: Pluxee campaigns have no carte_recharge_client data. Added alternate KPI query methods using client.sub_store + client_abonnement directly.
+- **Methods added**: isPluxeeCampaign(), getPluxeeDistributed/Inscriptions/ActiveUsers/Transactions/etc.
+- **User Access Control**: pluxee_campaign_access column on users table, isolated campaign view
+- **Admin UI**: /admin/pluxee/users management page (create, deactivate, reactivate users per campaign)
+- **JS Fix**: Corrected fetch URLs in sub-stores dashboard to use /sub-stores/api/ prefix
+- **Route Fix**: Fixed route('logout') → route('auth.logout') in sub-stores template
+- Tested: 100% backend (9/9), 100% frontend (iteration_16.json)
+
+## Pending / Backlog
+
+### P1 - ML Merchant Recommendation Engine
+- Phase 1: DB Infrastructure (cp_user_merchant_history, cp_merchants_catalog, cp_user_profile, cp_user_offer_interactions)
+- Phase 2: Feature Extraction + LightGBM Ranker training
+- Phase 3: POST /api/merchant-recommendations in FastAPI
+- Phase 4: MLMerchantRecommendationService.php + Artisan command
+- Phase 5: Feedback Loop + Weekly retrain scheduler
 
 ## Key Files
-- `app/Services/Dashboard/KPIService.php` - FRAGILE math
-- `app/Services/WeeklyReportService.php` - 6 report types + ML data
-- `app/Services/MLFeatureExtractionService.php` - Batch extraction v2.0
-- `app/Http/Controllers/Api/ReportController.php` - Report CRUD + preview
-- `app/Http/Controllers/Admin/MLDashboardController.php` - ML Dashboard
-- `ml_models/async_worker.php` - Background worker (extract, train, report)
-- `ml_models/generate_report.py` - AI report via GPT-4o
-- `resources/views/reports/pdf/*.blade.php` - 5 PDF templates (store shared with sub-store)
-- `public/js/dashboard/reporting.js` - Frontend reporting module
-- `backend/server.py` - FastAPI proxy + AI suggestions endpoint
+- `app/Http/Controllers/SubStoreController.php` - Sub-store dashboard with Pluxee support
+- `app/Services/SubStoreService.php` - Access control with pluxee_campaign_access
+- `app/Http/Controllers/Admin/PluxeeUserController.php` - Pluxee user management
+- `backend/server.py` - FastAPI (AI Reports, ML endpoints)
+- `ml_models/` - Python ML scripts
+- `resources/views/sub-stores/dashboard.blade.php` - Sub-store dashboard UI
+- `resources/views/admin/pluxee-users.blade.php` - Pluxee admin UI
 
-## Backlog
-### P2
-- Export rapports PDF (download from UI)
-- Comparaison historique des rapports
-- Envoi par email automatique du rapport IA ML Dashboard
+## DB Schema (Key Tables)
+- `stores`: store_id, store_name, store_type, is_sub_store, store_active
+- `client`: client_id, sub_store (FK to stores.store_id), client_email
+- `client_abonnement`: subscriptions with expiration dates
+- `history`: transaction history
+- `carte_recharge` / `carte_recharge_client`: card distribution (NOT used for Pluxee)
+- `users`: id, email, role_id, pluxee_campaign_access (nullable)
 
-## Credentials
-- Login: superadmin@ooredoo.tn / SuperAdmin@2025
-- DB: looker_user @ 51.38.187.245:3306 / clubprivileges
+## Admin Credentials
+- SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
