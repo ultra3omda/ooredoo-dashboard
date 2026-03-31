@@ -589,6 +589,322 @@ async def get_categories():
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# P2: CLIENT-FACING RECOMMENDATION WIDGET
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/merchant-recommendations/widget/{client_id}")
+async def widget_recommendations(client_id: int, request: Request):
+    """Lightweight recommendation widget for mobile/web app integration."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from predict_merchant import get_recommendations
+
+        top_k = int(request.query_params.get('top_k', '5'))
+        category_id = request.query_params.get('category_id')
+        exclude_visited = request.query_params.get('exclude_visited', 'false').lower() == 'true'
+
+        result = get_recommendations(
+            client_id=client_id, top_k=top_k,
+            category_id=int(category_id) if category_id else None,
+            exclude_visited=exclude_visited
+        )
+        recommendations, source, user_context = result if len(result) == 3 else (result[0], result[1], {})
+
+        items = [{
+            'id': r['partner_id'],
+            'name': r['partner_name'],
+            'category': r['category_name'],
+            'score': r['score_normalized'],
+            'type': r.get('recommendation_type', 'DISCOVERY'),
+            'reason': r['reason'],
+            'promos': r['active_promotions'],
+            'discount': r['avg_discount'],
+            'visited': r.get('already_visited', False),
+            'visits': r.get('visit_count', 0),
+        } for r in recommendations]
+
+        return JSONResponse({
+            'client_id': client_id,
+            'source': source,
+            'items': items,
+            'count': len(items),
+        })
+    except Exception as e:
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-recommendations/widget/{client_id}/html")
+async def widget_recommendations_html(client_id: int, request: Request):
+    """Embeddable HTML widget for mobile/web app."""
+    from fastapi.responses import HTMLResponse
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from predict_merchant import get_recommendations
+
+        top_k = int(request.query_params.get('top_k', '5'))
+        result = get_recommendations(client_id=client_id, top_k=top_k)
+        recommendations, source, _ = result if len(result) == 3 else (result[0], result[1], {})
+
+        type_styles = {
+            'DISCOVERY': ('Decouvrir', '#3b82f6', '#eff6ff'),
+            'RE_ENGAGEMENT': ('Re-visiter', '#f59e0b', '#fffbeb'),
+            'LOYALTY': ('Favori', '#10b981', '#ecfdf5'),
+            'TRENDING': ('Tendance', '#8b5cf6', '#f5f3ff'),
+        }
+
+        cards = ''
+        for r in recommendations:
+            rt = r.get('recommendation_type', 'DISCOVERY')
+            label, color, bg = type_styles.get(rt, type_styles['DISCOVERY'])
+            sn = r.get('score_normalized', 0)
+            sc = '#10b981' if sn >= 80 else '#f59e0b' if sn >= 40 else '#9ca3af'
+            because = r.get('because_you_visited', [])
+            because_text = f' · Parce que: {because[0]["partner_name"]}' if because else ''
+
+            cards += f'''<div style="display:flex;gap:12px;padding:12px;border-radius:12px;border:1px solid #e5e7eb;margin-bottom:8px;background:#fff;">
+  <div style="width:36px;height:36px;border-radius:50%;background:{bg};color:{color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">{r["rank"]}</div>
+  <div style="flex:1;min-width:0;">
+    <div style="font-weight:600;font-size:14px;color:#111;">{r["partner_name"]}</div>
+    <div style="font-size:11px;color:#6b7280;margin-top:2px;">
+      {r["category_name"]} · <span style="background:{bg};color:{color};padding:1px 6px;border-radius:4px;font-weight:600;">{label}</span>
+      {f' · {r["active_promotions"]} promos' if r["active_promotions"] else ''}
+    </div>
+    <div style="font-size:10px;color:#1e3a5f;margin-top:3px;">{r["reason"]}{because_text}</div>
+  </div>
+  <div style="text-align:center;min-width:40px;">
+    <div style="font-size:18px;font-weight:800;color:{sc};">{sn:.0f}</div>
+    <div style="font-size:9px;color:#9ca3af;">/100</div>
+  </div>
+</div>'''
+
+        html = f'''<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{{margin:0;padding:0;box-sizing:border-box}}body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;padding:12px}}</style>
+</head><body>
+<div style="max-width:400px;margin:0 auto;">
+  <div style="font-size:15px;font-weight:700;color:#1e3a5f;margin-bottom:12px;">Recommande pour vous</div>
+  {cards}
+  <div style="text-align:center;font-size:10px;color:#9ca3af;margin-top:8px;">Club Privileges ML · {source}</div>
+</div>
+</body></html>'''
+        return HTMLResponse(content=html)
+    except Exception as e:
+        return HTMLResponse(content=f"<p>Erreur: {e}</p>", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MERCHANT INTELLIGENCE ENGINE
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/merchant-intelligence/analyze")
+async def merchant_intelligence_analyze(request: Request):
+    """Analyze merchant traffic patterns and detect anomalies."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import analyze_merchant_traffic
+
+        partner_id = request.query_params.get('partner_id')
+        days = int(request.query_params.get('days', '30'))
+
+        results = analyze_merchant_traffic(
+            partner_id=int(partner_id) if partner_id else None,
+            days=days
+        )
+        return JSONResponse({
+            'success': True,
+            'count': len(results),
+            'period_days': days,
+            'merchants': results,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-intelligence/digest")
+async def merchant_intelligence_digest(request: Request):
+    """Get merchant intelligence digest: boost/watch/performers."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import get_top_merchants_to_boost
+
+        limit = int(request.query_params.get('limit', '10'))
+        data = get_top_merchants_to_boost(limit=limit)
+        return JSONResponse({'success': True, **data})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.post("/api/merchant-intelligence/report")
+async def merchant_intelligence_report(request: Request):
+    """Generate AI-powered merchant intelligence report."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import get_top_merchants_to_boost, generate_merchant_intelligence_report
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not api_key:
+            return JSONResponse({'success': False, 'error': 'Cle API non configuree'}, status_code=500)
+
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+
+        model_provider = body.get('provider', 'gemini')
+        model_name = body.get('model', 'gemini-2.5-flash')
+
+        merchants_data = get_top_merchants_to_boost(limit=10)
+        report = await generate_merchant_intelligence_report(
+            merchants_data, api_key,
+            model_provider=model_provider,
+            model_name=model_name
+        )
+
+        return JSONResponse({
+            'success': True,
+            'report': report,
+            'data': merchants_data.get('stats', {}),
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-intelligence/report/html")
+async def merchant_intelligence_report_html(request: Request):
+    """Generate HTML intelligence report."""
+    from fastapi.responses import HTMLResponse
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import get_top_merchants_to_boost, generate_merchant_intelligence_report
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        merchants_data = get_top_merchants_to_boost(limit=10)
+
+        ai_report = None
+        if api_key:
+            try:
+                ai_report = await generate_merchant_intelligence_report(
+                    merchants_data, api_key,
+                    model_provider='gemini', model_name='gemini-2.5-flash'
+                )
+            except Exception as e:
+                ai_report = {'executive_summary': f'Analyse IA indisponible: {str(e)}', 'boost_recommendations': []}
+
+        html = _build_intelligence_html(merchants_data, ai_report)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return HTMLResponse(content=f"<html><body><h1>Erreur</h1><pre>{str(e)}</pre></body></html>", status_code=500)
+
+
+def _build_intelligence_html(data, ai_report):
+    """Build HTML intelligence report."""
+    now = datetime.now().strftime('%d/%m/%Y %H:%M')
+    stats = data.get('stats', {})
+    total = stats.get('performant', 0) + stats.get('a_surveiller', 0) + stats.get('a_booster', 0)
+
+    summary = ''
+    if ai_report and ai_report.get('executive_summary'):
+        summary = f'''<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:12px;padding:20px;margin-bottom:20px;">
+            <div style="font-weight:700;color:#92400e;margin-bottom:8px;">Resume executif (Gemini AI)</div>
+            <div style="font-size:14px;color:#78350f;line-height:1.6;">{ai_report["executive_summary"]}</div>
+        </div>'''
+
+    boost_html = ''
+    recs = ai_report.get('boost_recommendations', []) if ai_report else []
+    for rec in recs:
+        actions = ''.join([f'<li style="margin:4px 0;">{a}</li>' for a in rec.get('actions', [])])
+        priority_color = {'P0': '#ef4444', 'P1': '#f59e0b', 'P2': '#3b82f6'}.get(rec.get('priority', 'P1'), '#6b7280')
+        boost_html += f'''<div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:12px;background:white;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="font-weight:700;font-size:15px;">{rec.get("partner_name", "")}</span>
+                <span style="background:{priority_color};color:white;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">{rec.get("priority", "P1")}</span>
+            </div>
+            <div style="font-size:13px;color:#374151;margin-bottom:8px;"><strong>Diagnostic:</strong> {rec.get("diagnostic", "")}</div>
+            <div style="margin-bottom:6px;"><strong style="font-size:12px;">Actions commerciales:</strong><ul style="font-size:12px;padding-left:20px;color:#374151;">{actions}</ul></div>
+            <div style="font-size:12px;color:#1e40af;margin-bottom:4px;"><strong>Strategie promo:</strong> {rec.get("promo_strategy", "")}</div>
+            <div style="font-size:12px;color:#059669;"><strong>Strategie digitale:</strong> {rec.get("digital_strategy", "")}</div>
+        </div>'''
+
+    status_colors = {'PERFORMANT': '#10b981', 'A_SURVEILLER': '#f59e0b', 'A_BOOSTER': '#ef4444'}
+
+    def merchant_row(m):
+        sc = status_colors.get(m['status'], '#6b7280')
+        trend = m['trend_7d_pct']
+        trend_icon = '&#9650;' if trend > 0 else '&#9660;' if trend < 0 else '&#9644;'
+        trend_color = '#10b981' if trend > 5 else '#ef4444' if trend < -5 else '#6b7280'
+        return f'''<tr>
+            <td style="padding:8px;font-weight:600;">{m["partner_name"]}</td>
+            <td style="padding:8px;font-size:12px;">{m["category"]}</td>
+            <td style="padding:8px;text-align:center;"><span style="background:{sc}20;color:{sc};padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">{m["status"].replace("_"," ")}</span></td>
+            <td style="padding:8px;text-align:center;font-weight:700;">{m["health_score"]}</td>
+            <td style="padding:8px;text-align:center;">{m["avg_daily_tx"]}</td>
+            <td style="padding:8px;text-align:center;color:{trend_color};font-weight:600;">{trend_icon} {trend:+.1f}%</td>
+            <td style="padding:8px;text-align:center;">{m["active_promos"]}</td>
+            <td style="padding:8px;text-align:center;font-size:12px;">{m["best_day"][:3]}</td>
+        </tr>'''
+
+    boost_rows = ''.join([merchant_row(m) for m in data.get('to_boost', [])[:10]])
+    watch_rows = ''.join([merchant_row(m) for m in data.get('to_watch', [])[:10]])
+    perf_rows = ''.join([merchant_row(m) for m in data.get('top_performers', [])[:5]])
+
+    table_header = '''<tr style="background:#f9fafb;">
+        <th style="padding:8px;text-align:left;">Marchand</th><th style="padding:8px;text-align:left;">Categorie</th>
+        <th style="padding:8px;text-align:center;">Statut</th><th style="padding:8px;text-align:center;">Score</th>
+        <th style="padding:8px;text-align:center;">Tx/jour</th><th style="padding:8px;text-align:center;">Tendance 7j</th>
+        <th style="padding:8px;text-align:center;">Promos</th><th style="padding:8px;text-align:center;">Meilleur jour</th>
+    </tr>'''
+
+    patterns_html = ''
+    patterns = ai_report.get('success_patterns', []) if ai_report else []
+    if patterns:
+        patterns_items = ''.join([f'<li style="margin:4px 0;font-size:13px;">{p}</li>' for p in patterns])
+        patterns_html = f'''<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;color:#065f46;margin-bottom:8px;">Patterns de succes a repliquer</div>
+            <ul style="padding-left:20px;color:#047857;">{patterns_items}</ul>
+        </div>'''
+
+    return f'''<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Intelligence Marchands — Club Privileges</title>
+<style>*{{margin:0;padding:0;box-sizing:border-box}}body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f3f4f6;color:#111;line-height:1.5}}.container{{max-width:1000px;margin:0 auto;padding:24px 16px}}table{{width:100%;border-collapse:collapse}}th,td{{border-bottom:1px solid #e5e7eb}}@media print{{body{{background:#fff}}.no-print{{display:none!important}}}}</style>
+</head><body><div class="container">
+<div style="background:linear-gradient(135deg,#7c2d12,#c2410c);color:white;border-radius:16px;padding:28px 32px;margin-bottom:20px;">
+    <div style="font-size:24px;font-weight:800;">Intelligence Marchands</div>
+    <div style="font-size:14px;opacity:0.8;margin-top:4px;">Club Privileges — Analyse de performance + Recommandations commerciales IA</div>
+    <div style="font-size:12px;opacity:0.6;margin-top:6px;">Genere le {now}</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;">
+    <div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;"><div style="font-size:28px;font-weight:800;color:#1e3a5f;">{total}</div><div style="font-size:11px;color:#6b7280;">Marchands analyses</div></div>
+    <div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;"><div style="font-size:28px;font-weight:800;color:#10b981;">{stats.get("performant", 0)}</div><div style="font-size:11px;color:#6b7280;">Performants</div></div>
+    <div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;"><div style="font-size:28px;font-weight:800;color:#f59e0b;">{stats.get("a_surveiller", 0)}</div><div style="font-size:11px;color:#6b7280;">A surveiller</div></div>
+    <div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;"><div style="font-size:28px;font-weight:800;color:#ef4444;">{stats.get("a_booster", 0)}</div><div style="font-size:11px;color:#6b7280;">A booster</div></div>
+</div>
+{summary}
+{f'<div style="margin-bottom:20px;"><div style="font-size:18px;font-weight:700;margin-bottom:12px;">Recommandations commerciales (IA)</div>{boost_html}</div>' if boost_html else ''}
+{patterns_html}
+{f'<div style="background:white;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #e5e7eb;overflow-x:auto;"><div style="font-size:16px;font-weight:700;color:#ef4444;margin-bottom:12px;">Marchands a booster</div><table>{table_header}{boost_rows}</table></div>' if boost_rows else ''}
+{f'<div style="background:white;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #e5e7eb;overflow-x:auto;"><div style="font-size:16px;font-weight:700;color:#f59e0b;margin-bottom:12px;">Marchands a surveiller</div><table>{table_header}{watch_rows}</table></div>' if watch_rows else ''}
+{f'<div style="background:white;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #e5e7eb;overflow-x:auto;"><div style="font-size:16px;font-weight:700;color:#10b981;margin-bottom:12px;">Top performeurs</div><table>{table_header}{perf_rows}</table></div>' if perf_rows else ''}
+<div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af;">Club Privileges — Intelligence Marchands v1.0 · {total} marchands · Gemini AI</div>
+</div></body></html>'''
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROXY CATCH-ALL (must be LAST)
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
 async def proxy(request: Request, path: str):
     target_url = f"{PHP_BASE_URL}/{path}"
@@ -644,6 +960,354 @@ async def proxy(request: Request, path: str):
     except Exception as e:
         return Response(content=f"Proxy error: {str(e)}", status_code=502)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# P2: CLIENT-FACING RECOMMENDATION WIDGET
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/merchant-recommendations/widget/{client_id}")
+async def widget_recommendations(client_id: int, request: Request):
+    """Lightweight recommendation widget for mobile/web app integration."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from predict_merchant import get_recommendations
+
+        top_k = int(request.query_params.get('top_k', '5'))
+        category_id = request.query_params.get('category_id')
+        exclude_visited = request.query_params.get('exclude_visited', 'false').lower() == 'true'
+
+        result = get_recommendations(
+            client_id=client_id, top_k=top_k,
+            category_id=int(category_id) if category_id else None,
+            exclude_visited=exclude_visited
+        )
+        recommendations, source, user_context = result if len(result) == 3 else (result[0], result[1], {})
+
+        # Lightweight format for mobile
+        items = [{
+            'id': r['partner_id'],
+            'name': r['partner_name'],
+            'category': r['category_name'],
+            'score': r['score_normalized'],
+            'type': r.get('recommendation_type', 'DISCOVERY'),
+            'reason': r['reason'],
+            'promos': r['active_promotions'],
+            'discount': r['avg_discount'],
+            'visited': r.get('already_visited', False),
+            'visits': r.get('visit_count', 0),
+        } for r in recommendations]
+
+        return JSONResponse({
+            'client_id': client_id,
+            'source': source,
+            'items': items,
+            'count': len(items),
+        })
+    except Exception as e:
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-recommendations/widget/{client_id}/html")
+async def widget_recommendations_html(client_id: int, request: Request):
+    """Embeddable HTML widget for mobile/web app."""
+    from fastapi.responses import HTMLResponse
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from predict_merchant import get_recommendations
+
+        top_k = int(request.query_params.get('top_k', '5'))
+        result = get_recommendations(client_id=client_id, top_k=top_k)
+        recommendations, source, _ = result if len(result) == 3 else (result[0], result[1], {})
+
+        type_styles = {
+            'DISCOVERY': ('Decouvrir', '#3b82f6', '#eff6ff'),
+            'RE_ENGAGEMENT': ('Re-visiter', '#f59e0b', '#fffbeb'),
+            'LOYALTY': ('Favori', '#10b981', '#ecfdf5'),
+            'TRENDING': ('Tendance', '#8b5cf6', '#f5f3ff'),
+        }
+
+        cards = ''
+        for r in recommendations:
+            rt = r.get('recommendation_type', 'DISCOVERY')
+            label, color, bg = type_styles.get(rt, type_styles['DISCOVERY'])
+            sn = r.get('score_normalized', 0)
+            sc = '#10b981' if sn >= 80 else '#f59e0b' if sn >= 40 else '#9ca3af'
+            because = r.get('because_you_visited', [])
+            because_text = f' · Parce que: {because[0]["partner_name"]}' if because else ''
+
+            cards += f'''<div style="display:flex;gap:12px;padding:12px;border-radius:12px;border:1px solid #e5e7eb;margin-bottom:8px;background:#fff;">
+  <div style="width:36px;height:36px;border-radius:50%;background:{bg};color:{color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">{r["rank"]}</div>
+  <div style="flex:1;min-width:0;">
+    <div style="font-weight:600;font-size:14px;color:#111;">{r["partner_name"]}</div>
+    <div style="font-size:11px;color:#6b7280;margin-top:2px;">
+      {r["category_name"]} · <span style="background:{bg};color:{color};padding:1px 6px;border-radius:4px;font-weight:600;">{label}</span>
+      {f' · {r["active_promotions"]} promos' if r["active_promotions"] else ''}
+    </div>
+    <div style="font-size:10px;color:#1e3a5f;margin-top:3px;">{r["reason"]}{because_text}</div>
+  </div>
+  <div style="text-align:center;min-width:40px;">
+    <div style="font-size:18px;font-weight:800;color:{sc};">{sn:.0f}</div>
+    <div style="font-size:9px;color:#9ca3af;">/100</div>
+  </div>
+</div>'''
+
+        html = f'''<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{{margin:0;padding:0;box-sizing:border-box}}body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;padding:12px}}</style>
+</head><body>
+<div style="max-width:400px;margin:0 auto;">
+  <div style="font-size:15px;font-weight:700;color:#1e3a5f;margin-bottom:12px;">Recommande pour vous</div>
+  {cards}
+  <div style="text-align:center;font-size:10px;color:#9ca3af;margin-top:8px;">Club Privileges ML · {source}</div>
+</div>
+</body></html>'''
+        return HTMLResponse(content=html)
+    except Exception as e:
+        return HTMLResponse(content=f"<p>Erreur: {e}</p>", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MERCHANT INTELLIGENCE ENGINE
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/merchant-intelligence/analyze")
+async def merchant_intelligence_analyze(request: Request):
+    """Analyze merchant traffic patterns and detect anomalies."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import analyze_merchant_traffic
+
+        partner_id = request.query_params.get('partner_id')
+        days = int(request.query_params.get('days', '30'))
+
+        results = analyze_merchant_traffic(
+            partner_id=int(partner_id) if partner_id else None,
+            days=days
+        )
+        return JSONResponse({
+            'success': True,
+            'count': len(results),
+            'period_days': days,
+            'merchants': results,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-intelligence/digest")
+async def merchant_intelligence_digest(request: Request):
+    """Get merchant intelligence digest: boost/watch/performers."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import get_top_merchants_to_boost
+
+        limit = int(request.query_params.get('limit', '10'))
+        data = get_top_merchants_to_boost(limit=limit)
+        return JSONResponse({'success': True, **data})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.post("/api/merchant-intelligence/report")
+async def merchant_intelligence_report(request: Request):
+    """Generate AI-powered merchant intelligence report with commercial recommendations."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import get_top_merchants_to_boost, generate_merchant_intelligence_report
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not api_key:
+            return JSONResponse({'success': False, 'error': 'Cle API non configuree'}, status_code=500)
+
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+
+        model_provider = body.get('provider', 'gemini')
+        model_name = body.get('model', 'gemini-2.5-flash')
+
+        merchants_data = get_top_merchants_to_boost(limit=10)
+        report = await generate_merchant_intelligence_report(
+            merchants_data, api_key,
+            model_provider=model_provider,
+            model_name=model_name
+        )
+
+        return JSONResponse({
+            'success': True,
+            'report': report,
+            'data': merchants_data.get('stats', {}),
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-intelligence/report/html")
+async def merchant_intelligence_report_html(request: Request):
+    """Generate HTML intelligence report for merchants."""
+    from fastapi.responses import HTMLResponse
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import get_top_merchants_to_boost, generate_merchant_intelligence_report
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        merchants_data = get_top_merchants_to_boost(limit=10)
+
+        ai_report = None
+        if api_key:
+            try:
+                ai_report = await generate_merchant_intelligence_report(
+                    merchants_data, api_key,
+                    model_provider='gemini', model_name='gemini-2.5-flash'
+                )
+            except Exception as e:
+                ai_report = {'executive_summary': f'Analyse IA indisponible: {str(e)}', 'boost_recommendations': []}
+
+        html = _build_intelligence_html(merchants_data, ai_report)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return HTMLResponse(content=f"<html><body><h1>Erreur</h1><pre>{str(e)}</pre></body></html>", status_code=500)
+
+
+def _build_intelligence_html(data, ai_report):
+    """Build HTML intelligence report."""
+    now = datetime.now().strftime('%d/%m/%Y %H:%M')
+    stats = data.get('stats', {})
+    total = stats.get('performant', 0) + stats.get('a_surveiller', 0) + stats.get('a_booster', 0)
+
+    summary = ''
+    if ai_report and ai_report.get('executive_summary'):
+        summary = f'''<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:12px;padding:20px;margin-bottom:20px;">
+            <div style="font-weight:700;color:#92400e;margin-bottom:8px;">Resume executif (Gemini AI)</div>
+            <div style="font-size:14px;color:#78350f;line-height:1.6;">{ai_report["executive_summary"]}</div>
+        </div>'''
+
+    # Boost recommendations from AI
+    boost_html = ''
+    recs = ai_report.get('boost_recommendations', []) if ai_report else []
+    for rec in recs:
+        actions = ''.join([f'<li style="margin:4px 0;">{a}</li>' for a in rec.get('actions', [])])
+        priority_color = {'P0': '#ef4444', 'P1': '#f59e0b', 'P2': '#3b82f6'}.get(rec.get('priority', 'P1'), '#6b7280')
+        boost_html += f'''<div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:12px;background:white;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="font-weight:700;font-size:15px;">{rec.get("partner_name", "")}</span>
+                <span style="background:{priority_color};color:white;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">{rec.get("priority", "P1")}</span>
+            </div>
+            <div style="font-size:13px;color:#374151;margin-bottom:8px;"><strong>Diagnostic:</strong> {rec.get("diagnostic", "")}</div>
+            <div style="margin-bottom:6px;"><strong style="font-size:12px;">Actions commerciales:</strong><ul style="font-size:12px;padding-left:20px;color:#374151;">{actions}</ul></div>
+            <div style="font-size:12px;color:#1e40af;margin-bottom:4px;"><strong>Strategie promo:</strong> {rec.get("promo_strategy", "")}</div>
+            <div style="font-size:12px;color:#059669;"><strong>Strategie digitale:</strong> {rec.get("digital_strategy", "")}</div>
+        </div>'''
+
+    # Merchant status cards
+    status_colors = {'PERFORMANT': '#10b981', 'A_SURVEILLER': '#f59e0b', 'A_BOOSTER': '#ef4444'}
+
+
 @app.get("/")
 async def root(request: Request):
     return await proxy(request, "")
+
+    def merchant_row(m):
+        sc = status_colors.get(m['status'], '#6b7280')
+        trend = m['trend_7d_pct']
+        trend_icon = '&#9650;' if trend > 0 else '&#9660;' if trend < 0 else '&#9644;'
+        trend_color = '#10b981' if trend > 5 else '#ef4444' if trend < -5 else '#6b7280'
+        return f'''<tr>
+            <td style="padding:8px;font-weight:600;">{m["partner_name"]}</td>
+            <td style="padding:8px;font-size:12px;">{m["category"]}</td>
+            <td style="padding:8px;text-align:center;"><span style="background:{sc}20;color:{sc};padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">{m["status"].replace("_"," ")}</span></td>
+            <td style="padding:8px;text-align:center;font-weight:700;">{m["health_score"]}</td>
+            <td style="padding:8px;text-align:center;">{m["avg_daily_tx"]}</td>
+            <td style="padding:8px;text-align:center;color:{trend_color};font-weight:600;">{trend_icon} {trend:+.1f}%</td>
+            <td style="padding:8px;text-align:center;">{m["active_promos"]}</td>
+            <td style="padding:8px;text-align:center;font-size:12px;">{m["best_day"][:3]}</td>
+        </tr>'''
+
+    boost_rows = ''.join([merchant_row(m) for m in data.get('to_boost', [])[:10]])
+    watch_rows = ''.join([merchant_row(m) for m in data.get('to_watch', [])[:10]])
+    perf_rows = ''.join([merchant_row(m) for m in data.get('top_performers', [])[:5]])
+
+    table_header = '''<tr style="background:#f9fafb;">
+        <th style="padding:8px;text-align:left;">Marchand</th>
+        <th style="padding:8px;text-align:left;">Categorie</th>
+        <th style="padding:8px;text-align:center;">Statut</th>
+        <th style="padding:8px;text-align:center;">Score</th>
+        <th style="padding:8px;text-align:center;">Tx/jour</th>
+        <th style="padding:8px;text-align:center;">Tendance 7j</th>
+        <th style="padding:8px;text-align:center;">Promos</th>
+        <th style="padding:8px;text-align:center;">Meilleur jour</th>
+    </tr>'''
+
+    # Success patterns
+    patterns_html = ''
+    patterns = ai_report.get('success_patterns', []) if ai_report else []
+    if patterns:
+        patterns_items = ''.join([f'<li style="margin:4px 0;font-size:13px;">{p}</li>' for p in patterns])
+        patterns_html = f'''<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;color:#065f46;margin-bottom:8px;">Patterns de succes a repliquer</div>
+            <ul style="padding-left:20px;color:#047857;">{patterns_items}</ul>
+        </div>'''
+
+    return f'''<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Intelligence Marchands — Club Privileges</title>
+<style>*{{margin:0;padding:0;box-sizing:border-box}}body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f3f4f6;color:#111;line-height:1.5}}.container{{max-width:1000px;margin:0 auto;padding:24px 16px}}table{{width:100%;border-collapse:collapse}}th,td{{border-bottom:1px solid #e5e7eb}}@media print{{body{{background:#fff}}.no-print{{display:none!important}}}}</style>
+</head><body><div class="container">
+<!-- Header -->
+<div style="background:linear-gradient(135deg,#7c2d12,#c2410c);color:white;border-radius:16px;padding:28px 32px;margin-bottom:20px;">
+    <div style="font-size:24px;font-weight:800;">Intelligence Marchands</div>
+    <div style="font-size:14px;opacity:0.8;margin-top:4px;">Club Privileges — Analyse de performance + Recommandations commerciales IA</div>
+    <div style="font-size:12px;opacity:0.6;margin-top:6px;">Genere le {now}</div>
+</div>
+
+<!-- KPIs -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;">
+    <div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+        <div style="font-size:28px;font-weight:800;color:#1e3a5f;">{total}</div>
+        <div style="font-size:11px;color:#6b7280;">Marchands analyses</div>
+    </div>
+    <div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+        <div style="font-size:28px;font-weight:800;color:#10b981;">{stats.get("performant", 0)}</div>
+        <div style="font-size:11px;color:#6b7280;">Performants</div>
+    </div>
+    <div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+        <div style="font-size:28px;font-weight:800;color:#f59e0b;">{stats.get("a_surveiller", 0)}</div>
+        <div style="font-size:11px;color:#6b7280;">A surveiller</div>
+    </div>
+    <div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+        <div style="font-size:28px;font-weight:800;color:#ef4444;">{stats.get("a_booster", 0)}</div>
+        <div style="font-size:11px;color:#6b7280;">A booster</div>
+    </div>
+</div>
+
+{summary}
+
+<!-- AI Recommendations -->
+{f'<div style="margin-bottom:20px;"><div style="font-size:18px;font-weight:700;margin-bottom:12px;color:#111;">Recommandations commerciales (IA)</div>{boost_html}</div>' if boost_html else ''}
+
+{patterns_html}
+
+<!-- Boost Table -->
+{f'<div style="background:white;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #e5e7eb;overflow-x:auto;"><div style="font-size:16px;font-weight:700;color:#ef4444;margin-bottom:12px;">Marchands a booster</div><table>{table_header}{boost_rows}</table></div>' if boost_rows else ''}
+
+<!-- Watch Table -->
+{f'<div style="background:white;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #e5e7eb;overflow-x:auto;"><div style="font-size:16px;font-weight:700;color:#f59e0b;margin-bottom:12px;">Marchands a surveiller</div><table>{table_header}{watch_rows}</table></div>' if watch_rows else ''}
+
+<!-- Performers Table -->
+{f'<div style="background:white;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #e5e7eb;overflow-x:auto;"><div style="font-size:16px;font-weight:700;color:#10b981;margin-bottom:12px;">Top performeurs</div><table>{table_header}{perf_rows}</table></div>' if perf_rows else ''}
+
+<div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af;">
+    Club Privileges — Intelligence Marchands v1.0 · Analyse de {total} marchands · Gemini AI
+</div>
+</div></body></html>'''
