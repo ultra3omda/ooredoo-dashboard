@@ -94,20 +94,31 @@ async def merchant_recommendations(request: Request):
         category_id = body.get("category_id")
         exclude_visited = body.get("exclude_visited", False)
         
-        recommendations, source = get_recommendations(
+        result = get_recommendations(
             client_id=int(client_id),
             top_k=int(top_k),
             category_id=int(category_id) if category_id else None,
             exclude_visited=bool(exclude_visited)
         )
         
-        return JSONResponse({
+        # Handle both old (2-tuple) and new (3-tuple with user_context) return formats
+        if len(result) == 3:
+            recommendations, source, user_context = result
+        else:
+            recommendations, source = result
+            user_context = None
+        
+        response = {
             "success": True,
             "client_id": int(client_id),
             "count": len(recommendations),
             "source": source,
             "recommendations": recommendations,
-        })
+        }
+        if user_context:
+            response["user_context"] = user_context
+        
+        return JSONResponse(response)
     except Exception as e:
         import traceback
         traceback.print_exc()
