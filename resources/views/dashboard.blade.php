@@ -77,6 +77,9 @@
       <a href="{{ route('admin.eklektik.sync-tracking') }}" class="dropdown-item" data-testid="menu-sync-tracking">Suivi Synchronisations</a>
       @endif
       <a href="{{ route('admin.ml.dashboard') }}" class="dropdown-item" data-testid="menu-ml-dashboard">Dashboard ML</a>
+      @if(Auth::user()->isSuperAdmin())
+      <a href="{{ route('admin.pluxee.users.index') }}" class="dropdown-item" data-testid="menu-pluxee-users">Gestion Pluxee</a>
+      @endif
       <div style="border-top: 1px solid var(--border); margin: 4px 0;"></div>
       <form action="{{ route('auth.logout') }}" method="POST" style="margin: 0;">
         @csrf

@@ -237,6 +237,19 @@ class SubStoreService
      */
     public function getAvailableSubStoresForUser($user): array
     {
+        // Pluxee campaign user: only their assigned campaign
+        if (!empty($user->pluxee_campaign_access)) {
+            $store = DB::table('stores')
+                ->where('store_name', $user->pluxee_campaign_access)
+                ->where('store_active', 1)
+                ->select('store_name as name', 'store_id')
+                ->first();
+            if ($store) {
+                return [(array) $store];
+            }
+            return [['name' => $user->pluxee_campaign_access, 'store_id' => null]];
+        }
+
         // Super Admin : tous les sub-stores
         if ($user->isSuperAdmin()) {
             return $this->getSubStoresWithIds();
@@ -274,6 +287,11 @@ class SubStoreService
      */
     public function getDefaultSubStoreForUser($user): ?string
     {
+        // Pluxee campaign user: their campaign
+        if (!empty($user->pluxee_campaign_access)) {
+            return $user->pluxee_campaign_access;
+        }
+
         // Super Admin : ALL par défaut
         if ($user->isSuperAdmin()) {
             return 'ALL';

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="9" time="167.213" timestamp="2026-03-31T10:33:32.552208+00:00" hostname="agent-env-05e71150-e8ce-4b77-a854-80030459ae3b"><testcase classname="backend.tests.test_pluxee_dashboard.TestPluxeeDashboardKPIs" name="test_pluxee_ramadan_dashboard_returns_nonzero_kpis" time="40.560" /><testcase classname="backend.tests.test_pluxee_dashboard.TestPluxeeDashboardKPIs" name="test_pluxee_ete_dashboard_returns_different_data" time="63.256" /><testcase classname="backend.tests.test_pluxee_dashboard.TestPluxeeDashboardKPIs" name="test_sofrecom_dashboard_regression_check" time="24.748" /><testcase classname="backend.tests.test_pluxee_dashboard.TestPluxeeUserAccess" name="test_pluxee_user_sees_only_their_campaign" time="19.639" /><testcase classname="backend.tests.test_pluxee_dashboard.TestPluxeeAdminEndpoints" name="test_get_pluxee_campaigns" time="5.463" /><testcase classname="backend.tests.test_pluxee_dashboard.TestPluxeeAdminEndpoints" name="test_list_pluxee_users" time="1.870" /><testcase classname="backend.tests.test_pluxee_dashboard.TestPluxeeAdminEndpoints" name="test_create_pluxee_user" time="6.104" /><testcase classname="backend.tests.test_pluxee_dashboard.TestSubStoresPageLoad" name="test_substores_page_loads_for_admin" time="1.765"><failure message="AssertionError: Page contains 500 error&#10;assert '500' not in '&lt;!DOCTYPE h...   }\n\n    '&#10;  &#10;  '500' is contained here:&#10;    &lt;!DOCTYPE html&gt;&#10;    &lt;html lang=&quot;fr&quot;&gt;&#10;    &lt;head&gt;&#10;      &lt;meta charset=&quot;UTF-8&quot; /&gt;&#10;      &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;...&#10;  &#10;  ...Full output truncated (24 lines hidden), use '-vv' to show">backend/tests/test_pluxee_dashboard.py:322: in test_substores_page_loads_for_admin
+    assert '500' not in response.text[:1000], "Page contains 500 error"
+E   AssertionError: Page contains 500 error
+E   assert '500' not in '&lt;!DOCTYPE h...   }\n\n    '
+E     
+E     '500' is contained here:
+E       &lt;!DOCTYPE html&gt;
+E       &lt;html lang="fr"&gt;
+E       &lt;head&gt;
+E         &lt;meta charset="UTF-8" /&gt;
+E         &lt;meta name="viewport" content="width=device-width, initial-scale=1.0" /&gt;...
+E     
+E     ...Full output truncated (24 lines hidden), use '-vv' to show</failure></testcase><testcase classname="backend.tests.test_pluxee_dashboard.TestSubStoresPageLoad" name="test_substores_page_loads_for_pluxee_user" time="3.654" /></testsuite></testsuites>

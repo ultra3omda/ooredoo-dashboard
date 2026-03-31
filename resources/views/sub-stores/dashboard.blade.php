@@ -1596,7 +1596,7 @@
                   @if(Auth::user()->canAccessEklektikConfig())
                   <a href="{{ route('admin.eklektik-cron') }}" class="admin-btn" style="display:block; margin:8px;">⚙️ Configuration Eklektik</a>
                   @endif
-                  <form action="{{ route('logout') }}" method="POST" style="display:block; margin:8px;">
+                  <form action="{{ route('auth.logout') }}" method="POST" style="display:block; margin:8px;">
                     @csrf
                     <button type="submit" class="logout-btn" style="width:100%;" onclick="return confirm('Êtes-vous sûr de vouloir vous déconnecter ?')">Déconnexion</button>
                   </form>
@@ -2322,7 +2322,7 @@
         
         debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
         
-        const response = await fetch(`/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -2717,7 +2717,7 @@
             controller.abort();
         }, timeoutMs);
         
-        const response = await fetch(`/api/sub-store/dashboard/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/sub-stores/api/dashboard/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
@@ -2827,7 +2827,7 @@
         try {
           showExpirationsSkeleton();
           const subStore = document.getElementById('subStoreSelect')?.value || 'ALL';
-          const resp = await fetch(`/api/expirations?sub_store=${encodeURIComponent(subStore)}`);
+          const resp = await fetch(`/sub-stores/api/expirations?sub_store=${encodeURIComponent(subStore)}`);
           const aux = await resp.json();
           if (aux.expirationsByMonth && aux.expirationsByMonth.length > 0) {
             createExpirationsChart(aux.expirationsByMonth);
@@ -3494,7 +3494,7 @@
     // Load available sub-stores
     async function loadSubStores() {
       try {
-        const response = await fetch('/api/sub-stores');
+        const response = await fetch('/sub-stores/api/sub-stores');
         const data = await response.json();
         
         const select = document.getElementById('subStoreSelect');
@@ -3957,7 +3957,7 @@
         
         debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
         
-        const response = await fetch(`/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
+        const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'

@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\TimweDiagnosticApiController;
 use App\Http\Controllers\Admin\MLDashboardController;
 use App\Http\Controllers\Admin\EklektikSyncTrackingController;
 use App\Http\Controllers\Admin\ClubPrivilegesSyncController;
+use App\Http\Controllers\Admin\PluxeeUserController;
 use App\Http\Controllers\SubStoreController;
 use App\Http\Controllers\Api\DataController;
 use App\Http\Controllers\Api\DataControllerOptimized;
@@ -188,6 +189,16 @@ Route::middleware('auth')->group(function () {
             Route::post('/ab-test/{testId}/end', [MLDashboardController::class, 'endABTest'])->name('ab-test.end');
             Route::post('/report/generate', [MLDashboardController::class, 'generateReport'])->name('report.generate');
             Route::get('/report/latest', [MLDashboardController::class, 'getLatestReport'])->name('report.latest');
+        });
+
+        // === PLUXEE USER MANAGEMENT ROUTES ===
+        Route::prefix('pluxee')->name('pluxee.')->group(function () {
+            Route::get('/users', [PluxeeUserController::class, 'index'])->name('users.index');
+            Route::get('/users/list', [PluxeeUserController::class, 'listUsers'])->name('users.list');
+            Route::post('/users/create', [PluxeeUserController::class, 'createUser'])->name('users.create');
+            Route::post('/users/{userId}/deactivate', [PluxeeUserController::class, 'deactivateUser'])->name('users.deactivate');
+            Route::post('/users/{userId}/activate', [PluxeeUserController::class, 'activateUser'])->name('users.activate');
+            Route::get('/campaigns', [PluxeeUserController::class, 'getCampaigns'])->name('campaigns');
         });
 
         // === AI AGENT ROUTES ===
