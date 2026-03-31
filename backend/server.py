@@ -13,30 +13,33 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     print("Backend proxy started - ensuring PHP-FPM and Nginx are running...")
     import subprocess
-    # Ensure PHP-FPM is running
-    result = subprocess.run(["pgrep", "-f", "php-fpm"], capture_output=True)
-    if result.returncode != 0:
-        print("Starting PHP-FPM...")
-        subprocess.run(["mkdir", "-p", "/run/php"], check=False)
-        # Try multiple PHP-FPM binary locations
-        for fpm_bin in ["/usr/sbin/php-fpm8.2", "php-fpm8.2", "php-fpm"]:
-            try:
-                subprocess.run([fpm_bin, "--daemonize"], check=False)
-                print(f"Started PHP-FPM via {fpm_bin}")
-                break
-            except FileNotFoundError:
-                continue
-        else:
-            # Fallback: try service command
-            subprocess.run(["service", "php8.2-fpm", "start"], check=False, capture_output=True)
-            print("Started PHP-FPM via service command")
-    # Ensure Nginx has the Laravel config and is serving port 8002
-    result = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8002/"], capture_output=True, text=True)
-    if result.stdout.strip() != "200":
-        print("Reloading Nginx...")
-        subprocess.run(["nginx", "-s", "reload"], check=False, capture_output=True)
-    # Fix storage permissions
-    subprocess.run(["chmod", "-R", "777", "/app/storage/logs/", "/app/storage/framework/"], check=False, capture_output=True)
+    try:
+        # Ensure PHP-FPM is running
+        result = subprocess.run(["pgrep", "-f", "php-fpm"], capture_output=True)
+        if result.returncode != 0:
+            print("Starting PHP-FPM...")
+            subprocess.run(["mkdir", "-p", "/run/php"], check=False)
+            for fpm_bin in ["/usr/sbin/php-fpm8.2", "php-fpm8.2", "php-fpm"]:
+                try:
+                    subprocess.run([fpm_bin, "--daemonize"], check=False)
+                    print(f"Started PHP-FPM via {fpm_bin}")
+                    break
+                except FileNotFoundError:
+                    continue
+            else:
+                subprocess.run(["service", "php8.2-fpm", "start"], check=False, capture_output=True)
+                print("Started PHP-FPM via service command")
+        # Ensure Nginx has the Laravel config and is serving port 8002
+        result = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8002/"], capture_output=True, text=True)
+        if result.stdout.strip() != "200":
+            print("Reloading Nginx...")
+            subprocess.run(["nginx", "-s", "reload"], check=False, capture_output=True)
+        # Fix storage permissions
+        subprocess.run(["chmod", "-R", "777", "/app/storage/logs/", "/app/storage/framework/"], check=False, capture_output=True)
+    except FileNotFoundError:
+        print("Some system commands not found (pgrep/nginx) - skipping startup checks (VPS mode)")
+    except Exception as e:
+        print(f"Startup checks skipped: {e}")
     print("Backend proxy ready - proxying to Nginx+PHP-FPM on port 8002")
     yield
 
