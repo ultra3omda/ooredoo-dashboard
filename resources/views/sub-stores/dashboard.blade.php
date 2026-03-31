@@ -3189,9 +3189,9 @@
           <tr>
             <td>${rankBadge}</td>
             <td><strong>${merchant.name}</strong></td>
-            <td>${merchant.category}</td>
-            <td>${(merchant.current || merchant.transactions || 0).toLocaleString()}</td>
-            <td>${(merchant.share || 0).toFixed ? (merchant.share || 0).toFixed(1) : (merchant.share || 0)}%</td>
+            <td>${merchant.category || '-'}</td>
+            <td>${Number(merchant.current || merchant.transactions || 0).toLocaleString()}</td>
+            <td>${Number(merchant.share || 0).toFixed(1)}%</td>
             <td>
               <span class="delta-badge delta-${deltaClass}">
                 ${deltaIcon} ${delta > 0 ? '+' : ''}${delta.toFixed(1)}%
@@ -3283,7 +3283,7 @@
       const csvContent = "data:text/csv;charset=utf-8," + 
         "Rang,Nom du Marchand,Catégorie,Transactions,Part de Marché,Delta\n" +
         allMerchants.map(merchant => {
-          return `${merchant.rank},"${merchant.name}","${merchant.category}",${merchant.current},${merchant.share}%,"${merchant.delta ? (merchant.delta > 0 ? '+' : '') + merchant.delta.toFixed(1) + '%' : '0.0%'}"`;
+          return `${merchant.rank || 0},"${merchant.name || ''}","${merchant.category || ''}",${merchant.current || merchant.transactions || 0},${Number(merchant.share || 0).toFixed(1)}%,"${merchant.delta ? (merchant.delta > 0 ? '+' : '') + merchant.delta.toFixed(1) + '%' : '0.0%'}"`;
         }).join("\n");
       
       const encodedUri = encodeURI(csvContent);

@@ -1,0 +1,43 @@
+{
+  "trained_at": "2026-03-31T11:31:23.142588",
+  "n_train_samples": 111660,
+  "n_test_samples": 27660,
+  "n_features": 28,
+  "n_groups_train": 15399,
+  "n_groups_test": 3850,
+  "eval_results": {
+    "ndcg@5": 1.0,
+    "ndcg@10": 1.0
+  },
+  "feature_importances": {
+    "user_avg_visits": 716,
+    "visit_count": 666,
+    "user_total_visits": 543,
+    "days_since_last_visit": 537,
+    "loyalty_score": 485,
+    "avg_days_between_visits": 453,
+    "days_since_last_activity": 381,
+    "merchant_avg_visits": 377,
+    "recency_score": 291,
+    "unique_merchants_visited": 199,
+    "merchant_total_visits": 172,
+    "age": 130,
+    "merchant_unique_visitors": 125,
+    "frequency_score": 113,
+    "location_count": 107,
+    "active_promotion_count": 92,
+    "subscription_tier": 86,
+    "same_fav_category": 83,
+    "unique_categories_visited": 76,
+    "popularity_score": 71,
+    "avg_discount": 70,
+    "unique_promotions_used": 56,
+    "max_discount": 53,
+    "is_female": 41,
+    "total_promotion_count": 40,
+    "category_diversity_score": 23,
+    "is_featured": 14,
+    "merchant_is_premium": 0
+  },
+  "best_iteration": 0
+}

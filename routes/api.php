@@ -103,3 +103,27 @@ Route::prefix('reports')->name('api.reports.')->group(function () {
     Route::get('/partners', [ReportController::class, 'getPartners'])->name('partners');
     Route::get('/schedule', [ReportController::class, 'getScheduleConfig'])->name('schedule');
 });
+
+// ML Merchant Recommendations (proxied to FastAPI)
+Route::prefix('merchant-recommendations')->name('api.merchant-reco.')->group(function () {
+    Route::get('/health', function () {
+        $service = new \App\Services\MLMerchantRecommendationService();
+        return response()->json($service->getHealth());
+    })->name('health');
+
+    Route::post('/', function (\Illuminate\Http\Request $request) {
+        $service = new \App\Services\MLMerchantRecommendationService();
+        $result = $service->getRecommendations(
+            (int) $request->input('client_id'),
+            (int) $request->input('top_k', 10),
+            $request->input('category_id') ? (int) $request->input('category_id') : null,
+            (bool) $request->input('exclude_visited', false)
+        );
+        return response()->json($result);
+    })->name('recommend');
+
+    Route::post('/retrain', function () {
+        $service = new \App\Services\MLMerchantRecommendationService();
+        return response()->json($service->triggerRetrain());
+    })->name('retrain');
+});

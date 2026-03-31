@@ -159,6 +159,17 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/health-check.log'));
+
+            // ============================================================
+            // ML MERCHANT RECOMMENDATIONS - Retrain hebdomadaire
+            // ============================================================
+
+            // Retrain du modèle de recommandation marchands - Chaque dimanche à 6h30
+            $schedule->command('ml:merchant-recommendations retrain')
+                ->weeklyOn(0, '06:30')
+                ->withoutOverlapping(300)
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/merchant-reco-retrain.log'));
     }
 
     /**

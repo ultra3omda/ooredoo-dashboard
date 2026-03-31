@@ -1,0 +1,402 @@
+[
+  {
+    "partner_id": 1427,
+    "partner_name": "PATH\u00c9",
+    "category_name": "Sport, Loisirs & Voyages",
+    "popularity_score": 475.9643,
+    "active_promotions": 10,
+    "avg_discount": 31.79
+  },
+  {
+    "partner_id": 1511,
+    "partner_name": "BAGUETTE & BAGUETTE",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 406.9302,
+    "active_promotions": 1,
+    "avg_discount": 25.0
+  },
+  {
+    "partner_id": 869,
+    "partner_name": "ZEN",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 276.6655,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1068,
+    "partner_name": "HA ",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 251.7294,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 808,
+    "partner_name": "STRASS",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 195.6281,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 891,
+    "partner_name": "EXIST",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 170.9649,
+    "active_promotions": 2,
+    "avg_discount": 20.0
+  },
+  {
+    "partner_id": 1153,
+    "partner_name": "KFC",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 133.0336,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 1293,
+    "partner_name": "COSMITTO",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 127.8706,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 1512,
+    "partner_name": "HOBO",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 124.3107,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 1105,
+    "partner_name": "PATISSERIE MASMOUDI",
+    "category_name": "P\u00e2tisserie & \u00e9picerie",
+    "popularity_score": 107.0933,
+    "active_promotions": 1,
+    "avg_discount": 13.33
+  },
+  {
+    "partner_id": 1115,
+    "partner_name": "CASA DECO",
+    "category_name": "Maison & D\u00e9co",
+    "popularity_score": 69.5773,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1133,
+    "partner_name": "BIGOTTI & OME",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 66.3366,
+    "active_promotions": 1,
+    "avg_discount": 35.0
+  },
+  {
+    "partner_id": 981,
+    "partner_name": "MANEKEN",
+    "category_name": "P\u00e2tisserie & \u00e9picerie",
+    "popularity_score": 64.4015,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1209,
+    "partner_name": "TRAVELTODO",
+    "category_name": "Sport, Loisirs & Voyages",
+    "popularity_score": 64.0567,
+    "active_promotions": 2,
+    "avg_discount": 12.5
+  },
+  {
+    "partner_id": 1639,
+    "partner_name": "OXIDO",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 52.6392,
+    "active_promotions": 1,
+    "avg_discount": 16.67
+  },
+  {
+    "partner_id": 46,
+    "partner_name": "ABRACADABRA",
+    "category_name": "Jouets & gaming",
+    "popularity_score": 52.5921,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 443,
+    "partner_name": "CARTHAGE LAND TUNIS",
+    "category_name": "Sport, Loisirs & Voyages",
+    "popularity_score": 51.2043,
+    "active_promotions": 1,
+    "avg_discount": 22.5
+  },
+  {
+    "partner_id": 173,
+    "partner_name": "TUNISIE BOOKING ",
+    "category_name": "Sport, Loisirs & Voyages",
+    "popularity_score": 40.9669,
+    "active_promotions": 1,
+    "avg_discount": 25.0
+  },
+  {
+    "partner_id": 432,
+    "partner_name": "PURE JUICE ",
+    "category_name": "P\u00e2tisserie & \u00e9picerie",
+    "popularity_score": 39.3418,
+    "active_promotions": 2,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1464,
+    "partner_name": "ROUTE 66 ",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 38.9421,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1078,
+    "partner_name": "JUMPARK",
+    "category_name": "Sport, Loisirs & Voyages",
+    "popularity_score": 37.3442,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 1822,
+    "partner_name": "Monoprix",
+    "category_name": "Boutiques en ligne",
+    "popularity_score": 37.125,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 953,
+    "partner_name": "HAPPYNESS",
+    "category_name": "Beaut\u00e9 & bien \u00eatre",
+    "popularity_score": 32.4076,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1660,
+    "partner_name": "YOYO FOOD ",
+    "category_name": "P\u00e2tisserie & \u00e9picerie",
+    "popularity_score": 31.2691,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1642,
+    "partner_name": "HUMMEL",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 30.1115,
+    "active_promotions": 2,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 1041,
+    "partner_name": "MAZZARO MILANO",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 29.9142,
+    "active_promotions": 1,
+    "avg_discount": 25.0
+  },
+  {
+    "partner_id": 1001,
+    "partner_name": "SANGOOR.TN",
+    "category_name": "Boutiques en ligne",
+    "popularity_score": 28.3652,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1152,
+    "partner_name": "FATALES",
+    "category_name": "Beaut\u00e9 & bien \u00eatre",
+    "popularity_score": 28.2554,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 1659,
+    "partner_name": "TOP PICK BUREAU",
+    "category_name": "Formation & \u00e9ducation",
+    "popularity_score": 27.9689,
+    "active_promotions": 3,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 1749,
+    "partner_name": "Z'animo",
+    "category_name": "Sport, Loisirs & Voyages",
+    "popularity_score": 27.0509,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 397,
+    "partner_name": "MAMMA TIME",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 25.7702,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1483,
+    "partner_name": "3ALLA9NI",
+    "category_name": "Boutiques en ligne",
+    "popularity_score": 24.5967,
+    "active_promotions": 1,
+    "avg_discount": 15.0
+  },
+  {
+    "partner_id": 1657,
+    "partner_name": "THE 716 MENZAH 6",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 23.9449,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1082,
+    "partner_name": "THE 716 LAC 2",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 22.5327,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 206,
+    "partner_name": "PICSTORE.TN",
+    "category_name": "Boutiques en ligne",
+    "popularity_score": 20.2386,
+    "active_promotions": 1,
+    "avg_discount": 25.0
+  },
+  {
+    "partner_id": 568,
+    "partner_name": "ENZO SHOES",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 19.8741,
+    "active_promotions": 1,
+    "avg_discount": 12.5
+  },
+  {
+    "partner_id": 1663,
+    "partner_name": "TOP PICK HOUSE",
+    "category_name": "Maison & D\u00e9co",
+    "popularity_score": 19.0607,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1651,
+    "partner_name": "NESPRESSO",
+    "category_name": "P\u00e2tisserie & \u00e9picerie",
+    "popularity_score": 18.7567,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 550,
+    "partner_name": "CAPRICE LINGERIE",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 18.5125,
+    "active_promotions": 1,
+    "avg_discount": 12.5
+  },
+  {
+    "partner_id": 1111,
+    "partner_name": "TACOS DE LYON",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 17.4224,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 680,
+    "partner_name": "AZAR SHOES",
+    "category_name": "Mode & accessoires",
+    "popularity_score": 16.0441,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1525,
+    "partner_name": "ECOSI BISTROT",
+    "category_name": "Restaurants & caf\u00e9s",
+    "popularity_score": 15.9128,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1617,
+    "partner_name": "DR PARA",
+    "category_name": "Boutiques en ligne",
+    "popularity_score": 15.0372,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1329,
+    "partner_name": "ANAIS PARAPHARMACIE ",
+    "category_name": "Beaut\u00e9 & bien \u00eatre",
+    "popularity_score": 14.7051,
+    "active_promotions": 3,
+    "avg_discount": 11.67
+  },
+  {
+    "partner_id": 1678,
+    "partner_name": "LINGERIE.TN",
+    "category_name": "Boutiques en ligne",
+    "popularity_score": 14.3584,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 55,
+    "partner_name": "FIX N GO",
+    "category_name": "Services",
+    "popularity_score": 14.2965,
+    "active_promotions": 2,
+    "avg_discount": 18.5
+  },
+  {
+    "partner_id": 1195,
+    "partner_name": "BARBAPAPA",
+    "category_name": "Jouets & gaming",
+    "popularity_score": 13.8776,
+    "active_promotions": 1,
+    "avg_discount": 28.33
+  },
+  {
+    "partner_id": 605,
+    "partner_name": "SMART COSMETICS",
+    "category_name": "Beaut\u00e9 & bien \u00eatre",
+    "popularity_score": 13.3986,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 894,
+    "partner_name": "KAINA COSMETICS",
+    "category_name": "Boutiques en ligne",
+    "popularity_score": 12.9988,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  },
+  {
+    "partner_id": 1614,
+    "partner_name": "LE BISCUIT CITE LA GAZELLE",
+    "category_name": "P\u00e2tisserie & \u00e9picerie",
+    "popularity_score": 12.9574,
+    "active_promotions": 1,
+    "avg_discount": 10.0
+  }
+]
