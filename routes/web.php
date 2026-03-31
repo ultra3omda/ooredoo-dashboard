@@ -133,6 +133,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/users/{user}/reset-password', [UserManagementController::class, 'resetPassword'])->name('users.reset-password');
         Route::post('/users/{user}/suspend', [UserManagementController::class, 'suspend'])->name('users.suspend');
         Route::post('/users/{user}/unsuspend', [UserManagementController::class, 'unsuspend'])->name('users.unsuspend');
+        Route::get('/users/permissions', [UserManagementController::class, 'permissions'])->name('users.permissions');
+        Route::post('/users/{user}/campaign-access', [UserManagementController::class, 'updateCampaignAccess'])->name('users.campaign-access');
+        Route::get('/users/available-campaigns', [UserManagementController::class, 'getAvailableCampaigns'])->name('users.available-campaigns');
         
         // Invitations (admins seulement)
         Route::middleware('check.invitation')->group(function () {

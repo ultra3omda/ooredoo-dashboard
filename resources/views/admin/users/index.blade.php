@@ -317,6 +317,9 @@
                     </a>
                 @endif
                 @if(Auth::user()->isSuperAdmin() || Auth::user()->isAdmin())
+                    <a href="{{ route('admin.users.permissions') }}" class="btn" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);">
+                        <i class="fas fa-shield-alt"></i> Permissions Campagnes
+                    </a>
                     <a href="{{ route('admin.users.create') }}" class="btn btn-primary">
                         + Nouvel Utilisateur
                     </a>

@@ -386,4 +386,116 @@ class UserManagementController extends Controller
                  ->pluck('country_payments_methods_name', 'country_payments_methods_name')
                  ->toArray();
     }
+
+    /**
+     * Page de gestion des permissions campagnes
+     */
+    public function permissions()
+    {
+        $currentUser = auth()->user();
+        
+        if (!$currentUser->isSuperAdmin() && !$currentUser->canInviteCollaborators()) {
+            abort(403, 'Acces refuse.');
+        }
+
+        // Get all users with their operators and campaign access
+        $query = User::with(['role', 'operators']);
+        
+        if (!$currentUser->isSuperAdmin()) {
+            // Non-super admins see only users from their operators
+            $myOperators = $currentUser->operators->pluck('operator_name');
+            $query->whereHas('operators', function($q) use ($myOperators) {
+                $q->whereIn('operator_name', $myOperators);
+            });
+        }
+        
+        $users = $query->orderBy('name')->get()->map(function($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role ? $user->role->name : 'unknown',
+                'role_display' => $user->role ? $user->role->display_name : 'Inconnu',
+                'operator' => $user->primaryOperator() ? $user->primaryOperator()->operator_name : '-',
+                'campaigns' => $user->getAllowedCampaigns(),
+                'has_restriction' => $user->hasCampaignRestriction(),
+                'can_invite' => $user->canInviteCollaborators(),
+                'status' => $user->status ?? 'active',
+            ];
+        });
+
+        $theme = $currentUser->isTimweOoredooUser() ? 'ooredoo' : 'club_privileges';
+        $isOoredoo = $theme === 'ooredoo';
+        
+        return view('admin.users.permissions', compact('users', 'theme', 'isOoredoo'));
+    }
+
+    /**
+     * API: Update campaign access for a user
+     */
+    public function updateCampaignAccess(Request $request, User $user)
+    {
+        $currentUser = auth()->user();
+        
+        if (!$currentUser->isSuperAdmin() && !$currentUser->canInviteCollaborators()) {
+            return response()->json(['success' => false, 'error' => 'Acces refuse'], 403);
+        }
+
+        // Cannot modify super admins
+        if ($user->isSuperAdmin()) {
+            return response()->json(['success' => false, 'error' => 'Impossible de modifier un super administrateur'], 403);
+        }
+
+        $campaigns = $request->input('campaigns', []);
+        
+        if (empty($campaigns)) {
+            $user->update(['pluxee_campaign_access' => null]);
+        } else {
+            $user->update(['pluxee_campaign_access' => json_encode(array_values($campaigns))]);
+        }
+
+        Log::info("Campaign access updated for user {$user->id} ({$user->name}) by {$currentUser->name}: " . json_encode($campaigns));
+
+        return response()->json([
+            'success' => true,
+            'user_id' => $user->id,
+            'campaigns' => $user->getAllowedCampaigns(),
+            'has_restriction' => $user->hasCampaignRestriction(),
+            'can_invite' => $user->canInviteCollaborators(),
+        ]);
+    }
+
+    /**
+     * API: Get all available campaigns for a store
+     */
+    public function getAvailableCampaigns(Request $request)
+    {
+        $storeName = $request->input('store_name', '');
+        
+        if (empty($storeName)) {
+            // Get all campaigns from all sub-stores
+            $campaigns = DB::table('carte_recharge')
+                ->join('stores', 'stores.store_id', '=', 'carte_recharge.stores')
+                ->where('stores.is_sub_store', 1)
+                ->select('carte_recharge.campain_name', 'stores.store_name', 
+                         DB::raw('COUNT(*) as total_batches'), 
+                         DB::raw('SUM(carte_recharge.card_generated_number) as total_cards'))
+                ->groupBy('carte_recharge.campain_name', 'stores.store_name')
+                ->orderBy('stores.store_name')
+                ->orderBy('carte_recharge.campain_name')
+                ->get();
+        } else {
+            $campaigns = DB::table('carte_recharge')
+                ->join('stores', 'stores.store_id', '=', 'carte_recharge.stores')
+                ->where('stores.store_name', $storeName)
+                ->select('carte_recharge.campain_name', 'stores.store_name',
+                         DB::raw('COUNT(*) as total_batches'), 
+                         DB::raw('SUM(carte_recharge.card_generated_number) as total_cards'))
+                ->groupBy('carte_recharge.campain_name', 'stores.store_name')
+                ->orderBy('carte_recharge.campain_name')
+                ->get();
+        }
+
+        return response()->json(['campaigns' => $campaigns]);
+    }
 }
