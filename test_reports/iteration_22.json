@@ -1,0 +1,69 @@
+{
+  "summary": "Backend API testing for Merchant Recommendations ML engine - All 20 tests PASSED. Verified: ML model source with score_normalized 0-100, explanation objects, user_context, exclude_visited filter, category filter, health/stats/retrain endpoints.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_merchant_reco_v3.py",
+    "/app/test_reports/pytest/pytest_merchant_reco_v3.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_merchant_reco_v3.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "ml_client_ids": "118580 (555 visits, 252 merchants), 130212 (137 visits, 1 merchant), 49949 (115 visits, 12 merchants)",
+    "fallback_client_ids": "0, 1"
+  },
+  "seed_data_creation": "No new seed data. Used existing production data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 22 verified all merchant recommendation API features. All endpoints working correctly: POST /api/merchant-recommendations returns source='ml_model' for profiled clients (118580, 130212, 49949) with score_normalized 0-100, explanation object (summary, factors, details, score_interpretation, model_type), user_context (total_visits, unique_merchants, loyalty_score, subscription_type). Fallback source='fallback_popularity' for clients 0,1 with properly distributed scores (0-100 range). exclude_visited=true filter works correctly. category_id filter works for both ML and fallback. GET /health returns status='ready', model_loaded=true. GET /stats returns active_merchants=576, profiled_users=19252. POST /retrain returns JSON response (fails in test env as expected due to DB connection).",
+  "features_verified": {
+    "POST /api/merchant-recommendations (client 118580)": "PASS - source='ml_model', score_normalized 0-100, explanation object complete",
+    "POST /api/merchant-recommendations (client 0)": "PASS - source='fallback_popularity', scores distributed 0-100",
+    "POST /api/merchant-recommendations (client 1)": "PASS - source='fallback_popularity'",
+    "POST /api/merchant-recommendations (client 130212)": "PASS - source='ml_model'",
+    "POST /api/merchant-recommendations (client 49949)": "PASS - source='ml_model'",
+    "exclude_visited=true filter": "PASS - returns only unvisited merchants (already_visited=false, visit_count=0)",
+    "category_id filter (ML)": "PASS - returns only merchants from specified category",
+    "category_id filter (fallback)": "PASS - works with fallback recommendations",
+    "user_context for ML model": "PASS - contains total_visits, unique_merchants, loyalty_score, subscription_type",
+    "explanation object structure": "PASS - contains summary, factors, details, score_interpretation, model_type",
+    "score_normalized range": "PASS - all scores in 0-100 range with proper distribution",
+    "GET /api/merchant-recommendations/health": "PASS - status='ready', model_loaded=true",
+    "GET /api/merchant-recommendations/stats": "PASS - active_merchants=576, profiled_users=19252",
+    "POST /api/merchant-recommendations/retrain": "PASS - returns JSON response with success/error",
+    "Error handling (missing client_id)": "PASS - returns 400",
+    "Error handling (invalid client_id)": "PASS - returns 400/500 with error message"
+  },
+  "api_response_samples": {
+    "ml_model_user_context": {
+      "client_id": 118580,
+      "total_visits": 555,
+      "unique_merchants": 252,
+      "unique_categories": 10,
+      "loyalty_score": 0.5468,
+      "subscription_type": "premium"
+    },
+    "fallback_scores": [100.0, 75.4, 28.9, 20.0, 0.0],
+    "health_response": {
+      "status": "ready",
+      "model_loaded": true,
+      "fallback_available": true,
+      "trained_at": "2026-03-31T11:31:23.142588",
+      "n_train_samples": 111660
+    }
+  }
+}

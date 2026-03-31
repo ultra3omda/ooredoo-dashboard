@@ -233,12 +233,17 @@ def _cold_start_recommendations(cursor, top_k, category_id=None):
             LIMIT %s
         """, (category_id, top_k) if category_id else (top_k,))
         rows = cursor.fetchall()
+        if rows:
+            max_pop = max(float(r['popularity_score']) for r in rows)
+            min_pop = min(float(r['popularity_score']) for r in rows) if len(rows) > 1 else 0
+        else:
+            max_pop, min_pop = 1, 0
         return [{
             'partner_id': int(r['partner_id']),
             'partner_name': r['partner_name'],
             'category_name': r['category_name'] or 'Autre',
             'score': float(r['popularity_score']),
-            'score_normalized': 0,
+            'score_normalized': round((float(r['popularity_score']) - min_pop) / (max_pop - min_pop) * 100, 1) if max_pop > min_pop else 50.0,
             'rank': i + 1,
             'active_promotions': r['active_promotion_count'],
             'avg_discount': float(r['avg_discount']),
@@ -252,11 +257,18 @@ def _cold_start_recommendations(cursor, top_k, category_id=None):
             'visit_count': 0,
         } for i, r in enumerate(rows)]
 
+    # Normalize popularity scores for display
+    if fallback:
+        max_pop = max(m['popularity_score'] for m in fallback[:top_k])
+        min_pop = min(m['popularity_score'] for m in fallback[:top_k]) if len(fallback) > 1 else 0
+    else:
+        max_pop, min_pop = 1, 0
+
     return [{
         **m,
         'rank': i + 1,
         'score': m['popularity_score'],
-        'score_normalized': 0,
+        'score_normalized': round((m['popularity_score'] - min_pop) / (max_pop - min_pop) * 100, 1) if max_pop > min_pop else 50.0,
         'reason': 'Populaire auprès des utilisateurs',
         'explanation': {
             'summary': 'Recommandation par popularité (pas de profil utilisateur).',

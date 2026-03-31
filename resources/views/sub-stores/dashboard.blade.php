@@ -2770,7 +2770,19 @@
         const sourceTag = data.source === 'ml_model' 
           ? '<span style="background: rgba(16,185,129,0.12); color: var(--success); padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600;">ML Model</span>'
           : '<span style="background: rgba(59,130,246,0.12); color: #3b82f6; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600;">Popularité</span>';
-        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceTag} | ${recos.length} résultats</div>`;
+        
+        let contextHtml = '';
+        if (data.user_context) {
+            const uc = data.user_context;
+            contextHtml = `<div style="background: var(--table-stripe); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; font-size: 11px; display: flex; flex-wrap: wrap; gap: 10px;">
+                <span><strong>${uc.total_visits || 0}</strong> visites</span>
+                <span><strong>${uc.unique_merchants || 0}</strong> marchands</span>
+                <span><strong>${uc.unique_categories || 0}</strong> catég.</span>
+                <span>Fidélité: <strong>${(uc.loyalty_score || 0).toFixed(1)}/10</strong></span>
+                <span>${uc.subscription_type || ''}</span>
+            </div>`;
+        }
+        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceTag} | ${recos.length} résultats</div>${contextHtml}`;
         renderRecoCards(recos, 'reco-client-results', true);
       } catch (e) {
         container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
@@ -2783,24 +2795,36 @@
       
       merchants.forEach(m => {
         const rank = m.rank || 0;
-        const score = parseFloat(m.score || m.popularity_score || 0);
+        const scoreNorm = m.score_normalized != null ? parseFloat(m.score_normalized) : parseFloat(m.score || 0);
         const rankColors = {1: 'linear-gradient(135deg, #fbbf24, #f59e0b)', 2: 'linear-gradient(135deg, #d1d5db, #9ca3af)', 3: 'linear-gradient(135deg, #d97706, #b45309)'};
         const rankBg = rankColors[rank] || 'var(--table-stripe)';
         const rankColor = rank <= 3 ? '#fff' : 'var(--muted)';
+        const scoreColor = scoreNorm >= 80 ? 'var(--success)' : scoreNorm >= 40 ? 'var(--warning)' : 'var(--muted)';
         const visitTag = m.already_visited 
-          ? '<span style="background: rgba(16,185,129,0.12); color: var(--success); padding: 1px 6px; border-radius: 4px; font-size: 10px;">Visité</span>'
+          ? `<span style="background: rgba(16,185,129,0.12); color: var(--success); padding: 1px 6px; border-radius: 4px; font-size: 10px;">Visité${m.visit_count > 0 ? ' ('+m.visit_count+'x)' : ''}</span>`
           : '<span style="background: rgba(59,130,246,0.12); color: #3b82f6; padding: 1px 6px; border-radius: 4px; font-size: 10px;">Nouveau</span>';
         const promoTag = (m.active_promotions || 0) > 0 ? ` <span style="background: rgba(245,158,11,0.12); color: var(--warning); padding: 1px 6px; border-radius: 4px; font-size: 10px;">${m.active_promotions} promos</span>` : '';
         
-        html += `<div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--card); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'" data-testid="reco-card-${m.partner_id}">
-          <div style="min-width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background: ${rankBg}; color: ${rankColor};">${rank}</div>
+        // Explanation section
+        let explanationHtml = '';
+        if (m.explanation && m.explanation.factors && m.explanation.factors.length > 0) {
+            const factors = m.explanation.factors.slice(0, 3).map(f => `<div style="font-size: 10px; color: var(--text-secondary); padding: 1px 0;">→ ${f}</div>`).join('');
+            explanationHtml = `<div style="margin-top: 4px; padding: 4px 8px; background: var(--table-stripe); border-radius: 4px;">
+                <div style="font-size: 10px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px;">${m.explanation.summary || ''}</div>
+                ${factors}
+            </div>`;
+        }
+
+        html += `<div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--card); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'" data-testid="reco-card-${m.partner_id}">
+          <div style="min-width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background: ${rankBg}; color: ${rankColor}; flex-shrink: 0; margin-top: 2px;">${rank}</div>
           <div style="flex: 1; min-width: 0;">
             <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.partner_name || 'N/A'}</div>
             <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">${m.category_name || 'Autre'} ${visitTag}${promoTag}</div>
             ${m.reason ? `<div style="font-size: 10px; color: var(--brand-primary); margin-top: 3px;">${m.reason}</div>` : ''}
+            ${explanationHtml}
           </div>
-          <div style="text-align: right; min-width: 50px;">
-            <div style="font-size: 16px; font-weight: 700; color: ${score > 0 ? 'var(--success)' : 'var(--muted)'};">${score.toFixed(1)}</div>
+          <div style="text-align: right; min-width: 55px; flex-shrink: 0;">
+            <div style="font-size: 16px; font-weight: 700; color: ${scoreColor};">${scoreNorm.toFixed(0)}<span style="font-size: 10px; font-weight: 400;">/100</span></div>
             ${m.avg_discount ? `<div style="font-size: 10px; color: var(--muted);">${parseFloat(m.avg_discount).toFixed(0)}% remise</div>` : ''}
           </div>
         </div>`;

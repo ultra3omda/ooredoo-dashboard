@@ -349,7 +349,22 @@ async function searchRecommendations() {
             return;
         }
         const sourceLabel = data.source === 'ml_model' ? '<span class="tag tag-visited">ML Model</span>' : '<span class="tag tag-new">Popularité</span>';
-        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceLabel} | ${recos.length} résultats pour client #${clientId}</div>`;
+        
+        // Show user context if available
+        let contextHtml = '';
+        if (data.user_context) {
+            const uc = data.user_context;
+            contextHtml = `<div style="background: var(--table-stripe); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12px; display: flex; flex-wrap: wrap; gap: 12px;">
+                <span><strong>Visites:</strong> ${uc.total_visits || 0}</span>
+                <span><strong>Marchands:</strong> ${uc.unique_merchants || 0}</span>
+                <span><strong>Catégories:</strong> ${uc.unique_categories || 0}</span>
+                <span><strong>Fidélité:</strong> ${(uc.loyalty_score || 0).toFixed(1)}/10</span>
+                <span><strong>Abo:</strong> ${uc.subscription_type || 'N/A'}</span>
+                <span><strong>Genre:</strong> ${uc.gender || '?'}</span>
+                <span><strong>Inactif depuis:</strong> ${uc.days_since_last_activity || 0}j</span>
+            </div>`;
+        }
+        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceLabel} | ${recos.length} résultats pour client #${clientId}</div>${contextHtml}`;
         renderMerchants(recos, 'recoResults', true);
     } catch (e) {
         container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
@@ -363,21 +378,34 @@ function renderMerchants(merchants, containerId, append) {
     merchants.forEach(m => {
         const rank = m.rank || 0;
         const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-default';
-        const score = parseFloat(m.score || m.popularity_score || 0);
-        const scoreClass = score > 0 ? 'score-positive' : 'score-neutral';
+        const scoreNorm = m.score_normalized != null ? parseFloat(m.score_normalized) : parseFloat(m.score || 0);
+        const scoreColor = scoreNorm >= 80 ? 'var(--success)' : scoreNorm >= 40 ? 'var(--warning)' : 'var(--muted)';
         const visitedTag = m.already_visited ? '<span class="tag tag-visited">Visité</span>' : '<span class="tag tag-new">Nouveau</span>';
         const promosTag = (m.active_promotions || 0) > 0 ? ` <span class="tag tag-promos">${m.active_promotions} promos</span>` : '';
         const discount = m.avg_discount ? parseFloat(m.avg_discount).toFixed(0) + '% remise' : '';
+        const visitInfo = m.visit_count > 0 ? `<span style="font-size: 10px; color: var(--muted);">${m.visit_count} visites</span>` : '';
+
+        // Explanation tooltip
+        let explanationHtml = '';
+        if (m.explanation) {
+            const ex = m.explanation;
+            const factors = (ex.factors || []).map(f => `<div style="font-size: 10px; color: var(--text-secondary); padding: 1px 0;">→ ${f}</div>`).join('');
+            explanationHtml = `<div style="margin-top: 4px; padding: 6px 8px; background: var(--table-stripe); border-radius: 6px; font-size: 11px;">
+                <div style="color: var(--text-primary); font-weight: 500; margin-bottom: 3px;">${ex.summary || ''}</div>
+                ${factors}
+            </div>`;
+        }
 
         html += `<div class="merchant-card" data-testid="merchant-card-${m.partner_id}">
             <div class="merchant-rank ${rankClass}">${rank}</div>
             <div class="merchant-info">
                 <div class="merchant-name">${m.partner_name || 'N/A'}</div>
-                <div class="merchant-cat">${m.category_name || 'Autre'} ${visitedTag}${promosTag}</div>
+                <div class="merchant-cat">${m.category_name || 'Autre'} ${visitedTag}${promosTag} ${visitInfo}</div>
                 <div class="merchant-reason">${m.reason || ''}</div>
+                ${explanationHtml}
             </div>
             <div class="merchant-score">
-                <div class="merchant-score-val ${scoreClass}">${score.toFixed(1)}</div>
+                <div class="merchant-score-val" style="color: ${scoreColor};">${scoreNorm.toFixed(0)}<span style="font-size: 11px; font-weight: 400;">/100</span></div>
                 <div class="merchant-meta">${discount}</div>
             </div>
         </div>`;
