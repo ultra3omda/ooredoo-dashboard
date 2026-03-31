@@ -91,7 +91,7 @@ async def merchant_recommendations(request: Request):
         category_id = body.get("category_id")
         exclude_visited = body.get("exclude_visited", False)
         
-        recommendations = get_recommendations(
+        recommendations, source = get_recommendations(
             client_id=int(client_id),
             top_k=int(top_k),
             category_id=int(category_id) if category_id else None,
@@ -102,6 +102,7 @@ async def merchant_recommendations(request: Request):
             "success": True,
             "client_id": int(client_id),
             "count": len(recommendations),
+            "source": source,
             "recommendations": recommendations,
         })
     except Exception as e:
@@ -239,6 +240,85 @@ async def recommendation_stats():
             "active_merchants": active_merchants,
             "profiled_users": profiled_users,
         })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/merchant-recommendations/stats/timeline")
+async def recommendation_timeline():
+    """Get daily interaction counts for the last 30 days."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from predict_merchant import get_db_connection
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                DATE(created_at) as day,
+                interaction_type,
+                COUNT(*) as cnt
+            FROM cp_user_offer_interactions
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            GROUP BY DATE(created_at), interaction_type
+            ORDER BY day ASC
+        """)
+        rows = cursor.fetchall()
+        
+        # Convert date objects to strings
+        timeline = []
+        for r in rows:
+            timeline.append({
+                "day": str(r['day']) if r['day'] else None,
+                "interaction_type": r['interaction_type'],
+                "cnt": r['cnt']
+            })
+        
+        # Also get category breakdown
+        cursor.execute("""
+            SELECT 
+                mc.category_name,
+                COUNT(*) as cnt,
+                COUNT(DISTINCT uoi.client_id) as unique_users
+            FROM cp_user_offer_interactions uoi
+            JOIN cp_merchants_catalog mc ON uoi.partner_id = mc.partner_id
+            WHERE uoi.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            GROUP BY mc.category_name
+            ORDER BY cnt DESC
+            LIMIT 10
+        """)
+        categories = cursor.fetchall()
+        
+        conn.close()
+        
+        return JSONResponse({
+            "timeline": timeline,
+            "categories": categories,
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/merchant-recommendations/categories")
+async def get_categories():
+    """Get available merchant categories."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from predict_merchant import get_db_connection
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT category_id, category_name 
+            FROM cp_merchants_catalog 
+            WHERE is_active = 1 AND category_name IS NOT NULL
+            ORDER BY category_name
+        """)
+        cats = cursor.fetchall()
+        conn.close()
+        
+        return JSONResponse({"categories": cats})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

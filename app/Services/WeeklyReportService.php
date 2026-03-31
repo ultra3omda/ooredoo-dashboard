@@ -108,22 +108,77 @@ class WeeklyReportService
     protected function gatherReportData(ReportRecipient $recipient, Carbon $start, Carbon $end, Carbon $compStart, Carbon $compEnd): array
     {
         $mlData = $this->gatherMLData();
+        $merchantReco = $this->gatherMerchantRecoData();
 
         switch ($recipient->type) {
             case 'ceo':
-                return array_merge($this->gatherCEOReport($start, $end, $compStart, $compEnd), ['ml' => $mlData]);
+                return array_merge($this->gatherCEOReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco]);
             case 'marketing':
-                return array_merge($this->gatherMarketingReport($start, $end, $compStart, $compEnd), ['ml' => $mlData]);
+                return array_merge($this->gatherMarketingReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco]);
             case 'partner':
                 return array_merge($this->gatherPartnerReport($recipient, $start, $end, $compStart, $compEnd), ['ml' => $mlData]);
             case 'associe':
-                return array_merge($this->gatherAssocieReport($start, $end, $compStart, $compEnd), ['ml' => $mlData]);
+                return array_merge($this->gatherAssocieReport($start, $end, $compStart, $compEnd), ['ml' => $mlData, 'merchant_reco' => $merchantReco]);
             case 'store':
                 return array_merge($this->gatherStoreReport($recipient, $start, $end, $compStart, $compEnd), ['ml' => $mlData]);
             case 'sub-store':
                 return array_merge($this->gatherSubStoreReport($recipient, $start, $end, $compStart, $compEnd), ['ml' => $mlData]);
             default:
                 return ['ml' => $mlData];
+        }
+    }
+
+    protected function gatherMerchantRecoData(): array
+    {
+        try {
+            $service = new \App\Services\MLMerchantRecommendationService();
+            $health = $service->getHealth();
+            
+            if (($health['status'] ?? '') !== 'ready') {
+                return [];
+            }
+
+            $activeMerchants = DB::table('cp_merchants_catalog')->where('is_active', 1)->count();
+            $profiledUsers = DB::table('cp_user_profile')->count();
+            $userMerchantPairs = DB::table('cp_user_merchant_history')->count();
+
+            $topMerchants = DB::table('cp_merchants_catalog')
+                ->where('is_active', 1)->where('total_visits', '>', 0)
+                ->orderBy('popularity_score', 'desc')
+                ->limit(10)
+                ->get()
+                ->map(fn($m) => [
+                    'partner_name' => $m->partner_name,
+                    'category_name' => $m->category_name,
+                    'total_visits' => (int) $m->total_visits,
+                    'unique_visitors' => (int) $m->unique_visitors,
+                    'popularity_score' => round((float) $m->popularity_score, 1),
+                ])->toArray();
+
+            $topCategories = DB::table('cp_merchants_catalog')
+                ->where('is_active', 1)->whereNotNull('category_name')
+                ->selectRaw('category_name, COUNT(*) as merchant_count, SUM(total_visits) as total_visits, AVG(popularity_score) as avg_popularity')
+                ->groupBy('category_name')
+                ->orderByDesc('total_visits')
+                ->limit(5)
+                ->get()
+                ->map(fn($c) => [
+                    'category_name' => $c->category_name,
+                    'merchant_count' => (int) $c->merchant_count,
+                    'total_visits' => (int) $c->total_visits,
+                    'avg_popularity' => round((float) $c->avg_popularity, 1),
+                ])->toArray();
+
+            return [
+                'active_merchants' => $activeMerchants,
+                'profiled_users' => $profiledUsers,
+                'user_merchant_pairs' => $userMerchantPairs,
+                'top_merchants' => $topMerchants,
+                'top_categories' => $topCategories,
+            ];
+        } catch (\Exception $e) {
+            Log::warning("Merchant reco data unavailable: " . $e->getMessage());
+            return [];
         }
     }
 

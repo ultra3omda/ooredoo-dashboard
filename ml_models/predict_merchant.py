@@ -56,7 +56,7 @@ def get_recommendations(client_id: int, top_k: int = 10, category_id: int = None
                         exclude_visited: bool = False):
     """
     Get merchant recommendations for a user.
-    Returns list of {partner_id, partner_name, category_name, score, reason}
+    Returns (recommendations_list, source_type)
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -68,12 +68,12 @@ def get_recommendations(client_id: int, top_k: int = 10, category_id: int = None
         
         if not user_profile:
             # Cold start: return popular merchants
-            return _cold_start_recommendations(cursor, top_k, category_id)
+            return _cold_start_recommendations(cursor, top_k, category_id), 'fallback_popularity'
         
         # Load model
         model_data = load_model()
         if not model_data:
-            return _cold_start_recommendations(cursor, top_k, category_id)
+            return _cold_start_recommendations(cursor, top_k, category_id), 'fallback_popularity'
         
         model = model_data['model']
         feature_cols = model_data['feature_cols']
@@ -194,7 +194,7 @@ def get_recommendations(client_id: int, top_k: int = 10, category_id: int = None
                 'already_visited': m['partner_id'] in visited,
             })
         
-        return results
+        return results, 'ml_model'
         
     finally:
         conn.close()

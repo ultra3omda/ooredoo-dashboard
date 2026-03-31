@@ -1615,6 +1615,7 @@
       <button class="nav-tab" onclick="showTab('merchant')">Merchant</button>
       @if(Auth::user()->canAccessSubStoresDashboard())
       <button class="nav-tab" onclick="showTab('users')">Users</button>
+      <button class="nav-tab" onclick="showTab('recommendations')" data-testid="tab-recommendations">Recommandations</button>
       @endif
                 </div>
                 
@@ -2009,6 +2010,78 @@
           </div>
         </div>
     @endif
+
+    <!-- Recommendations Tab -->
+    <div id="recommendations" class="tab-content" data-testid="recommendations-tab">
+      <!-- Reco KPIs -->
+      <div class="reco-kpis-row" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
+        <div class="card kpi-card" data-testid="reco-kpi-model">
+          <div class="kpi-content">
+            <div class="kpi-title">Statut Moteur ML</div>
+            <div class="kpi-value" id="reco-status" style="font-size: 16px;">Chargement...</div>
+          </div>
+        </div>
+        <div class="card kpi-card" data-testid="reco-kpi-merchants">
+          <div class="kpi-content">
+            <div class="kpi-title">Marchands Catalogués</div>
+            <div class="kpi-value" id="reco-merchants">--</div>
+          </div>
+        </div>
+        <div class="card kpi-card" data-testid="reco-kpi-profiles">
+          <div class="kpi-content">
+            <div class="kpi-title">Profils Utilisateurs</div>
+            <div class="kpi-value" id="reco-profiles">--</div>
+          </div>
+        </div>
+        <div class="card kpi-card" data-testid="reco-kpi-interactions">
+          <div class="kpi-content">
+            <div class="kpi-title">Interactions (7j)</div>
+            <div class="kpi-value" id="reco-interactions-count">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        <!-- Client Reco Search -->
+        <div class="card" data-testid="reco-client-search">
+          <div class="card-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0; color: var(--brand-dark);">Recommandations par Client</h3>
+          </div>
+          <div style="padding: 14px 18px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+              <input type="number" id="reco-client-input" placeholder="ID Client (ex: 114218)" style="flex: 1; min-width: 120px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary); font-size: 13px;" data-testid="reco-client-input">
+              <select id="reco-category-filter" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary); font-size: 13px;" data-testid="reco-category-filter">
+                <option value="">Toutes catégories</option>
+              </select>
+              <button class="btn btn-primary" onclick="loadClientRecommendations()" style="padding: 8px 16px;" data-testid="reco-search-btn">Rechercher</button>
+            </div>
+            <div id="reco-client-results" data-testid="reco-client-results" style="max-height: 400px; overflow-y: auto;">
+              <p style="color: var(--muted); font-size: 13px; text-align: center; padding: 20px;">Entrez un ID client</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Popular -->
+        <div class="card" data-testid="reco-popular-panel">
+          <div class="card-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0; color: var(--brand-dark);">Top Marchands Populaires</h3>
+          </div>
+          <div id="reco-popular-results" data-testid="reco-popular-results" style="padding: 14px 18px; max-height: 400px; overflow-y: auto;">
+            <p style="color: var(--muted); text-align: center;">Chargement...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interaction Chart -->
+      <div class="card" data-testid="reco-interactions-chart-panel" style="margin-bottom: 20px;">
+        <div class="card-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+          <h3 style="font-size: 14px; font-weight: 600; margin: 0; color: var(--brand-dark);">Évolution des Interactions (30 derniers jours)</h3>
+        </div>
+        <div style="padding: 14px 18px; height: 280px;">
+          <canvas id="reco-interactions-chart" data-testid="reco-interactions-chart"></canvas>
+        </div>
+      </div>
+    </div>
 
     <script>
     // Helper pour désactiver les logs en production (DOIT être défini en premier)
@@ -2554,7 +2627,8 @@
             const navTabs = document.querySelectorAll('.nav-tab');
             navTabs.forEach(tab => {
                 if (tab.textContent.toLowerCase().includes(tabName.toLowerCase()) || 
-                    (tabName === 'overview' && tab.textContent.includes('Vue d\'Ensemble'))) {
+                    (tabName === 'overview' && tab.textContent.includes('Vue d\'Ensemble')) ||
+                    (tabName === 'recommendations' && tab.textContent.includes('Recommandations'))) {
                     tab.classList.add('active');
                 }
             });
@@ -2598,6 +2672,208 @@
         }
       }, 300); // Attendre que l'onglet soit visible
     }
+    // Si on active l'onglet Recommandations, charger les données ML
+    if (tabName === 'recommendations') {
+      debugLog('🤖 Activation onglet Recommandations');
+      setTimeout(() => loadRecommendationsTab(), 200);
+    }
+    }
+
+    // ========================================
+    // RECOMMENDATIONS TAB FUNCTIONS
+    // ========================================
+    let recoChartInstance = null;
+    let recoTabLoaded = false;
+
+    async function loadRecommendationsTab() {
+      if (recoTabLoaded) return;
+      recoTabLoaded = true;
+      
+      try {
+        const baseUrl = window.location.origin;
+        
+        // Load stats, popular, categories, timeline in parallel
+        const [statsRes, popularRes, catsRes, timelineRes] = await Promise.allSettled([
+          fetch(`${baseUrl}/api/merchant-recommendations/stats`),
+          fetch(`${baseUrl}/api/merchant-recommendations`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({client_id: 0, top_k: 10}) }),
+          fetch(`${baseUrl}/api/merchant-recommendations/categories`),
+          fetch(`${baseUrl}/api/merchant-recommendations/stats/timeline`)
+        ]);
+        
+        // Stats KPIs
+        if (statsRes.status === 'fulfilled') {
+          const stats = await statsRes.value.json();
+          document.getElementById('reco-merchants').textContent = (stats.active_merchants || 0).toLocaleString();
+          document.getElementById('reco-profiles').textContent = (stats.profiled_users || 0).toLocaleString();
+          document.getElementById('reco-interactions-count').textContent = (stats.total_interactions || 0).toLocaleString();
+          document.getElementById('reco-status').innerHTML = '<span style="color: var(--success); font-weight: 600;">Opérationnel</span>';
+        }
+        
+        // Popular merchants
+        if (popularRes.status === 'fulfilled') {
+          const popData = await popularRes.value.json();
+          const recos = popData.recommendations || [];
+          renderRecoCards(recos, 'reco-popular-results');
+        }
+        
+        // Categories
+        if (catsRes.status === 'fulfilled') {
+          const catData = await catsRes.value.json();
+          const select = document.getElementById('reco-category-filter');
+          (catData.categories || []).forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.category_id;
+            opt.textContent = c.category_name;
+            select.appendChild(opt);
+          });
+        }
+        
+        // Timeline chart
+        if (timelineRes.status === 'fulfilled') {
+          const tlData = await timelineRes.value.json();
+          renderInteractionsChart(tlData.timeline || [], tlData.categories || []);
+        }
+      } catch (e) {
+        debugLog('Erreur chargement recommandations:', e);
+      }
+    }
+
+    async function loadClientRecommendations() {
+      const clientId = document.getElementById('reco-client-input').value;
+      if (!clientId) { alert('Entrez un ID client'); return; }
+      
+      const container = document.getElementById('reco-client-results');
+      container.innerHTML = '<p style="text-align: center; color: var(--muted);">Chargement...</p>';
+      
+      try {
+        const catFilter = document.getElementById('reco-category-filter').value;
+        const baseUrl = window.location.origin;
+        const res = await fetch(`${baseUrl}/api/merchant-recommendations`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            client_id: parseInt(clientId),
+            top_k: 10,
+            category_id: catFilter || null,
+            exclude_visited: false
+          })
+        });
+        const data = await res.json();
+        const recos = data.recommendations || [];
+        
+        if (recos.length === 0) {
+          container.innerHTML = '<p style="color: var(--muted); text-align: center;">Aucun résultat</p>';
+          return;
+        }
+        
+        const sourceTag = data.source === 'ml_model' 
+          ? '<span style="background: rgba(16,185,129,0.12); color: var(--success); padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600;">ML Model</span>'
+          : '<span style="background: rgba(59,130,246,0.12); color: #3b82f6; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600;">Popularité</span>';
+        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceTag} | ${recos.length} résultats</div>`;
+        renderRecoCards(recos, 'reco-client-results', true);
+      } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+      }
+    }
+
+    function renderRecoCards(merchants, containerId, append = false) {
+      const container = document.getElementById(containerId);
+      let html = append ? container.innerHTML : '';
+      
+      merchants.forEach(m => {
+        const rank = m.rank || 0;
+        const score = parseFloat(m.score || m.popularity_score || 0);
+        const rankColors = {1: 'linear-gradient(135deg, #fbbf24, #f59e0b)', 2: 'linear-gradient(135deg, #d1d5db, #9ca3af)', 3: 'linear-gradient(135deg, #d97706, #b45309)'};
+        const rankBg = rankColors[rank] || 'var(--table-stripe)';
+        const rankColor = rank <= 3 ? '#fff' : 'var(--muted)';
+        const visitTag = m.already_visited 
+          ? '<span style="background: rgba(16,185,129,0.12); color: var(--success); padding: 1px 6px; border-radius: 4px; font-size: 10px;">Visité</span>'
+          : '<span style="background: rgba(59,130,246,0.12); color: #3b82f6; padding: 1px 6px; border-radius: 4px; font-size: 10px;">Nouveau</span>';
+        const promoTag = (m.active_promotions || 0) > 0 ? ` <span style="background: rgba(245,158,11,0.12); color: var(--warning); padding: 1px 6px; border-radius: 4px; font-size: 10px;">${m.active_promotions} promos</span>` : '';
+        
+        html += `<div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--card); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'" data-testid="reco-card-${m.partner_id}">
+          <div style="min-width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background: ${rankBg}; color: ${rankColor};">${rank}</div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.partner_name || 'N/A'}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">${m.category_name || 'Autre'} ${visitTag}${promoTag}</div>
+            ${m.reason ? `<div style="font-size: 10px; color: var(--brand-primary); margin-top: 3px;">${m.reason}</div>` : ''}
+          </div>
+          <div style="text-align: right; min-width: 50px;">
+            <div style="font-size: 16px; font-weight: 700; color: ${score > 0 ? 'var(--success)' : 'var(--muted)'};">${score.toFixed(1)}</div>
+            ${m.avg_discount ? `<div style="font-size: 10px; color: var(--muted);">${parseFloat(m.avg_discount).toFixed(0)}% remise</div>` : ''}
+          </div>
+        </div>`;
+      });
+      
+      container.innerHTML = html;
+    }
+
+    function renderInteractionsChart(timeline, categories) {
+      const canvas = document.getElementById('reco-interactions-chart');
+      if (!canvas) return;
+      
+      // If no data, show placeholder
+      if (timeline.length === 0) {
+        const ctx = canvas.getContext('2d');
+        ctx.font = '14px sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('Pas encore de données d\'interaction', canvas.width / 2, canvas.height / 2);
+        
+        // Show categories if available
+        if (categories.length > 0) {
+          const parent = canvas.parentElement;
+          let catHtml = '<div style="margin-top: 16px;"><h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--brand-dark);">Catégories par Interactions</h4>';
+          categories.forEach(c => {
+            catHtml += `<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px;"><span>${c.category_name || 'Autre'}</span><strong>${c.cnt} (${c.unique_users} users)</strong></div>`;
+          });
+          catHtml += '</div>';
+          parent.insertAdjacentHTML('beforeend', catHtml);
+        }
+        return;
+      }
+      
+      // Group by day
+      const dayMap = {};
+      const types = new Set();
+      timeline.forEach(r => {
+        if (!dayMap[r.day]) dayMap[r.day] = {};
+        dayMap[r.day][r.interaction_type] = (dayMap[r.day][r.interaction_type] || 0) + r.cnt;
+        types.add(r.interaction_type);
+      });
+      
+      const labels = Object.keys(dayMap).sort();
+      const typeColors = {
+        'click': {bg: 'rgba(59, 130, 246, 0.6)', border: '#3b82f6'},
+        'impression': {bg: 'rgba(16, 185, 129, 0.6)', border: '#10b981'},
+        'redeem': {bg: 'rgba(245, 158, 11, 0.6)', border: '#f59e0b'},
+        'dismiss': {bg: 'rgba(239, 68, 68, 0.4)', border: '#ef4444'},
+        'share': {bg: 'rgba(139, 92, 246, 0.6)', border: '#8b5cf6'},
+      };
+      
+      const datasets = Array.from(types).map(t => ({
+        label: t.charAt(0).toUpperCase() + t.slice(1),
+        data: labels.map(d => dayMap[d][t] || 0),
+        backgroundColor: (typeColors[t] || {bg: 'rgba(107,114,128,0.4)'}).bg,
+        borderColor: (typeColors[t] || {border: '#6b7280'}).border,
+        borderWidth: 1,
+      }));
+      
+      if (recoChartInstance) recoChartInstance.destroy();
+      
+      recoChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: { labels: labels.map(d => new Date(d).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'})), datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+          scales: {
+            x: { stacked: true, grid: { display: false } },
+            y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+          }
+        }
+      });
     }
 
     async function loadDashboardData() {

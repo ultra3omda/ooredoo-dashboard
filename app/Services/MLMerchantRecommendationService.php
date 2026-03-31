@@ -46,7 +46,7 @@ class MLMerchantRecommendationService
                             'success' => true,
                             'recommendations' => $data['recommendations'] ?? [],
                             'count' => $data['count'] ?? 0,
-                            'source' => 'ml_model',
+                            'source' => $data['source'] ?? 'ml_model',
                         ];
                     }
                 }

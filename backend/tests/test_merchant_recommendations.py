@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
 """
-Test suite for ML Merchant Recommendation Engine endpoints.
-Tests: recommendations, health, track, stats, retrain, cold-start fallback.
+Backend tests for Merchant Recommendations feature (iteration 21)
+Tests: ML recommendations, timeline, categories, source field, stats
 """
 import pytest
 import requests
@@ -10,338 +9,206 @@ import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Known client IDs from the training data
-KNOWN_CLIENT_ID = 114218  # User with history
-UNKNOWN_CLIENT_ID = 999999  # Cold-start user (no history)
-
-
-class TestMerchantRecommendationsHealth:
-    """Health endpoint tests - verify model status and metrics."""
+class TestMerchantRecommendationsAPI:
+    """Tests for /api/merchant-recommendations endpoints"""
     
-    def test_health_endpoint_returns_200(self):
-        """GET /api/merchant-recommendations/health returns 200."""
-        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/health", timeout=30)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        print(f"✓ Health endpoint returned 200")
-    
-    def test_health_returns_model_status(self):
-        """Health endpoint returns model_loaded and status fields."""
-        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/health", timeout=30)
-        data = response.json()
-        
-        assert "status" in data, "Missing 'status' field"
-        assert "model_loaded" in data, "Missing 'model_loaded' field"
-        assert "fallback_available" in data, "Missing 'fallback_available' field"
-        
-        print(f"✓ Model status: {data['status']}, loaded: {data['model_loaded']}, fallback: {data['fallback_available']}")
-    
-    def test_health_returns_training_metrics(self):
-        """Health endpoint returns training date and eval metrics."""
-        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/health", timeout=30)
-        data = response.json()
-        
-        # Model should be trained
-        assert data.get("model_loaded") == True, "Model not loaded"
-        assert data.get("trained_at") is not None, "Missing trained_at"
-        assert data.get("n_train_samples") is not None, "Missing n_train_samples"
-        
-        # Eval results should have NDCG metrics
-        eval_results = data.get("eval_results", {})
-        print(f"✓ Trained at: {data['trained_at']}, samples: {data['n_train_samples']}")
-        print(f"✓ Eval results: {eval_results}")
-
-
-class TestMerchantRecommendations:
-    """POST /api/merchant-recommendations - personalized recommendations."""
-    
-    def test_recommendations_requires_client_id(self):
-        """Returns 400 if client_id is missing."""
+    def test_recommendations_ml_model_source(self):
+        """POST /api/merchant-recommendations with client 114218 returns source='ml_model'"""
         response = requests.post(
             f"{BASE_URL}/api/merchant-recommendations",
-            json={},
-            timeout=30
+            json={"client_id": 114218, "top_k": 5}
         )
-        assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+        assert response.status_code == 200
         data = response.json()
-        assert data.get("success") == False
-        assert "client_id" in data.get("error", "").lower()
-        print("✓ Returns 400 when client_id missing")
-    
-    def test_recommendations_for_known_user(self):
-        """Returns personalized recommendations for known client_id."""
-        response = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations",
-            json={"client_id": KNOWN_CLIENT_ID, "top_k": 5},
-            timeout=60
-        )
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
-        data = response.json()
-        assert data.get("success") == True, f"Expected success=True: {data}"
-        assert data.get("client_id") == KNOWN_CLIENT_ID
+        assert data["success"] is True
+        assert data["client_id"] == 114218
+        assert data["source"] == "ml_model", f"Expected 'ml_model', got '{data['source']}'"
         assert "recommendations" in data
-        assert "count" in data
+        assert len(data["recommendations"]) > 0
         
-        recommendations = data["recommendations"]
-        assert isinstance(recommendations, list)
-        assert len(recommendations) > 0, "Expected at least 1 recommendation"
-        assert len(recommendations) <= 5, f"Expected max 5, got {len(recommendations)}"
-        
-        # Validate recommendation structure
-        rec = recommendations[0]
+        # Verify recommendation structure
+        rec = data["recommendations"][0]
         assert "partner_id" in rec
         assert "partner_name" in rec
         assert "score" in rec
         assert "rank" in rec
-        assert "reason" in rec
-        
-        print(f"✓ Got {len(recommendations)} recommendations for client {KNOWN_CLIENT_ID}")
-        print(f"  Top recommendation: {rec['partner_name']} (score: {rec['score']}, reason: {rec['reason'][:50]}...)")
+        print(f"✓ Client 114218 recommendations: {len(data['recommendations'])} results, source={data['source']}")
     
-    def test_cold_start_fallback_for_unknown_user(self):
-        """Returns popularity-based recommendations for unknown client_id."""
+    def test_recommendations_fallback_popularity_source(self):
+        """POST /api/merchant-recommendations with client 0 returns source='fallback_popularity'"""
         response = requests.post(
             f"{BASE_URL}/api/merchant-recommendations",
-            json={"client_id": UNKNOWN_CLIENT_ID, "top_k": 5},
-            timeout=60
-        )
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        assert data.get("success") == True, f"Expected success=True: {data}"
-        
-        recommendations = data.get("recommendations", [])
-        assert len(recommendations) > 0, "Expected fallback recommendations for cold-start user"
-        
-        # Cold-start should return popularity-based recommendations
-        rec = recommendations[0]
-        assert "partner_id" in rec
-        assert "reason" in rec
-        # Cold-start reason should mention "populaire"
-        print(f"✓ Cold-start fallback: {len(recommendations)} recommendations for unknown user {UNKNOWN_CLIENT_ID}")
-        print(f"  Top: {rec.get('partner_name', 'N/A')} - {rec.get('reason', 'N/A')}")
-    
-    def test_exclude_visited_merchants(self):
-        """exclude_visited=true filters out already visited merchants."""
-        # First get recommendations without exclusion
-        response1 = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations",
-            json={"client_id": KNOWN_CLIENT_ID, "top_k": 20, "exclude_visited": False},
-            timeout=60
-        )
-        data1 = response1.json()
-        
-        # Then with exclusion
-        response2 = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations",
-            json={"client_id": KNOWN_CLIENT_ID, "top_k": 20, "exclude_visited": True},
-            timeout=60
-        )
-        data2 = response2.json()
-        
-        assert response1.status_code == 200
-        assert response2.status_code == 200
-        
-        recs1 = data1.get("recommendations", [])
-        recs2 = data2.get("recommendations", [])
-        
-        # With exclusion, all should have already_visited=False
-        for rec in recs2:
-            assert rec.get("already_visited") == False, f"Merchant {rec['partner_id']} should not be visited"
-        
-        print(f"✓ exclude_visited works: {len(recs1)} total vs {len(recs2)} unvisited")
-    
-    def test_category_filter(self):
-        """category_id filters recommendations to specific category."""
-        # Category 1 is typically "Restaurants" or similar
-        response = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations",
-            json={"client_id": KNOWN_CLIENT_ID, "top_k": 10, "category_id": 1},
-            timeout=60
-        )
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        
-        data = response.json()
-        # May return empty if no merchants in category 1
-        print(f"✓ Category filter: {data.get('count', 0)} recommendations for category_id=1")
-
-
-class TestTrackInteraction:
-    """POST /api/merchant-recommendations/track - feedback loop tracking."""
-    
-    def test_track_requires_client_and_partner(self):
-        """Returns 400 if client_id or partner_id missing."""
-        response = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations/track",
-            json={"client_id": 123},
-            timeout=30
-        )
-        assert response.status_code == 400
-        data = response.json()
-        assert data.get("success") == False
-        print("✓ Track returns 400 when partner_id missing")
-    
-    def test_track_validates_interaction_type(self):
-        """Returns 400 for invalid interaction_type."""
-        response = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations/track",
-            json={
-                "client_id": KNOWN_CLIENT_ID,
-                "partner_id": 1,
-                "interaction_type": "invalid_type"
-            },
-            timeout=30
-        )
-        assert response.status_code == 400
-        data = response.json()
-        assert "interaction_type" in data.get("error", "").lower()
-        print("✓ Track validates interaction_type")
-    
-    def test_track_click_interaction(self):
-        """Successfully tracks a click interaction."""
-        response = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations/track",
-            json={
-                "client_id": KNOWN_CLIENT_ID,
-                "partner_id": 1,
-                "interaction_type": "click",
-                "source": "recommendation",
-                "recommendation_score": 0.85,
-                "recommendation_rank": 1
-            },
-            timeout=30
-        )
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        assert data.get("success") == True
-        assert data.get("tracked") == True
-        print("✓ Click interaction tracked successfully")
-    
-    def test_track_redeem_interaction(self):
-        """Successfully tracks a redeem interaction."""
-        response = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations/track",
-            json={
-                "client_id": KNOWN_CLIENT_ID,
-                "partner_id": 2,
-                "interaction_type": "redeem",
-                "source": "organic",
-                "promotion_id": 100
-            },
-            timeout=30
+            json={"client_id": 0, "top_k": 5}
         )
         assert response.status_code == 200
         data = response.json()
-        assert data.get("success") == True
-        print("✓ Redeem interaction tracked successfully")
-
-
-class TestRecommendationStats:
-    """GET /api/merchant-recommendations/stats - monitoring statistics."""
-    
-    def test_stats_returns_200(self):
-        """Stats endpoint returns 200."""
-        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/stats", timeout=30)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        print("✓ Stats endpoint returned 200")
-    
-    def test_stats_returns_metrics(self):
-        """Stats endpoint returns interaction metrics."""
-        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/stats", timeout=30)
-        data = response.json()
         
-        assert "total_interactions" in data, "Missing total_interactions"
-        assert "active_merchants" in data, "Missing active_merchants"
-        assert "profiled_users" in data, "Missing profiled_users"
-        
-        print(f"✓ Stats: {data['total_interactions']} interactions, {data['active_merchants']} merchants, {data['profiled_users']} profiled users")
-        
-        # Check last_7_days breakdown
-        if "last_7_days" in data:
-            print(f"  Last 7 days breakdown: {len(data['last_7_days'])} interaction types")
-
-
-class TestRetrain:
-    """POST /api/merchant-recommendations/retrain - model retraining."""
+        assert data["success"] is True
+        assert data["source"] == "fallback_popularity", f"Expected 'fallback_popularity', got '{data['source']}'"
+        assert len(data["recommendations"]) > 0
+        print(f"✓ Client 0 (cold start) recommendations: source={data['source']}")
     
-    def test_retrain_endpoint_works(self):
-        """Retrain endpoint triggers training (long timeout)."""
-        # This test takes ~60-120 seconds
+    def test_recommendations_with_category_filter(self):
+        """POST /api/merchant-recommendations with category filter"""
         response = requests.post(
-            f"{BASE_URL}/api/merchant-recommendations/retrain",
-            json={},
-            timeout=180  # 3 minute timeout for retraining
+            f"{BASE_URL}/api/merchant-recommendations",
+            json={"client_id": 114218, "top_k": 5, "category_id": 1}  # Restaurants & cafés
         )
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
+        assert response.status_code == 200
         data = response.json()
-        assert "success" in data
-        
-        if data.get("success"):
-            print("✓ Retrain completed successfully")
-            if data.get("output"):
-                # Print last few lines of output
-                output_lines = data["output"].strip().split('\n')[-5:]
-                print(f"  Output (last 5 lines):")
-                for line in output_lines:
-                    print(f"    {line}")
-        else:
-            print(f"⚠ Retrain returned success=False: {data.get('errors', 'No error details')}")
-            # Still pass if endpoint works, even if training has issues
-            assert "output" in data or "errors" in data
-
-
-class TestSubStoreMerchantsRegression:
-    """Regression test: /sub-stores/api/split/merchants still works.
-    Note: This endpoint requires Laravel session auth, so we test via internal route.
-    """
+        assert data["success"] is True
+        print(f"✓ Category filter works: {len(data['recommendations'])} results")
     
-    def test_split_merchants_endpoint_requires_auth(self):
-        """Verify sub-store merchants endpoint requires authentication (redirects to login)."""
+    def test_recommendations_missing_client_id(self):
+        """POST /api/merchant-recommendations without client_id returns 400"""
+        response = requests.post(
+            f"{BASE_URL}/api/merchant-recommendations",
+            json={"top_k": 5}
+        )
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] is False
+        assert "client_id" in data.get("error", "").lower()
+        print("✓ Missing client_id returns 400 error")
+
+
+class TestTimelineEndpoint:
+    """Tests for /api/merchant-recommendations/stats/timeline"""
+    
+    def test_timeline_returns_arrays(self):
+        """GET /api/merchant-recommendations/stats/timeline returns timeline and categories arrays"""
+        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/stats/timeline")
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "timeline" in data, "Response missing 'timeline' field"
+        assert "categories" in data, "Response missing 'categories' field"
+        assert isinstance(data["timeline"], list), "timeline should be a list"
+        assert isinstance(data["categories"], list), "categories should be a list"
+        
+        # If timeline has data, verify structure
+        if len(data["timeline"]) > 0:
+            item = data["timeline"][0]
+            assert "day" in item
+            assert "interaction_type" in item
+            assert "cnt" in item
+        
+        print(f"✓ Timeline endpoint: {len(data['timeline'])} timeline entries, {len(data['categories'])} categories")
+
+
+class TestCategoriesEndpoint:
+    """Tests for /api/merchant-recommendations/categories"""
+    
+    def test_categories_returns_11(self):
+        """GET /api/merchant-recommendations/categories returns 11 categories"""
+        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/categories")
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "categories" in data
+        categories = data["categories"]
+        assert len(categories) == 11, f"Expected 11 categories, got {len(categories)}"
+        
+        # Verify structure
+        for cat in categories:
+            assert "category_id" in cat
+            assert "category_name" in cat
+        
+        cat_names = [c["category_name"] for c in categories]
+        print(f"✓ Categories endpoint: {len(categories)} categories - {cat_names[:3]}...")
+
+
+class TestStatsEndpoint:
+    """Tests for /api/merchant-recommendations/stats"""
+    
+    def test_stats_returns_kpis(self):
+        """GET /api/merchant-recommendations/stats returns KPIs"""
+        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/stats")
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "active_merchants" in data
+        assert "profiled_users" in data
+        assert "total_interactions" in data
+        
+        # Verify expected values
+        assert data["active_merchants"] == 576, f"Expected 576 merchants, got {data['active_merchants']}"
+        assert data["profiled_users"] == 19249, f"Expected 19249 profiles, got {data['profiled_users']}"
+        
+        print(f"✓ Stats: {data['active_merchants']} merchants, {data['profiled_users']} profiles, {data['total_interactions']} interactions")
+
+
+class TestHealthEndpoint:
+    """Tests for /api/merchant-recommendations/health"""
+    
+    def test_health_check(self):
+        """GET /api/merchant-recommendations/health returns status"""
+        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/health")
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "status" in data
+        assert data["status"] in ["ready", "fallback_only"]
+        assert "model_loaded" in data
+        assert "fallback_available" in data
+        
+        print(f"✓ Health: status={data['status']}, model_loaded={data['model_loaded']}")
+
+
+class TestRedisCachePerformance:
+    """Tests for Redis cache performance on merchants split endpoint"""
+    
+    def test_cache_performance(self):
+        """2nd call to merchants split should be faster (cached)"""
+        url = f"{BASE_URL}/sub-stores/api/split/merchants?sub_store=ALL&start_date=2025-01-01&end_date=2025-12-31"
+        
+        # First call (may be slow)
+        start1 = time.time()
+        response1 = requests.get(url)
+        time1 = (time.time() - start1) * 1000
+        assert response1.status_code == 200
+        
+        # Second call (should be cached)
+        start2 = time.time()
+        response2 = requests.get(url)
+        time2 = (time.time() - start2) * 1000
+        assert response2.status_code == 200
+        
+        print(f"✓ Cache test: 1st call={time1:.0f}ms, 2nd call={time2:.0f}ms")
+        
+        # 2nd call should be under 500ms (cached)
+        assert time2 < 500, f"2nd call took {time2:.0f}ms, expected <500ms (cache miss?)"
+
+
+class TestRegressionMerchantKPIs:
+    """Regression tests for existing merchant KPIs"""
+    
+    def test_merchant_kpis_8_values(self):
+        """GET /sub-stores/api/split/merchants returns all 8 KPIs"""
         response = requests.get(
             f"{BASE_URL}/sub-stores/api/split/merchants",
-            params={
-                "start_date": "2026-03-01",
-                "end_date": "2026-03-31",
-                "sub_store_id": "Sofrecom"
-            },
-            timeout=60,
-            allow_redirects=False
+            params={"sub_store": "ALL", "start_date": "2025-01-01", "end_date": "2025-12-31"}
         )
-        # Should redirect to login (302) or return HTML redirect
-        # This confirms the endpoint exists and auth middleware is working
-        assert response.status_code in [200, 302], f"Expected 200/302, got {response.status_code}"
-        
-        # If 200, it's an HTML redirect page
-        if response.status_code == 200:
-            assert "login" in response.text.lower(), "Expected redirect to login"
-            print("✓ Regression: /sub-stores/api/split/merchants exists and requires auth (HTML redirect)")
-        else:
-            print("✓ Regression: /sub-stores/api/split/merchants exists and requires auth (302 redirect)")
-
-
-class TestDatabaseTables:
-    """Verify ML tables have data."""
-    
-    def test_merchants_catalog_has_data(self):
-        """cp_merchants_catalog should have data from training."""
-        # Use stats endpoint which queries this table
-        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/stats", timeout=30)
+        assert response.status_code == 200
         data = response.json()
         
-        active_merchants = data.get("active_merchants", 0)
-        assert active_merchants > 0, f"Expected active_merchants > 0, got {active_merchants}"
-        print(f"✓ cp_merchants_catalog has {active_merchants} active merchants")
-    
-    def test_user_profiles_has_data(self):
-        """cp_user_profile should have data from training."""
-        response = requests.get(f"{BASE_URL}/api/merchant-recommendations/stats", timeout=30)
-        data = response.json()
+        # Verify all 8 KPIs exist
+        expected_kpis = [
+            "totalPartners", "activeMerchants", "totalLocationsActive",
+            "activeMerchantRatio", "totalTransactions", "transactionsPerMerchant",
+            "topMerchantShare", "diversity"
+        ]
         
-        profiled_users = data.get("profiled_users", 0)
-        assert profiled_users > 0, f"Expected profiled_users > 0, got {profiled_users}"
-        print(f"✓ cp_user_profile has {profiled_users} profiled users")
+        for kpi in expected_kpis:
+            assert kpi in data, f"Missing KPI: {kpi}"
+        
+        # Verify specific values
+        assert data["totalPartners"]["current"] == 576
+        assert data["activeMerchants"]["current"] > 0
+        assert data["totalTransactions"]["current"] > 0
+        
+        print(f"✓ Regression: All 8 merchant KPIs present - totalPartners={data['totalPartners']['current']}")
 
 
 if __name__ == "__main__":

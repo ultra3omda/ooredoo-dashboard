@@ -167,6 +167,51 @@ table td { padding: 10px 12px; border-bottom: 1px solid #f0ecf7; }
   </div>
   @endif
 
+  @if(!empty($merchant_reco))
+  <div class="section">
+    <div class="section-title">Insights Marchands - Moteur ML</div>
+    <div class="kpi-grid" style="margin-bottom: 16px;">
+      <div class="kpi-box">
+        <div class="value">{{ number_format($merchant_reco['active_merchants'] ?? 0) }}</div>
+        <div class="label">Marchands Actifs</div>
+      </div>
+      <div class="kpi-box">
+        <div class="value">{{ number_format($merchant_reco['profiled_users'] ?? 0) }}</div>
+        <div class="label">Profils ML</div>
+      </div>
+    </div>
+    @if(!empty($merchant_reco['top_merchants']))
+    <table>
+      <thead>
+        <tr><th>#</th><th>Marchand</th><th>Catégorie</th><th>Visites</th><th>Score</th></tr>
+      </thead>
+      <tbody>
+        @foreach(array_slice($merchant_reco['top_merchants'], 0, 10) as $i => $m)
+        <tr>
+          <td>{{ $i + 1 }}</td>
+          <td style="font-weight: 600;">{{ $m['partner_name'] ?? 'N/A' }}</td>
+          <td>{{ $m['category_name'] ?? '-' }}</td>
+          <td>{{ number_format($m['total_visits'] ?? 0) }}</td>
+          <td style="color: #4c3489; font-weight: 700;">{{ number_format($m['popularity_score'] ?? 0, 1) }}</td>
+        </tr>
+        @endforeach
+      </tbody>
+    </table>
+    @endif
+    @if(!empty($merchant_reco['top_categories']))
+    <div style="margin-top: 12px;">
+      <div style="font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #4c3489;">Top Catégories</div>
+      @foreach($merchant_reco['top_categories'] as $cat)
+      <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; border-bottom: 1px solid #f0ecf7;">
+        <span>{{ $cat['category_name'] ?? 'Autre' }}</span>
+        <span style="font-weight: 600;">{{ number_format($cat['total_visits'] ?? 0) }} visites</span>
+      </div>
+      @endforeach
+    </div>
+    @endif
+  </div>
+  @endif
+
   <div class="footer">
     Club Privileges &bull; Rapport genere le {{ $generated_at }} &bull; Confidentiel
   </div>
