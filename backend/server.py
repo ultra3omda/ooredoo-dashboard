@@ -1218,6 +1218,173 @@ def _build_weekly_email_html(data, ai_report):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# DIGITAL PRESENCE SCORING
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/merchant-intelligence/digital-scores")
+async def digital_scores(request: Request):
+    """Score all merchants' digital presence via real web scraping."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from digital_scoring import score_all_merchants
+
+        limit = int(request.query_params.get('limit', '30'))
+        limit = min(limit, 100)
+
+        result = await score_all_merchants(limit=limit, batch_size=5)
+        return JSONResponse(result)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-intelligence/digital-score/{partner_id}")
+async def digital_score_single(partner_id: int, request: Request):
+    """Score a single merchant's digital presence."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from digital_scoring import get_merchants_with_digital_info, score_merchant_digital
+
+        merchants = get_merchants_with_digital_info(limit=500)
+        merchant = next((m for m in merchants if m['partner_id'] == partner_id), None)
+
+        if not merchant:
+            return JSONResponse({'success': False, 'error': 'Marchand introuvable'}, status_code=404)
+
+        result = await score_merchant_digital(merchant)
+        return JSONResponse({'success': True, **result})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.post("/api/merchant-intelligence/digital-audit/{partner_id}")
+async def digital_audit(partner_id: int, request: Request):
+    """Generate AI-powered digital audit for a merchant (scrape + Gemini)."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from digital_scoring import get_merchants_with_digital_info, score_merchant_digital, generate_digital_audit
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not api_key:
+            return JSONResponse({'success': False, 'error': 'EMERGENT_LLM_KEY non configure'}, status_code=500)
+
+        merchants = get_merchants_with_digital_info(limit=500)
+        merchant = next((m for m in merchants if m['partner_id'] == partner_id), None)
+
+        if not merchant:
+            return JSONResponse({'success': False, 'error': 'Marchand introuvable'}, status_code=404)
+
+        # Score first (scrape)
+        score_data = await score_merchant_digital(merchant)
+
+        # Then audit with Gemini
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        provider = body.get('provider', 'gemini')
+        model = body.get('model', 'gemini-2.5-flash')
+
+        audit_result = await generate_digital_audit(score_data, api_key, provider, model)
+        return JSONResponse(audit_result)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-intelligence/digital-scores/html")
+async def digital_scores_html(request: Request):
+    """HTML dashboard of all digital scores."""
+    from fastapi.responses import HTMLResponse
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from digital_scoring import score_all_merchants
+
+        limit = int(request.query_params.get('limit', '30'))
+        data = await score_all_merchants(limit=min(limit, 50), batch_size=5)
+
+        merchants = data.get('merchants', [])
+        dist = data.get('distribution', {})
+        now = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+        rows = ''
+        for m in merchants:
+            bd = m.get('breakdown', {})
+            lvl_color = {'EXCELLENT': '#10b981', 'BON': '#3b82f6', 'MOYEN': '#f59e0b', 'FAIBLE': '#ef4444'}.get(m['level'], '#6b7280')
+            channels = []
+            if m.get('has_website'): channels.append('Web')
+            if m.get('has_facebook'): channels.append('FB')
+            if m.get('has_instagram'): channels.append('IG')
+
+            rows += f'''<tr>
+                <td style="padding:10px 14px;font-weight:600;font-size:13px;">{m['partner_name']}</td>
+                <td style="padding:10px 14px;font-size:12px;color:#6b7280;">{m['category']}</td>
+                <td style="padding:10px 14px;text-align:center;">
+                    <span style="display:inline-block;background:{lvl_color};color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700;min-width:32px;">{m['digital_score']}</span>
+                </td>
+                <td style="padding:10px 14px;text-align:center;">
+                    <span style="color:{lvl_color};font-weight:600;font-size:12px;">{m['level']}</span>
+                </td>
+                <td style="padding:10px 8px;text-align:center;font-size:11px;">{bd.get('website',0)}/30</td>
+                <td style="padding:10px 8px;text-align:center;font-size:11px;">{bd.get('facebook',0)}/25</td>
+                <td style="padding:10px 8px;text-align:center;font-size:11px;">{bd.get('instagram',0)}/25</td>
+                <td style="padding:10px 8px;text-align:center;font-size:11px;">{bd.get('google',0)}/20</td>
+                <td style="padding:10px 14px;font-size:11px;color:#6b7280;">{', '.join(channels) if channels else '-'}</td>
+            </tr>'''
+
+        html = f'''<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scoring Digital — Club Privileges</title>
+<style>
+body {{ margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111; }}
+.container {{ max-width:1100px;margin:0 auto;padding:24px 16px; }}
+.header {{ background:linear-gradient(135deg,#0f172a,#1e3a5f);border-radius:14px;padding:28px 24px;color:white;margin-bottom:24px; }}
+.header h1 {{ margin:0;font-size:22px;font-weight:800; }}
+.header p {{ margin:4px 0 0;font-size:13px;opacity:0.7; }}
+.kpi-grid {{ display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px; }}
+.kpi {{ background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e2e8f0; }}
+.kpi .val {{ font-size:28px;font-weight:800; }}
+.kpi .lbl {{ font-size:11px;color:#64748b;margin-top:2px; }}
+table {{ width:100%;border-collapse:collapse;background:white;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0; }}
+th {{ padding:12px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;background:#f8fafc;border-bottom:1px solid #e2e8f0; }}
+td {{ border-bottom:1px solid #f1f5f9; }}
+tr:hover {{ background:#f8fafc; }}
+</style></head><body>
+<div class="container">
+<div class="header">
+    <h1>Scoring de Presence Digitale</h1>
+    <p>Club Privileges — {data['count']} marchands analyses le {now}</p>
+</div>
+<div class="kpi-grid">
+    <div class="kpi"><div class="val" style="color:#111;">{data['count']}</div><div class="lbl">Total analyses</div></div>
+    <div class="kpi"><div class="val" style="color:#3b82f6;">{data['avg_score']}</div><div class="lbl">Score moyen /100</div></div>
+    <div class="kpi"><div class="val" style="color:#10b981;">{dist.get('EXCELLENT',0)}</div><div class="lbl">Excellent (70+)</div></div>
+    <div class="kpi"><div class="val" style="color:#f59e0b;">{dist.get('MOYEN',0)}</div><div class="lbl">Moyen (30-49)</div></div>
+    <div class="kpi"><div class="val" style="color:#ef4444;">{dist.get('FAIBLE',0)}</div><div class="lbl">Faible (&lt;30)</div></div>
+</div>
+<table>
+<thead><tr>
+    <th>Marchand</th><th>Categorie</th><th style="text-align:center;">Score</th><th style="text-align:center;">Niveau</th>
+    <th style="text-align:center;">Web</th><th style="text-align:center;">FB</th><th style="text-align:center;">IG</th><th style="text-align:center;">Google</th><th>Canaux</th>
+</tr></thead>
+<tbody>{rows}</tbody>
+</table>
+<div style="text-align:center;padding:20px;font-size:11px;color:#94a3b8;">Club Privileges — Scoring Digital v1.0 · Scraping reel</div>
+</div></body></html>'''
+
+        return HTMLResponse(content=html)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return HTMLResponse(content=f"<html><body><h1>Erreur</h1><pre>{str(e)}</pre></body></html>", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # PROXY CATCH-ALL (must be LAST)
 # ═══════════════════════════════════════════════════════════════════════════
 

@@ -228,6 +228,25 @@
         <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
     </div>
 </div>
+
+<!-- Scoring Digital -->
+<div class="cp-card" style="margin-bottom: 28px;" data-testid="digital-scoring-panel">
+    <div class="cp-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="cp-card-title"><i class="fas fa-globe"></i> Scoring Presence Digitale (Scraping reel)</span>
+        <div style="display: flex; gap: 6px;">
+            <button class="btn-sm" onclick="loadDigitalScores()" data-testid="digital-refresh-btn"><i class="fas fa-sync-alt"></i> Scanner</button>
+            <a id="digitalScoresHtmlLink" href="#" target="_blank" class="btn-sm btn-primary" data-testid="digital-full-report-btn">
+                <i class="fas fa-external-link-alt"></i> Rapport complet
+            </a>
+        </div>
+    </div>
+    <div id="digitalScoresContainer" data-testid="digital-scores-container" style="margin-top: 16px;">
+        <div style="text-align: center; padding: 30px; color: var(--muted);">
+            <i class="fas fa-globe" style="font-size: 32px; margin-bottom: 12px; opacity: 0.3;"></i>
+            <p style="font-size: 13px;">Cliquez "Scanner" pour analyser la presence digitale des marchands (scraping reel des sites web, Facebook, Instagram, Google).</p>
+        </div>
+    </div>
+</div>
 @endsection
 
 @section('scripts')
@@ -247,6 +266,8 @@ async function loadDashboard() {
     const emailPreviewLink = document.getElementById('intelligenceEmailPreviewLink');
     if (fullReportLink) fullReportLink.href = `${baseUrl}/api/merchant-intelligence/report/html`;
     if (emailPreviewLink) emailPreviewLink.href = `${baseUrl}/api/merchant-intelligence/weekly-email-preview`;
+    const digitalLink = document.getElementById('digitalScoresHtmlLink');
+    if (digitalLink) digitalLink.href = `${baseUrl}/api/merchant-intelligence/digital-scores/html?limit=50`;
 
     await Promise.allSettled([
         loadStats(),
@@ -777,6 +798,158 @@ async function loadIntelligenceDigest() {
         </div>`;
     } catch (e) {
         container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCORING DIGITAL
+// ═══════════════════════════════════════════════════════════════
+
+async function loadDigitalScores() {
+    const container = document.getElementById('digitalScoresContainer');
+    container.innerHTML = `<div style="text-align: center; padding: 30px;">
+        <div class="loading-spinner"></div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 12px;">Scraping en cours... Analyse des sites web, Facebook, Instagram et Google de chaque marchand.</p>
+    </div>`;
+
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-intelligence/digital-scores?limit=20`);
+        const data = await res.json();
+        if (!data.success) { container.innerHTML = `<p style="color: var(--danger);">Erreur: ${data.error}</p>`; return; }
+
+        const dist = data.distribution || {};
+        const levelColors = { EXCELLENT: 'var(--success)', BON: 'var(--brand-primary)', MOYEN: 'var(--warning)', FAIBLE: 'var(--danger)' };
+
+        let rows = '';
+        (data.merchants || []).forEach(m => {
+            const bd = m.breakdown || {};
+            const lc = levelColors[m.level] || 'var(--muted)';
+            const channels = [];
+            if (m.has_website) channels.push('Web');
+            if (m.has_facebook) channels.push('FB');
+            if (m.has_instagram) channels.push('IG');
+
+            rows += `<tr>
+                <td style="padding:8px 12px;font-weight:600;font-size:13px;">${m.partner_name}</td>
+                <td style="padding:8px 12px;font-size:12px;color:var(--muted);">${m.category}</td>
+                <td style="padding:8px 12px;text-align:center;">
+                    <span style="display:inline-block;background:${lc};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;">${m.digital_score}</span>
+                </td>
+                <td style="padding:8px 12px;text-align:center;font-size:11px;color:${lc};font-weight:600;">${m.level}</td>
+                <td style="padding:8px 8px;text-align:center;font-size:11px;">${bd.website||0}/30</td>
+                <td style="padding:8px 8px;text-align:center;font-size:11px;">${bd.facebook||0}/25</td>
+                <td style="padding:8px 8px;text-align:center;font-size:11px;">${bd.instagram||0}/25</td>
+                <td style="padding:8px 8px;text-align:center;font-size:11px;">${bd.google||0}/20</td>
+                <td style="padding:8px 12px;font-size:11px;color:var(--muted);">${channels.join(', ') || '-'}</td>
+                <td style="padding:8px 12px;text-align:center;">
+                    <button class="btn-sm" onclick="runDigitalAudit(${m.partner_id}, '${m.partner_name.replace(/'/g, "\\'")}')"><i class="fas fa-search"></i></button>
+                </td>
+            </tr>`;
+        });
+
+        container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px;">
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700;">${data.count}</div>
+                <div style="font-size: 10px; color: var(--muted);">Analyses</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--brand-primary);">${data.avg_score}/100</div>
+                <div style="font-size: 10px; color: var(--muted);">Score moyen</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--success);">${(dist.EXCELLENT||0)+(dist.BON||0)}</div>
+                <div style="font-size: 10px; color: var(--muted);">Bon / Excellent</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--warning);">${dist.MOYEN||0}</div>
+                <div style="font-size: 10px; color: var(--muted);">Moyen</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--danger);">${dist.FAIBLE||0}</div>
+                <div style="font-size: 10px; color: var(--muted);">Faible</div>
+            </div>
+        </div>
+        <table class="stats-table">
+            <thead><tr>
+                <th>Marchand</th><th>Categorie</th><th style="text-align:center;">Score</th><th style="text-align:center;">Niveau</th>
+                <th style="text-align:center;">Web</th><th style="text-align:center;">FB</th><th style="text-align:center;">IG</th><th style="text-align:center;">Google</th><th>Canaux</th><th style="text-align:center;">Audit</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+    } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+async function runDigitalAudit(partnerId, partnerName) {
+    const container = document.getElementById('digitalScoresContainer');
+    const existingContent = container.innerHTML;
+
+    // Show modal-like overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'auditOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `<div style="background:white;border-radius:14px;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;font-size:16px;">Audit Digital: ${partnerName}</h3>
+            <button onclick="document.getElementById('auditOverlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;">&times;</button>
+        </div>
+        <div id="auditContent" style="text-align:center;padding:20px;"><div class="loading-spinner"></div><p style="font-size:13px;color:#6b7280;">Analyse Gemini en cours...</p></div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-intelligence/digital-audit/${partnerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const data = await res.json();
+        const content = document.getElementById('auditContent');
+
+        if (!data.success) { content.innerHTML = `<p style="color:#ef4444;">Erreur: ${data.error}</p>`; return; }
+
+        const a = data.audit || {};
+        let recsHtml = '';
+        (a.recommendations || []).forEach(r => {
+            const pc = { P0: '#dc2626', P1: '#ea580c', P2: '#2563eb' }[r.priority] || '#6b7280';
+            recsHtml += `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    <span style="background:${pc};color:white;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;">${r.priority}</span>
+                    <span style="font-size:11px;color:#6b7280;text-transform:uppercase;">${r.canal}</span>
+                    <span style="font-size:11px;color:#9ca3af;">Effort: ${r.effort}</span>
+                </div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${r.action}</div>
+                <div style="font-size:12px;color:#059669;">${r.impact_attendu}</div>
+            </div>`;
+        });
+
+        content.innerHTML = `
+            <div style="text-align:left;">
+                <div style="display:flex;gap:12px;margin-bottom:16px;">
+                    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;flex:1;text-align:center;">
+                        <div style="font-size:24px;font-weight:800;color:#111;">${data.digital_score}/100</div>
+                        <div style="font-size:11px;color:#6b7280;">Score actuel</div>
+                    </div>
+                    <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:12px;flex:1;text-align:center;">
+                        <div style="font-size:24px;font-weight:800;color:#2563eb;">${a.score_potentiel || '?'}/100</div>
+                        <div style="font-size:11px;color:#6b7280;">Score potentiel</div>
+                    </div>
+                </div>
+                <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:14px;margin-bottom:16px;">
+                    <div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:4px;">Diagnostic</div>
+                    <div style="font-size:13px;color:#78350f;">${a.diagnostic || ''}</div>
+                </div>
+                ${a.points_forts ? `<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:700;color:#059669;margin-bottom:4px;">Points forts</div><ul style="margin:0;padding-left:18px;">${a.points_forts.map(p => `<li style="font-size:12px;margin:2px 0;">${p}</li>`).join('')}</ul></div>` : ''}
+                ${a.points_faibles ? `<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:4px;">Points faibles</div><ul style="margin:0;padding-left:18px;">${a.points_faibles.map(p => `<li style="font-size:12px;margin:2px 0;">${p}</li>`).join('')}</ul></div>` : ''}
+                <div style="font-size:13px;font-weight:700;margin-bottom:8px;">Recommandations (${(a.recommendations||[]).length})</div>
+                ${recsHtml}
+                ${a.strategie_contenu ? `<div style="background:#f8fafc;border-radius:8px;padding:12px;margin-top:12px;">
+                    <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:4px;">Strategie de contenu</div>
+                    <div style="font-size:12px;">Frequence: ${a.strategie_contenu.frequence_publication || ''}</div>
+                    <div style="font-size:12px;">Ton: ${a.strategie_contenu.ton_recommande || ''}</div>
+                    <div style="font-size:12px;">Types: ${(a.strategie_contenu.types_contenu || []).join(', ')}</div>
+                </div>` : ''}
+            </div>`;
+    } catch (e) {
+        document.getElementById('auditContent').innerHTML = `<p style="color:#ef4444;">Erreur: ${e.message}</p>`;
     }
 }
 </script>

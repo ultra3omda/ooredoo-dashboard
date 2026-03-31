@@ -1,0 +1,128 @@
+{
+  "summary": "Backend API testing for Iteration 26 - All 10 tests PASSED. Verified NEW Digital Scoring feature with REAL web scraping: batch scoring, single merchant scoring, Gemini AI audit, and HTML dashboard. Plus 5 regression tests for existing endpoints.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_26_digital_scoring.py",
+    "/app/test_reports/pytest/pytest_iteration_26.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_26_digital_scoring.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "test_partner_id": "1209 (TRAVELTODO - has website, facebook, instagram)",
+    "test_client_id": "118580",
+    "api_url": "https://perf-test-ooredoo.preview.emergentagent.com"
+  },
+  "seed_data_creation": "No new seed data. Used existing production data. TRAVELTODO (partner_id=1209) used as test merchant.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 26 verified all Digital Scoring features with REAL web scraping: 1) Batch scoring endpoint takes ~30-60s for 10 merchants (concurrent scraping), 2) Single merchant scoring takes ~10-15s, 3) Gemini AI audit takes ~20-30s and returns detailed recommendations, 4) HTML dashboard renders KPI cards and merchant table. Facebook/Instagram often return accessible=False due to login walls (expected behavior). Google search may be blocked by CAPTCHA.",
+  "features_verified": {
+    "GET /api/merchant-intelligence/digital-scores?limit=10": {
+      "status": "PASS",
+      "response_time": "~60s",
+      "details": "Returns success=true, count, avg_score, distribution (EXCELLENT/BON/MOYEN/FAIBLE), merchants array with digital_score, level, breakdown, scrape_data"
+    },
+    "GET /api/merchant-intelligence/digital-score/1209": {
+      "status": "PASS",
+      "response_time": "~10s",
+      "details": "TRAVELTODO scored 45/100 (MOYEN). Breakdown: website=30/30, facebook=5/25, instagram=10/25, google=0/20"
+    },
+    "GET /api/merchant-intelligence/digital-score/999999 (invalid)": {
+      "status": "PASS",
+      "details": "Returns 404 with success=false for invalid partner_id"
+    },
+    "POST /api/merchant-intelligence/digital-audit/1209": {
+      "status": "PASS",
+      "response_time": "~30s",
+      "details": "Gemini AI audit returns diagnostic, points_forts (3), points_faibles (3), recommendations (7), score_potentiel (85), strategie_contenu"
+    },
+    "GET /api/merchant-intelligence/digital-scores/html?limit=10": {
+      "status": "PASS",
+      "details": "Returns HTML dashboard with KPI cards, merchant table, score levels"
+    },
+    "REGRESSION: GET /api/merchant-recommendations/health": {
+      "status": "PASS",
+      "details": "status=ready"
+    },
+    "REGRESSION: GET /api/merchant-intelligence/digest": {
+      "status": "PASS",
+      "details": "success=true"
+    },
+    "REGRESSION: GET /api/merchant-recommendations/ab-test/results": {
+      "status": "PASS",
+      "details": "Returns period_days, groups, uplift"
+    },
+    "REGRESSION: GET /api/merchant-intelligence/weekly-email-preview": {
+      "status": "PASS",
+      "details": "Returns HTML email preview"
+    },
+    "REGRESSION: POST /api/merchant-recommendations": {
+      "status": "PASS",
+      "details": "ML recommendations working for client_id=118580"
+    }
+  },
+  "api_response_samples": {
+    "digital_score_traveltodo": {
+      "partner_id": 1209,
+      "partner_name": "TRAVELTODO",
+      "digital_score": 45,
+      "level": "MOYEN",
+      "breakdown": {
+        "website": 30,
+        "facebook": 5,
+        "instagram": 10,
+        "google": 0
+      },
+      "has_website": true,
+      "has_facebook": true,
+      "has_instagram": true
+    },
+    "batch_scoring_5_merchants": {
+      "count": 5,
+      "avg_score": 30.6,
+      "distribution": {
+        "EXCELLENT": 0,
+        "BON": 0,
+        "MOYEN": 3,
+        "FAIBLE": 2
+      }
+    },
+    "digital_audit_traveltodo": {
+      "success": true,
+      "digital_score": 45,
+      "audit": {
+        "diagnostic": "Traveltodo possède un site web très performant et sécurisé...",
+        "points_forts_count": 3,
+        "points_faibles_count": 3,
+        "recommendations_count": 7,
+        "score_potentiel": 85
+      }
+    }
+  },
+  "scraping_behavior_notes": {
+    "website_scraping": "Real HTTP requests with BeautifulSoup parsing. Checks SSL, title, description, contact info, e-commerce signals, booking signals",
+    "facebook_scraping": "Often returns accessible=False due to login walls (expected behavior)",
+    "instagram_scraping": "Often returns accessible=False due to login walls (expected behavior)",
+    "google_search": "May be blocked by CAPTCHA, returns found=False in such cases",
+    "timeout_recommendations": {
+      "batch_10_merchants": "120s",
+      "single_merchant": "30s",
+      "ai_audit": "60s"
+    }
+  }
+}
