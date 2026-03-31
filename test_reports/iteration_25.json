@@ -1,0 +1,97 @@
+{
+  "summary": "Backend API testing for Iteration 25 - All 23 tests PASSED. Verified 3 new features: P3 Analytics Temporel (Timeline with 30/60/90 days), P3 A/B Test Framework (ML vs Popularity with deterministic hashing), Weekly Email Preview (Gemini AI). Plus 6 regression tests for existing endpoints.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_25.py",
+    "/app/test_reports/pytest/pytest_iteration_25.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_25.py"
+  ],
+  "success_rate": {
+    "backend": "100% (23/23 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "ml_client_ids": "118580 (ML group), 100 (Popularity group)",
+    "api_url": "https://perf-test-ooredoo.preview.emergentagent.com"
+  },
+  "seed_data_creation": "No new seed data. Used existing production data. A/B test impressions tracked automatically.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 25 verified all 3 new features: 1) Timeline endpoint accepts ?days=30/60/90 (defaults to 30), 2) A/B test framework with deterministic MD5 hashing (client 118580=ml_model, client 100=popularity), 3) Weekly email preview generates HTML with Gemini AI (~10-15s response time). Server.py now has 1277 lines with proxy catch-all at the end.",
+  "features_verified": {
+    "GET /api/merchant-recommendations/stats/timeline?days=30": "PASS - Returns timeline, categories, source_breakdown, period_days=30",
+    "GET /api/merchant-recommendations/stats/timeline?days=60": "PASS - Returns period_days=60",
+    "GET /api/merchant-recommendations/stats/timeline?days=90": "PASS - Returns period_days=90",
+    "GET /api/merchant-recommendations/stats/timeline (default)": "PASS - Defaults to period_days=30",
+    "GET /api/merchant-recommendations/stats/timeline?days=45 (invalid)": "PASS - Invalid days defaults to 30",
+    "GET /api/merchant-recommendations/ab-test/results?days=30": "PASS - Returns groups, uplift, breakdown",
+    "GET /api/merchant-recommendations/ab-test/118580?top_k=3": "PASS - ab_group=ml_model (deterministic)",
+    "GET /api/merchant-recommendations/ab-test/100?top_k=3": "PASS - ab_group=popularity (deterministic)",
+    "A/B test deterministic assignment": "PASS - Same client_id always gets same group",
+    "A/B test response includes ab_group": "PASS - ab_group field present in response",
+    "A/B test tracking impressions": "PASS - Impressions tracked in results endpoint",
+    "GET /api/merchant-intelligence/weekly-email-preview": "PASS - Returns HTML with KPI cards, executive summary, actions, top performers",
+    "REGRESSION: Widget endpoint": "PASS - /api/merchant-recommendations/widget/118580 works",
+    "REGRESSION: Intelligence digest": "PASS - /api/merchant-intelligence/digest works",
+    "REGRESSION: ML recommendations": "PASS - POST /api/merchant-recommendations works",
+    "REGRESSION: Health endpoint": "PASS - status=ready, model_loaded=true",
+    "REGRESSION: Stats endpoint": "PASS - Returns interaction stats",
+    "REGRESSION: Categories endpoint": "PASS - Returns categories list"
+  },
+  "api_response_samples": {
+    "timeline_30_days": {
+      "period_days": 30,
+      "timeline_count": 3,
+      "categories_count": 3,
+      "source_breakdown_includes": ["ab_ml_model", "ab_popularity", "recommendation", "organic"]
+    },
+    "ab_test_results": {
+      "period_days": 30,
+      "groups": {
+        "ml_model": {"impressions": 3, "ctr": 0.0},
+        "popularity": {"impressions": 2, "ctr": 0.0}
+      },
+      "uplift": {"winner": "tie"}
+    },
+    "ab_test_client_118580": {
+      "client_id": 118580,
+      "ab_group": "ml_model",
+      "source": "ml_model",
+      "count": 3
+    },
+    "ab_test_client_100": {
+      "client_id": 100,
+      "ab_group": "popularity",
+      "source": "popularity_ab",
+      "count": 3
+    },
+    "weekly_email_preview": {
+      "status": 200,
+      "content_type": "text/html",
+      "contains": ["KPI cards", "Executive summary (Gemini AI)", "Actions commerciales", "Top performeurs"]
+    }
+  },
+  "server_py_verification": {
+    "line_count": 1277,
+    "ends_with_proxy_catch_all": true,
+    "no_duplicate_routes": true,
+    "new_endpoints_added": [
+      "/api/merchant-recommendations/stats/timeline (line 513-570)",
+      "/api/merchant-recommendations/ab-test/results (line 920-990)",
+      "/api/merchant-recommendations/ab-test/{client_id} (line 993-1043)",
+      "/api/merchant-intelligence/weekly-email-preview (line 1050-1076)"
+    ]
+  }
+}

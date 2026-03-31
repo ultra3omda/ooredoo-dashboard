@@ -511,57 +511,60 @@ async def recommendation_stats():
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/merchant-recommendations/stats/timeline")
-async def recommendation_timeline():
-    """Get daily interaction counts for the last 30 days."""
+async def recommendation_timeline(request: Request):
+    """Get daily interaction counts for the last N days (30/60/90)."""
     try:
         import sys
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
         from predict_merchant import get_db_connection
-        
+
+        days = int(request.query_params.get('days', '30'))
+        if days not in (30, 60, 90):
+            days = 30
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT 
-                DATE(created_at) as day,
-                interaction_type,
-                COUNT(*) as cnt
+
+        cursor.execute(f"""
+            SELECT DATE(created_at) as day, interaction_type, COUNT(*) as cnt
             FROM cp_user_offer_interactions
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
             GROUP BY DATE(created_at), interaction_type
             ORDER BY day ASC
         """)
         rows = cursor.fetchall()
-        
-        # Convert date objects to strings
-        timeline = []
-        for r in rows:
-            timeline.append({
-                "day": str(r['day']) if r['day'] else None,
-                "interaction_type": r['interaction_type'],
-                "cnt": r['cnt']
-            })
-        
-        # Also get category breakdown
-        cursor.execute("""
-            SELECT 
-                mc.category_name,
-                COUNT(*) as cnt,
-                COUNT(DISTINCT uoi.client_id) as unique_users
+
+        timeline = [{"day": str(r['day']) if r['day'] else None, "interaction_type": r['interaction_type'], "cnt": r['cnt']} for r in rows]
+
+        cursor.execute(f"""
+            SELECT mc.category_name, COUNT(*) as cnt, COUNT(DISTINCT uoi.client_id) as unique_users
             FROM cp_user_offer_interactions uoi
             JOIN cp_merchants_catalog mc ON uoi.partner_id = mc.partner_id
-            WHERE uoi.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            WHERE uoi.created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
             GROUP BY mc.category_name
-            ORDER BY cnt DESC
-            LIMIT 10
+            ORDER BY cnt DESC LIMIT 10
         """)
         categories = cursor.fetchall()
-        
+
+        # Source breakdown (ML vs popularity)
+        cursor.execute(f"""
+            SELECT source, interaction_type, COUNT(*) as cnt,
+                   COUNT(DISTINCT client_id) as unique_users,
+                   COUNT(DISTINCT partner_id) as unique_merchants
+            FROM cp_user_offer_interactions
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
+            GROUP BY source, interaction_type
+            ORDER BY cnt DESC
+        """)
+        source_breakdown = cursor.fetchall()
+
         conn.close()
-        
+
         return JSONResponse({
             "timeline": timeline,
             "categories": categories,
+            "source_breakdown": source_breakdown,
+            "period_days": days,
         })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -899,6 +902,319 @@ def _build_intelligence_html(data, ai_report):
 {f'<div style="background:white;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #e5e7eb;overflow-x:auto;"><div style="font-size:16px;font-weight:700;color:#10b981;margin-bottom:12px;">Top performeurs</div><table>{table_header}{perf_rows}</table></div>' if perf_rows else ''}
 <div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af;">Club Privileges — Intelligence Marchands v1.0 · {total} marchands · Gemini AI</div>
 </div></body></html>'''
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# A/B TEST FRAMEWORK: ML Model vs Popularity
+# ═══════════════════════════════════════════════════════════════════════════
+
+import hashlib
+import random as _random
+
+def _get_ab_group(client_id: int) -> str:
+    """Deterministic A/B assignment based on client_id hash."""
+    h = hashlib.md5(f"ab_test_v1_{client_id}".encode()).hexdigest()
+    return 'ml_model' if int(h[:8], 16) % 2 == 0 else 'popularity'
+
+
+@app.get("/api/merchant-recommendations/ab-test/results")
+async def ab_test_results(request: Request):
+    """Get A/B test results comparing ML model vs Popularity."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from predict_merchant import get_db_connection
+
+        days = int(request.query_params.get('days', '30'))
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(f"""
+            SELECT source, interaction_type,
+                   COUNT(*) as cnt,
+                   COUNT(DISTINCT client_id) as unique_users,
+                   COUNT(DISTINCT partner_id) as unique_merchants
+            FROM cp_user_offer_interactions
+            WHERE source IN ('ab_ml_model', 'ab_popularity')
+              AND created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
+            GROUP BY source, interaction_type
+            ORDER BY source, cnt DESC
+        """)
+        breakdown = cursor.fetchall()
+
+        cursor.execute(f"""
+            SELECT source,
+                   SUM(CASE WHEN interaction_type = 'impression' THEN 1 ELSE 0 END) as impressions,
+                   SUM(CASE WHEN interaction_type = 'click' THEN 1 ELSE 0 END) as clicks,
+                   SUM(CASE WHEN interaction_type = 'redeem' THEN 1 ELSE 0 END) as redeems,
+                   COUNT(DISTINCT client_id) as unique_users
+            FROM cp_user_offer_interactions
+            WHERE source IN ('ab_ml_model', 'ab_popularity')
+              AND created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
+            GROUP BY source
+        """)
+        summary_rows = cursor.fetchall()
+        conn.close()
+
+        groups = {}
+        for row in summary_rows:
+            src = row['source'].replace('ab_', '')
+            impressions = int(row['impressions'] or 0)
+            clicks = int(row['clicks'] or 0)
+            redeems = int(row['redeems'] or 0)
+            groups[src] = {
+                'impressions': impressions,
+                'clicks': clicks,
+                'redeems': redeems,
+                'unique_users': int(row['unique_users'] or 0),
+                'ctr': round(clicks / max(impressions, 1) * 100, 2),
+                'conversion_rate': round(redeems / max(impressions, 1) * 100, 2),
+            }
+
+        ml = groups.get('ml_model', {})
+        pop = groups.get('popularity', {})
+        uplift_ctr = round(ml.get('ctr', 0) - pop.get('ctr', 0), 2) if ml and pop else None
+        uplift_conv = round(ml.get('conversion_rate', 0) - pop.get('conversion_rate', 0), 2) if ml and pop else None
+
+        return JSONResponse({
+            'period_days': days,
+            'groups': groups,
+            'uplift': {
+                'ctr_pct': uplift_ctr,
+                'conversion_pct': uplift_conv,
+                'winner': 'ml_model' if (uplift_conv or 0) > 0 else 'popularity' if (uplift_conv or 0) < 0 else 'tie',
+            },
+            'breakdown': breakdown,
+        })
+    except Exception as e:
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@app.get("/api/merchant-recommendations/ab-test/{client_id}")
+async def ab_test_recommend(client_id: int, request: Request):
+    """Serve recommendations via A/B test: ML model vs Popularity fallback."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from predict_merchant import get_recommendations, get_db_connection
+
+        top_k = int(request.query_params.get('top_k', '5'))
+        group = _get_ab_group(client_id)
+
+        if group == 'ml_model':
+            result = get_recommendations(client_id=client_id, top_k=top_k)
+            recommendations, source, user_context = result if len(result) == 3 else (result[0], result[1], {})
+        else:
+            # Popularity-based: use fallback (client_id=0 triggers cold start / popularity)
+            result = get_recommendations(client_id=0, top_k=top_k)
+            recommendations, source, user_context = result if len(result) == 3 else (result[0], result[1], {})
+            source = 'popularity_ab'
+
+        items = [{
+            'id': r['partner_id'], 'name': r['partner_name'],
+            'category': r['category_name'], 'score': r['score_normalized'],
+            'type': r.get('recommendation_type', 'DISCOVERY'), 'reason': r['reason'],
+            'promos': r['active_promotions'], 'discount': r['avg_discount'],
+        } for r in recommendations]
+
+        # Track the A/B assignment
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO cp_user_offer_interactions
+                    (client_id, partner_id, interaction_type, source, recommendation_score, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+            """, (client_id, items[0]['id'] if items else 0, 'impression', f'ab_{group}', 0))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
+        return JSONResponse({
+            'client_id': client_id,
+            'ab_group': group,
+            'source': source,
+            'items': items,
+            'count': len(items),
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WEEKLY EMAIL PREVIEW
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/merchant-intelligence/weekly-email-preview")
+async def weekly_email_preview(request: Request):
+    """Generate a preview of the weekly commercial intelligence email."""
+    from fastapi.responses import HTMLResponse
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml_models'))
+        from merchant_intelligence import get_top_merchants_to_boost, generate_merchant_intelligence_report
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        merchants_data = get_top_merchants_to_boost(limit=10)
+
+        ai_report = None
+        if api_key:
+            try:
+                ai_report = await generate_merchant_intelligence_report(
+                    merchants_data, api_key, model_provider='gemini', model_name='gemini-2.5-flash'
+                )
+            except Exception as e:
+                ai_report = {'executive_summary': f'Analyse IA indisponible: {str(e)}', 'boost_recommendations': []}
+
+        html = _build_weekly_email_html(merchants_data, ai_report)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return HTMLResponse(content=f"<html><body><h1>Erreur</h1><pre>{str(e)}</pre></body></html>", status_code=500)
+
+
+def _build_weekly_email_html(data, ai_report):
+    """Build the weekly email preview HTML for commercial teams."""
+    now = datetime.now().strftime('%d/%m/%Y %H:%M')
+    stats = data.get('stats', {})
+    total = stats.get('performant', 0) + stats.get('a_surveiller', 0) + stats.get('a_booster', 0)
+
+    summary_text = ''
+    if ai_report and ai_report.get('executive_summary'):
+        summary_text = ai_report['executive_summary']
+
+    # Build boost actions
+    actions_html = ''
+    recs = ai_report.get('boost_recommendations', []) if ai_report else []
+    for rec in recs:
+        priority = rec.get('priority', 'P1')
+        pc = {'P0': '#dc2626', 'P1': '#ea580c', 'P2': '#2563eb'}.get(priority, '#6b7280')
+        actions_list = ''.join([f'<li style="margin:3px 0;font-size:13px;color:#374151;">{a}</li>' for a in rec.get('actions', [])])
+        actions_html += f'''
+        <tr>
+            <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <strong style="font-size:14px;color:#111;">{rec.get('partner_name','')}</strong>
+                    <span style="background:{pc};color:white;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">{priority}</span>
+                </div>
+                <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">{rec.get('diagnostic','')}</div>
+                <ul style="padding-left:18px;margin:0;">{actions_list}</ul>
+                <div style="margin-top:6px;font-size:12px;">
+                    <span style="color:#1e40af;">Promo: {rec.get('promo_strategy','')}</span><br>
+                    <span style="color:#059669;">Digital: {rec.get('digital_strategy','')}</span>
+                </div>
+            </td>
+        </tr>'''
+
+    # Watch alerts
+    watch_html = ''
+    alerts = ai_report.get('watch_alerts', []) if ai_report else []
+    for a in alerts:
+        watch_html += f'''<tr><td style="padding:10px 16px;border-bottom:1px solid #f3f4f6;font-size:13px;">
+            <strong>{a.get('partner_name','')}</strong>: {a.get('alert','')} &rarr; <em style="color:#1e40af;">{a.get('action','')}</em>
+        </td></tr>'''
+
+    # Success patterns
+    patterns_html = ''
+    patterns = ai_report.get('success_patterns', []) if ai_report else []
+    for p in patterns:
+        patterns_html += f'<li style="margin:3px 0;font-size:13px;color:#047857;">{p}</li>'
+
+    # Top performers table
+    perf_rows = ''
+    for m in data.get('top_performers', [])[:5]:
+        perf_rows += f'''<tr>
+            <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-weight:600;font-size:13px;">{m['partner_name']}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;text-align:center;">{m['total_transactions']}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;text-align:center;">
+                <span style="background:#ecfdf5;color:#059669;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">{m['health_score']}/100</span>
+            </td>
+        </tr>'''
+
+    return f'''<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Club Privileges — Rapport Commercial Hebdomadaire</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111;line-height:1.5;">
+<div style="max-width:680px;margin:0 auto;padding:24px 12px;">
+
+<!-- Header -->
+<table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#1e3a5f,#2d5f8a);border-radius:12px;margin-bottom:20px;">
+<tr><td style="padding:28px 24px;color:white;">
+    <div style="font-size:22px;font-weight:800;">Rapport Commercial Hebdomadaire</div>
+    <div style="font-size:13px;opacity:0.8;margin-top:4px;">Club Privileges — Intelligence Marchands</div>
+    <div style="font-size:12px;opacity:0.6;margin-top:4px;">Genere le {now} · {total} marchands analyses</div>
+</td></tr></table>
+
+<!-- KPI Cards -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+<tr>
+    <td style="width:33%;padding:0 4px 0 0;"><div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+        <div style="font-size:28px;font-weight:800;color:#10b981;">{stats.get('performant',0)}</div>
+        <div style="font-size:11px;color:#6b7280;">Performants</div>
+    </div></td>
+    <td style="width:33%;padding:0 2px;"><div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+        <div style="font-size:28px;font-weight:800;color:#f59e0b;">{stats.get('a_surveiller',0)}</div>
+        <div style="font-size:11px;color:#6b7280;">A surveiller</div>
+    </div></td>
+    <td style="width:33%;padding:0 0 0 4px;"><div style="background:white;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+        <div style="font-size:28px;font-weight:800;color:#ef4444;">{stats.get('a_booster',0)}</div>
+        <div style="font-size:11px;color:#6b7280;">A booster</div>
+    </div></td>
+</tr></table>
+
+<!-- Executive Summary -->
+{f"""<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+<tr><td style="background:#fffbeb;border:1px solid #fbbf24;border-radius:10px;padding:18px 20px;">
+    <div style="font-weight:700;color:#92400e;font-size:14px;margin-bottom:6px;">Resume executif (Gemini AI)</div>
+    <div style="font-size:13px;color:#78350f;line-height:1.6;">{summary_text}</div>
+</td></tr></table>""" if summary_text else ''}
+
+<!-- Actions Commerciales -->
+{f"""<table width="100%" cellpadding="0" cellspacing="0" style="background:white;border-radius:10px;border:1px solid #e5e7eb;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;font-size:16px;font-weight:700;color:#111;">
+    Actions commerciales prioritaires
+</td></tr>
+{actions_html}
+</table>""" if actions_html else ''}
+
+<!-- Watch Alerts -->
+{f"""<table width="100%" cellpadding="0" cellspacing="0" style="background:white;border-radius:10px;border:1px solid #e5e7eb;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:700;color:#f59e0b;">
+    Alertes surveillance
+</td></tr>
+{watch_html}
+</table>""" if watch_html else ''}
+
+<!-- Success Patterns -->
+{f"""<table width="100%" cellpadding="0" cellspacing="0" style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;">
+    <div style="font-weight:700;color:#065f46;font-size:14px;margin-bottom:6px;">Patterns de succes a repliquer</div>
+    <ul style="padding-left:18px;margin:0;">{patterns_html}</ul>
+</td></tr></table>""" if patterns_html else ''}
+
+<!-- Top Performers -->
+{f"""<table width="100%" cellpadding="0" cellspacing="0" style="background:white;border-radius:10px;border:1px solid #e5e7eb;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:700;color:#10b981;">
+    Top performeurs
+</td></tr>
+<tr><td>
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr style="background:#f9fafb;"><th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;">Marchand</th><th style="padding:8px 12px;text-align:center;font-size:11px;color:#6b7280;">Transactions</th><th style="padding:8px 12px;text-align:center;font-size:11px;color:#6b7280;">Score</th></tr>
+{perf_rows}
+</table></td></tr></table>""" if perf_rows else ''}
+
+<!-- Footer -->
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr><td style="text-align:center;padding:20px;font-size:11px;color:#9ca3af;">
+    Club Privileges — Intelligence Marchands v1.0<br>
+    Ce rapport est genere automatiquement par Gemini AI. Consultez le dashboard pour plus de details.
+</td></tr></table>
+
+</div>
+</body></html>'''
 
 
 # ═══════════════════════════════════════════════════════════════════════════

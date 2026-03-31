@@ -60,6 +60,11 @@
 
 @media (max-width: 1024px) { .reco-grid { grid-template-columns: repeat(2, 1fr); } .reco-layout { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .reco-grid { grid-template-columns: 1fr; } }
+
+.btn-sm { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--card); color: var(--text-primary); cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.btn-sm:hover { background: var(--table-stripe); }
+.btn-sm.active, .btn-sm.btn-primary { background: var(--brand-primary); color: white; border-color: var(--brand-primary); }
+.period-btn { min-width: 40px; text-align: center; }
 @endsection
 
 @section('content')
@@ -165,28 +170,92 @@
     <!-- Model Performance -->
     <div class="cp-card" data-testid="model-info-panel">
         <div class="cp-card-header">
-            <span class="cp-card-title"><i class="fas fa-brain"></i> Performance Modèle</span>
+            <span class="cp-card-title"><i class="fas fa-brain"></i> Performance Modele</span>
         </div>
         <div id="modelInfo" data-testid="model-info">
             <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
         </div>
     </div>
 </div>
+
+<!-- Analytics Temporel -->
+<div class="cp-card" style="margin-bottom: 28px;" data-testid="temporal-analytics-panel">
+    <div class="cp-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="cp-card-title"><i class="fas fa-chart-line"></i> Analytics Temporel</span>
+        <div style="display: flex; gap: 6px;" data-testid="period-selector">
+            <button class="btn-sm period-btn active" onclick="loadTimeline(30)" data-testid="period-30d">30j</button>
+            <button class="btn-sm period-btn" onclick="loadTimeline(60)" data-testid="period-60d">60j</button>
+            <button class="btn-sm period-btn" onclick="loadTimeline(90)" data-testid="period-90d">90j</button>
+        </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-top: 16px;">
+        <div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Interactions par jour</div>
+            <canvas id="timelineChart" height="200" data-testid="timeline-chart"></canvas>
+        </div>
+        <div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Top Categories</div>
+            <canvas id="categoryChart" height="200" data-testid="category-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- A/B Test Results -->
+<div class="cp-card" style="margin-bottom: 28px;" data-testid="ab-test-panel">
+    <div class="cp-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="cp-card-title"><i class="fas fa-flask"></i> A/B Test: ML Model vs Popularite</span>
+        <button class="btn-sm" onclick="loadABResults()" data-testid="ab-refresh-btn"><i class="fas fa-sync-alt"></i> Actualiser</button>
+    </div>
+    <div id="abTestResults" data-testid="ab-test-results" style="margin-top: 16px;">
+        <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
+    </div>
+</div>
+
+<!-- Intelligence Marchands Preview -->
+<div class="cp-card" style="margin-bottom: 28px;" data-testid="intelligence-preview-panel">
+    <div class="cp-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="cp-card-title"><i class="fas fa-lightbulb"></i> Intelligence Marchands (Gemini AI)</span>
+        <div style="display: flex; gap: 6px;">
+            <a id="intelligenceFullReportLink" href="#" target="_blank" class="btn-sm" data-testid="intelligence-full-report-btn">
+                <i class="fas fa-external-link-alt"></i> Rapport complet
+            </a>
+            <a id="intelligenceEmailPreviewLink" href="#" target="_blank" class="btn-sm btn-primary" data-testid="intelligence-email-preview-btn">
+                <i class="fas fa-envelope"></i> Preview email hebdo
+            </a>
+        </div>
+    </div>
+    <div id="intelligenceDigest" data-testid="intelligence-digest" style="margin-top: 16px;">
+        <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
+    </div>
+</div>
 @endsection
 
 @section('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 const baseUrl = window.location.origin;
 
+let timelineChartInstance = null;
+let categoryChartInstance = null;
+
 document.addEventListener('DOMContentLoaded', loadDashboard);
 
 async function loadDashboard() {
+    // Set dynamic links
+    const fullReportLink = document.getElementById('intelligenceFullReportLink');
+    const emailPreviewLink = document.getElementById('intelligenceEmailPreviewLink');
+    if (fullReportLink) fullReportLink.href = `${baseUrl}/api/merchant-intelligence/report/html`;
+    if (emailPreviewLink) emailPreviewLink.href = `${baseUrl}/api/merchant-intelligence/weekly-email-preview`;
+
     await Promise.allSettled([
         loadStats(),
         loadPopular(),
         loadModelInfo(),
-        loadCategories()
+        loadCategories(),
+        loadTimeline(30),
+        loadABResults(),
+        loadIntelligenceDigest(),
     ]);
 }
 
@@ -450,7 +519,7 @@ async function retrainModel() {
         });
         const data = await res.json();
         if (data.success) {
-            btn.innerHTML = '<i class="fas fa-check"></i> Retrain terminé !';
+            btn.innerHTML = '<i class="fas fa-check"></i> Retrain termine !';
             btn.className = 'btn-success';
             setTimeout(() => { location.reload(); }, 2000);
         } else {
@@ -459,7 +528,7 @@ async function retrainModel() {
             alert('Erreur: ' + (data.errors || data.error || 'Inconnue'));
             setTimeout(() => {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modèle';
+                btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modele';
                 btn.className = 'btn-warning';
             }, 5000);
         }
@@ -468,9 +537,246 @@ async function retrainModel() {
         alert('Erreur: ' + e.message);
         setTimeout(() => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modèle';
+            btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modele';
             btn.className = 'btn-warning';
         }, 5000);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANALYTICS TEMPOREL
+// ═══════════════════════════════════════════════════════════════
+
+async function loadTimeline(days) {
+    // Update active period button
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.querySelector(`[data-testid="period-${days}d"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-recommendations/stats/timeline?days=${days}`);
+        const data = await res.json();
+
+        renderTimelineChart(data.timeline || [], days);
+        renderCategoryChart(data.categories || []);
+    } catch (e) {
+        console.error('Timeline error:', e);
+    }
+}
+
+function renderTimelineChart(timeline, days) {
+    const canvas = document.getElementById('timelineChart');
+    if (!canvas) return;
+
+    // Group by day, aggregate types
+    const dayMap = {};
+    const types = new Set();
+    timeline.forEach(t => {
+        if (!dayMap[t.day]) dayMap[t.day] = {};
+        dayMap[t.day][t.interaction_type] = (dayMap[t.day][t.interaction_type] || 0) + t.cnt;
+        types.add(t.interaction_type);
+    });
+
+    const sortedDays = Object.keys(dayMap).sort();
+    const typeColors = {
+        click: {bg: 'rgba(59,130,246,0.15)', border: '#3b82f6'},
+        impression: {bg: 'rgba(139,92,246,0.15)', border: '#8b5cf6'},
+        redeem: {bg: 'rgba(16,185,129,0.15)', border: '#10b981'},
+        dismiss: {bg: 'rgba(239,68,68,0.15)', border: '#ef4444'},
+        share: {bg: 'rgba(245,158,11,0.15)', border: '#f59e0b'},
+    };
+
+    const datasets = [...types].map(type => ({
+        label: type.charAt(0).toUpperCase() + type.slice(1),
+        data: sortedDays.map(d => dayMap[d][type] || 0),
+        backgroundColor: (typeColors[type] || {bg: 'rgba(107,114,128,0.15)'}).bg,
+        borderColor: (typeColors[type] || {border: '#6b7280'}).border,
+        borderWidth: 2,
+        tension: 0.3,
+        fill: true,
+        pointRadius: 2,
+    }));
+
+    if (timelineChartInstance) timelineChartInstance.destroy();
+    timelineChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: { labels: sortedDays.map(d => d.slice(5)), datasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } },
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 } } },
+            },
+        },
+    });
+}
+
+function renderCategoryChart(categories) {
+    const canvas = document.getElementById('categoryChart');
+    if (!canvas || categories.length === 0) return;
+
+    const colors = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#d946ef','#84cc16','#f97316','#6366f1'];
+
+    if (categoryChartInstance) categoryChartInstance.destroy();
+    categoryChartInstance = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels: categories.map(c => c.category_name || 'Autre'),
+            datasets: [{
+                data: categories.map(c => c.cnt),
+                backgroundColor: colors.slice(0, categories.length),
+                borderWidth: 0,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
+            },
+        },
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// A/B TEST RESULTS
+// ═══════════════════════════════════════════════════════════════
+
+async function loadABResults() {
+    const container = document.getElementById('abTestResults');
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-recommendations/ab-test/results?days=30`);
+        const data = await res.json();
+        const groups = data.groups || {};
+        const uplift = data.uplift || {};
+
+        const ml = groups.ml_model || { impressions: 0, clicks: 0, redeems: 0, unique_users: 0, ctr: 0, conversion_rate: 0 };
+        const pop = groups.popularity || { impressions: 0, clicks: 0, redeems: 0, unique_users: 0, ctr: 0, conversion_rate: 0 };
+
+        const totalImpressions = ml.impressions + pop.impressions;
+
+        if (totalImpressions === 0) {
+            container.innerHTML = `
+            <div style="text-align: center; padding: 24px; color: var(--muted);">
+                <i class="fas fa-flask" style="font-size: 32px; margin-bottom: 12px; opacity: 0.3;"></i>
+                <p style="font-size: 13px;">Aucune donnee A/B test. Utilisez l'endpoint <code>/api/merchant-recommendations/ab-test/{'{client_id}'}</code> pour servir des recommandations via A/B test.</p>
+                <div style="margin-top: 12px; font-size: 12px; background: var(--table-stripe); border-radius: 8px; padding: 12px;">
+                    <strong>Comment ca marche :</strong> Les clients sont assignes de facon deterministe a un groupe (ML ou Popularite) via un hash de leur ID. Les interactions sont trackees automatiquement pour mesurer l'uplift.
+                </div>
+            </div>`;
+            return;
+        }
+
+        const winnerColor = uplift.winner === 'ml_model' ? 'var(--success)' : uplift.winner === 'popularity' ? 'var(--warning)' : 'var(--muted)';
+        const winnerLabel = uplift.winner === 'ml_model' ? 'ML Model' : uplift.winner === 'popularity' ? 'Popularite' : 'Egalite';
+
+        container.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 14px; text-align: center;">
+                <div style="font-size: 22px; font-weight: 700; color: ${winnerColor};">${winnerLabel}</div>
+                <div style="font-size: 11px; color: var(--muted);">Gagnant</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 14px; text-align: center;">
+                <div style="font-size: 22px; font-weight: 700; color: var(--brand-primary);">${uplift.ctr_pct !== null ? (uplift.ctr_pct > 0 ? '+' : '') + uplift.ctr_pct + '%' : 'N/A'}</div>
+                <div style="font-size: 11px; color: var(--muted);">Uplift CTR</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 14px; text-align: center;">
+                <div style="font-size: 22px; font-weight: 700; color: var(--brand-primary);">${uplift.conversion_pct !== null ? (uplift.conversion_pct > 0 ? '+' : '') + uplift.conversion_pct + '%' : 'N/A'}</div>
+                <div style="font-size: 11px; color: var(--muted);">Uplift Conversion</div>
+            </div>
+        </div>
+        <table class="stats-table">
+            <thead><tr>
+                <th>Groupe</th><th>Impressions</th><th>Clicks</th><th>Redemptions</th><th>CTR</th><th>Conv. Rate</th><th>Users</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td><span class="tag tag-visited">ML Model</span></td>
+                    <td>${ml.impressions}</td><td>${ml.clicks}</td><td>${ml.redeems}</td>
+                    <td><strong>${ml.ctr}%</strong></td><td><strong>${ml.conversion_rate}%</strong></td><td>${ml.unique_users}</td>
+                </tr>
+                <tr>
+                    <td><span class="tag tag-promos">Popularite</span></td>
+                    <td>${pop.impressions}</td><td>${pop.clicks}</td><td>${pop.redeems}</td>
+                    <td><strong>${pop.ctr}%</strong></td><td><strong>${pop.conversion_rate}%</strong></td><td>${pop.unique_users}</td>
+                </tr>
+            </tbody>
+        </table>`;
+    } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INTELLIGENCE MARCHANDS DIGEST
+// ═══════════════════════════════════════════════════════════════
+
+async function loadIntelligenceDigest() {
+    const container = document.getElementById('intelligenceDigest');
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-intelligence/digest?limit=5`);
+        const data = await res.json();
+        if (!data.success) { container.innerHTML = '<p style="color: var(--danger);">Erreur chargement intelligence</p>'; return; }
+
+        const stats = data.stats || {};
+        const total = (stats.performant || 0) + (stats.a_surveiller || 0) + (stats.a_booster || 0);
+
+        let boostCards = '';
+        (data.to_boost || []).forEach(m => {
+            const trendIcon = m.trend_7d_pct > 0 ? '&#9650;' : m.trend_7d_pct < 0 ? '&#9660;' : '&#9644;';
+            const trendColor = m.trend_7d_pct > 5 ? 'var(--success)' : m.trend_7d_pct < -5 ? 'var(--danger)' : 'var(--muted)';
+            boostCards += `<div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+                <div style="min-width: 36px; height: 36px; border-radius: 50%; background: rgba(239,68,68,0.1); color: var(--danger); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">${m.health_score}</div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 13px;">${m.partner_name}</div>
+                    <div style="font-size: 11px; color: var(--muted);">${m.category} · ${m.avg_daily_tx} tx/j · ${m.active_promos} promos</div>
+                </div>
+                <div style="font-size: 13px; font-weight: 600; color: ${trendColor};">${trendIcon} ${m.trend_7d_pct > 0 ? '+' : ''}${m.trend_7d_pct.toFixed(1)}%</div>
+            </div>`;
+        });
+
+        let perfCards = '';
+        (data.top_performers || []).slice(0, 3).forEach(m => {
+            perfCards += `<div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+                <div style="min-width: 36px; height: 36px; border-radius: 50%; background: rgba(16,185,129,0.1); color: var(--success); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">${m.health_score}</div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 13px;">${m.partner_name}</div>
+                    <div style="font-size: 11px; color: var(--muted);">${m.category} · ${m.total_transactions} tx total</div>
+                </div>
+            </div>`;
+        });
+
+        container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px;">
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--text-primary);">${total}</div>
+                <div style="font-size: 10px; color: var(--muted);">Total analyses</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--success);">${stats.performant || 0}</div>
+                <div style="font-size: 10px; color: var(--muted);">Performants</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--warning);">${stats.a_surveiller || 0}</div>
+                <div style="font-size: 10px; color: var(--muted);">A surveiller</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--danger);">${stats.a_booster || 0}</div>
+                <div style="font-size: 10px; color: var(--muted);">A booster</div>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--danger); text-transform: uppercase; margin-bottom: 8px;">Marchands a booster</div>
+                ${boostCards || '<p style="font-size:12px;color:var(--muted);">Aucun marchand critique</p>'}
+            </div>
+            <div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--success); text-transform: uppercase; margin-bottom: 8px;">Top performeurs</div>
+                ${perfCards || '<p style="font-size:12px;color:var(--muted);">Aucune donnee</p>'}
+            </div>
+        </div>`;
+    } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
     }
 }
 </script>
