@@ -331,10 +331,10 @@ location /api/merchant-recommendations {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
 
-    # Timeout élevé pour le retrain (~60-120s)
-    proxy_read_timeout 300s;
+    # Timeout élevé pour le retrain (synchrone, peut prendre 5-10 min)
+    proxy_read_timeout 600s;
     proxy_connect_timeout 10s;
-    proxy_send_timeout 300s;
+    proxy_send_timeout 600s;
 }
 
 # ─── FastAPI AI Suggestions (rapports IA) ─────────────────────
@@ -385,9 +385,9 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
+        proxy_read_timeout 600s;
         proxy_connect_timeout 10s;
-        proxy_send_timeout 300s;
+        proxy_send_timeout 600s;
     }
 
     location /api/report-ai-suggestions {
@@ -505,8 +505,7 @@ curl -s https://preprod.dashboard.clubprivileges.app/api/merchant-recommendation
 |---------|--------------------------------------------------|------------------------------------------|
 | POST    | `/api/merchant-recommendations`                  | Obtenir des recommandations pour un client |
 | GET     | `/api/merchant-recommendations/health`           | Statut du moteur ML (modèle, métriques)  |
-| POST    | `/api/merchant-recommendations/retrain`          | Lancer le re-entraînement (async)        |
-| GET     | `/api/merchant-recommendations/retrain/status`   | Statut du re-entraînement en cours       |
+| POST    | `/api/merchant-recommendations/retrain`          | Lancer le re-entraînement (synchrone, attend la fin) |
 | POST    | `/api/merchant-recommendations/track`            | Tracker une interaction utilisateur      |
 | GET     | `/api/merchant-recommendations/stats`            | Statistiques d'utilisation (7 jours)     |
 | GET     | `/api/merchant-recommendations/stats/timeline`   | Timeline des interactions (30 jours)     |

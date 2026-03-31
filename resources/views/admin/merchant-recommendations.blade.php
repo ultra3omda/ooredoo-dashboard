@@ -389,74 +389,37 @@ function renderMerchants(merchants, containerId, append) {
 async function retrainModel() {
     const btn = document.getElementById('retrainBtn');
     btn.disabled = true;
-    btn.innerHTML = '<div class="loading-spinner"></div> Lancement du retrain...';
+    btn.innerHTML = '<div class="loading-spinner"></div> Retrain en cours (~5-10 min)...';
 
     try {
-        // Call FastAPI directly (bypass Laravel to avoid 504 timeout)
         const res = await fetch(`${baseUrl}/api/merchant-recommendations/retrain`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         });
         const data = await res.json();
-        if (data.started) {
-            btn.innerHTML = '<div class="loading-spinner"></div> Retrain en cours...';
-            pollRetrainStatus(btn);
-        } else if (data.success) {
+        if (data.success) {
             btn.innerHTML = '<i class="fas fa-check"></i> Retrain terminé !';
             btn.className = 'btn-success';
             setTimeout(() => { location.reload(); }, 2000);
         } else {
             btn.innerHTML = '<i class="fas fa-times"></i> Echec retrain';
             btn.className = 'btn-danger';
-            alert('Erreur: ' + (data.error || 'Inconnue'));
-            resetRetrainBtn(btn);
+            alert('Erreur: ' + (data.errors || data.error || 'Inconnue'));
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modèle';
+                btn.className = 'btn-warning';
+            }, 5000);
         }
     } catch (e) {
         btn.innerHTML = '<i class="fas fa-times"></i> Erreur connexion';
         alert('Erreur: ' + e.message);
-        resetRetrainBtn(btn);
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modèle';
+            btn.className = 'btn-warning';
+        }, 5000);
     }
-}
-
-async function pollRetrainStatus(btn) {
-    let attempts = 0;
-    const maxAttempts = 40; // 40 * 5s = 200s max
-    const interval = setInterval(async () => {
-        attempts++;
-        try {
-            const res = await fetch(`${baseUrl}/api/merchant-recommendations/retrain/status`);
-            const data = await res.json();
-            if (data.status === 'completed') {
-                clearInterval(interval);
-                btn.innerHTML = '<i class="fas fa-check"></i> Retrain terminé !';
-                btn.className = 'btn-success';
-                setTimeout(() => { location.reload(); }, 2000);
-            } else if (data.status === 'failed') {
-                clearInterval(interval);
-                btn.innerHTML = '<i class="fas fa-times"></i> Echec retrain';
-                btn.className = 'btn-danger';
-                alert('Erreur retrain: ' + (data.error || 'Inconnue'));
-                resetRetrainBtn(btn);
-            } else {
-                btn.innerHTML = `<div class="loading-spinner"></div> Retrain en cours... (${attempts * 5}s)`;
-            }
-        } catch(e) {
-            // Network error during poll, keep trying
-            if (attempts >= maxAttempts) {
-                clearInterval(interval);
-                btn.innerHTML = '<i class="fas fa-question"></i> Timeout - vérifiez les logs';
-                resetRetrainBtn(btn);
-            }
-        }
-    }, 5000);
-}
-
-function resetRetrainBtn(btn) {
-    setTimeout(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modèle';
-        btn.className = 'btn-warning';
-    }, 5000);
 }
 </script>
 @endsection
