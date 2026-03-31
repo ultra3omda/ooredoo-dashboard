@@ -2300,61 +2300,9 @@
     }
 
     async function loadUsersData() {
-      try {
-        debugLog('👥 Chargement des données utilisateurs...');
-        
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-        const subStore = document.getElementById('subStoreSelect').value;
-        
-        if (!startDate || !endDate) {
-          debugError('❌ Dates manquantes pour le chargement des utilisateurs');
-          showNotification('Veuillez sélectionner une période', 'error');
-          return;
-        }
-        
-        // Calculer la période de comparaison
-        const startDateObj = new Date(startDate);
-        const endDateObj = new Date(endDate);
-        const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24)) + 1;
-        const comparisonStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        const comparisonEndDate = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        
-        debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
-        
-        const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        debugLog('✅ Données utilisateurs reçues:', data);
-        
-        // Sauvegarder les données en cache
-        window.usersKPIsData = data;
-        
-        // Mettre à jour les KPIs Users
-        if (data.kpis) {
-          updateUsersKPIs(data.kpis);
-        }
-        
-        // Mettre à jour le tableau Users
-        if (data.users) {
-          updateUsersTable(data.users);
-        }
-        
-        showNotification(`Données utilisateurs ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
-        
-      } catch (error) {
-        debugError('❌ Erreur lors du chargement des données utilisateurs:', error);
-        showNotification('Erreur lors du chargement des données utilisateurs', 'error');
-      }
+      // Users are now loaded via the split endpoint in loadDashboardData()
+      debugLog('loadUsersData: delegated to split endpoint');
+      loadDashboardData();
     }
     // ===== FIN FONCTIONS USERS =====
 
@@ -2651,129 +2599,123 @@
 
     async function loadDashboardData() {
       try {
-        // S'assurer que les KPIs de la vue d'ensemble sont créés s'ils n'existent pas
         const kpisGrid = document.getElementById('kpisGrid');
-        if (kpisGrid && kpisGrid.children.length === 0) {
-          createLoadingKPIs();
-        }
-        
-        // Ajouter un indicateur de chargement dans les KPIs (après création)
-        // Ne pas mettre les KPIs Merchant en chargement s'ils ont déjà des données
+        if (kpisGrid && kpisGrid.children.length === 0) createLoadingKPIs();
         showKPIsLoading();
-        
+
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         const subStore = document.getElementById('subStoreSelect').value;
-        
-        // Validation des dates
+
         if (!startDate || !endDate || startDate.trim() === '' || endDate.trim() === '') {
-          debugError('❌ Dates manquantes ou vides:', { startDate, endDate });
-          showNotification('Veuillez sélectionner des dates valides', 'error');
+          showNotification('Veuillez selectionner des dates valides', 'error');
           return;
         }
-        
-        // Calculer automatiquement les dates de comparaison (même durée que la période principale)
         const startDateObj = new Date(startDate);
         const endDateObj = new Date(endDate);
-        
-        // Vérifier que les dates sont valides
-        if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
-          debugError('❌ Dates invalides:', { startDate, endDate, startDateObj, endDateObj });
-          showNotification('Format de date invalide. Utilisez le format YYYY-MM-DD', 'error');
+        if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime()) || startDateObj >= endDateObj) {
+          showNotification('Dates invalides', 'error');
           return;
         }
-        
-        // Vérifier que la date de début est antérieure à la date de fin
-        if (startDateObj >= endDateObj) {
-          debugError('❌ Date de début >= date de fin:', { startDate, endDate });
-          showNotification('La date de début doit être antérieure à la date de fin', 'error');
-          return;
-        }
-        
         const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24)) + 1;
-        
-        const comparisonStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        const comparisonEndDate = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        
-        // Vérifier que les dates de comparaison sont valides
-        if (isNaN(comparisonStartDate.getTime()) || isNaN(comparisonEndDate.getTime())) {
-          debugError('❌ Dates de comparaison invalides:', { comparisonStartDate, comparisonEndDate });
-          showNotification('Erreur dans le calcul des dates de comparaison', 'error');
-          return;
-        }
-        
-        debugLog('📅 Période principale:', startDate, '→', endDate);
-        debugLog('📅 Période comparaison:', comparisonStartDate.toISOString().split('T')[0], '→', comparisonEndDate.toISOString().split('T')[0]);
-        
-        debugLog('📊 Chargement des données:', { startDate, endDate, subStore });
-        
-        // Timeout fixe pour toutes les périodes (mode optimisé gère les longues périodes)
-        const timeoutMs = 120000; // 2 minutes pour toutes les périodes
-        
-        debugLog(`🕐 Période: ${periodDays} jours, Timeout: ${timeoutMs/1000}s`);
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-            controller.abort();
-        }, timeoutMs);
-        
-        const response = await fetch(`/sub-stores/api/dashboard/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        // Enregistrer le timestamp du chargement
+        const compStart = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
+        const compEnd = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
+
+        const params = new URLSearchParams({
+          start_date: startDate,
+          end_date: endDate,
+          comparison_start_date: compStart.toISOString().split('T')[0],
+          comparison_end_date: compEnd.toISOString().split('T')[0],
+          sub_store: subStore
+        }).toString();
+
+        debugLog('Chargement split parallele:', { startDate, endDate, subStore, periodDays });
+
+        const fetchSection = (section) =>
+          fetch(`/sub-stores/api/split/${section}?${params}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(120000)
+          }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+
+        // Fire all 5 splits in parallel
+        const [kpis, stores, charts, merchants, users] = await Promise.allSettled([
+          fetchSection('kpis'),
+          fetchSection('stores'),
+          fetchSection('charts'),
+          fetchSection('merchants'),
+          fetchSection('users')
+        ]);
+
         window.lastDashboardLoadTime = Date.now();
-        
-        // Reset le flag de changement de dates après le chargement
         window.datesChanged = false;
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let loadedSections = 0;
+
+        // KPIs
+        if (kpis.status === 'fulfilled' && kpis.value.success) {
+          updateKPIs(kpis.value.data);
+          loadedSections++;
+          debugLog('Split kpis OK:', kpis.value.execution_time_ms + 'ms');
+        } else { showKPIsError(); debugLog('Split kpis FAIL', kpis.reason || kpis.value?.error); }
+
+        // Stores
+        if (stores.status === 'fulfilled' && stores.value.success) {
+          updateSubStoresRankingTable(stores.value.data);
+          loadedSections++;
         }
-        
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await response.text();
-            debugError('❌ Réponse non-JSON reçue:', text.substring(0, 200));
-            throw new Error('Le serveur a renvoyé du HTML au lieu de JSON. Vérifiez les logs du serveur.');
+
+        // Charts
+        if (charts.status === 'fulfilled' && charts.value.success) {
+          const cd = charts.value.data;
+          if (cd.categoryDistribution) updateCategoryTable(cd.categoryDistribution);
+          if (cd.inscriptionsTrend) {
+            currentData = currentData || {};
+            currentData.inscriptionsTrend = cd.inscriptionsTrend;
+            updateCharts(currentData);
+          }
+          loadedSections++;
         }
-        
-        const data = await response.json();
-                
-        debugLog('✅ Données reçues:', data);
-        
-        debugLog('✅ Réponse API reçue:', data);
-        debugLog('🔍 Structure des KPIs:', Object.keys(data.kpis || {}));
-        debugLog('🔍 totalPartners dans kpis:', data.kpis?.totalPartners);
-        debugLog('🔍 merchants array:', data.merchants);
-        currentData = data;
-        updateDashboard(data);
-        
-        // Les KPIs sont déjà visibles avec le chargement intégré
-        
-        showNotification(`Données ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
-                
-            } catch (error) {
-        debugError('❌ Erreur lors du chargement des données:', error);
-        
-        let errorMessage = 'Erreur de connexion';
-        if (error.name === 'AbortError') {
-            errorMessage = `⏱️ Timeout: Le chargement a pris trop de temps (${periodDays} jours). Le mode optimisé est utilisé pour les longues périodes.`;
-        } else if (error.message.includes('JSON')) {
-            errorMessage = '🔧 Erreur serveur: Vérifiez les logs Laravel';
-        } else if (error.message.includes('400')) {
-            errorMessage = '📅 Période invalide';
-        } else {
-            errorMessage = 'Erreur: ' + error.message;
+
+        // Merchants
+        if (merchants.status === 'fulfilled' && merchants.value.success) {
+          const md = merchants.value.data;
+          if (md.kpis) {
+            window.merchantKPIsData = md.kpis;
+            const activeTab = document.querySelector('.nav-link.active');
+            if (activeTab && activeTab.textContent.includes('Merchant')) {
+              updateMerchantKPIs(md.kpis);
+            }
+          }
+          if (md.merchants) updateMerchantTable(md.merchants);
+          loadedSections++;
         }
-        
-        showNotification(errorMessage, 'error');
+
+        // Users
+        if (users.status === 'fulfilled' && users.value.success) {
+          const ud = users.value.data;
+          if (ud.users_kpis) {
+            window.usersKPIsData = { kpis: ud.users_kpis, users: ud.users || [] };
+            updateUsersKPIs(ud.users_kpis);
+          }
+          if (ud.users) updateUsersTable(ud.users);
+          loadedSections++;
+        }
+
+        // Expirations (separate lightweight call)
+        try {
+          showExpirationsSkeleton();
+          const eresp = await fetch(`/sub-stores/api/expirations?sub_store=${encodeURIComponent(subStore)}`);
+          const edata = await eresp.json();
+          if (edata.expirationsByMonth && edata.expirationsByMonth.length > 0) createExpirationsChart(edata.expirationsByMonth);
+          hideExpirationsSkeleton();
+        } catch (e) { hideExpirationsSkeleton(); }
+
+        hideGlobalKPIsDeltas();
+        forceHideGlobalDeltas();
+        showNotification(`${loadedSections}/5 sections chargees pour ${subStore === 'ALL' ? 'tous sub-stores' : subStore}`, 'success');
+
+      } catch (error) {
+        debugError('Erreur chargement split:', error);
+        showNotification('Erreur: ' + error.message, 'error');
       }
     }
 
@@ -3934,63 +3876,7 @@
       });
     }
 
-    async function loadUsersData() {
-      try {
-        debugLog('👥 Chargement des données utilisateurs...');
-        
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-        const subStore = document.getElementById('subStoreSelect').value;
-        
-        if (!startDate || !endDate) {
-          debugError('❌ Dates manquantes pour le chargement des utilisateurs');
-          showNotification('Veuillez sélectionner une période', 'error');
-          return;
-        }
-        
-        // Calculer la période de comparaison
-        const startDateObj = new Date(startDate);
-        const endDateObj = new Date(endDate);
-        const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24)) + 1;
-        const comparisonStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        const comparisonEndDate = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        
-        debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
-        
-        const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        debugLog('✅ Données utilisateurs reçues:', data);
-        
-        // Sauvegarder les données en cache
-        window.usersKPIsData = data;
-        
-        // Mettre à jour les KPIs Users
-        if (data.kpis) {
-          updateUsersKPIs(data.kpis);
-        }
-        
-        // Mettre à jour le tableau Users
-        if (data.users) {
-          updateUsersTable(data.users);
-        }
-        
-        showNotification(`Données utilisateurs ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
-        
-      } catch (error) {
-        debugError('❌ Erreur lors du chargement des données utilisateurs:', error);
-        showNotification('Erreur lors du chargement des données utilisateurs', 'error');
-      }
-    }
+    // loadUsersData is now handled by the split endpoint in loadDashboardData()
 
     function exportTable() {
       // Table export logic

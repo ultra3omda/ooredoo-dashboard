@@ -107,14 +107,17 @@ Route::middleware('auth')->group(function () {
         // DÉSACTIVÉ POUR OPTIMISATION: API pour les transactions Timwe d'un client spécifique
         // Route::get('/api/timwe-client-transactions/{clientId}', [DataControllerOptimized::class, 'getClientTimweTransactions'])->name('api.timwe.client.transactions');
     
-    // Dashboard Sub-Stores (accès restreint)
+    // Dashboard Sub-Stores (acces restreint)
     Route::middleware(['check.dashboard:sub-stores'])->prefix('sub-stores')->name('sub-stores.')->group(function () {
         Route::get('/', [SubStoreController::class, 'index'])->name('dashboard');
         Route::get('/api/sub-stores', [SubStoreController::class, 'getSubStores'])->name('api.sub-stores');
-        Route::get('/api/dashboard/data', [SubStoreController::class, 'getDashboardData'])->name('api.dashboard.data');
-        Route::get('/api/users/data', [SubStoreController::class, 'getUsersData'])->name('api.users.data');
-        // Endpoint asynchrone pour expirations (léger et mis en cache)
         Route::get('/api/expirations', [SubStoreController::class, 'getExpirationsAsync'])->name('api.expirations');
+        // Split endpoints (parallel loading)
+        Route::get('/api/split/kpis', [SubStoreController::class, 'getKpisSplit'])->name('api.split.kpis');
+        Route::get('/api/split/stores', [SubStoreController::class, 'getStoresSplit'])->name('api.split.stores');
+        Route::get('/api/split/charts', [SubStoreController::class, 'getChartsSplit'])->name('api.split.charts');
+        Route::get('/api/split/merchants', [SubStoreController::class, 'getMerchantsSplit'])->name('api.split.merchants');
+        Route::get('/api/split/users', [SubStoreController::class, 'getUsersSplit'])->name('api.split.users');
     });
 
     // Routes d'administration (Super Admin et Admin uniquement)
@@ -251,7 +254,3 @@ Route::get('/test', function () {
 Route::middleware('auth')->get('/monitoring', function () {
     return view('monitoring.dashboard');
 })->name('monitoring.dashboard');
-
-// Routes temporaires pour accéder à Eklektik sans authentification (à supprimer après utilisation)
-Route::get('/eklektik-sync-direct', [EklektikSyncController::class, 'index'])->name('eklektik.sync.direct');
-Route::get('/eklektik-sync-status-direct', [EklektikSyncController::class, 'status'])->name('eklektik.status.direct');
