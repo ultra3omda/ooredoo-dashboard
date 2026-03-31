@@ -1,7 +1,7 @@
 # Club Privileges Dashboard - PRD
 
 ## Original Problem Statement
-High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-powered predictive recommendations inspired by AWS Personalize. Merchant Intelligence powered by Gemini AI. Digital Presence Scoring with real web scraping. Role-based campaign access for collaborators.
+High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-powered predictive recommendations inspired by AWS Personalize. Merchant Intelligence powered by Gemini AI. Digital Presence Scoring with real web scraping. Role-based campaign access for collaborators with real-time permission management.
 
 ## Tech Stack
 - **Backend**: Laravel 10, FastAPI (Python), Redis Cache
@@ -14,91 +14,39 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 ## Implemented Features
 
 ### Core Dashboard (DONE)
-- Main + Sub-store dashboards, KPIs, merchants, subscriptions, period comparison, export
-- Pluxee campaign filtering (16 methods with `applyPluxeeCampaignFilter`)
-
-### ML Recommendation Engine v2.0 — AWS Personalize-inspired (DONE)
-- Types: DISCOVERY, RE_ENGAGEMENT, LOYALTY, TRENDING
-- Score normalization 0-100, Cold-start fallback, Collaborative signals
-
-### P2: Client-Facing Recommendation Widget (DONE)
-
+### ML Recommendation Engine v2.0 (DONE)
+### P2: Client-Facing Widget (DONE)
 ### Merchant Intelligence Engine (DONE)
-- Analyze, Digest, Report (Gemini AI), Report HTML, Weekly Email Preview
-
 ### P3: Analytics Temporel (DONE)
-- Timeline 30/60/90 days with Chart.js
-
 ### P3: A/B Test Framework (DONE)
-- ML Model vs Popularity, Uplift CTR/Conversion
-
 ### Digital Presence Scoring (DONE)
-- Real web scraping (websites, Facebook, Instagram, Google)
-- Score 0-100, AI audit via Gemini
+### Collaborateur Role with Campaign Access (DONE)
 
-### Collaborateur Role with Campaign Access Control (DONE - NEW)
-**Architecture:**
-- `pluxee_campaign_access` column: TEXT type storing JSON array (e.g., `["Campagne pilote Pluxee","test tarek"]`)
-- NULL or empty = full access (can see all campaigns + can invite others)
-- Non-empty = restricted (can only see assigned campaigns, cannot invite)
+### Permissions Management Page (DONE - NEW)
+**Route:** `/admin/users/permissions`
+**Features:**
+- KPI dashboard: Total users, Collaborators, Full access, Restricted
+- Search + filter by role, access type
+- User table showing: name, email, role, operator, campaigns, can_invite status
+- **Edit modal**: Checkboxes for all available campaigns grouped by store
+- **Real-time save**: AJAX POST to `/admin/users/{id}/campaign-access`
+- **Full access button**: Clears campaign restriction, grants all access + invite rights
+- Toast notifications, KPI auto-update, row state transitions
+- Navigation link added to Users Index page
 
-**User Model Methods:**
-- `getAllowedCampaigns()`: Decodes JSON, returns array of campaign names
-- `hasCampaignRestriction()`: Returns true if user has restricted access
-- `canInviteCollaborators()`: SuperAdmin/Admin always true; Collaborator only if unrestricted
-
-**Invitation Flow:**
-- Form shows multi-campaign checkboxes when sub-store is selected
-- Campaigns loaded dynamically via `/admin/invitations/campaigns?store_name=X`
-- `campaign_access[]` stored in `invitations.additional_data` JSON
-- On acceptance: `pluxee_campaign_access` set on user record
-
-**Dashboard Enforcement:**
-- `SubStoreController.normalizeSubStoreParams()`: Forces campaign filter for restricted users
-- `getSubStores()` API: Returns `has_campaign_restriction`, `allowed_campaigns`, `can_invite`
-- Campaign dropdown: Disabled/filtered for restricted users, shows all for admins
-
-**Permission Matrix:**
-| Role | See All Campaigns | Invite Others |
-|---|---|---|
-| Super Admin | Yes | Yes |
-| Admin Sub-Store | Yes | Yes |
-| Collaborator (no restriction) | Yes | Yes |
-| Collaborator (with campaigns) | Only assigned | No |
-
-### Weekly Reports with Intelligence Integration (DONE)
-
-## All API Endpoints
-- POST /api/merchant-recommendations
-- GET /api/merchant-recommendations/explain/{client_id}
-- GET /api/merchant-recommendations/health
-- POST /api/merchant-recommendations/retrain
-- POST /api/merchant-recommendations/track
-- GET /api/merchant-recommendations/stats
-- GET /api/merchant-recommendations/stats/timeline?days=30|60|90
-- GET /api/merchant-recommendations/categories
-- GET /api/merchant-recommendations/widget/{client_id}
-- GET /api/merchant-recommendations/widget/{client_id}/html
-- GET /api/merchant-recommendations/ab-test/results
-- GET /api/merchant-recommendations/ab-test/{client_id}
-- GET /api/merchant-intelligence/analyze
-- GET /api/merchant-intelligence/digest
-- POST /api/merchant-intelligence/report
-- GET /api/merchant-intelligence/report/html
-- GET /api/merchant-intelligence/weekly-email-preview
-- GET /api/merchant-intelligence/digital-scores?limit=N
-- GET /api/merchant-intelligence/digital-score/{partner_id}
-- POST /api/merchant-intelligence/digital-audit/{partner_id}
-- GET /api/merchant-intelligence/digital-scores/html?limit=N
-- /{path:path} — Proxy catch-all to Laravel (MUST be last)
+**Endpoints:**
+- GET `/admin/users/permissions` — Permissions page
+- POST `/admin/users/{user}/campaign-access` — Update campaigns (JSON body)
+- GET `/admin/users/available-campaigns` — All campaigns for all sub-stores
 
 ### Test Reports
-- iteration_22: 20/20 ML API tests (100%)
-- iteration_23: 37/37 AWS Personalize features (100%)
-- iteration_24: 18/18 Widget P2 + Intelligence (100%)
-- iteration_25: 23/23 Analytics Temporel + A/B Test + Email Preview (100%)
-- iteration_26: 10/10 Digital Scoring + scraping + Gemini audit (100%)
-- iteration_27: 17/17 Campaign Restriction + regression (100%)
+- iteration_22: 20/20 (100%)
+- iteration_23: 37/37 (100%)
+- iteration_24: 18/18 (100%)
+- iteration_25: 23/23 (100%)
+- iteration_26: 10/10 (100%)
+- iteration_27: 17/17 (100%)
+- iteration_28: 28/28 (100%)
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
