@@ -140,10 +140,35 @@ class SubStoreController extends Controller
         $user = auth()->user();
         $availableSubStores = $this->subStoreService->getAvailableSubStoresForUser($user);
         $defaultSubStore = $this->subStoreService->getDefaultSubStoreForUser($user);
+
+        // Fetch campaigns for Pluxee sub-stores
+        $campaigns = [];
+        foreach ($availableSubStores as $store) {
+            $storeName = is_array($store) ? ($store['name'] ?? '') : ($store->name ?? '');
+            if (stripos($storeName, 'pluxee') !== false || stripos($storeName, 'Pluxee') !== false) {
+                $storeId = is_array($store) ? ($store['store_id'] ?? null) : ($store->store_id ?? null);
+                if ($storeId) {
+                    $storeCampaigns = DB::table('carte_recharge')
+                        ->where('stores', $storeId)
+                        ->select('campain_name', DB::raw('COUNT(*) as total_batches'), DB::raw('SUM(card_generated_number) as total_cards'))
+                        ->groupBy('campain_name')
+                        ->orderBy('campain_name')
+                        ->get()
+                        ->map(fn($c) => [
+                            'name' => $c->campain_name,
+                            'batches' => (int) $c->total_batches,
+                            'cards' => (int) $c->total_cards,
+                        ])->toArray();
+                    $campaigns[$storeName] = $storeCampaigns;
+                }
+            }
+        }
+
         return response()->json([
             'sub_stores' => $availableSubStores,
             'default_sub_store' => $defaultSubStore,
-            'user_role' => $user->role ? $user->role->name : 'unknown'
+            'user_role' => $user->role ? $user->role->name : 'unknown',
+            'campaigns' => $campaigns,
         ]);
     }
 
@@ -771,15 +796,41 @@ class SubStoreController extends Controller
                    ->groupBy('partner.partner_id');
             $compMap = $compMq->get()->keyBy('partner_id');
 
-            $merchants = $allMerchants->map(function ($m, $idx) use ($compMap) {
+            // ===== COMPUTE ENRICHED KPIs =====
+            $totalTransactions = $allMerchants->sum('transactions_count');
+            $totalTransactionsComp = $compMap->sum('transactions_count');
+            $transactionsPerMerchant = $activeMerchants > 0 ? round($totalTransactions / $activeMerchants, 1) : 0;
+            $transactionsPerMerchantComp = $activeMerchantsComp > 0 ? round($totalTransactionsComp / $activeMerchantsComp, 1) : 0;
+            $activeMerchantRatio = $totalPartners > 0 ? round(($activeMerchants / $totalPartners) * 100, 1) : 0;
+            $activeMerchantRatioComp = $totalPartners > 0 ? round(($activeMerchantsComp / $totalPartners) * 100, 1) : 0;
+
+            // Top merchant share
+            $topMerchant = $allMerchants->first();
+            $topMerchantShare = ($topMerchant && $totalTransactions > 0) ? round(($topMerchant->transactions_count / $totalTransactions) * 100, 1) : 0;
+            $topMerchantName = $topMerchant ? $topMerchant->partner_name : 'N/A';
+
+            // Active locations count
+            $activePartnerIds = $allMerchants->pluck('partner_id')->toArray();
+            $totalLocationsActive = 0;
+            if (!empty($activePartnerIds)) {
+                $totalLocationsActive = DB::table('partner_location')
+                    ->whereIn('partner_id', $activePartnerIds)
+                    ->count();
+            }
+
+            $merchants = $allMerchants->map(function ($m, $idx) use ($compMap, $totalTransactions) {
                 $prev = $compMap->get($m->partner_id);
                 $prevTx = $prev ? $prev->transactions_count : 0;
                 $change = $prevTx > 0 ? round((($m->transactions_count - $prevTx) / $prevTx) * 100, 1) : ($m->transactions_count > 0 ? 100 : 0);
+                $share = $totalTransactions > 0 ? round(($m->transactions_count / $totalTransactions) * 100, 1) : 0;
                 return [
                     'rank' => $idx + 1,
                     'name' => $m->partner_name ?? 'N/A',
                     'category' => $m->partner_category_name ?? 'Autres',
+                    'current' => (int) $m->transactions_count,
                     'transactions' => (int) $m->transactions_count,
+                    'share' => $share,
+                    'delta' => $change,
                     'change' => $change,
                 ];
             })->toArray();
@@ -788,13 +839,27 @@ class SubStoreController extends Controller
                 'kpis' => [
                     'totalPartners' => ['current' => $totalPartners, 'previous' => $totalPartners, 'change' => 0],
                     'activeMerchants' => ['current' => $activeMerchants, 'previous' => $activeMerchantsComp, 'change' => $this->calculatePercentageChange($activeMerchants, $activeMerchantsComp)],
-                    'diversityLevel' => $diversity,
+                    'totalLocationsActive' => ['current' => $totalLocationsActive, 'previous' => $totalLocationsActive, 'change' => 0],
+                    'activeMerchantRatio' => ['current' => $activeMerchantRatio, 'previous' => $activeMerchantRatioComp, 'change' => $this->calculatePercentageChange($activeMerchantRatio, $activeMerchantRatioComp)],
+                    'totalTransactions' => ['current' => $totalTransactions, 'previous' => $totalTransactionsComp, 'change' => $this->calculatePercentageChange($totalTransactions, $totalTransactionsComp)],
+                    'transactionsPerMerchant' => ['current' => $transactionsPerMerchant, 'previous' => $transactionsPerMerchantComp, 'change' => $this->calculatePercentageChange($transactionsPerMerchant, $transactionsPerMerchantComp)],
+                    'topMerchantShare' => ['current' => $topMerchantShare, 'previous' => 0, 'change' => 0, 'merchant_name' => $topMerchantName],
+                    'diversity' => $diversity,
                 ],
                 'merchants' => $merchants,
             ];
         } catch (\Exception $e) {
             Log::error("getMerchantData error: " . $e->getMessage());
-            return ['kpis' => ['totalPartners' => ['current' => 0, 'previous' => 0, 'change' => 0], 'activeMerchants' => ['current' => 0, 'previous' => 0, 'change' => 0], 'diversityLevel' => ['level' => 'N/A', 'score' => 0]], 'merchants' => []];
+            return ['kpis' => [
+                'totalPartners' => ['current' => 0, 'previous' => 0, 'change' => 0],
+                'activeMerchants' => ['current' => 0, 'previous' => 0, 'change' => 0],
+                'totalLocationsActive' => ['current' => 0, 'previous' => 0, 'change' => 0],
+                'activeMerchantRatio' => ['current' => 0, 'previous' => 0, 'change' => 0],
+                'totalTransactions' => ['current' => 0, 'previous' => 0, 'change' => 0],
+                'transactionsPerMerchant' => ['current' => 0, 'previous' => 0, 'change' => 0],
+                'topMerchantShare' => ['current' => 0, 'previous' => 0, 'change' => 0, 'merchant_name' => 'N/A'],
+                'diversity' => ['level' => 'N/A', 'score' => 0],
+            ], 'merchants' => []];
         }
     }
 

@@ -1655,9 +1655,12 @@
           <div style="font-size: 14px; color: var(--muted);">Accès global à tous les sub-stores</div>
                     </div>
                     </div>
-      <select id="subStoreSelect" class="substore-dropdown">
+      <select id="subStoreSelect" class="substore-dropdown" data-testid="sub-store-select">
         <option value="ALL">Tous les sub-stores</option>
         <!-- Options will be populated by JavaScript -->
+      </select>
+      <select id="campaignSelect" class="substore-dropdown" style="display: none; margin-top: 8px;" data-testid="campaign-select">
+        <option value="">Toutes les campagnes</option>
       </select>
                 <div class="action-buttons">
         <button class="btn btn-primary" onclick="refreshData()">
@@ -2680,7 +2683,7 @@
           const md = merchants.value.data;
           if (md.kpis) {
             window.merchantKPIsData = md.kpis;
-            const activeTab = document.querySelector('.nav-link.active');
+            const activeTab = document.querySelector('.nav-tab.active');
             if (activeTab && activeTab.textContent.includes('Merchant')) {
               updateMerchantKPIs(md.kpis);
             }
@@ -2804,7 +2807,7 @@
         debugLog('💾 Données sauvegardées dans window.merchantKPIsData:', window.merchantKPIsData);
         
         // Vérifier si l'onglet Merchant est actif
-        const activeTab = document.querySelector('.nav-link.active');
+        const activeTab = document.querySelector('.nav-tab.active');
         const isMerchantActive = activeTab && activeTab.textContent.includes('Merchant');
         debugLog('🔍 Onglet actif:', activeTab?.textContent, 'Merchant actif:', isMerchantActive);
         
@@ -3025,48 +3028,23 @@
 
     function updateMerchantKPIs(kpis) {
       debugLog('📊 Mise à jour des KPIs Merchant:', kpis);
-      debugLog('🔍 Vérification: kpis.totalPartners =', kpis.totalPartners);
-      debugLog('🔍 Vérification: type de kpis =', typeof kpis);
-      debugLog('🔍 Vérification: clés de kpis =', Object.keys(kpis));
-      debugLog('🔍 État de l\'onglet Merchant:', document.getElementById('merchant')?.classList.contains('active'));
       
-      // Vérifier que nous avons les bonnes données
-      if (!kpis.totalPartners) {
-        debugLog('❌ ERREUR: Pas de données totalPartners dans kpis');
+      if (!kpis || !kpis.totalPartners) {
+        debugLog('❌ Pas de données totalPartners dans kpis');
         return;
       }
       
-      debugLog('✅ Données totalPartners trouvées, procédure normale');
-      
-      // VÉRIFICATION CRITIQUE: Les éléments HTML existent-ils ?
-      debugLog('🔍 Test: Recherche éléments HTML Merchant...');
       const testElement = document.getElementById('merch-totalPartners');
-      debugLog('🔍 Élément merch-totalPartners:', testElement ? 'TROUVÉ' : 'INTROUVABLE');
-      
       if (!testElement) {
-        debugLog('❌ PROBLÈME: Les éléments Merchant ne sont pas dans le DOM !');
-        debugLog('🔍 Onglet merchant existe-t-il?', document.getElementById('merchant') ? 'OUI' : 'NON');
-        debugLog('🔍 Contenu de l\'onglet merchant:', document.getElementById('merchant')?.innerHTML?.substring(0, 200) + '...');
-        
-        // Attendre un peu plus et réessayer
-        setTimeout(() => {
-          debugLog('🔄 Nouvelle tentative de mise à jour Merchant...');
-          updateMerchantKPIs(kpis);
-        }, 500);
+        debugLog('❌ Éléments Merchant pas encore dans le DOM, retry...');
+        if (!window._merchantRetryCount) window._merchantRetryCount = 0;
+        window._merchantRetryCount++;
+        if (window._merchantRetryCount < 10) {
+          setTimeout(() => updateMerchantKPIs(kpis), 500);
+        }
         return;
       }
-      
-      // Vérifier que l'onglet Merchant est visible
-      const merchantTab = document.getElementById('merchant');
-      if (merchantTab && !merchantTab.classList.contains('active')) {
-        debugLog('⚠️ Onglet Merchant non visible, attente...');
-        setTimeout(() => {
-          updateMerchantKPIs(kpis);
-        }, 200);
-        return;
-      }
-      
-      debugLog('✅ Éléments HTML trouvés, procédure de mise à jour...');
+      window._merchantRetryCount = 0;
       
       
       
@@ -3091,7 +3069,6 @@
       
       // Top Merchant et Diversity avec gestion spéciale
       const topMerchantShare = normalizeKPI(kpis.topMerchantShare);
-      const diversity = normalizeKPI(kpis.diversity);
       
       // Gestion spéciale pour Top Merchant Share avec nom du marchand
       if (topMerchantShare.merchant_name) {
@@ -3107,7 +3084,20 @@
       } else {
         updateSingleKPI('merch-topMerchantShare', topMerchantShare, '%');
       }
-      updateSingleKPI('merch-diversity', diversity);
+      
+      // Gestion spéciale pour Diversity avec level et score (utiliser kpis.diversity directement)
+      const rawDiversity = kpis.diversity || {};
+      if (rawDiversity.level) {
+        const diversityValue = `${rawDiversity.level} (${rawDiversity.score || 0})`;
+        const diversityElement = document.getElementById('merch-diversity');
+        if (diversityElement) {
+          diversityElement.innerHTML = diversityValue;
+          debugLog(`✅ merch-diversity mis à jour: ${diversityValue}`);
+        }
+      } else {
+        const diversity = normalizeKPI(kpis.diversity);
+        updateSingleKPI('merch-diversity', diversity);
+      }
       
       // Forcer le masquage des deltas globaux après la mise à jour
       forceHideGlobalDeltas();
@@ -3475,11 +3465,46 @@
         }
         
         debugLog('✅ Sub-stores chargés:', data.sub_stores.length, 'Super Admin:', isSuperAdmin);
+
+        // Store campaigns data for Pluxee dropdown
+        window.pluxeeCampaigns = data.campaigns || {};
+        updateCampaignDropdown(select.value);
+
         return data;
         
       } catch (error) {
         debugError('❌ Erreur lors du chargement des sub-stores:', error);
         return { sub_stores: [] };
+      }
+    }
+
+    // Campaign dropdown for Pluxee sub-stores
+    function updateCampaignDropdown(selectedSubStore) {
+      const campaignSelect = document.getElementById('campaignSelect');
+      const isPluxee = selectedSubStore && (selectedSubStore.toLowerCase().includes('pluxee') || selectedSubStore.toLowerCase().includes('privilèges by pluxee'));
+      const campaigns = window.pluxeeCampaigns || {};
+      
+      // Find campaigns for this sub-store
+      let storeCampaigns = [];
+      for (const [storeName, campList] of Object.entries(campaigns)) {
+        if (selectedSubStore === storeName || (isPluxee && storeName.toLowerCase().includes('pluxee'))) {
+          storeCampaigns = campList;
+          break;
+        }
+      }
+      
+      if (isPluxee && storeCampaigns.length > 0) {
+        campaignSelect.style.display = 'block';
+        campaignSelect.innerHTML = '<option value="">Toutes les campagnes (' + storeCampaigns.length + ')</option>';
+        storeCampaigns.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.name;
+          opt.textContent = c.name + (c.cards ? ' (' + c.cards + ' cartes)' : '');
+          campaignSelect.appendChild(opt);
+        });
+      } else {
+        campaignSelect.style.display = 'none';
+        campaignSelect.innerHTML = '<option value="">Toutes les campagnes</option>';
       }
     }
 
@@ -3892,11 +3917,22 @@
     // Seul le sub-store déclenche un rechargement automatique
     document.getElementById('subStoreSelect').addEventListener('change', function() {
         debugLog('🏪 Sub-Store modifié, rechargement de toutes les données');
+        // Update campaign dropdown for Pluxee
+        updateCampaignDropdown(this.value);
         // Effacer tous les caches
         window.merchantKPIsData = null;
         window.usersKPIsData = null;
         window.lastDashboardLoadTime = 0;
         // Recharger toutes les données
+        loadDashboardData();
+    });
+
+    // Campaign change also triggers reload
+    document.getElementById('campaignSelect').addEventListener('change', function() {
+        debugLog('📋 Campagne modifiée, rechargement');
+        window.merchantKPIsData = null;
+        window.usersKPIsData = null;
+        window.lastDashboardLoadTime = 0;
         loadDashboardData();
     });
     
