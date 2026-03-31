@@ -51,8 +51,8 @@ class ReportController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
-            'type' => 'required|in:ceo,marketing,partner',
-            'partner_id' => 'required_if:type,partner|nullable|integer|exists:partner,partner_id',
+            'type' => 'required|in:ceo,marketing,partner,associe,store,sub-store',
+            'partner_id' => 'required_if:type,partner|required_if:type,store|required_if:type,sub-store|nullable|integer|exists:partner,partner_id',
             'is_active' => 'boolean',
             'schedule_day' => 'string|in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
             'schedule_time' => 'string|regex:/^\d{2}:\d{2}$/',
@@ -64,7 +64,7 @@ class ReportController extends Controller
 
         $data = $validator->validated();
 
-        if ($data['type'] !== 'partner') {
+        if (!in_array($data['type'], ['partner', 'store', 'sub-store'])) {
             $data['partner_id'] = null;
         }
 

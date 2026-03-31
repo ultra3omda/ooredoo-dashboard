@@ -47,7 +47,10 @@
     const typeBadge = {
       ceo: '<span class="badge badge-primary" style="font-size:0.7rem;">CEO</span>',
       marketing: '<span class="badge badge-info" style="font-size:0.7rem;">Marketing</span>',
-      partner: '<span class="badge badge-success" style="font-size:0.7rem;">Partenaire</span>'
+      partner: '<span class="badge badge-success" style="font-size:0.7rem;">Partenaire</span>',
+      associe: '<span class="badge" style="font-size:0.7rem;background:#7c3aed;color:#fff;">Associe</span>',
+      store: '<span class="badge" style="font-size:0.7rem;background:#0891b2;color:#fff;">Store</span>',
+      'sub-store': '<span class="badge" style="font-size:0.7rem;background:#475569;color:#fff;">Sub-Store</span>'
     };
 
     tbody.innerHTML = filtered.map(r => `
@@ -132,7 +135,7 @@
 
   window.togglePartnerField = function() {
     const type = document.getElementById('recipientType').value;
-    document.getElementById('partnerFieldGroup').style.display = type === 'partner' ? 'block' : 'none';
+    document.getElementById('partnerFieldGroup').style.display = ['partner', 'store', 'sub-store'].includes(type) ? 'block' : 'none';
   };
 
   // ── Partner search ──
@@ -197,6 +200,10 @@
 
     if (payload.type === 'partner' && !payload.partner_id) {
       showNotification('Veuillez selectionner un partenaire.', 'error');
+      return;
+    }
+    if (['store', 'sub-store'].includes(payload.type) && !payload.partner_id) {
+      showNotification('Veuillez selectionner un store/partenaire associe.', 'error');
       return;
     }
 

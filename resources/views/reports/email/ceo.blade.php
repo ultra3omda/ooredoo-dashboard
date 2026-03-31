@@ -99,6 +99,50 @@ table tr:nth-child(even) { background: #fdfbff; }
   </div>
   @endif
 
+  @if(!empty($ml) && ($ml['available'] ?? false))
+  <div class="section">
+    <div style="background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 10px; padding: 24px; color: #fff;">
+      <h3 style="color: #60a5fa; margin: 0 0 16px; font-size: 16px; font-weight: 700;">Predictions ML - Analyse Predictive</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
+        <div style="flex: 1 1 120px; background: rgba(255,255,255,0.06); border-radius: 8px; padding: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+          <div style="font-size: 22px; font-weight: 800; color: #60a5fa;">{{ number_format($ml['total_clients']) }}</div>
+          <div style="font-size: 10px; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-top: 4px;">Clients Analyses</div>
+        </div>
+        <div style="flex: 1 1 120px; background: rgba(255,255,255,0.06); border-radius: 8px; padding: 14px; text-align: center; border: 1px solid rgba(239,68,68,0.3);">
+          <div style="font-size: 22px; font-weight: 800; color: #ef4444;">{{ number_format($ml['high_churn_clients']) }}</div>
+          <div style="font-size: 10px; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-top: 4px;">Risque Churn</div>
+        </div>
+        <div style="flex: 1 1 120px; background: rgba(255,255,255,0.06); border-radius: 8px; padding: 14px; text-align: center; border: 1px solid rgba(16,185,129,0.3);">
+          <div style="font-size: 22px; font-weight: 800; color: #10b981;">{{ number_format($ml['high_value_clients']) }}</div>
+          <div style="font-size: 10px; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-top: 4px;">Haute Valeur</div>
+        </div>
+        <div style="flex: 1 1 120px; background: rgba(255,255,255,0.06); border-radius: 8px; padding: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+          <div style="font-size: 22px; font-weight: 800; color: #60a5fa;">{{ $ml['avg_success_rate'] }}%</div>
+          <div style="font-size: 10px; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-top: 4px;">Taux Succes</div>
+        </div>
+      </div>
+      @if(!empty($ml['segments']))
+      <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 8px; font-weight: 600;">SEGMENTATION PREDICTIVE</div>
+      @foreach($ml['segments'] as $seg)
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 12px;">
+        <span style="width: 110px; color: rgba(255,255,255,0.8);">{{ ucfirst(str_replace('_', ' ', $seg['segment'])) }}</span>
+        <div style="flex: 1; background: rgba(255,255,255,0.1); border-radius: 4px; height: 8px; overflow: hidden;">
+          <div style="height: 100%; width: {{ min(100, ($seg['count'] / max(1, $ml['total_clients'])) * 100) }}%; background: {{ $seg['avg_churn'] > 30 ? '#ef4444' : ($seg['avg_churn'] > 10 ? '#f59e0b' : '#10b981') }}; border-radius: 4px;"></div>
+        </div>
+        <span style="color: rgba(255,255,255,0.6); width: 55px; text-align: right;">{{ number_format($seg['count']) }}</span>
+        <span style="color: {{ $seg['avg_churn'] > 30 ? '#ef4444' : '#71717a' }}; width: 55px; text-align: right; font-size: 11px;">{{ $seg['avg_churn'] }}% churn</span>
+      </div>
+      @endforeach
+      @endif
+      @if(!empty($ml['model']))
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: rgba(255,255,255,0.4);">
+        Modele: {{ $ml['model']['model_type'] ?? 'LightGBM' }} | Precision: {{ $ml['model']['accuracy'] ?? 'N/A' }} | Derniere MAJ: {{ $ml['date'] }}
+      </div>
+      @endif
+    </div>
+  </div>
+  @endif
+
   @if(!empty($ai_suggestions))
   <div class="section">
     <div class="ai-section">

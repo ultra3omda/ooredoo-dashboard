@@ -112,6 +112,52 @@ table td { padding: 10px 12px; border-bottom: 1px solid #f0ecf7; }
   </div>
   @endif
 
+  @if(!empty($ml) && ($ml['available'] ?? false))
+  <div class="section">
+    <div style="background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 10px; padding: 24px; color: #fff;">
+      <h3 style="color: #60a5fa; margin: 0 0 16px; font-size: 15px; font-weight: 700;">Analyse ML - Ciblage Marketing</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
+        <div style="flex: 1 1 140px; background: rgba(239,68,68,0.1); border-radius: 8px; padding: 14px; border: 1px solid rgba(239,68,68,0.2);">
+          <div style="font-size: 11px; color: #fca5a5; text-transform: uppercase; margin-bottom: 4px;">Clients a Reactiver</div>
+          <div style="font-size: 22px; font-weight: 800; color: #ef4444;">{{ number_format($ml['high_churn_clients']) }}</div>
+          <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">Churn predit >50%</div>
+        </div>
+        <div style="flex: 1 1 140px; background: rgba(16,185,129,0.1); border-radius: 8px; padding: 14px; border: 1px solid rgba(16,185,129,0.2);">
+          <div style="font-size: 11px; color: #6ee7b7; text-transform: uppercase; margin-bottom: 4px;">Clients Premium</div>
+          <div style="font-size: 22px; font-weight: 800; color: #10b981;">{{ number_format($ml['high_value_clients']) }}</div>
+          <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">Haute LTV predite</div>
+        </div>
+        <div style="flex: 1 1 140px; background: rgba(96,165,250,0.1); border-radius: 8px; padding: 14px; border: 1px solid rgba(96,165,250,0.2);">
+          <div style="font-size: 11px; color: #93c5fd; text-transform: uppercase; margin-bottom: 4px;">Succes Paiement</div>
+          <div style="font-size: 22px; font-weight: 800; color: #60a5fa;">{{ $ml['avg_success_rate'] }}%</div>
+          <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">Moyenne tous segments</div>
+        </div>
+      </div>
+      @if(!empty($ml['segments']))
+      <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 6px;">CIBLES CAMPAGNES ML</div>
+      <table style="width:100%; font-size:12px; color:#fff;">
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+          <th style="text-align:left; padding:6px; color:rgba(255,255,255,0.5);">Segment</th>
+          <th style="text-align:right; padding:6px; color:rgba(255,255,255,0.5);">Clients</th>
+          <th style="text-align:right; padding:6px; color:rgba(255,255,255,0.5);">Succes</th>
+          <th style="text-align:right; padding:6px; color:rgba(255,255,255,0.5);">Churn</th>
+          <th style="text-align:right; padding:6px; color:rgba(255,255,255,0.5);">Engagement</th>
+        </tr>
+        @foreach($ml['segments'] as $seg)
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+          <td style="padding:6px; color:rgba(255,255,255,0.8);">{{ ucfirst(str_replace('_', ' ', $seg['segment'])) }}</td>
+          <td style="text-align:right; padding:6px;">{{ number_format($seg['count']) }}</td>
+          <td style="text-align:right; padding:6px; color:#60a5fa;">{{ $seg['avg_success'] }}%</td>
+          <td style="text-align:right; padding:6px; color:{{ $seg['avg_churn'] > 30 ? '#ef4444' : '#f59e0b' }};">{{ $seg['avg_churn'] }}%</td>
+          <td style="text-align:right; padding:6px; color:#10b981;">{{ $seg['avg_engagement'] }}%</td>
+        </tr>
+        @endforeach
+      </table>
+      @endif
+    </div>
+  </div>
+  @endif
+
   @if(!empty($ai_suggestions))
   <div class="section">
     <div class="ai-section">

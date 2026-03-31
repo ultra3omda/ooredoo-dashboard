@@ -62,7 +62,7 @@ async def report_ai_suggestions(request: Request):
         chat = LlmChat(
             api_key=api_key,
             session_id=f"report-{report_type}-{id(request)}",
-            system_message="Tu es un analyste business senior expert en programmes de fidélité et marketing digital en Tunisie. Tu analyses des KPIs hebdomadaires et fournis des recommandations stratégiques précises, actionables et prioritisées. Réponds toujours en français. Format: liste numérotée avec émoji de priorité."
+            system_message="Tu es un analyste business senior expert en programmes de fidelite, marketing digital et data science en Tunisie. Tu analyses des KPIs hebdomadaires enrichis de predictions ML (machine learning) - segments clients, probabilites de churn, scores d'engagement et de lifetime value. Tu fournis des recommandations strategiques precises, actionables et prioritisees basees sur ces insights data-driven. Reponds toujours en francais. Format: liste numerotee avec priorite (P0/P1/P2) et impact estime."
         )
         chat.with_model("openai", "gpt-4o")
 

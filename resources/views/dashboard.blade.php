@@ -1197,6 +1197,9 @@
                 <option value="ceo">CEO</option>
                 <option value="marketing">Marketing</option>
                 <option value="partner">Partenaire</option>
+                <option value="associe">Associe</option>
+                <option value="store">Store</option>
+                <option value="sub-store">Sub-Store</option>
               </select>
             </div>
           </div>
@@ -1267,9 +1270,12 @@
             <label style="display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 4px;">Type de rapport *</label>
             <select id="recipientType" required onchange="togglePartnerField()" class="enhanced-date-input" style="width: 100%; box-sizing: border-box;" data-testid="recipient-type-select">
               <option value="">Choisir...</option>
-              <option value="ceo">CEO - Rapport complet tous operateurs</option>
-              <option value="marketing">Marketing - Acquisition & Retention</option>
+              <option value="ceo">CEO - Rapport strategique complet + ML</option>
+              <option value="marketing">Marketing - Acquisition, Retention & Ciblage ML</option>
               <option value="partner">Partenaire - Transactions individuelles</option>
+              <option value="associe">Associe - Performance reseau & financier</option>
+              <option value="store">Store - Performance point de vente + ML</option>
+              <option value="sub-store">Sub-Store - Performance sous-point de vente</option>
             </select>
           </div>
           <div id="partnerFieldGroup" style="display: none; margin-bottom: 14px;">
