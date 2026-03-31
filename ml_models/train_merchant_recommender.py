@@ -311,21 +311,38 @@ def build_training_data(conn):
     print(f"   -> {len(df_positive)} positive samples")
 
     # Negative samples: random merchants users haven't visited
-    query_negative_candidates = """
-    SELECT up.client_id, mc.partner_id
-    FROM cp_user_profile up
-    CROSS JOIN cp_merchants_catalog mc
-    WHERE mc.is_active = 1
-    AND NOT EXISTS (
-        SELECT 1 FROM cp_user_merchant_history umh 
-        WHERE umh.client_id = up.client_id AND umh.partner_id = mc.partner_id
-    )
-    ORDER BY RAND()
-    LIMIT %s
-    """
-    # Sample ~2x negatives vs positives (capped at 200K)
+    # Use Python/numpy sampling instead of SQL CROSS JOIN + ORDER BY RAND()
+    # This is ~10x faster: avoids sorting 11M+ rows in MySQL
+    import numpy as np
+    
+    user_ids = df_positive['client_id'].unique()
+    merchant_ids = pd.read_sql("SELECT partner_id FROM cp_merchants_catalog WHERE is_active = 1", conn)['partner_id'].values
+    all_merchants_set = set(merchant_ids.tolist())
+    
+    # Build per-user visited merchants map
+    user_visited = df_positive.groupby('client_id')['partner_id'].apply(set).to_dict()
+    
     neg_count = min(len(df_positive) * 2, 200000)
-    df_neg_pairs = pd.read_sql(query_negative_candidates, conn, params=[neg_count])
+    rng = np.random.default_rng(42)
+    neg_pairs = []
+    neg_per_user = max(1, neg_count // len(user_ids) + 1)
+    
+    for uid in user_ids:
+        visited = user_visited.get(uid, set())
+        available = list(all_merchants_set - visited)
+        if not available:
+            continue
+        n_sample = min(neg_per_user, len(available))
+        sampled = rng.choice(available, size=n_sample, replace=False)
+        for m in sampled:
+            neg_pairs.append((int(uid), int(m)))
+        if len(neg_pairs) >= neg_count:
+            break
+    
+    rng.shuffle(neg_pairs)
+    neg_pairs = neg_pairs[:neg_count]
+    df_neg_pairs = pd.DataFrame(neg_pairs, columns=['client_id', 'partner_id'])
+    print(f"   -> {len(df_neg_pairs)} negative pairs sampled (Python/numpy)")
     
     if len(df_neg_pairs) > 0:
         query_neg_features = """
@@ -375,12 +392,13 @@ def build_training_data(conn):
         cursor = conn.cursor()
         cursor.execute("CREATE TEMPORARY TABLE _tmp_neg_pairs (client_id BIGINT, partner_id BIGINT)")
         
-        # Batch insert
-        batch_size = 5000
+        # Batch insert (vectorized, no iterrows)
+        batch_size = 10000
         for i in range(0, len(df_neg_pairs), batch_size):
             batch = df_neg_pairs.iloc[i:i+batch_size]
-            values = ','.join([f"({r.client_id},{r.partner_id})" for _, r in batch.iterrows()])
+            values = ','.join([f"({int(r[0])},{int(r[1])})" for r in batch.values])
             cursor.execute(f"INSERT INTO _tmp_neg_pairs VALUES {values}")
+        conn.commit()
         conn.commit()
         
         df_negative = pd.read_sql("""

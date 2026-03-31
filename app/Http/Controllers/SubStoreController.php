@@ -13,6 +13,7 @@ use Carbon\Carbon;
 class SubStoreController extends Controller
 {
     private SubStoreService $subStoreService;
+    private ?string $currentCampaign = null;
 
     public function __construct(SubStoreService $subStoreService)
     {
@@ -50,12 +51,16 @@ class SubStoreController extends Controller
         $comparisonStartDate = $request->input('comparison_start_date');
         $comparisonEndDate = $request->input('comparison_end_date');
         $subStore = $request->input('sub_store', 'ALL');
+        $campaign = $request->input('campaign');
 
         if (strtolower($subStore) === 'all') $subStore = 'ALL';
 
+        // Store campaign for use by Pluxee methods
+        $this->currentCampaign = $campaign ?: null;
+
         if (!$startDate || !$endDate) {
             $endDate = Carbon::now()->toDateString();
-            $startDate = Carbon::now()->subDays(29)->toDateString();
+            $startDate = Carbon::now()->subDays(364)->toDateString();
         }
         if (!$comparisonStartDate || !$comparisonEndDate) {
             $comparisonEndDate = Carbon::parse($startDate)->subDay()->toDateString();
@@ -78,6 +83,7 @@ class SubStoreController extends Controller
             'comparison_start_date' => $comparisonStartDate,
             'comparison_end_date' => $comparisonEndDate,
             'sub_store' => $subStore,
+            'campaign' => $this->currentCampaign,
             'period_days' => $periodDays,
         ];
     }
@@ -90,6 +96,7 @@ class SubStoreController extends Controller
                 'start_date' => $params['start_date'],
                 'end_date' => $params['end_date'],
                 'sub_store' => $params['sub_store'],
+                'campaign' => $params['campaign'],
             ]));
             $cached = Cache::get($rawKey);
             if ($cached) {
@@ -569,91 +576,132 @@ class SubStoreController extends Controller
     // PLUXEE KPI METHODS — Without carte_recharge_client
     // =========================================================================
 
+    /**
+     * Filter Pluxee clients by campaign through carte_recharge chain.
+     * When a specific campaign is selected, only include clients linked to that campaign's cards.
+     */
+    private function applyPluxeeCampaignFilter($query, string $clientAlias = 'client')
+    {
+        if ($this->currentCampaign) {
+            $campaign = $this->currentCampaign;
+            $query->whereIn("$clientAlias.client_id", function ($sub) use ($campaign) {
+                $sub->select('carte_recharge_client.client_id')
+                    ->from('carte_recharge_client')
+                    ->join('carte_recharge_code', 'carte_recharge_client.carte_recharge_code_id', '=', 'carte_recharge_code.carte_recharge_code_id')
+                    ->join('carte_recharge', 'carte_recharge_code.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+                    ->where('carte_recharge.campain_name', $campaign);
+            });
+        }
+        return $query;
+    }
+
     private function getPluxeeDistributed(string $ss): int
     {
+        if ($this->currentCampaign) {
+            return (int) DB::table('carte_recharge')
+                ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
+                ->where('stores.store_name', 'LIKE', "%$ss%")
+                ->where('carte_recharge.campain_name', $this->currentCampaign)
+                ->sum('carte_recharge.card_generated_number');
+        }
         return (int) DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->where('stores.store_name', 'LIKE', "%$ss%")->count('client.client_id');
     }
 
     private function getPluxeeInscriptions(string $ss): int
     {
-        return (int) DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
+        $q = DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
-            ->where('stores.store_name', 'LIKE', "%$ss%")->distinct('client.client_id')->count('client.client_id');
+            ->where('stores.store_name', 'LIKE', "%$ss%");
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->distinct('client.client_id')->count('client.client_id');
     }
 
     private function getPluxeeActiveUsers(string $ss): int
     {
-        return (int) DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
+        $q = DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
             ->where('stores.store_name', 'LIKE', "%$ss%")
-            ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now())
-            ->distinct('client.client_id')->count('client.client_id');
+            ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now());
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->distinct('client.client_id')->count('client.client_id');
     }
 
     private function getPluxeeActiveUsersCohorte(string $ss, string $sd, string $ed): int
     {
-        return (int) DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
+        $q = DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->join('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
             ->where('stores.store_name', 'LIKE', "%$ss%")
             ->where('client_abonnement.client_abonnement_expiration', '>', Carbon::now())
-            ->whereBetween('client_abonnement.client_abonnement_creation', [Carbon::parse($sd)->startOfDay(), Carbon::parse($ed)->endOfDay()])
-            ->distinct('client.client_id')->count('client.client_id');
+            ->whereBetween('client_abonnement.client_abonnement_creation', [Carbon::parse($sd)->startOfDay(), Carbon::parse($ed)->endOfDay()]);
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->distinct('client.client_id')->count('client.client_id');
     }
 
     private function getPluxeeTransactions(string $ss): int
     {
-        return (int) DB::table('history')->join('client', 'history.client_id', '=', 'client.client_id')
+        $q = DB::table('history')->join('client', 'history.client_id', '=', 'client.client_id')
             ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-            ->where('stores.store_name', 'LIKE', "%$ss%")->count('history.history_id');
+            ->where('stores.store_name', 'LIKE', "%$ss%");
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->count('history.history_id');
     }
 
     private function getPluxeeTransactionsCohorte(string $ss, string $sd, string $ed): int
     {
-        return (int) DB::table('history')->join('client', 'history.client_id', '=', 'client.client_id')
+        $q = DB::table('history')->join('client', 'history.client_id', '=', 'client.client_id')
             ->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->where('stores.store_name', 'LIKE', "%$ss%")
-            ->whereBetween('history.time', [Carbon::parse($sd)->startOfDay(), Carbon::parse($ed)->endOfDay()])
-            ->count('history.history_id');
+            ->whereBetween('history.time', [Carbon::parse($sd)->startOfDay(), Carbon::parse($ed)->endOfDay()]);
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->count('history.history_id');
     }
 
     private function getPluxeeInscriptionsCohorte(string $ss, string $sd, string $ed): int
     {
-        return (int) DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
+        $q = DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->where('stores.store_name', 'LIKE', "%$ss%")
-            ->whereBetween('client.created_at', [Carbon::parse($sd)->startOfDay(), Carbon::parse($ed)->endOfDay()])
-            ->count('client.client_id');
+            ->whereBetween('client.created_at', [Carbon::parse($sd)->startOfDay(), Carbon::parse($ed)->endOfDay()]);
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->count('client.client_id');
     }
 
     private function getPluxeeCardsActivated(string $ss, string $sd, string $ed): int
     {
-        return (int) DB::table('client_abonnement')->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
+        $q = DB::table('client_abonnement')->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
             ->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->where('stores.store_name', 'LIKE', "%$ss%")
-            ->whereBetween('client_abonnement.client_abonnement_creation', [Carbon::parse($sd)->startOfDay(), Carbon::parse($ed)->endOfDay()])
-            ->count();
+            ->whereBetween('client_abonnement.client_abonnement_creation', [Carbon::parse($sd)->startOfDay(), Carbon::parse($ed)->endOfDay()]);
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->count();
     }
 
     private function getPluxeeTotalSubscriptions(string $ss): int
     {
-        return (int) DB::table('client_abonnement')->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
+        $q = DB::table('client_abonnement')->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
             ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-            ->where('stores.store_name', 'LIKE', "%$ss%")->count();
+            ->where('stores.store_name', 'LIKE', "%$ss%");
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->count();
     }
 
     private function getPluxeeUsersWithCardsCount(string $ss): int
     {
-        return (int) DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
+        $q = DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->join('history', 'client.client_id', '=', 'history.client_id')
-            ->where('stores.store_name', 'LIKE', "%$ss%")->distinct('client.client_id')->count('client.client_id');
+            ->where('stores.store_name', 'LIKE', "%$ss%");
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->distinct('client.client_id')->count('client.client_id');
     }
 
     private function getPluxeeUsersWithCardsCohorteCount(string $ss, $sd, $ed): int
     {
-        return (int) DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
+        $q = DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
             ->join('history', 'client.client_id', '=', 'history.client_id')
             ->where('stores.store_name', 'LIKE', "%$ss%")
-            ->whereBetween('history.time', [$sd, $ed])->distinct('client.client_id')->count('client.client_id');
+            ->whereBetween('history.time', [$sd, $ed]);
+        $this->applyPluxeeCampaignFilter($q);
+        return (int) $q->distinct('client.client_id')->count('client.client_id');
     }
 
     // =========================================================================
@@ -674,6 +722,8 @@ class SubStoreController extends Controller
             if (!$isPluxee) {
                 $q->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id');
                 $this->applySubStoreFilter($q);
+            } else {
+                $this->applyPluxeeCampaignFilter($q);
             }
             $q->where('stores.store_active', 1)
               ->whereBetween('history.time', [$sd, Carbon::parse($ed)->endOfDay()])
@@ -699,11 +749,12 @@ class SubStoreController extends Controller
             $isPluxee = $this->isPluxeeCampaign($ss);
 
             if ($isPluxee) {
-                $trend = DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
+                $q = DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
                     ->select(DB::raw("DATE_FORMAT(client.created_at, '%Y-%m') as month"), DB::raw('COUNT(DISTINCT client.client_id) as value'))
                     ->where('stores.store_name', 'LIKE', "%$ss%")
-                    ->whereBetween('client.created_at', [$extStart, Carbon::parse($extEnd)->endOfDay()])
-                    ->groupBy(DB::raw("DATE_FORMAT(client.created_at, '%Y-%m')"))
+                    ->whereBetween('client.created_at', [$extStart, Carbon::parse($extEnd)->endOfDay()]);
+                $this->applyPluxeeCampaignFilter($q);
+                $trend = $q->groupBy(DB::raw("DATE_FORMAT(client.created_at, '%Y-%m')"))
                     ->orderBy('month')->get();
             } else {
                 $q = DB::table('carte_recharge_client')
@@ -741,6 +792,8 @@ class SubStoreController extends Controller
             if (!$isPluxee) {
                 $amq->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id');
                 $this->applySubStoreFilter($amq);
+            } else {
+                $this->applyPluxeeCampaignFilter($amq);
             }
             $amq->when($ss !== 'ALL', fn($q) => $q->where('stores.store_name', 'LIKE', "%$ss%"))
                 ->whereBetween('history.time', [$sd, Carbon::parse($ed)->endOfDay()])->distinct();
@@ -755,6 +808,8 @@ class SubStoreController extends Controller
             if (!$isPluxee) {
                 $amcq->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id');
                 $this->applySubStoreFilter($amcq);
+            } else {
+                $this->applyPluxeeCampaignFilter($amcq);
             }
             $amcq->when($ss !== 'ALL', fn($q) => $q->where('stores.store_name', 'LIKE', "%$ss%"))
                  ->whereBetween('history.time', [$csd, Carbon::parse($ced)->endOfDay()])->distinct();
@@ -773,6 +828,8 @@ class SubStoreController extends Controller
             if (!$isPluxee) {
                 $allMq->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id');
                 $this->applySubStoreFilter($allMq);
+            } else {
+                $this->applyPluxeeCampaignFilter($allMq);
             }
             $allMq->when($ss !== 'ALL', fn($q) => $q->where('stores.store_name', 'LIKE', "%$ss%"))
                   ->whereBetween('history.time', [$sd, Carbon::parse($ed)->endOfDay()])
@@ -790,6 +847,8 @@ class SubStoreController extends Controller
             if (!$isPluxee) {
                 $compMq->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id');
                 $this->applySubStoreFilter($compMq);
+            } else {
+                $this->applyPluxeeCampaignFilter($compMq);
             }
             $compMq->when($ss !== 'ALL', fn($q) => $q->where('stores.store_name', 'LIKE', "%$ss%"))
                    ->whereBetween('history.time', [$csd, Carbon::parse($ced)->endOfDay()])

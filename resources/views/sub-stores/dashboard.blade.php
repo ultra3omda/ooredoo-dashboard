@@ -2409,23 +2409,24 @@
     function initializeDashboard() {
       debugLog('🚀 Initialisation du dashboard sub-stores');
       
-      // Période par défaut : 30 derniers jours (évite timeout sur l'onglet Users)
+      // Période par défaut : 365 derniers jours (1 an)
       const today = new Date();
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 29);
+      const yearAgo = new Date(today);
+      yearAgo.setDate(today.getDate() - 364);
       
-      if (isNaN(today.getTime()) || isNaN(thirtyDaysAgo.getTime())) {
+      if (isNaN(today.getTime()) || isNaN(yearAgo.getTime())) {
         debugError('❌ Erreur lors de la création des dates par défaut');
         document.getElementById('startDate').value = '2025-01-01';
-        document.getElementById('endDate').value = '2025-01-31';
-        document.getElementById('comparisonStartDate').value = '2024-12-01';
+        document.getElementById('endDate').value = '2025-12-31';
+        document.getElementById('comparisonStartDate').value = '2024-01-01';
         document.getElementById('comparisonEndDate').value = '2024-12-31';
       } else {
-        document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+        document.getElementById('startDate').value = yearAgo.toISOString().split('T')[0];
         document.getElementById('endDate').value = today.toISOString().split('T')[0];
-        // Période de comparaison : 30 jours précédents
-        const comparisonEnd = new Date(thirtyDaysAgo.getTime() - 24 * 60 * 60 * 1000);
-        const comparisonStart = new Date(comparisonEnd.getTime() - 29 * 24 * 60 * 60 * 1000);
+        // Période de comparaison : 365 jours précédents
+        const comparisonEnd = new Date(yearAgo.getTime() - 24 * 60 * 60 * 1000);
+        const comparisonStart = new Date(comparisonEnd);
+        comparisonStart.setDate(comparisonEnd.getDate() - 364);
         document.getElementById('comparisonStartDate').value = comparisonStart.toISOString().split('T')[0];
         document.getElementById('comparisonEndDate').value = comparisonEnd.toISOString().split('T')[0];
       }
@@ -2900,13 +2901,16 @@
         const compStart = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
         const compEnd = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
 
-        const params = new URLSearchParams({
+        const paramsObj = new URLSearchParams({
           start_date: startDate,
           end_date: endDate,
           comparison_start_date: compStart.toISOString().split('T')[0],
           comparison_end_date: compEnd.toISOString().split('T')[0],
           sub_store: subStore
-        }).toString();
+        });
+        const campaign = document.getElementById('campaignSelect').value;
+        if (campaign) paramsObj.append('campaign', campaign);
+        const params = paramsObj.toString();
 
         debugLog('Chargement split parallele:', { startDate, endDate, subStore, periodDays });
 
@@ -3806,7 +3810,7 @@
         row.insertCell(0).textContent = category.category || 'Non spécifié';
         
         // Usage count
-        row.insertCell(1).textContent = formatNumber(category.utilizations || 0);
+        row.insertCell(1).textContent = formatNumber(category.transactions || 0);
         
         // Percentage
         row.insertCell(2).textContent = `${category.percentage || 0}%`;
