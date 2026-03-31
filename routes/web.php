@@ -194,6 +194,15 @@ Route::middleware('auth')->group(function () {
             Route::get('/report/latest', [MLDashboardController::class, 'getLatestReport'])->name('report.latest');
         });
 
+        // === ML MERCHANT RECOMMENDATIONS DASHBOARD ===
+        Route::prefix('merchant-recommendations')->name('merchant-reco.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'index'])->name('dashboard');
+            Route::post('/recommend', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'getRecommendations'])->name('recommend');
+            Route::get('/popular', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'getPopular'])->name('popular');
+            Route::post('/retrain', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'retrain'])->name('retrain');
+            Route::get('/health', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'health'])->name('health');
+        });
+
         // === PLUXEE USER MANAGEMENT ROUTES ===
         Route::prefix('pluxee')->name('pluxee.')->group(function () {
             Route::get('/users', [PluxeeUserController::class, 'index'])->name('users.index');

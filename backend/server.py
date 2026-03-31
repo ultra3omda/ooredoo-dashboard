@@ -84,7 +84,7 @@ async def merchant_recommendations(request: Request):
         
         body = await request.json()
         client_id = body.get("client_id")
-        if not client_id:
+        if client_id is None:
             return JSONResponse({"success": False, "error": "client_id requis"}, status_code=400)
         
         top_k = body.get("top_k", 10)

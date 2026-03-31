@@ -79,6 +79,77 @@ def fetch_metrics():
     conn.close()
     return metrics
 
+def fetch_merchant_recommendation_metrics():
+    """Fetch merchant recommendation engine metrics."""
+    config = get_db_config()
+    conn = pymysql.connect(**config)
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
+    
+    reco_metrics = {}
+    
+    try:
+        # Catalog stats
+        cursor.execute("SELECT COUNT(*) as cnt FROM cp_merchants_catalog WHERE is_active = 1")
+        reco_metrics['active_merchants'] = cursor.fetchone()['cnt']
+        
+        cursor.execute("SELECT COUNT(*) as cnt FROM cp_user_profile")
+        reco_metrics['profiled_users'] = cursor.fetchone()['cnt']
+        
+        cursor.execute("SELECT COUNT(*) as cnt FROM cp_user_merchant_history")
+        reco_metrics['user_merchant_pairs'] = cursor.fetchone()['cnt']
+        
+        # Top categories by popularity
+        cursor.execute("""
+            SELECT category_name, COUNT(*) as merchant_count, 
+                   SUM(total_visits) as total_visits, AVG(popularity_score) as avg_popularity
+            FROM cp_merchants_catalog WHERE is_active = 1 AND category_name IS NOT NULL
+            GROUP BY category_name ORDER BY total_visits DESC LIMIT 5
+        """)
+        reco_metrics['top_categories'] = [dict(r) for r in cursor.fetchall()]
+        for cat in reco_metrics['top_categories']:
+            for k, v in cat.items():
+                if hasattr(v, '__float__'):
+                    cat[k] = float(v)
+        
+        # Top merchants
+        cursor.execute("""
+            SELECT partner_name, category_name, total_visits, unique_visitors, 
+                   popularity_score, active_promotion_count
+            FROM cp_merchants_catalog WHERE is_active = 1
+            ORDER BY popularity_score DESC LIMIT 10
+        """)
+        reco_metrics['top_merchants'] = [dict(r) for r in cursor.fetchall()]
+        for m in reco_metrics['top_merchants']:
+            for k, v in m.items():
+                if hasattr(v, '__float__'):
+                    m[k] = float(v)
+        
+        # Interaction stats (last 7 days)
+        cursor.execute("""
+            SELECT interaction_type, source, COUNT(*) as cnt
+            FROM cp_user_offer_interactions
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY interaction_type, source
+        """)
+        reco_metrics['interactions_7d'] = [dict(r) for r in cursor.fetchall()]
+        
+        # Model metrics from file
+        metrics_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'merchant_recommender_metrics.json')
+        if os.path.exists(metrics_path):
+            with open(metrics_path) as f:
+                model_data = json.load(f)
+                reco_metrics['model'] = {
+                    'trained_at': model_data.get('trained_at'),
+                    'n_train_samples': model_data.get('n_train_samples'),
+                    'eval_results': model_data.get('eval_results', {}),
+                    'top_features': list(model_data.get('feature_importances', {}).keys())[:5],
+                }
+    except Exception as e:
+        reco_metrics['error'] = str(e)
+    
+    conn.close()
+    return reco_metrics
+
 async def generate_report(metrics):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     
@@ -102,9 +173,13 @@ Reponds UNIQUEMENT en JSON valide avec cette structure:
   "alertes": [{"niveau": "critique|attention|info", "message": ""}],
   "recommandations": [{"priorite": "P0|P1|P2", "action": "", "impact_estime": ""}],
   "modele_ml": {"accuracy": 0, "statut": "", "commentaire": ""},
+  "recommandations_marchands": {"top_merchants": [], "categories_tendances": [], "engagement_reco": ""},
   "prochaines_etapes": [""]
 }"""
     ).with_model("openai", "gpt-4o")
+    
+    # Fetch merchant recommendation metrics
+    reco_data = fetch_merchant_recommendation_metrics()
     
     prompt = f"""Voici les metriques du dashboard ML Club Privileges pour cette semaine:
 
@@ -124,7 +199,16 @@ Reponds UNIQUEMENT en JSON valide avec cette structure:
 **Tests A/B en cours:**
 {json.dumps(metrics.get('ab_tests', []), indent=2, ensure_ascii=False)}
 
-Genere le rapport hebdomadaire complet en JSON."""
+**Moteur de Recommandation Marchands ML:**
+- Marchands actifs dans le catalogue: {reco_data.get('active_merchants', 'N/A')}
+- Profils utilisateurs: {reco_data.get('profiled_users', 'N/A')}
+- Paires utilisateur-marchand: {reco_data.get('user_merchant_pairs', 'N/A')}
+- Top Categories: {json.dumps(reco_data.get('top_categories', []), indent=2, ensure_ascii=False)}
+- Top 10 Marchands (par popularite): {json.dumps(reco_data.get('top_merchants', []), indent=2, ensure_ascii=False)}
+- Interactions recommandations (7j): {json.dumps(reco_data.get('interactions_7d', []), indent=2, ensure_ascii=False)}
+- Performance modele recommandation: {json.dumps(reco_data.get('model', {}), indent=2, ensure_ascii=False)}
+
+Genere le rapport hebdomadaire complet en JSON. Inclus une section specifique sur les recommandations marchands avec les tendances de categories et suggestions d'optimisation."""
     
     message = UserMessage(text=prompt)
     response = await chat.send_message(message)
@@ -162,6 +246,7 @@ def main():
         json.dump({
             'report': report,
             'metrics_snapshot': metrics,
+            'merchant_reco_snapshot': fetch_merchant_recommendation_metrics(),
             'generated_at': datetime.now().isoformat(),
             'filename': filename
         }, f, ensure_ascii=False, indent=2)

@@ -1,0 +1,47 @@
+{
+  "summary": "Tested ML Merchant Recommendation Dashboard - All features working. Dashboard loads with correct KPIs (576 merchants, 19249 profiles), Popular merchants show ranked list with gold/silver/bronze badges, Personalized search returns ML-scored recommendations with 'ML Model' tag, Menu link 'Recommandations Marchands' present in dropdown, All FastAPI endpoints working (stats, health, recommend, track).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_merchant_recommendations.py",
+    "/app/test_reports/pytest/pytest_merchant_recommendations.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (all endpoints working)",
+    "frontend": "100% (all UI features verified)"
+  },
+  "test_credentials": {
+    "admin": "superadmin@ooredoo.tn / SuperAdmin@2025"
+  },
+  "seed_data_creation": "No new seed data. Used existing production data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "ML Merchant Recommendation Dashboard fully tested. All features verified: KPIs (576 merchants, 19249 profiles, 5+ interactions), Popular merchants panel with ranked list, Personalized search with ML Model tag, Category filter, Retrain button, Model performance panel (NDCG@5=100%, NDCG@10=100%), Interaction stats table. Menu link 'Recommandations Marchands' accessible from main dashboard dropdown.",
+  "features_verified": {
+    "GET /api/merchant-recommendations/stats": "PASS - Returns active_merchants=576, profiled_users=19249, total_interactions",
+    "GET /api/merchant-recommendations/health": "PASS - Returns status=ready, model_loaded=true, trained_at, eval_results",
+    "POST /api/merchant-recommendations (client_id=114218)": "PASS - Returns ML-scored personalized recommendations",
+    "POST /api/merchant-recommendations (client_id=0)": "PASS - Returns cold-start popularity-based recommendations (not error)",
+    "POST /api/merchant-recommendations/track": "PASS - Tracks interaction successfully",
+    "GET /admin/merchant-recommendations": "PASS - Dashboard page loads with all components",
+    "GET /admin/merchant-recommendations/popular": "PASS - Returns top popular merchants with rank and score",
+    "POST /admin/merchant-recommendations/recommend": "PASS - Returns personalized recommendations via Laravel",
+    "GET /admin/merchant-recommendations/health": "PASS - Returns model health status",
+    "Dashboard KPIs 4-column grid": "PASS - Shows Model Status, 576 Merchants, 19249 Profiles, Interactions",
+    "Popular merchants ranked list": "PASS - Shows gold/silver/bronze rank badges (1,2,3...)",
+    "Search by client ID": "PASS - Returns personalized results with 'ML Model' tag",
+    "Category filter dropdown": "PASS - Populated with categories from merchants",
+    "Retrain button": "PASS - Visible and clickable",
+    "Menu link in dropdown": "PASS - 'Recommandations Marchands' link present and navigates correctly"
+  }
+}
