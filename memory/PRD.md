@@ -16,63 +16,51 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. Inclu
 ### Core Dashboard (DONE)
 - Main + Sub-store dashboards with KPIs, merchants, subscriptions, period comparison, export
 
-### ML Pipeline v1 - Churn Prediction (DONE)
-- Feature extraction, LightGBM training, A/B testing, ML Dashboard UI
-
-### AI Weekly Reporting (DONE)
-- Automated reports, multiple profiles, ML + merchant reco enrichment
-
-### Pluxee B2B Campaign Support (DONE)
-- Campaign dropdown with filtering per campaign via carte_recharge chain
-- `applyPluxeeCampaignFilter` applied to all 16 Pluxee methods
-- Distribué: uses `card_generated_number` from `carte_recharge` when campaign selected
-- Other KPIs: filters clients via `carte_recharge_client → carte_recharge_code → carte_recharge`
-
-### Sub-Store Dashboard Refactoring (DONE)
-- 5 split endpoints with Promise.allSettled
-- 8 Merchant KPIs fully implemented
-- Redis caching: CACHE_DRIVER=redis -> 14x faster
-
 ### ML Merchant Recommendation Engine (DONE - Optimized 2026-04-02)
 - LightGBM LambdaRank Ranker with 28 features
-- FastAPI endpoints with detailed score explanations
-- Batch scoring (N+1 queries eliminated → single batch prediction)
-- Training optimized: numpy sampling replaces CROSS JOIN + ORDER BY RAND() (~10x faster)
-- User context returned (profile summary, loyalty score, etc.)
+- Batch scoring (N+1 queries eliminated)
+- Training optimized: numpy sampling replaces CROSS JOIN + ORDER BY RAND()
 - Score normalization 0-100 for readability
-- Detailed explanation per recommendation (factors, interpretation, model type)
-- Cold-start fallback for new users (popularity-based)
+- Detailed explanation per recommendation (summary, factors, details, model_type)
+- User context in response (profile summary, loyalty, visits)
+- Cold-start fallback with normalized popularity scores
+- Filters: exclude_visited, category_id
+- Admin dashboard + Sub-Store widget with explanations displayed
+- API tested: 20/20 tests passed (iteration_22)
+
+### Pluxee Campaign Filtering (DONE - 2026-04-02)
+- `applyPluxeeCampaignFilter` applied to all 16 Pluxee methods
+- Campaign parameter flows through all 5 split API endpoints
+- Cache keys include campaign for proper invalidation
 
 ### Bug Fixes (2026-04-02)
-- Category distribution UTILISATION=0: frontend read `utilizations` but backend sent `transactions`
-- Campaign selection not updating data: added `campaign` param to all 5 API split endpoints
-- Default date changed from 30 days to 365 days (1 year)
-- Retrain 504 timeout: JS calls FastAPI directly, synchronous with 600s timeout
+- Category distribution UTILISATION=0: frontend read `utilizations` → fixed to `transactions`
+- Campaign selection not updating data: campaign param added to all APIs
+- Default date: 30 days → 365 days
+- Retrain 504 timeout: synchronous FastAPI, 600s timeout
+- Score display: raw score → normalized 0-100 in both dashboards
+- Fallback scores: were all 0 → now properly distributed 0-100
 
 ## ML Recommendation - Score Explanation
+### Score:
+- **Normalisé (0-100)**: Position relative. 100 = meilleure correspondance, 0 = plus faible
+- **Source**: `ml_model` = ML personnalisé, `fallback_popularity` = popularité (nouveaux clients)
 
-### What the score means:
-- **Score brut**: Output of LightGBM LambdaRank model. Higher = more relevant for this specific user
-- **Score normalisé (0-100)**: Relative ranking among all active merchants. 100 = best match, 0 = least match
-- **Source**: `ml_model` = personalized ML prediction, `fallback_popularity` = popular merchants (new users)
+### 28 Features:
+1. User-Merchant (6): visit_count, unique_promotions, recency, frequency, days_since_last
+2. User Profile (10): total_visits, unique_merchants/categories, loyalty, subscription, gender, age
+3. Merchant (11): promotions, discount, popularity, visits, premium, featured, locations
+4. Cross (1): same_fav_category
 
-### 28 Features used by the model:
-1. **User-Merchant interaction** (6): visit_count, unique_promotions_used, days_since_last_visit, avg_days_between_visits, recency_score, frequency_score
-2. **User profile** (10): total_visits, unique_merchants, unique_categories, days_since_last_activity, avg_visits, category_diversity, loyalty_score, subscription_tier, gender, age
-3. **Merchant characteristics** (11): active/total promotions, avg/max discount, total_visits, unique_visitors, popularity_score, avg_visits_per_user, is_featured, is_premium, location_count
-4. **Cross-feature** (1): same_fav_category (user's favorite category matches merchant)
+### Explanation object:
+- `summary`: interpretation textuelle du score
+- `factors`: liste des facteurs clés (historique, catégorie, promos, popularité)
+- `details`: précisions sur les boosts de score
+- `score_interpretation`: explication technique du score brut vs normalisé
+- `model_type`: LightGBM LambdaRank
 
-### Why merchant X is recommended for client Y:
-The model learns patterns from 139K+ training samples:
-- Positive samples: real user-merchant visits (relevance 1-4 based on visit frequency)
-- Negative samples: random user-merchant pairs with no interaction (relevance 0)
-- The model learns which combinations of user profile + merchant characteristics predict future visits
-
-## Test Results (2026-04-02):
-- Client 118580 (555 visites, 252 marchands, premium): ML model correctly recommends frequently visited merchants with high scores
-- Client 130212 (137 visites, 1 marchand, Femme): ML recommends her single visited merchant #1, then diversification in same category
-- Client 49949 (115 visites, 12 marchands, diversifié): Mix of familiar merchants and category-matched discoveries
-- Client 49949 with exclude_visited: New merchants prioritized by category match and promotions
+## Test Reports
+- iteration_22: Merchant Recommendations API 20/20 (100%)
 
 ## Pending / Backlog
 - P2: Client-facing recommendation widget for end users (mobile app/web)
