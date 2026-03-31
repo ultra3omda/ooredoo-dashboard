@@ -1,13 +1,14 @@
 # Club Privileges Dashboard - PRD
 
 ## Original Problem Statement
-High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-powered predictive recommendations inspired by AWS Personalize. Merchant Intelligence powered by Gemini AI.
+High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-powered predictive recommendations inspired by AWS Personalize. Merchant Intelligence powered by Gemini AI. Digital Presence Scoring with real web scraping.
 
 ## Tech Stack
 - **Backend**: Laravel 10, FastAPI (Python), Redis Cache
 - **Database**: MySQL (remote)
 - **ML**: LightGBM LambdaRank + Exploration/Exploitation (28 features)
-- **AI**: Gemini 2.5 Flash (Emergent LLM Key) for Merchant Intelligence, GPT-4o for AI Suggestions
+- **AI**: Gemini 2.5 Flash (Emergent LLM Key) for Merchant Intelligence + Digital Audit
+- **Scraping**: httpx + BeautifulSoup (real web/social scraping)
 - **Frontend**: Blade templates, Vanilla JS, Chart.js
 
 ## Implemented Features
@@ -15,62 +16,41 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 ### Core Dashboard (DONE)
 - Main + Sub-store dashboards, KPIs, merchants, subscriptions, period comparison, export
 - Pluxee campaign filtering (16 methods with `applyPluxeeCampaignFilter`)
-- Default date: 365 days
 
 ### ML Recommendation Engine v2.0 — AWS Personalize-inspired (DONE)
 - Types: DISCOVERY, RE_ENGAGEMENT, LOYALTY, TRENDING
-- "Because you visited X" contextual linking
-- Collaborative signal, Exploration/Exploitation (15%)
+- "Because you visited X" contextual linking, Collaborative signals
 - Score normalization 0-100, Cold-start fallback
 
 ### P2: Client-Facing Recommendation Widget (DONE)
-- GET /api/merchant-recommendations/widget/{client_id} — JSON
-- GET /api/merchant-recommendations/widget/{client_id}/html — Embeddable HTML
+- GET /api/merchant-recommendations/widget/{client_id} — JSON + HTML
 
 ### Merchant Intelligence Engine (DONE)
-- GET /api/merchant-intelligence/analyze — Traffic analysis + anomaly detection
-- GET /api/merchant-intelligence/digest — Boost/Watch/Performers classification
-- POST /api/merchant-intelligence/report — Gemini AI commercial recommendations
-- GET /api/merchant-intelligence/report/html — Full HTML intelligence report
-- GET /api/merchant-intelligence/weekly-email-preview — Preview email hebdomadaire
+- Analyze, Digest, Report (Gemini AI), Report HTML, Weekly Email Preview
 
 ### P3: Analytics Temporel (DONE)
-- GET /api/merchant-recommendations/stats/timeline?days=30|60|90
-- Chart.js line chart (interactions/jour par type) + doughnut (categories)
-- Source breakdown (ML vs organic vs A/B)
-- Dashboard: period selector (30/60/90j), real-time Chart.js rendering
+- Timeline 30/60/90 days with Chart.js, Source breakdown, Category doughnut
 
-### P3: A/B Test Framework — ML vs Popularity (DONE)
-- GET /api/merchant-recommendations/ab-test/{client_id} — Serve reco via A/B
-- GET /api/merchant-recommendations/ab-test/results — Uplift metrics
-- Deterministic assignment via MD5 hash (50/50 split)
-- Tracks impressions, clicks, redeems per group
-- Calculates CTR, conversion rate, uplift, winner
-- Dashboard: KPI cards (winner, uplift CTR, uplift conversion), comparison table
+### P3: A/B Test Framework (DONE)
+- ML Model vs Popularity, Deterministic MD5 hash assignment
+- Uplift metrics: CTR, Conversion Rate, Winner detection
+
+### Digital Presence Scoring (DONE - NEW)
+- **Real web scraping** of merchant websites, Facebook, Instagram, Google
+- Score 0-100 with breakdown: Website (30pts), Facebook (25pts), Instagram (25pts), Google (20pts)
+- Levels: EXCELLENT (70+), BON (50-69), MOYEN (30-49), FAIBLE (<30)
+- Per-merchant AI audit via Gemini with:
+  - Diagnostic, Points forts/faibles
+  - Prioritized recommendations (P0/P1/P2) per canal
+  - Score potentiel, Strategie de contenu
+- Dashboard admin: Scanner button, KPI cards, sortable table, modal audit overlay
+- HTML report standalone page
 
 ### Weekly Reports with Intelligence Integration (DONE)
 - gatherMerchantIntelligenceData() calls FastAPI digest endpoint
 - Intelligence data injected into CEO, Marketing, Associe report prompts
-- AI suggestions include merchant boost/watch/performer insights
-
-### Admin Dashboard — Merchant Recommendations (DONE)
-- KPIs: model status, active merchants, profiled users, interactions
-- Personalized recommendations search with user context
-- Popular merchants panel
-- Interaction stats table (7 days)
-- Model performance (NDCG@5, NDCG@10, top features)
-- Analytics Temporel (Chart.js 30/60/90 days)
-- A/B Test results panel
-- Intelligence Marchands digest + links to full report / email preview
-
-### Test Reports
-- iteration_22: 20/20 ML API tests
-- iteration_23: 37/37 AWS Personalize features + regression (100%)
-- iteration_24: 18/18 Widget P2 + Intelligence + regression (100%)
-- iteration_25: 23/23 Analytics Temporel + A/B Test + Email Preview + regression (100%)
 
 ## All API Endpoints
-- POST /api/report-ai-suggestions
 - POST /api/merchant-recommendations
 - GET /api/merchant-recommendations/explain/{client_id}
 - GET /api/merchant-recommendations/health
@@ -88,7 +68,18 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - POST /api/merchant-intelligence/report
 - GET /api/merchant-intelligence/report/html
 - GET /api/merchant-intelligence/weekly-email-preview
+- GET /api/merchant-intelligence/digital-scores?limit=N
+- GET /api/merchant-intelligence/digital-score/{partner_id}
+- POST /api/merchant-intelligence/digital-audit/{partner_id}
+- GET /api/merchant-intelligence/digital-scores/html?limit=N
 - /{path:path} — Proxy catch-all to Laravel (MUST be last)
+
+### Test Reports
+- iteration_22: 20/20 ML API tests (100%)
+- iteration_23: 37/37 AWS Personalize features (100%)
+- iteration_24: 18/18 Widget P2 + Intelligence (100%)
+- iteration_25: 23/23 Analytics Temporel + A/B Test + Email Preview (100%)
+- iteration_26: 10/10 Digital Scoring + scraping + Gemini audit (100%)
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
