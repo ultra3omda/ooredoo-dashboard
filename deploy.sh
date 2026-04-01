@@ -48,7 +48,7 @@ if [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 fi
 
-pip install -r requirements.txt --quiet
+pip install -r requirements.txt --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ --quiet
 
 sudo supervisorctl restart fastapi_dashboard
 
