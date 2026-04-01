@@ -59,7 +59,19 @@
 .feature-bar-fill { height: 100%; border-radius: 4px; background: var(--brand-primary); transition: width 0.5s ease; }
 
 @media (max-width: 1024px) { .reco-grid { grid-template-columns: repeat(2, 1fr); } .reco-layout { grid-template-columns: 1fr; } }
-@media (max-width: 600px) { .reco-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { 
+    .reco-grid { grid-template-columns: 1fr 1fr; gap: 8px; } 
+    .reco-kpi { padding: 12px; }
+    .reco-kpi-value { font-size: 20px; }
+    .reco-kpi-label { font-size: 10px; }
+    .reco-search-box { flex-direction: column; }
+    .reco-search-box input, .reco-search-box select { width: 100%; }
+    .merchant-card { flex-wrap: wrap; padding: 12px; gap: 10px; }
+    .merchant-score { min-width: auto; }
+    .feature-bar-name { min-width: 100px; font-size: 11px; }
+    .stats-table { font-size: 11px; }
+    .stats-table th, .stats-table td { padding: 8px 6px; }
+}
 
 .btn-sm { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--card); color: var(--text-primary); cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
 .btn-sm:hover { background: var(--table-stripe); }

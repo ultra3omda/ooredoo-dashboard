@@ -32,11 +32,19 @@
 .segment-item:last-child { border-bottom: none; }
 
 @media (max-width: 768px) {
-    .ml-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .ml-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .ml-grid { grid-template-columns: 1fr; }
+    .ml-kpi { padding: 14px; }
+    .ml-kpi-value { font-size: 20px; }
+    .rec-card { flex-direction: column; text-align: center; }
+    .rec-impact { min-width: auto; }
+    .rec-actions { justify-content: center; }
 }
 @media (max-width: 480px) {
-    .ml-kpi-grid { grid-template-columns: 1fr; }
+    .ml-kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .ml-kpi { padding: 10px; }
+    .ml-kpi-value { font-size: 18px; }
+    .ml-kpi-label { font-size: 10px; }
 }
 </style>
 @endsection

@@ -258,6 +258,15 @@
         }
         
         .hidden { display: none; }
+        
+        @media (max-width: 480px) {
+            .otp-container { padding: 28px 20px; margin: 12px; border-radius: 16px; }
+            .otp-title { font-size: 20px; }
+            .otp-subtitle { font-size: 12px; }
+            .form-input, .otp-input { padding: 10px; font-size: 20px; }
+            .btn { padding: 14px 20px; font-size: 15px; }
+            .otp-group { gap: 8px; }
+        }
     </style>
 </head>
 <body>

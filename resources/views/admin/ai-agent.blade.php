@@ -155,6 +155,18 @@
             background: #f8fafc;
             font-weight: 600;
         }
+        
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .container-fluid { padding: 8px !important; }
+            .chat-container { height: 60vh; }
+            .d-flex.justify-content-between { flex-direction: column; gap: 8px; }
+            h2 { font-size: 18px; }
+            .card { margin-bottom: 12px; }
+            .card-body { padding: 12px; }
+            .markdown-content table { font-size: 12px; }
+            .markdown-content th, .markdown-content td { padding: 6px 8px; }
+        }
     </style>
 </head>
 <body>

@@ -48,6 +48,19 @@
 .toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; z-index: 2000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 .toast.success { background: #16a34a; color: white; }
 .toast.error { background: #dc2626; color: white; }
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .pluxee-header { flex-direction: column; gap: 12px; text-align: center; }
+    .pluxee-grid { grid-template-columns: 1fr; gap: 12px; }
+    .campaign-stats { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+    .campaign-stat-value { font-size: 16px; }
+    .campaign-card-header { padding: 12px 14px; }
+    .campaign-users { padding: 10px 14px; }
+    .user-row { flex-wrap: wrap; gap: 6px; }
+    .user-actions { width: 100%; justify-content: flex-end; }
+    .modal-box { padding: 18px; width: 95%; }
+}
 </style>
 @endsection
 

@@ -843,6 +843,18 @@
                 transform: translateY(0);
             }
         }
+        
+        /* Mobile Small */
+        @media (max-width: 480px) {
+            .container { padding: 8px; }
+            .summary-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .summary-stat { padding: 12px; }
+            .summary-stat .stat-value { font-size: 20px; }
+            .page-header h1 { font-size: 18px; }
+            .header-actions { flex-wrap: wrap; gap: 6px; }
+            .header-actions .btn { font-size: 12px; padding: 8px 12px; }
+            .tab-button { padding: 10px; font-size: 12px; }
+        }
     </style>
 </head>
 <body>

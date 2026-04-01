@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div style="max-width: 500px; margin: 40px auto; padding: 20px;">
+<div style="max-width: 500px; margin: 20px auto; padding: 12px;">
     <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <h2 style="margin: 0 0 24px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
             🔒 Changer mon mot de passe

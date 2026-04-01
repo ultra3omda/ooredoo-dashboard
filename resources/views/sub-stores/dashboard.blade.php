@@ -332,8 +332,13 @@
     
     @media (max-width: 480px) {
       .kpi-card {
-        width: calc(100% - 12px); /* 1 par ligne */
-        flex: 0 0 calc(100% - 12px);
+        width: calc(50% - 8px); /* 2 par ligne sur mobile */
+        flex: 0 0 calc(50% - 8px);
+        min-height: 90px;
+        padding: 12px 10px;
+      }
+      #kpisGrid {
+        gap: 8px;
       }
     }
     
@@ -802,7 +807,7 @@
       .chart-card { min-height: 220px; }
       .container { padding: 12px 8px; }
       .nav-tabs { padding: 4px; margin-bottom: 12px; }
-      .nav-tab { padding: 6px 8px; font-size: 12px; }
+      .nav-tab { padding: 6px 8px; font-size: 12px; flex: 0 0 auto; }
     }
 
     /* Merchants Section Styles */
@@ -1555,6 +1560,168 @@
         justify-content: center;
             }
         }
+
+    /* =============================================
+       COMPREHENSIVE MOBILE FIXES
+       ============================================= */
+    
+    /* --- Mobile: Header compact --- */
+    @media (max-width: 600px) {
+      .header {
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+        text-align: center;
+      }
+      .header-left {
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+      }
+      .header h1 {
+        font-size: 16px;
+        line-height: 1.3;
+      }
+      .logo {
+        width: 100px;
+        height: 35px;
+      }
+      .header-right {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 12px;
+      }
+      .user-menu {
+        padding: 6px 10px;
+      }
+      .user-name { font-size: 12px; }
+      .user-role { font-size: 10px; }
+      .admin-btn, .logout-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+      }
+    }
+    
+    /* --- Mobile: KPIs 2 per row compact --- */
+    @media (max-width: 480px) {
+      .kpi-card {
+        width: calc(50% - 8px) !important;
+        flex: 0 0 calc(50% - 8px) !important;
+        min-height: 90px !important;
+        padding: 12px 10px !important;
+      }
+      #kpisGrid {
+        gap: 8px !important;
+      }
+      .kpi-icon { font-size: 22px !important; }
+      .kpi-value { font-size: 20px !important; }
+      .kpi-title { font-size: 9px !important; letter-spacing: 0.3px !important; }
+      .kpi-delta { font-size: 10px !important; min-width: 50px !important; max-width: 70px !important; padding: 2px 6px !important; }
+      .overview-kpi { padding: 12px !important; gap: 10px !important; }
+      .overview-kpi .kpi-icon { font-size: 20px !important; width: 30px !important; }
+      .overview-kpi .kpi-value { font-size: 18px !important; }
+      .overview-kpi .kpi-title { font-size: 11px !important; margin-bottom: 4px !important; }
+    }
+
+    /* --- Mobile: Nav tabs scrollable --- */
+    @media (max-width: 600px) {
+      .nav-tabs {
+        padding: 4px;
+        margin-bottom: 12px;
+        gap: 2px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        flex-wrap: nowrap;
+      }
+      .nav-tabs::-webkit-scrollbar { display: none; }
+      .nav-tab {
+        padding: 8px 12px;
+        font-size: 12px;
+        flex: 0 0 auto;
+        white-space: nowrap;
+      }
+    }
+
+    /* --- Mobile: Period selection compact --- */
+    @media (max-width: 600px) {
+      .period-selection-card { padding: 12px; margin-bottom: 16px; }
+      .period-grid { grid-template-columns: 1fr; gap: 12px; }
+      .date-inputs { flex-direction: column; gap: 6px; }
+      .date-input { padding: 8px; font-size: 13px; }
+      .date-separator { text-align: center; }
+      .substore-selector { padding: 12px; margin-bottom: 16px; }
+    }
+
+    /* --- Mobile: Charts responsive --- */
+    @media (max-width: 600px) {
+      .grid:not(#kpisGrid) {
+        display: flex !important;
+        flex-direction: column;
+        gap: 12px !important;
+      }
+      .chart-card {
+        min-height: 220px !important;
+        padding: 14px !important;
+      }
+      .chart-container { height: 200px !important; }
+      .chart-title { font-size: 14px !important; margin-bottom: 10px !important; }
+      .table-card { padding: 12px !important; margin: 0 !important; border-radius: 10px !important; }
+    }
+    
+    /* --- Mobile: Tables responsive --- */
+    @media (max-width: 600px) {
+      .enhanced-table { min-width: unset !important; }
+      .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      table th, table td { padding: 8px 6px; font-size: 12px; }
+    }
+    
+    /* --- Mobile: Merchants KPIs compact --- */
+    @media (max-width: 480px) {
+      .merchants-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+      .merchants-kpi { min-height: 80px !important; padding: 12px !important; gap: 10px !important; }
+      .merchants-kpi .kpi-icon { font-size: 20px !important; width: 30px !important; }
+      .merchants-kpi .kpi-value { font-size: 20px !important; }
+      .merchants-kpi .kpi-title { font-size: 11px !important; margin-bottom: 4px !important; }
+    }
+    
+    /* --- Mobile: Users KPIs compact --- */
+    @media (max-width: 480px) {
+      .users-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+      .users-kpi { min-height: 80px !important; padding: 12px !important; }
+      .users-kpi .kpi-icon { font-size: 18px !important; margin-right: 8px !important; }
+      .users-kpi .kpi-value { font-size: 20px !important; }
+      .users-kpi .kpi-title { font-size: 10px !important; margin-bottom: 4px !important; }
+    }
+    
+    /* --- Mobile: Tooltip --- */
+    @media (max-width: 600px) {
+      .tooltip .tooltiptext { width: 250px; font-size: 12px; padding: 12px; }
+    }
+    
+    /* --- Mobile: Container --- */
+    @media (max-width: 480px) {
+      .container { padding: 8px !important; }
+    }
+    
+    /* --- Mobile: Pagination compact --- */
+    @media (max-width: 480px) {
+      .pagination-row { gap: 8px; }
+      .pagination-info { font-size: 11px; min-width: auto; }
+      .pagination-controls .btn { padding: 4px 8px; font-size: 10px; min-width: 60px; }
+      .page-numbers { gap: 2px; margin: 0 4px; }
+    }
+
+    /* --- Mobile: Profile dropdown fix --- */
+    @media (max-width: 600px) {
+      #profileDropdown {
+        left: 10px !important;
+        right: 10px !important;
+        top: auto !important;
+        min-width: auto !important;
+      }
+    }
     </style>
 </head>
 <body>

@@ -2384,4 +2384,60 @@
       letter-spacing: 1px;
       font-family: 'Manrope', sans-serif;
     }
+
+    /* =============================================
+       ENHANCED MOBILE FIXES
+       ============================================= */
+    @media (max-width: 480px) {
+      /* Header stacks vertically */
+      .header {
+        flex-direction: column !important;
+        gap: 8px !important;
+        padding: 10px !important;
+        text-align: center;
+      }
+      .header-left {
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+        width: 100%;
+      }
+      .header-right {
+        justify-content: center;
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .header h1 { font-size: 14px !important; }
+      .logo { width: 80px !important; }
+      .user-menu { padding: 4px 8px; }
+      .user-name { font-size: 11px; }
+      .user-role { font-size: 9px; }
+      .user-info { align-items: center; text-align: center; }
+      
+      /* Profile dropdown fits screen */
+      #profileDropdown {
+        left: 10px !important;
+        right: 10px !important;
+        min-width: auto !important;
+        max-width: none !important;
+      }
+      
+      /* KPI cards compact 2 per row */
+      .kpi-card {
+        padding: 10px !important;
+        min-height: 65px !important;
+        border-radius: 10px !important;
+      }
+      .kpi-value { font-size: clamp(16px, 5vw, 20px) !important; }
+      .kpi-label { font-size: 0.6rem !important; letter-spacing: 0.5px !important; }
+      .kpi-change { font-size: 10px !important; }
+      
+      /* Grid */
+      .main-grid, .grid { gap: 8px !important; }
+      
+      /* Charts */
+      .chart-card { min-height: 200px !important; padding: 12px !important; }
+      .chart-title { font-size: 12px !important; }
+    }
   </style>
