@@ -25,48 +25,32 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 ### Permission Audit Log (DONE)
 ### Navigation Unifiee (DONE)
 ### Edit User Form - Sub-Store vs Operateur (DONE)
-
 ### Formulaire Creation Utilisateur - Logique Dynamique (DONE)
 ### Re-invitation & Suppression Invitations (DONE)
 
 ### Responsive Mobile - TOUTES les pages (DONE)
 **Date:** Avril 2026
-**Pattern CSS:** Tables -> Card layout mobile, KPIs 2-per-row, Nav tabs scrollable, Forms 1 colonne
+- Admin pages: card layout mobile, KPIs 2-per-row, nav tabs scrollable
+- Dashboards: Sub-stores + Principal - header stack, KPIs compact, charts responsive
+- Auth pages: 6 pages avec padding compact
+- Admin restantes: 5 pages avec responsive enrichi
 
-**Pages corrigees (Phase 1 - Admin):**
-- invitations/index, users/index, permissions, audit-logs/index - Card layout avec data-label
-- users/edit - CSS responsive ajoute
-- users/create, invitations/create - Grid 1 colonne
-- _admin-header - Fix overflow 480px
-
-**Pages corrigees (Phase 2 - Dashboards):**
-- sub-stores/dashboard.blade.php - Header stack, KPIs calc(50% - 8px), .grid:not(#kpisGrid) pour charts column, tabs overflow-x auto + flex-wrap nowrap
-- dashboard.css - Header stack, KPIs compact, charts responsive
-- Eklektik dashboard - Deja responsive
-
-**Pages corrigees (Phase 3 - Auth):**
-- login, forgot-password, reset-password, first-login, otp-request, otp-verify - Padding compact 480px
-- change-password - Margin/padding reduits
-
-**Pages corrigees (Phase 4 - Admin restantes):**
-- layouts/eklektik-config - Nav pills stack, cards padding
-- pluxee-users - Grid 1 colonne, user-row wrap
-- ai-agent - Container padding, chat height
-- ml-dashboard - KPIs 2 per row compact
-- merchant-recommendations - Grid 2 col, cards wrap
-- timwe-diagnostic - Summary 2 col, tab buttons compact
-
-**Tests:** 
-- iteration_35: 13/13 (100%) - Admin pages mobile + desktop regression
-- iteration_36: 11/11 (100%) - All pages mobile + desktop regression
+### Fix: Dates compactes + Message "Pas de donnees" (DONE)
+**Date:** Avril 2026
+- Section dates: `.date-inputs { flex-direction: row }` sur mobile (dates en ligne au lieu de stackees)
+- Fonction `showNoDataMessage(canvasId, message)`: remplace canvas vide par message SVG + texte
+- Applique a: inscriptionsChart + expirationsChart (si donnees vides ou toutes a 0)
+- Message: icone SVG graphique + "Aucune donnee disponible..." + sous-titre "Les donnees apparaitront..."
 
 ### Donnees abonnements a expiration
-**Statut:** DONNEES REELLES de la base client_abonnement (champ client_abonnement_expiration)
-Les 38 expirations Mars 2026 et 1 en Avril 2026 sont des donnees reelles.
+**Statut:** DONNEES REELLES de la table `client_abonnement` (champ `client_abonnement_expiration`)
 
 ### CI/CD Pipeline (DONE)
-- `.github/workflows/deploy.yml` + `deploy.sh` pour branche `emergent`
-- Fonctionnel (confirme par utilisateur)
+
+## Test Reports
+- iteration_34: 10/10 - User creation + invitation
+- iteration_35: 13/13 - Admin mobile + desktop regression  
+- iteration_36: 11/11 - All pages mobile + desktop regression
 
 ## Backlog
 - Aucune tache prioritaire restante

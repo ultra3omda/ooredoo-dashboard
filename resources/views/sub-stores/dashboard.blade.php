@@ -1646,12 +1646,14 @@
 
     /* --- Mobile: Period selection compact --- */
     @media (max-width: 600px) {
-      .period-selection-card { padding: 12px; margin-bottom: 16px; }
-      .period-grid { grid-template-columns: 1fr; gap: 12px; }
-      .date-inputs { flex-direction: column; gap: 6px; }
-      .date-input { padding: 8px; font-size: 13px; }
-      .date-separator { text-align: center; }
-      .substore-selector { padding: 12px; margin-bottom: 16px; }
+      .period-selection-card { padding: 12px; margin-bottom: 12px; }
+      .period-grid { grid-template-columns: 1fr; gap: 10px; }
+      .period-section { gap: 6px; }
+      .date-inputs { flex-direction: row; gap: 8px; align-items: center; }
+      .date-input { padding: 8px 10px; font-size: 13px; }
+      .date-separator { font-size: 12px; flex-shrink: 0; }
+      .period-label { font-size: 13px; margin-bottom: 2px; }
+      .substore-selector { padding: 12px; margin-bottom: 12px; }
     }
 
     /* --- Mobile: Charts responsive --- */
@@ -3802,18 +3804,28 @@
         createInscriptionsBarChart(data.inscriptionsTrend);
       } else {
         debugLog('❌ Pas de données inscriptionsTrend disponibles');
-        // Ne pas créer de données par défaut - laisser le graphique vide
+        showNoDataMessage('inscriptionsChart', 'Aucune donnée d\'inscription disponible pour cette période');
       }
 
       // Expirations Chart
       if (data.expirationsByMonth && data.expirationsByMonth.length > 0) {
         createExpirationsChart(data.expirationsByMonth);
+      } else {
+        showNoDataMessage('expirationsChart', 'Aucune donnée d\'expiration disponible pour cette période');
       }
     }
 
     function createInscriptionsBarChart(data) {
       const ctx = document.getElementById('inscriptionsChart');
       if (!ctx) return;
+
+      // Vérifier si toutes les valeurs sont 0
+      const values = data.map(item => item.value || item.count || 0);
+      const allZero = values.every(v => v === 0);
+      if (allZero) {
+        showNoDataMessage('inscriptionsChart', 'Aucune inscription enregistrée pour cette période');
+        return;
+      }
 
       if (inscriptionsChart) {
         inscriptionsChart.destroy();
@@ -4117,6 +4129,35 @@
         row.insertCell(5).textContent = store.manager || 'Non spécifié';
       });
     }
+
+    /**
+     * Affiche un message "Pas de données" à la place d'un canvas de graphique vide
+     */
+    function showNoDataMessage(canvasId, message) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      
+      const container = canvas.parentElement;
+      canvas.style.display = 'none';
+      
+      // Supprimer un message existant
+      const existing = container.querySelector('.no-data-message');
+      if (existing) existing.remove();
+      
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'no-data-message';
+      msgDiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:#94a3b8;text-align:center;gap:12px;';
+      msgDiv.innerHTML = `
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v18h18"/>
+          <path d="M7 16l4-8 4 4 4-6"/>
+        </svg>
+        <div style="font-size:14px;font-weight:500;">${message}</div>
+        <div style="font-size:12px;color:#cbd5e1;">Les données apparaîtront une fois les abonnements activés</div>
+      `;
+      container.appendChild(msgDiv);
+    }
+
 
 
     function formatNumber(num) {
