@@ -834,40 +834,6 @@
         grid-template-columns: repeat(2, 1fr);
       }
     }
-    
-    @media (max-width: 600px) {
-      .merchants-kpis-row {
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-      .merchants-kpi { 
-        min-height: 90px; 
-        padding: 12px 10px;
-        gap: 8px;
-        flex-direction: column;
-        align-items: flex-start;
-        text-align: left;
-      }
-      .merchants-kpi .kpi-icon { font-size: 18px !important; width: auto !important; margin-bottom: 2px; }
-      .merchants-kpi .kpi-title { font-size: 9px !important; line-height: 1.3; word-break: break-word; }
-      .merchants-kpi .kpi-value { font-size: 22px !important; }
-      .merchants-kpi .kpi-delta { font-size: 10px; }
-    }
-    
-    @media (max-width: 480px) {
-      .merchants-kpis-row {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-      }
-      .merchants-kpi { 
-        min-height: 80px; 
-        padding: 10px 8px;
-        gap: 6px;
-      }
-      .merchants-kpi .kpi-icon { font-size: 16px !important; }
-      .merchants-kpi .kpi-title { font-size: 8px !important; }
-      .merchants-kpi .kpi-value { font-size: 18px !important; }
-    }
 
     /* Users Section Styles */
     .users-kpis-row {
@@ -935,48 +901,6 @@
       .users-kpis-row {
         grid-template-columns: repeat(2, 1fr);
       }
-    }
-    
-    @media (max-width: 600px) {
-      .users-kpis-row {
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-      .users-kpi { 
-        min-height: 90px; 
-        padding: 12px 10px;
-        flex-direction: column;
-        align-items: flex-start;
-        text-align: left;
-      }
-      .users-kpi .kpi-icon { 
-        font-size: 18px; 
-        margin-right: 0;
-        margin-bottom: 2px;
-      }
-      .users-kpi .kpi-title { font-size: 9px !important; line-height: 1.3; word-break: break-word; }
-      .users-kpi .kpi-value { font-size: 22px !important; }
-      .users-kpi .kpi-delta { font-size: 10px; }
-    }
-    
-    @media (max-width: 480px) {
-      .users-kpis-row {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-      }
-      .users-kpi { 
-        min-height: 80px; 
-        padding: 10px 8px;
-      }
-      .users-kpi .kpi-icon { 
-        font-size: 16px; 
-        margin-right: 0;
-      }
-      .users-kpi .kpi-title { 
-        font-size: 8px !important; 
-        margin-bottom: 4px;
-      }
-      .users-kpi .kpi-value { font-size: 18px !important; }
     }
 
     .merchants-kpi {
@@ -1319,6 +1243,43 @@
       display: inline-block;
     }
 
+
+    /* ===== MOBILE: Merchants & Users KPIs (AFTER base styles) ===== */
+    @media (max-width: 600px) {
+      .merchants-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+      .merchants-kpi { 
+        min-height: 80px !important; padding: 12px 10px !important; gap: 6px !important;
+        flex-direction: column !important; align-items: flex-start !important;
+        overflow: visible !important;
+      }
+      .merchants-kpi .kpi-icon { font-size: 16px !important; width: auto !important; flex-shrink: 0; }
+      .merchants-kpi .kpi-content { overflow: visible !important; min-width: 0 !important; width: 100% !important; }
+      .merchants-kpi .kpi-title { font-size: 9px !important; line-height: 1.3 !important; word-break: break-word !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; }
+      .merchants-kpi .kpi-value { font-size: 20px !important; white-space: normal !important; overflow: visible !important; }
+      .merchants-kpi .kpi-delta { font-size: 10px !important; }
+
+      .users-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+      .users-kpi { 
+        min-height: 80px !important; padding: 12px 10px !important;
+        flex-direction: column !important; align-items: flex-start !important;
+        overflow: visible !important;
+      }
+      .users-kpi .kpi-icon { font-size: 16px !important; margin-right: 0 !important; flex-shrink: 0; }
+      .users-kpi .kpi-content { overflow: visible !important; min-width: 0 !important; width: 100% !important; }
+      .users-kpi .kpi-title { font-size: 9px !important; line-height: 1.3 !important; word-break: break-word !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; }
+      .users-kpi .kpi-value { font-size: 20px !important; white-space: normal !important; overflow: visible !important; }
+      .users-kpi .kpi-delta { font-size: 10px !important; }
+
+      .overview-kpi {
+        padding: 12px 10px !important; gap: 8px !important;
+        overflow: visible !important;
+      }
+      .overview-kpi .kpi-icon { font-size: 18px !important; width: 24px !important; }
+      .overview-kpi .kpi-content { overflow: visible !important; }
+      .overview-kpi .kpi-title { font-size: 10px !important; word-break: break-word !important; white-space: normal !important; }
+      .overview-kpi .kpi-value { font-size: 18px !important; }
+    }
+
     /* Sub-store specific styles */
     .substore-header {
             display: flex;
@@ -1628,18 +1589,21 @@
         flex: 0 0 calc(50% - 8px) !important;
         min-height: 90px !important;
         padding: 12px 10px !important;
+        overflow: visible !important;
       }
       #kpisGrid {
         gap: 8px !important;
       }
       .kpi-icon { font-size: 22px !important; }
-      .kpi-value { font-size: 20px !important; }
-      .kpi-title { font-size: 9px !important; letter-spacing: 0.3px !important; }
+      .kpi-value { font-size: 20px !important; overflow: visible !important; white-space: normal !important; }
+      .kpi-title { font-size: 9px !important; letter-spacing: 0.3px !important; overflow: visible !important; white-space: normal !important; word-break: break-word !important; text-overflow: unset !important; }
       .kpi-delta { font-size: 10px !important; min-width: 50px !important; max-width: 70px !important; padding: 2px 6px !important; }
-      .overview-kpi { padding: 12px !important; gap: 10px !important; }
+      .kpi-content { overflow: visible !important; }
+      .overview-kpi { padding: 12px !important; gap: 10px !important; overflow: visible !important; }
       .overview-kpi .kpi-icon { font-size: 20px !important; width: 30px !important; }
       .overview-kpi .kpi-value { font-size: 18px !important; }
       .overview-kpi .kpi-title { font-size: 11px !important; margin-bottom: 4px !important; }
+      .overview-kpi .kpi-content { overflow: visible !important; }
     }
 
     /* --- Mobile: Nav tabs scrollable --- */
@@ -1705,6 +1669,36 @@
     /* --- Mobile: Container --- */
     @media (max-width: 480px) {
       .container { padding: 8px !important; }
+    }
+    
+    /* --- Mobile: Recommandations tab --- */
+    @media (max-width: 600px) {
+      .reco-kpis-row {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+      }
+      .reco-kpis-row .kpi-card {
+        padding: 12px 10px !important;
+        min-height: 80px !important;
+      }
+      .reco-kpis-row .kpi-title { font-size: 10px !important; }
+      .reco-kpis-row .kpi-value { font-size: 18px !important; }
+      .reco-panels-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+      }
+      #reco-client-results, #reco-popular-results { max-height: 300px !important; }
+    }
+    
+    /* --- Mobile: Tables (Merchant & Users) --- */
+    @media (max-width: 600px) {
+      .enhanced-table { min-width: unset !important; font-size: 12px; }
+      .enhanced-table th, .enhanced-table td { padding: 8px 6px; white-space: nowrap; }
+      .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .table-card { padding: 12px !important; }
+      .pagination-row { flex-direction: column; gap: 8px; align-items: center; }
+      .pagination-info { font-size: 11px; }
+      .pagination-controls .btn { padding: 4px 8px; font-size: 11px; }
     }
     
     /* --- Mobile: Pagination compact --- */
@@ -2193,7 +2187,7 @@
         </div>
         <div class="card kpi-card" data-testid="reco-kpi-merchants">
           <div class="kpi-content">
-            <div class="kpi-title">Marchands Catalogués</div>
+            <div class="kpi-title">Marchands Catalogues</div>
             <div class="kpi-value" id="reco-merchants">--</div>
           </div>
         </div>
@@ -2211,7 +2205,7 @@
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+      <div class="reco-panels-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
         <!-- Client Reco Search -->
         <div class="card" data-testid="reco-client-search">
           <div class="card-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
