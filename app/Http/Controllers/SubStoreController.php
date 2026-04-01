@@ -210,9 +210,12 @@ class SubStoreController extends Controller
     public function getExpirationsAsync(Request $request)
     {
         try {
-            $subStore = $request->input('sub_store', 'ALL');
-            $data = Cache::remember("expirations_{$subStore}", 600, function () use ($subStore) {
-                return $this->getExpirationsByMonth($subStore, 12);
+            $p = $this->normalizeSubStoreParams($request);
+            $subStore = $p['sub_store'];
+            $campaign = $this->currentCampaign;
+            $cacheKey = "expirations_{$subStore}_" . ($campaign ?: 'ALL');
+            $data = Cache::remember($cacheKey, 600, function () use ($subStore, $campaign) {
+                return $this->getExpirationsByMonth($subStore, 12, $campaign);
             });
             return response()->json(['expirationsByMonth' => $data]);
         } catch (\Exception $e) {
@@ -1014,7 +1017,7 @@ class SubStoreController extends Controller
         return ['level' => 'Faible', 'score' => max(5, $active * 5)];
     }
 
-    private function getExpirationsByMonth(string $ss, int $months): array
+    private function getExpirationsByMonth(string $ss, int $months, ?string $campaign = null): array
     {
         try {
             $start = Carbon::now()->subMonths($months)->startOfMonth();
@@ -1023,6 +1026,17 @@ class SubStoreController extends Controller
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
                 ->select(DB::raw("DATE_FORMAT(client_abonnement.client_abonnement_expiration, '%Y-%m') as ym"), DB::raw('COUNT(*) as total'));
+
+            // Apply campaign filter: only include clients linked to this campaign
+            if ($campaign) {
+                $q->whereIn('client.client_id', function ($sub) use ($campaign) {
+                    $sub->select('carte_recharge_client.client_id')
+                        ->from('carte_recharge_client')
+                        ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+                        ->where('carte_recharge.campain_name', $campaign);
+                });
+            }
+
             $this->applySubStoreFilter($q)
                 ->when($ss !== 'ALL', fn($q2) => $q2->where('stores.store_name', 'LIKE', "%$ss%"))
                 ->whereBetween('client_abonnement.client_abonnement_expiration', [$start, $end])

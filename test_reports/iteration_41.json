@@ -1,0 +1,136 @@
+{
+  "summary": "Comprehensive testing of campaign-level data filtering fix completed. All 3 roles tested (SuperAdmin, Admin Pluxee, Collaborateur). API endpoints and frontend behavior verified for expirations, KPIs, and stores ranking.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Recommandations tab KPIs",
+        "issues": ["KPI cards appear to have white background with white text in some cases - text visibility may be inconsistent. Computed styles show white text on white background but visual inspection shows some text is visible in orange/red."]
+      }
+    ]
+  },
+  "test_results": {
+    "api_expirations": {
+      "superadmin": {
+        "endpoint": "/sub-stores/api/expirations",
+        "months_with_data": 13,
+        "total_expirations": 5417,
+        "sample_data": [{"date": "Apr 2025", "value": 606}, {"date": "May 2025", "value": 392}, {"date": "Jun 2025", "value": 304}],
+        "status": "PASS - Returns 13 months of real data (5000+ total)"
+      },
+      "admin_pluxee": {
+        "endpoint": "/sub-stores/api/expirations",
+        "months_with_data": 2,
+        "total_expirations": 40,
+        "note": "pluxee_campaign_access=NULL so NOT filtered by campaign",
+        "status": "PASS - Returns data (not filtered)"
+      },
+      "collaborateur": {
+        "endpoint": "/sub-stores/api/expirations?sub_store=Club%20Privilèges%20By%20Pluxee",
+        "months_with_data": 0,
+        "total_expirations": 0,
+        "note": "Hutchinson campaign has 0 clients activated",
+        "status": "PASS - Returns empty array (CORRECT for Hutchinson)"
+      }
+    },
+    "api_split_stores": {
+      "superadmin": {
+        "endpoint": "/sub-stores/api/split/stores",
+        "campaign_filter": null,
+        "num_stores": 15,
+        "title": "Classement des Meilleurs Sub-Stores",
+        "status": "PASS - Returns 15 sub-stores with no campaign filter"
+      },
+      "admin_pluxee": {
+        "endpoint": "/sub-stores/api/split/stores",
+        "campaign_filter": null,
+        "num_stores": 1,
+        "title": "Classement des Meilleurs Sub-Stores",
+        "status": "PASS - No campaign filter applied"
+      },
+      "collaborateur": {
+        "endpoint": "/sub-stores/api/split/stores?campaign=Hutchinson+Tunisie+-+By+Pluxee",
+        "campaign_filter": "Hutchinson Tunisie - By Pluxee",
+        "data": [{"rank": 1, "name": "Hutchinson Tunisie - By Pluxee", "type": "campagne", "customers": 2013, "transactions": 0}],
+        "title": "Classement - Campagne Hutchinson Tunisie - By Pluxee",
+        "status": "PASS - Shows campaign ranking with 2013 cartes distribuées, 0 clients activés"
+      }
+    },
+    "api_split_kpis": {
+      "superadmin": {
+        "distributed": "varies by sub-store",
+        "inscriptions": "varies",
+        "activeUsers": "varies",
+        "status": "PASS"
+      },
+      "admin_pluxee": {
+        "distributed": 622,
+        "inscriptions": 608,
+        "activeUsers": "varies",
+        "status": "PASS"
+      },
+      "collaborateur": {
+        "distributed": 2013,
+        "inscriptions": 0,
+        "activeUsers": 0,
+        "note": "Hutchinson has 2013 cards distributed but 0 clients activated",
+        "status": "PASS - Correctly shows 2013 distributed, 0 inscriptions, 0 activeUsers"
+      }
+    },
+    "frontend_mobile_kpis": {
+      "viewport": "375x812",
+      "merchant_kpis": {
+        "all_widths": "175px",
+        "status": "PASS - All 8 KPIs are 175px wide (not 79px)"
+      },
+      "users_kpis": {
+        "all_widths": "175px",
+        "status": "PASS - All 8 KPIs are 175px wide"
+      }
+    },
+    "frontend_expirations_chart": {
+      "superadmin": {
+        "has_data": true,
+        "status": "PASS - Shows bars in chart"
+      },
+      "collaborateur": {
+        "has_data": false,
+        "message": "Aucune donnée d'expiration",
+        "status": "PASS - Shows 'Aucune donnée' message (correct for Hutchinson)"
+      }
+    },
+    "frontend_substores_tab": {
+      "superadmin": {
+        "title": "Classement des Meilleurs Sub-Stores",
+        "status": "PASS"
+      },
+      "collaborateur": {
+        "title": "Classement - Campagne Hutchinson Tunisie - By Pluxee",
+        "header_columns": ["RANG", "NOM DE LA CAMPAGNE", "TYPE", "CARTES DISTRIBUÉES", "CLIENTS ACTIVÉS", "SUB-STORE"],
+        "status": "PASS - Shows campaign-specific ranking"
+      }
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "superadmin": "superadmin@ooredoo.tn / SuperAdmin@2025",
+    "admin_pluxee": "admin.pluxee@test.com / Test@2025",
+    "collaborateur": "imededdine.essefi@gmail.com / Test@2025"
+  },
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "All campaign-level data filtering fixes verified: (1) Expirations API correctly filters by campaign for Collaborateur (returns empty for Hutchinson), (2) SuperAdmin sees 13 months with 5000+ expirations, (3) Admin Pluxee sees data without campaign filter (pluxee_campaign_access=NULL), (4) KPIs show correct values (Collaborateur: 2013 distributed, 0 inscriptions, 0 activeUsers), (5) Sub-Stores tab shows campaign-specific ranking for Collaborateur, (6) Mobile KPIs are 175px wide (not 79px). Previous iteration 39 passed 100%."
+}
