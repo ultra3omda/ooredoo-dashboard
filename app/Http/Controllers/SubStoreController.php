@@ -85,6 +85,8 @@ class SubStoreController extends Controller
                 $campaign = $allowedCampaigns[0];
             }
         }
+        // If no restrictions but campaign selected via dropdown, apply it too
+        // This allows SuperAdmin/Admin to filter by campaign when they choose one
 
         // Store campaign for use by Pluxee methods
         $this->currentCampaign = $campaign ?: null;
@@ -361,14 +363,14 @@ class SubStoreController extends Controller
         $transactions      = $this->getTransactionsWithCards($ss);
         $totalSubscriptions = $this->getTotalSubscriptions($ss);
         $activeUsersCohorte = $this->getActiveUsersWithCardsCohorte($ss, $sd, $ed);
-        $transactionsCohorte = $this->getTransactionsWithCardsCohorte($ss, $sd, $ed);
+        $clientsWithTransactions = $this->getUsersWithCardsCount($ss);
         $inscriptionsCohorte = $this->getInscriptionsWithCardsCohorte($ss, $sd, $ed);
         $cardsActivated     = $this->getCardsActivated($ss, $sd, $ed);
         $conversionRate     = $distributed > 0 ? round(($inscriptions / $distributed) * 100, 1) : 0;
 
         // Comparison period
         $activeUsersCohorteComp = $this->getUsersWithCardsCohorteCount($ss, $csd, $ced);
-        $transactionsCohorteComp = $this->getTransactionsWithCardsCohorte($ss, $csd, $ced);
+        $clientsWithTransactionsComp = $this->getUsersWithCardsCount($ss);
         $inscriptionsCohorteComp = $this->getInscriptionsWithCardsCohorte($ss, $csd, $ced);
         $cardsActivatedComp     = $this->getCardsActivated($ss, $csd, $ced);
 
@@ -384,7 +386,7 @@ class SubStoreController extends Controller
             'transactions'       => $kpiPair($transactions, $transactions),
             'totalSubscriptions' => $kpiPair($totalSubscriptions, $totalSubscriptions),
             'renewalRate'        => $kpiPair($cardsActivated, $cardsActivatedComp),
-            'transactionsCohorte' => $kpiPair($transactionsCohorte, $transactionsCohorteComp),
+            'clientsWithTransactions' => $kpiPair($clientsWithTransactions, $clientsWithTransactionsComp),
             'inscriptionsCohorte' => $kpiPair($inscriptionsCohorte, $inscriptionsCohorteComp),
             'conversionRate'     => $kpiPair($conversionRate, $conversionRate),
         ];

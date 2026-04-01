@@ -3420,12 +3420,12 @@
           tooltip: 'Les nouvelles inscriptions pendant cette période. C\'est comme compter les nouveaux amis de cette semaine !'
         },
         { 
-          id: 'transactionsCohorte', 
-          title: 'TRANSACTIONS COHORTE', 
-          value: kpis.transactionsCohorte?.current || 0,
+          id: 'clientsWithTransactions', 
+          title: 'CLIENTS AVEC TRANSACTIONS', 
+          value: kpis.clientsWithTransactions?.current || 0,
           className: 'cohort',
           icon: '📊',
-          tooltip: 'Les achats faits pendant cette période précise. C\'est comme compter les achats de cette semaine seulement !'
+          tooltip: 'Nombre de clients ayant effectué au moins une transaction.'
         },
         { 
           id: 'activeUsersCohorte', 
