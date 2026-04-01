@@ -79,6 +79,7 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - iteration_28: 28/28 (100%)
 - iteration_29: 3/3 P0 bugs verified (100%)
 - iteration_30: P2 features all PASSED (100%)
+- iteration_31: Permissions modal filtering PASSED (100%) - campaigns filtrees par operateur
 
 ## Backlog
 - Aucune tâche prioritaire restante
