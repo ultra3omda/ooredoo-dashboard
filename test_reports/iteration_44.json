@@ -1,0 +1,65 @@
+{
+  "summary": "Iteration 44: All tests PASSED. Verified KPI changes (transactionsCohorte → clientsWithTransactions) and SuperAdmin campaign filter matching Collaborateur data.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "kpi_api_changes": {
+      "returns_clientsWithTransactions": true,
+      "returns_transactionsCohorte": false,
+      "status": "PASS - API returns clientsWithTransactions (NOT transactionsCohorte)"
+    },
+    "collaborateur_kpis": {
+      "distributed": 2013,
+      "inscriptions": 582,
+      "activeUsers": 580,
+      "transactions": 117,
+      "clientsWithTransactions": 61,
+      "conversionRate": 28.9,
+      "status": "PASS - All expected values match"
+    },
+    "superadmin_hutchinson_filter": {
+      "distributed": 2013,
+      "inscriptions": 582,
+      "activeUsers": 580,
+      "transactions": 117,
+      "clientsWithTransactions": 61,
+      "conversionRate": 28.9,
+      "status": "PASS - SuperAdmin with Hutchinson filter matches Collaborateur exactly"
+    },
+    "ui_kpi_display": {
+      "clients_avec_transactions_visible": true,
+      "transactions_cohorte_removed": true,
+      "status": "PASS - UI shows 'CLIENTS AVEC TRANSACTIONS' (not 'TRANSACTIONS COHORTE')"
+    },
+    "php_fpm_status": {
+      "status": "PASS - php-fpm8.2 is running"
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "computeKpis() correctly returns clientsWithTransactions instead of transactionsCohorte",
+    "normalizeSubStoreParams() properly applies campaign filter for SuperAdmin",
+    "applyPluxeeCampaignFilter() correctly uses carte_recharge.client_id for filtering"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "superadmin": "superadmin@ooredoo.tn / SuperAdmin@2025",
+    "collaborateur": "imededdine.essefi@gmail.com / Test@2025"
+  },
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "KPI changes verified: transactionsCohorte replaced by clientsWithTransactions in Vue d'Ensemble. SuperAdmin campaign filter working correctly - when filtering by Hutchinson campaign, data matches exactly with Collaborateur account. Expected values: distributed=2013, inscriptions=582, activeUsers=580, transactions=117, clientsWithTransactions=61, conversionRate=28.9"
+}

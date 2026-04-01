@@ -2121,7 +2121,7 @@
             <div class="card kpi-card users-kpi">
               <div class="kpi-icon">💳</div>
               <div class="kpi-content">
-                <div class="kpi-title">Transactions (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée (même que TRANSACTIONS COHORTE vue d'ensemble).">ⓘ</span></div>
+                <div class="kpi-title">Transactions (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée.">ⓘ</span></div>
                 <div class="kpi-value" id="users-transactionsCohorte">Loading...</div>
                 <div class="kpi-delta" id="users-transactionsCohorteDelta">→ 0.0%</div>
               </div>
@@ -2529,7 +2529,7 @@
             { id: 'users-avgTransactionsPerUser', title: 'Avg Transactions/User', icon: '📊', tooltip: 'Moyenne de transactions par utilisateur actif dans la période.', showDelta: false },
             { id: 'users-totalSubscriptions', title: 'Total Cartes Utilisées', icon: '🎯', tooltip: 'Nombre total de cartes de recharge utilisées par les utilisateurs (toutes périodes, même que CARTES UTILISÉES vue d\'ensemble).', showDelta: false },
             { id: 'users-newUsers', title: 'Cartes Activées', icon: '💳', tooltip: 'Nombre de cartes de recharge activées dans la période.' },
-            { id: 'users-transactionsCohorte', title: 'Transactions (Cohorte)', icon: '💳', tooltip: 'Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée (même que TRANSACTIONS COHORTE vue d\'ensemble).' },
+            { id: 'users-transactionsCohorte', title: 'Transactions (Cohorte)', icon: '💳', tooltip: 'Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée.' },
             { id: 'users-retentionRate', title: 'Retention Rate', icon: '🔄', tooltip: 'Pourcentage d\'utilisateurs actifs par rapport au total (ACTIVE USERS / TOTAL USERS).', showDelta: false }
       ];
       
@@ -2685,7 +2685,7 @@
         { id: 'transactions', title: 'TRANSACTIONS', tooltip: 'Le nombre total de transactions effectuées' },
         { id: 'activeUsers', title: 'ACTIVE USERS', tooltip: 'Le nombre d\'utilisateurs actifs' },
         { id: 'inscriptionsCohorte', title: 'INSCRIPTIONS COHORTE', tooltip: 'Inscriptions dans la période sélectionnée' },
-        { id: 'transactionsCohorte', title: 'TRANSACTIONS COHORTE', tooltip: 'Transactions dans la période sélectionnée' },
+        { id: 'clientsWithTransactions', title: 'CLIENTS AVEC TRANSACTIONS', tooltip: 'Nombre de clients ayant effectué au moins une transaction.' },
         { id: 'activeUsersCohorte', title: 'ACTIVE USERS COHORTE', tooltip: 'Utilisateurs actifs dans la période sélectionnée' },
         { id: 'conversionRate', title: 'TAUX DE CONVERSION', tooltip: 'Ratio inscriptions/distribué', showDelta: false },
         { id: 'renewalRate', title: 'CARTES ACTIVÉES COHORTE', tooltip: 'Le nombre total de cartes de recharge activées dans la période' }
