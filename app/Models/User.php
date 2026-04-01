@@ -233,40 +233,31 @@ class User extends Authenticatable
     {
         // Dispatching selon le type de plateforme
         if ($this->isTimweOoredooUser()) {
-            // Utilisateurs Timwe/Ooredoo : Dashboard avec thème Ooredoo
             return url('/?theme=ooredoo');
         }
 
-        // Utilisateurs Club Privilèges : Logique existante
         // Super Admin : Dashboard principal avec vue globale
         if ($this->isSuperAdmin()) {
             return url('/?theme=club_privileges');
         }
 
+        // Use centralized SubStoreService to determine dashboard
+        $subStoreService = app(\App\Services\SubStoreService::class);
+        $primaryOperator = $this->primaryOperator();
+
         // Admin : Vérifier si orienté sub-stores ou dashboard principal
         if ($this->isAdmin()) {
-            $primaryOperator = $this->primaryOperator();
-            
-            // Si l'admin est orienté sub-stores, rediriger vers sub-stores dashboard
-            if ($primaryOperator && in_array($primaryOperator->operator_name, ['Sub-Stores', 'Retail', 'Partnership', 'Sofrecom'])) {
+            if ($primaryOperator && $subStoreService->isSubStoreOperator($primaryOperator->operator_name)) {
                 return url('/sub-stores/?theme=club_privileges');
             }
-            
-            // Sinon, dashboard principal avec vue filtrée par opérateur
             return url('/?theme=club_privileges');
         }
 
-        // Collaborator : Selon les permissions et le contexte
+        // Collaborator : Selon l'opérateur principal
         if ($this->isCollaborator()) {
-            // Si l'utilisateur a accès aux sub-stores uniquement
-            $primaryOperator = $this->primaryOperator();
-            
-            // Si l'opérateur principal est lié aux sub-stores, rediriger vers sub-stores dashboard
-            if ($primaryOperator && in_array($primaryOperator->operator_name, ['Sub-Stores', 'Retail', 'Partnership', 'Sofrecom'])) {
+            if ($primaryOperator && $subStoreService->isSubStoreOperator($primaryOperator->operator_name)) {
                 return url('/sub-stores/?theme=club_privileges');
             }
-            
-            // Sinon, dashboard principal
             return url('/?theme=club_privileges');
         }
 

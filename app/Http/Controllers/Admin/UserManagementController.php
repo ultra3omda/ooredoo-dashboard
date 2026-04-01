@@ -180,11 +180,16 @@ class UserManagementController extends Controller
             $operators = $currentUser->operators->pluck('operator_name', 'operator_name');
         }
         
+        // Determine if this user belongs to a sub-store
+        $subStoreService = app(\App\Services\SubStoreService::class);
+        $primaryOp = $user->primaryOperator();
+        $isSubStoreUser = $primaryOp ? $subStoreService->isSubStoreOperator($primaryOp->operator_name) : false;
+        
         // Déterminer le thème selon l'utilisateur connecté
         $theme = $currentUser->isTimweOoredooUser() ? 'ooredoo' : 'club_privileges';
         $isOoredoo = $theme === 'ooredoo';
         
-        return view('admin.users.edit', compact('user', 'roles', 'operators', 'theme', 'isOoredoo'));
+        return view('admin.users.edit', compact('user', 'roles', 'operators', 'theme', 'isOoredoo', 'isSubStoreUser'));
     }
 
     /**

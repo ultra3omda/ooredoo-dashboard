@@ -1,0 +1,47 @@
+{
+  "summary": "Tested 3 fixes: 1) Edit form 'Dashboard Sub-Store' label for sub-store users, 2) Unified navbar on edit page, 3) First login page. All tests PASSED. User 43 (Imededdine safi) and User 28 (imededdine essafi) both show 'Dashboard Sub-Store' label with correct helper text. Navigation between pages works correctly with navbar preserved.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "edit_form_substore_label_user43": {
+      "status": "PASS",
+      "details": "User 43 (Imededdine safi) edit page shows 'Dashboard Sub-Store' label instead of 'Opérateurs Assignés'. Helper text 'Sub-store auquel cet utilisateur est rattache' is present."
+    },
+    "edit_form_substore_label_user28": {
+      "status": "PASS",
+      "details": "User 28 (imededdine essafi) edit page shows 'Dashboard Sub-Store' label with correct helper text."
+    },
+    "unified_navbar_on_edit": {
+      "status": "PASS",
+      "details": "Edit page has unified navbar with logo, Dashboard, Sub-Stores, Utilisateurs (active), Invitations, ML, Permissions, Audit links."
+    },
+    "first_login_page": {
+      "status": "PASS",
+      "details": "First login page loads correctly with 'Votre mot de passe sécurisé', 'Confirmer le mot de passe' fields, and 'ACTIVER MON COMPTE' button."
+    },
+    "navigation_from_edit": {
+      "status": "PASS",
+      "details": "Navigation from edit page to Invitations works correctly. Navbar is preserved on Invitations page."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only test)",
+    "frontend": "100%"
+  },
+  "test_credentials": "Email: superadmin@ooredoo.tn, Password: SuperAdmin@2025",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "All 3 fixes verified: 1) Edit form shows 'Dashboard Sub-Store' label for sub-store users (tested with user 43 and 28), 2) Unified navbar added to edit.blade.php via @include('partials._admin-header'), 3) First login page works correctly. The key fix in User.php getPreferredDashboard() using SubStoreService::isSubStoreOperator() is working - sub-store users are correctly identified."
+}
