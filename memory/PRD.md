@@ -10,53 +10,44 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - **AI**: Gemini 2.5 Flash (Emergent LLM Key)
 - **Frontend**: Blade templates, Vanilla JS, Chart.js
 
-## Implemented Features
+## Implemented Features (ALL DONE)
 
-### Core Features (ALL DONE)
+### Core Features
 - Core Dashboard, ML Recommendation Engine v2.0, Client-Facing Widget
-- Merchant Intelligence Engine, Analytics Temporel, A/B Test Framework
+- Merchant Intelligence, Analytics Temporel, A/B Test Framework
 - Digital Presence Scoring, Collaborateur Role with Campaign Access
-- Permissions Management, Permission Audit Log, Navigation Unifiee
-- Edit User Form Sub-Store/Operateur, Dynamic User Creation Form
-- Re-invitation & Suppression Invitations
+- Permissions Management, Audit Log, Unified Navigation
+- Edit User Form, Dynamic User Creation, Re-invitation/Deletion
 
 ### Responsive Mobile - COMPLETE (Avril 2026)
-**All pages responsive with unified mobile patterns:**
-- Admin tables: Card layout with data-label
-- KPIs: 2-per-row compact with word-break for long titles
-- Nav tabs: Horizontally scrollable (overflow-x: auto)
-- Forms: Single column on mobile
-- Auth pages: Compact padding
+**All 5 tabs of Sub-Stores Dashboard + all admin/auth pages fully responsive**
 
-**Merchant/Users KPIs fix:**
-- flex-direction: column on cards (icon top, title below)
-- kpi-title: font-size 9px at 600px, 8px at 480px, word-break: break-word
-- grid-template-columns: 1fr 1fr (always 2-per-row on mobile)
+**KPIs fix (CSS specificity resolved):**
+- Mobile responsive CSS placed AFTER base styles (line 1246+) with !important
+- flex-direction: column, overflow: visible, word-break: break-word
+- All titles fully visible: TOTAL LOCATIONS ACTIVE, ACTIVE MERCHANT RATIO, etc.
 
-**Date section fix:**
-- flex-direction: row on .date-inputs (dates inline, not stacked)
-- period-section gap: 6px for compact vertical spacing
+**Recommandations tab fix:**
+- .reco-kpis-row: 4->2 columns on mobile
+- .reco-panels-grid: 2->1 column on mobile (stacked)
 
-**Empty chart message:**
-- showNoDataMessage() function: SVG icon + text + subtitle
-- Applied to inscriptionsChart and expirationsChart
-
-### Campaign filtering (VERIFIED)
-- Backend enforces campaign restriction via normalizeSubStoreParams()
-- Frontend passes campaign parameter in all split API calls
-- Works for collaborators with pluxee_campaign_access restrictions
+**Multi-role testing (iteration_38: 8/8 - 100%):**
+- SuperAdmin: All tabs, all data, KPIs 2/row
+- Admin Club Privileges: All tabs, Club data, KPIs correct
+- Collaborator ALL: All tabs, 3 campaigns, KPIs correct
+- Collaborator campaign-restricted: Filtered to Hutchinson Tunisie, 2013 cartes
 
 ### CI/CD Pipeline (DONE)
 
 ## Test Reports
-- iteration_34: 10/10 - User creation + invitation
-- iteration_35: 13/13 - Admin mobile + desktop regression
-- iteration_36: 11/11 - All pages mobile + desktop regression
-- iteration_37: 7/7 - Merchant/Users KPIs + dates + collaborator
+- iteration_34: 10/10 | iteration_35: 13/13 | iteration_36: 11/11
+- iteration_37: 7/7 | iteration_38: 8/8 (multi-role)
+
+## Test Accounts
+- SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
+- Admin Club Privileges: admin.pluxee@test.com / Test@2025
+- Collaborateur ALL: mohamed@pluxee.tn / Test@2025
+- Collaborateur restricted: imededdine.essefi@gmail.com / Test@2025
 
 ## Backlog
 - Aucune tache prioritaire restante
-
-## Admin Credentials
-- SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
-- Collaborator (test): imededdine.essefi@gmail.com / Test@2025
