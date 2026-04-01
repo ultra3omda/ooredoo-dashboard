@@ -16,13 +16,14 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - NOT carte_recharge_client (empty for some campaigns)
 
 ## KPI Definitions (Unified across Vue d'Ensemble and Users tabs)
-- **Distribué**: sum(card_generated_number) for campaign, or count(clients) for all
+- **Distribue**: sum(card_generated_number) for campaign, or count(clients) for all
 - **Inscriptions**: Clients with at least one abonnement + campaign filter
-- **Active Users**: Clients with non-expired abonnement + campaign filter (same in both tabs now)
+- **Active Users**: Clients with non-expired abonnement + campaign filter
 - **Transactions**: Count of history entries for campaign clients
-- **Cartes Activées/Subscriptions**: Count of abonnements created in period for campaign clients
-- **Inscriptions Cohorte**: Clients created within period + campaign filter (may differ from Inscriptions by 1-2 due to creation date vs abonnement date)
-- **Taux de Conversion**: inscriptions / distribué * 100
+- **Clients avec transactions**: Distinct clients with at least one transaction (replaced "Transactions Cohorte" in Vue d'Ensemble)
+- **Cartes Utilisees/Subscriptions**: Count of abonnements created in period for campaign clients
+- **Inscriptions Cohorte**: Clients created within period + campaign filter
+- **Taux de Conversion**: inscriptions / distribue * 100
 
 ## Implemented Features (ALL DONE)
 
@@ -30,13 +31,20 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - `applyPluxeeCampaignFilter` uses `carte_recharge.client_id` (NOT carte_recharge_client)
 - `getUsersKPIs` now uses `getActiveUsersWithCards` (consistent with Vue d'Ensemble)
 - All Pluxee functions apply campaign filter consistently
+- SuperAdmin can filter by specific campaign via dropdown and see same data as Collaborateur
 
 ### RBAC Permission System - COMPLETE
 - Admin Sub-Store sees only their sub-store users/logs/invitations
 - Collaborateur gets 403 on admin pages, sees only campaign-filtered data
 
+### KPI Renaming - COMPLETE (Avril 2026)
+- Replaced "Transactions Cohorte" with "Clients avec transactions" in Vue d'Ensemble
+- Backend API returns `clientsWithTransactions` key (not `transactionsCohorte`)
+- Both loading state and data-loaded state show correct label
+- Tooltips updated to remove old references
+
 ## Test Reports
-- iteration_39-43: ALL 100% PASS
+- iteration_39-44: ALL 100% PASS
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
@@ -44,5 +52,6 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - Collaborateur: imededdine.essefi@gmail.com / Test@2025
 
 ## Backlog
-- CI/CD: Verify pipeline once user clears VPS disk space (P1)
-- Extract inline CSS from Blade templates into dedicated CSS files (P2)
+- Export PDF du dashboard par campagne (P1)
+- CI/CD: Verify pipeline once user clears VPS disk space (P2)
+- Extract inline CSS from Blade templates into dedicated CSS files (P3)
