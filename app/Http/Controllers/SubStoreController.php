@@ -455,12 +455,14 @@ class SubStoreController extends Controller
             ->where('carte_recharge.campain_name', $campaign)
             ->sum('carte_recharge.card_generated_number');
 
-        // Get clients who activated cards from this campaign
-        $activatedClients = (int) DB::table('carte_recharge_client')
-            ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+        // Get clients who activated cards from this campaign (via carte_recharge.client_id)
+        $activatedClients = (int) DB::table('carte_recharge')
             ->where('carte_recharge.campain_name', $campaign)
+            ->where('carte_recharge.carte_recharge_used', 1)
+            ->whereNotNull('carte_recharge.client_id')
+            ->where('carte_recharge.client_id', '!=', '')
             ->distinct()
-            ->count('carte_recharge_client.client_id');
+            ->count('carte_recharge.client_id');
 
         // Get transactions from activated clients of this campaign
         $transactions = 0;
@@ -468,10 +470,12 @@ class SubStoreController extends Controller
             $transactions = (int) DB::table('history')
                 ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
                 ->whereIn('client_abonnement.client_id', function ($sub) use ($campaign) {
-                    $sub->select('carte_recharge_client.client_id')
-                        ->from('carte_recharge_client')
-                        ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
-                        ->where('carte_recharge.campain_name', $campaign);
+                    $sub->select('carte_recharge.client_id')
+                        ->from('carte_recharge')
+                        ->where('carte_recharge.campain_name', $campaign)
+                        ->where('carte_recharge.carte_recharge_used', 1)
+                        ->whereNotNull('carte_recharge.client_id')
+                        ->where('carte_recharge.client_id', '!=', '');
                 })
                 ->count();
         }
@@ -673,10 +677,12 @@ class SubStoreController extends Controller
         if ($this->currentCampaign) {
             $campaign = $this->currentCampaign;
             $query->whereIn("$clientAlias.client_id", function ($sub) use ($campaign) {
-                $sub->select('carte_recharge_client.client_id')
-                    ->from('carte_recharge_client')
-                    ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
-                    ->where('carte_recharge.campain_name', $campaign);
+                $sub->select('carte_recharge.client_id')
+                    ->from('carte_recharge')
+                    ->where('carte_recharge.campain_name', $campaign)
+                    ->where('carte_recharge.carte_recharge_used', 1)
+                    ->whereNotNull('carte_recharge.client_id')
+                    ->where('carte_recharge.client_id', '!=', '');
             });
         }
         return $query;
@@ -1030,10 +1036,12 @@ class SubStoreController extends Controller
             // Apply campaign filter: only include clients linked to this campaign
             if ($campaign) {
                 $q->whereIn('client.client_id', function ($sub) use ($campaign) {
-                    $sub->select('carte_recharge_client.client_id')
-                        ->from('carte_recharge_client')
-                        ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
-                        ->where('carte_recharge.campain_name', $campaign);
+                    $sub->select('carte_recharge.client_id')
+                        ->from('carte_recharge')
+                        ->where('carte_recharge.campain_name', $campaign)
+                        ->where('carte_recharge.carte_recharge_used', 1)
+                        ->whereNotNull('carte_recharge.client_id')
+                        ->where('carte_recharge.client_id', '!=', '');
                 });
             }
 

@@ -1,0 +1,87 @@
+{
+  "summary": "Iteration 43: Pluxee Campaign Filter Fix VERIFIED. The critical fix to applyPluxeeCampaignFilter (now uses carte_recharge.client_id instead of carte_recharge_client table) is working correctly. Collaborateur Hutchinson now sees real data instead of zeros.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "collaborateur_kpis": {
+      "distributed": 2013,
+      "inscriptions": 582,
+      "activeUsers": 580,
+      "transactions": 117,
+      "cartes_utilisees": 617,
+      "status": "PASS - All KPIs show real data (NOT 0 anymore)"
+    },
+    "collaborateur_users": {
+      "users_count": 150,
+      "totalUsers_kpi": 582,
+      "active_users": 61,
+      "avg_transactions_per_user": 1.92,
+      "retention_rate": "10.5%",
+      "top_users_table": "Visible with data rows",
+      "status": "PASS - Users tab shows real data"
+    },
+    "collaborateur_stores": {
+      "campaign_filter": "Hutchinson Tunisie - By Pluxee",
+      "activated_clients": 664,
+      "status": "PASS - Campaign filter set, activatedClients > 600"
+    },
+    "collaborateur_expirations": {
+      "months_count": 1,
+      "data": [{"date": "Mar 2026", "value": 29}],
+      "status": "PASS - Returns 1+ months (NOT empty)"
+    },
+    "admin_pluxee_kpis": {
+      "distributed": 194817,
+      "inscriptions": 6840,
+      "activeUsers": 2999,
+      "transactions": 36622,
+      "status": "PASS - distributed > 100000, inscriptions > 6000"
+    },
+    "admin_pluxee_expirations": {
+      "months_count": 13,
+      "status": "PASS - Returns 13 months"
+    },
+    "rbac": {
+      "collaborateur_403_admin_users": "PASS - Returns 403",
+      "admin_pluxee_sees_users": "PASS - Can access /admin/users with sub-store users visible",
+      "status": "PASS - RBAC still works correctly"
+    },
+    "frontend_verification": {
+      "collaborateur_dashboard": "PASS - Shows DISTRIBUÉ 2,013, INSCRIPTIONS 582, TRANSACTIONS 117, ACTIVE USERS 580",
+      "collaborateur_users_tab": "PASS - Shows TOTAL USERS 582, Top Users Performance table with data",
+      "campaign_selector": "PASS - Shows 'Hutchinson Tunisie - By Pluxee (2013 cartes)'"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_43_pluxee_fix.py",
+    "/app/test_reports/pytest/pytest_iteration_43_pluxee.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The fix correctly uses carte_recharge.client_id directly instead of carte_recharge_client table",
+    "applyPluxeeCampaignFilter properly filters clients linked to campaign cards with carte_recharge_used=1"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_43_pluxee_fix.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "superadmin": "superadmin@ooredoo.tn / SuperAdmin@2025",
+    "admin_pluxee": "admin.pluxee@test.com / Test@2025",
+    "collaborateur": "imededdine.essefi@gmail.com / Test@2025"
+  },
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Pluxee campaign filter fix verified. Collaborateur Hutchinson now sees: distributed=2013, inscriptions=582, activeUsers=580, transactions=117, cartes_utilisees=617. The fix uses carte_recharge.client_id directly (664 clients with carte_recharge_used=1) instead of carte_recharge_client table (which was empty for Hutchinson). All RBAC permissions still work correctly."
+}
