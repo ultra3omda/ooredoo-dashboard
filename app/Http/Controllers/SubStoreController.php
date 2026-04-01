@@ -1137,8 +1137,12 @@ class SubStoreController extends Controller
                 $join->on('client.client_id', '=', 'history.client_id')->whereBetween('history.time', [$sd, $ed]);
             })
             ->leftJoin('client_abonnement', 'client.client_id', '=', 'client_abonnement.client_id')
-            ->where('stores.store_name', 'LIKE', "%$ss%")
-            ->select(
+            ->where('stores.store_name', 'LIKE', "%$ss%");
+
+        // Apply campaign filter for restricted users
+        $this->applyPluxeeCampaignFilter($q);
+
+        $q->select(
                 'client.client_id as id',
                 DB::raw('CONCAT(COALESCE(client.client_prenom,"")," ",COALESCE(client.client_nom,"")) as name'),
                 'stores.store_name as sub_store_name',
