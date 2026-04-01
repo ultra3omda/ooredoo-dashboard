@@ -1,0 +1,77 @@
+{
+  "summary": "Iteration 29 - P0 Bug Fixes Verification. All 3 critical bugs PASSED. Tested: 1) Z-index dropdown fix on dashboard, 2) Intelligence Marchands (Gemini AI) section on ML dashboard, 3) Campaign selection for Pluxee Admin/Collaborator invitations.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    ".screenshots/bug1_dropdown_opened.png",
+    ".screenshots/bug2_intelligence_section.png",
+    ".screenshots/bug3_final_campaigns.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100% (3/3 bugs verified fixed)"
+  },
+  "test_credentials": {
+    "email": "superadmin@ooredoo.tn",
+    "password": "SuperAdmin@2025",
+    "api_url": "https://perf-test-ooredoo.preview.emergentagent.com"
+  },
+  "seed_data_creation": "No new seed data created",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 29 verified 3 P0 bug fixes: 1) Z-index fix in dashboard.css line 979 (position:relative; z-index:50 on .enhanced-filters-bar) - dropdown now overlays KPI cards correctly, 2) Intelligence Marchands section in merchant-recommendations.blade.php loads data without errors (73 total analyses, 19 performants, 51 a surveiller, 3 a booster), 3) Campaign selection in invitations/create.blade.php now shows campaigns when selecting Collaborateur + Sub-Store + Pluxee (found 3 campaigns with checkboxes). All tests passed.",
+  "bugs_verified": {
+    "bug_1_zindex_dropdown": {
+      "status": "PASSED",
+      "description": "Operator dropdown on dashboard opens ABOVE KPI cards",
+      "fix_location": "/app/public/css/dashboard.css line 979",
+      "fix_details": "Added position:relative; z-index:50 to .enhanced-filters-bar",
+      "test_results": {
+        "dropdown_z_index": "1000",
+        "filter_bar_z_index": "50",
+        "filter_bar_position": "relative",
+        "dropdown_height": "250px",
+        "dropdown_visible": true
+      }
+    },
+    "bug_2_intelligence_marchands": {
+      "status": "PASSED",
+      "description": "Intelligence Marchands (Gemini AI) section shows data without errors",
+      "fix_location": "/app/resources/views/admin/merchant-recommendations.blade.php lines 735-801",
+      "test_results": {
+        "total_analyses": 73,
+        "performants": 19,
+        "a_surveiller": 51,
+        "a_booster": 3,
+        "has_error": false,
+        "marchands_a_booster": ["ANAIS PARAPHARMACIE", "BEAUTY SHOP", "OMIZ BOUTIQUES"],
+        "top_performeurs": ["PATHE", "BAGUETTE & BAGUETTE", "KFC"]
+      }
+    },
+    "bug_3_campaign_selection": {
+      "status": "PASSED",
+      "description": "Campaign selection appears when inviting Pluxee Admin/Collaborator",
+      "fix_location": "/app/resources/views/admin/invitations/create.blade.php lines 480-590",
+      "test_results": {
+        "campaign_section_visible": true,
+        "checkbox_count": 3,
+        "campaigns_found": [
+          "Hutchinson Tunisie - By Pluxee (2013 cartes · 2013 lots)",
+          "Hutchinson Tunisie - By Pluxee (Remboursement) (1 cartes · 1 lots)",
+          "test tarek (1 cartes · 1 lots)"
+        ],
+        "role_change_hides_campaigns": true
+      }
+    }
+  }
+}

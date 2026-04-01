@@ -342,10 +342,10 @@
                     
                     <div class="form-group">
                         <label for="role_id" class="form-label">Rôle *</label>
-                        <select id="role_id" name="role_id" class="form-select" required>
+                        <select id="role_id" name="role_id" class="form-select" required onchange="checkCampaignVisibility()">
                             <option value="">Sélectionner un rôle</option>
                             @foreach($roles as $role)
-                                <option value="{{ $role->id }}" {{ old('role_id') == $role->id ? 'selected' : '' }}>
+                                <option value="{{ $role->id }}" data-role-name="{{ $role->name }}" {{ old('role_id') == $role->id ? 'selected' : '' }}>
                                     {{ $role->display_name }}
                                 </option>
                             @endforeach
@@ -478,6 +478,63 @@
     </div>
     
     <script>
+        function getSelectedRoleName() {
+            const roleSelect = document.getElementById('role_id');
+            if (!roleSelect || !roleSelect.value) return '';
+            const selected = roleSelect.options[roleSelect.selectedIndex];
+            return (selected.getAttribute('data-role-name') || '').toLowerCase();
+        }
+
+        function isPluxeeStore(name) {
+            if (!name) return false;
+            const lower = name.toLowerCase();
+            return lower.includes('pluxee') || lower.includes('club priv');
+        }
+
+        function isCampaignEligibleRole() {
+            const roleName = getSelectedRoleName();
+            return roleName === 'admin' || roleName === 'collaborator';
+        }
+
+        function checkCampaignVisibility() {
+            const substoreName = document.getElementById('substore_name');
+            const operatorName = document.getElementById('operator_name');
+            const campaignSection = document.getElementById('campaign_section');
+            if (!campaignSection) return;
+
+            const eligible = isCampaignEligibleRole();
+            const typeSelection = document.getElementById('type_selection');
+            const currentType = typeSelection ? typeSelection.value : '';
+
+            // For sub-store type: show campaigns if sub-store is selected and role is eligible
+            if (substoreName && substoreName.value && (currentType === 'substore' || !typeSelection)) {
+                if (eligible) {
+                    campaignSection.style.display = 'block';
+                    // Only reload if not already loaded
+                    const checkboxes = document.getElementById('campaign_checkboxes');
+                    if (checkboxes && checkboxes.querySelectorAll('input[type="checkbox"]').length === 0) {
+                        loadCampaigns();
+                    }
+                } else {
+                    campaignSection.style.display = 'none';
+                }
+                return;
+            }
+
+            // For operator type: show campaigns if operator is Pluxee-related and role is eligible
+            if (operatorName && operatorName.value && currentType === 'operator') {
+                if (isPluxeeStore(operatorName.value) && eligible) {
+                    campaignSection.style.display = 'block';
+                    loadCampaignsForOperator(operatorName.value);
+                } else {
+                    campaignSection.style.display = 'none';
+                }
+                return;
+            }
+
+            campaignSection.style.display = 'none';
+        }
+
         function toggleOperatorLists() {
             const typeSelection = document.getElementById('type_selection');
             const operatorSelection = document.getElementById('operator_selection');
@@ -524,6 +581,12 @@
                 campaignSection.style.display = 'none';
                 return;
             }
+
+            // Only show campaigns for eligible roles
+            if (!isCampaignEligibleRole()) {
+                campaignSection.style.display = 'none';
+                return;
+            }
             
             campaignSection.style.display = 'block';
             campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Chargement des campagnes...</div>';
@@ -554,6 +617,40 @@
             }
         }
 
+        async function loadCampaignsForOperator(operatorValue) {
+            const campaignSection = document.getElementById('campaign_section');
+            const campaignCheckboxes = document.getElementById('campaign_checkboxes');
+            if (!campaignSection || !campaignCheckboxes) return;
+
+            campaignSection.style.display = 'block';
+            campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Chargement des campagnes...</div>';
+
+            try {
+                const res = await fetch(`{{ route('admin.invitations.campaigns') }}?store_name=${encodeURIComponent(operatorValue)}`);
+                const data = await res.json();
+                
+                if (!data.campaigns || data.campaigns.length === 0) {
+                    campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Aucune campagne trouvee pour cet operateur.</div>';
+                    return;
+                }
+                
+                let html = '';
+                data.campaigns.forEach((c, i) => {
+                    html += `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--input-border);border-radius:6px;cursor:pointer;transition:all 0.15s;background:var(--card);" 
+                                  onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--input-border)'">
+                        <input type="checkbox" name="campaign_access[]" value="${c.name}" style="width:16px;height:16px;accent-color:var(--accent);">
+                        <div>
+                            <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${c.name}</div>
+                            <div style="font-size:11px;color:var(--muted);">${c.cards} cartes · ${c.batches} lots</div>
+                        </div>
+                    </label>`;
+                });
+                campaignCheckboxes.innerHTML = html;
+            } catch (e) {
+                campaignCheckboxes.innerHTML = `<div style="text-align:center;padding:16px;color:var(--danger);grid-column:span 2;">Erreur: ${e.message}</div>`;
+            }
+        }
+
         function selectAllCampaigns() {
             document.querySelectorAll('#campaign_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = true);
         }
@@ -564,6 +661,13 @@
         
         document.addEventListener('DOMContentLoaded', function() {
             toggleOperatorLists();
+
+            // Add event listener on operator_name change for campaign visibility
+            const operatorSelect = document.getElementById('operator_name');
+            if (operatorSelect) {
+                operatorSelect.addEventListener('change', checkCampaignVisibility);
+            }
+
             // Auto-load campaigns if sub-store is pre-selected
             const substoreName = document.getElementById('substore_name');
             if (substoreName && substoreName.value) {
