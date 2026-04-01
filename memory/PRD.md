@@ -11,31 +11,32 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - **Frontend**: Blade templates, Vanilla JS, Chart.js
 
 ## Data Model - Campaign Linking
-- `carte_recharge`: Card batches with `client_id` (direct link to client), `campain_name`, `carte_recharge_used` (1=activated), `stores` (store IDs), `card_generated_number`
-- `carte_recharge_client`: Secondary link table (empty for some campaigns like Hutchinson)
-- **Campaign filter**: Uses `carte_recharge.client_id WHERE carte_recharge_used=1 AND campain_name=X` (NOT carte_recharge_client)
+- `carte_recharge`: Cards with `client_id`, `campain_name`, `carte_recharge_used` (1=activated), `stores`, `card_generated_number`
+- **Campaign filter**: Uses `carte_recharge.client_id WHERE carte_recharge_used=1 AND campain_name=X`
+- NOT carte_recharge_client (empty for some campaigns)
+
+## KPI Definitions (Unified across Vue d'Ensemble and Users tabs)
+- **Distribué**: sum(card_generated_number) for campaign, or count(clients) for all
+- **Inscriptions**: Clients with at least one abonnement + campaign filter
+- **Active Users**: Clients with non-expired abonnement + campaign filter (same in both tabs now)
+- **Transactions**: Count of history entries for campaign clients
+- **Cartes Activées/Subscriptions**: Count of abonnements created in period for campaign clients
+- **Inscriptions Cohorte**: Clients created within period + campaign filter (may differ from Inscriptions by 1-2 due to creation date vs abonnement date)
+- **Taux de Conversion**: inscriptions / distribué * 100
 
 ## Implemented Features (ALL DONE)
 
 ### Campaign Data Filtering - COMPLETE (Avril 2026)
-**Critical fix**: `applyPluxeeCampaignFilter` was using `carte_recharge_client` (empty for Hutchinson) → now uses `carte_recharge.client_id` directly.
-
-Results for Collaborateur Hutchinson:
-- DISTRIBUÉ: 2,013 | INSCRIPTIONS: 582 | ACTIVE USERS: 580
-- TRANSACTIONS: 117 | CARTES UTILISÉES: 617 | TAUX: 28.9%
+- `applyPluxeeCampaignFilter` uses `carte_recharge.client_id` (NOT carte_recharge_client)
+- `getUsersKPIs` now uses `getActiveUsersWithCards` (consistent with Vue d'Ensemble)
+- All Pluxee functions apply campaign filter consistently
 
 ### RBAC Permission System - COMPLETE
-| Feature | SuperAdmin | Admin Sub-Store | Collaborator |
-|---|---|---|---|
-| /sub-stores data | All sub-stores | Their sub-store (all campaigns) | Their campaign only |
-| /admin/users | All users | Sub-store users only | 403 |
-| /admin/audit-logs | All logs | Sub-store logs only | 403 |
-
-### Responsive Mobile - COMPLETE
-KPIs full-width in 2-col grid, proper text colors for Reco cards.
+- Admin Sub-Store sees only their sub-store users/logs/invitations
+- Collaborateur gets 403 on admin pages, sees only campaign-filtered data
 
 ## Test Reports
-- iteration_39-42: 100% | iteration_43: 100% (campaign filter fix)
+- iteration_39-43: ALL 100% PASS
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025

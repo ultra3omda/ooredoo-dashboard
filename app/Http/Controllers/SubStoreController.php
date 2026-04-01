@@ -1057,8 +1057,8 @@ class SubStoreController extends Controller
     private function getUsersKPIs($sd, $ed, $csd, $ced, $ss)
     {
         $totalUsers = $this->getInscriptionsWithCards($ss);
-        $activeUsers = $this->getUsersWithCardsCount($ss);
-        $activeUsersCohorte = $this->getUsersWithCardsCohorteCount($ss, $sd, $ed);
+        $activeUsers = $this->getActiveUsersWithCards($ss);
+        $activeUsersCohorte = $this->getActiveUsersWithCardsCohorte($ss, $sd, $ed);
         $totalTransactions = $this->getTransactionsWithCards($ss);
         $totalTransactionsCohorte = $this->getTransactionsWithCardsCohorte($ss, $sd, $ed);
         $totalSubscriptions = $this->getTotalSubscriptions($ss);
@@ -1068,15 +1068,16 @@ class SubStoreController extends Controller
 
         $comp = [];
         if ($csd && $ced) {
+            $compActiveUsers = $this->getActiveUsersWithCards($ss);
             $comp = [
                 'totalUsers' => $totalUsers,
-                'activeUsers' => $this->getUsersWithCardsCount($ss),
-                'activeUsersCohorte' => $this->getUsersWithCardsCohorteCount($ss, $csd, $ced),
+                'activeUsers' => $compActiveUsers,
+                'activeUsersCohorte' => $this->getActiveUsersWithCardsCohorte($ss, $csd, $ced),
                 'totalTransactions' => $this->getTransactionsWithCards($ss),
                 'totalTransactionsCohorte' => $this->getTransactionsWithCardsCohorte($ss, $csd, $ced),
                 'totalSubscriptions' => $this->getTotalSubscriptions($ss),
                 'newUsers' => $this->getCardsActivated($ss, $csd, $ced),
-                'retentionRate' => $totalUsers > 0 ? round(($comp['activeUsers'] ?? $activeUsers) / $totalUsers * 100, 1) : 0,
+                'retentionRate' => $totalUsers > 0 ? round($compActiveUsers / $totalUsers * 100, 1) : 0,
             ];
         }
 
