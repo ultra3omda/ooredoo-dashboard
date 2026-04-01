@@ -837,25 +837,36 @@
     
     @media (max-width: 600px) {
       .merchants-kpis-row {
-        grid-template-columns: 1fr;
-        gap: 16px;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
       }
       .merchants-kpi { 
-        min-height: 100px; 
-        padding: 16px;
+        min-height: 90px; 
+        padding: 12px 10px;
+        gap: 8px;
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
       }
-      .merchants-kpi .kpi-value { font-size: 28px; }
+      .merchants-kpi .kpi-icon { font-size: 18px !important; width: auto !important; margin-bottom: 2px; }
+      .merchants-kpi .kpi-title { font-size: 9px !important; line-height: 1.3; word-break: break-word; }
+      .merchants-kpi .kpi-value { font-size: 22px !important; }
+      .merchants-kpi .kpi-delta { font-size: 10px; }
     }
     
     @media (max-width: 480px) {
       .merchants-kpis-row {
-        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
       }
       .merchants-kpi { 
-        min-height: 90px; 
-        padding: 12px;
+        min-height: 80px; 
+        padding: 10px 8px;
+        gap: 6px;
       }
-      .merchants-kpi .kpi-value { font-size: 24px; }
+      .merchants-kpi .kpi-icon { font-size: 16px !important; }
+      .merchants-kpi .kpi-title { font-size: 8px !important; }
+      .merchants-kpi .kpi-value { font-size: 18px !important; }
     }
 
     /* Users Section Styles */
@@ -928,37 +939,44 @@
     
     @media (max-width: 600px) {
       .users-kpis-row {
-        grid-template-columns: 1fr;
-        gap: 16px;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
       }
       .users-kpi { 
-        min-height: 100px; 
-        padding: 16px;
+        min-height: 90px; 
+        padding: 12px 10px;
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
       }
-      .users-kpi .kpi-value { font-size: 28px; }
       .users-kpi .kpi-icon { 
-        font-size: 20px; 
-        margin-right: 12px;
+        font-size: 18px; 
+        margin-right: 0;
+        margin-bottom: 2px;
       }
+      .users-kpi .kpi-title { font-size: 9px !important; line-height: 1.3; word-break: break-word; }
+      .users-kpi .kpi-value { font-size: 22px !important; }
+      .users-kpi .kpi-delta { font-size: 10px; }
     }
     
     @media (max-width: 480px) {
       .users-kpis-row {
-        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
       }
       .users-kpi { 
-        min-height: 90px; 
-        padding: 12px;
+        min-height: 80px; 
+        padding: 10px 8px;
       }
-      .users-kpi .kpi-value { font-size: 24px; }
       .users-kpi .kpi-icon { 
-        font-size: 18px; 
-        margin-right: 10px;
+        font-size: 16px; 
+        margin-right: 0;
       }
       .users-kpi .kpi-title { 
-        font-size: 11px; 
-        margin-bottom: 6px;
+        font-size: 8px !important; 
+        margin-bottom: 4px;
       }
+      .users-kpi .kpi-value { font-size: 18px !important; }
     }
 
     .merchants-kpi {
@@ -1677,24 +1695,6 @@
       .enhanced-table { min-width: unset !important; }
       .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       table th, table td { padding: 8px 6px; font-size: 12px; }
-    }
-    
-    /* --- Mobile: Merchants KPIs compact --- */
-    @media (max-width: 480px) {
-      .merchants-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
-      .merchants-kpi { min-height: 80px !important; padding: 12px !important; gap: 10px !important; }
-      .merchants-kpi .kpi-icon { font-size: 20px !important; width: 30px !important; }
-      .merchants-kpi .kpi-value { font-size: 20px !important; }
-      .merchants-kpi .kpi-title { font-size: 11px !important; margin-bottom: 4px !important; }
-    }
-    
-    /* --- Mobile: Users KPIs compact --- */
-    @media (max-width: 480px) {
-      .users-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
-      .users-kpi { min-height: 80px !important; padding: 12px !important; }
-      .users-kpi .kpi-icon { font-size: 18px !important; margin-right: 8px !important; }
-      .users-kpi .kpi-value { font-size: 20px !important; }
-      .users-kpi .kpi-title { font-size: 10px !important; margin-bottom: 4px !important; }
     }
     
     /* --- Mobile: Tooltip --- */
