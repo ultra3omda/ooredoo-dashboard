@@ -174,16 +174,32 @@ class UserManagementController extends Controller
         
         if ($currentUser->isSuperAdmin()) {
             $roles = Role::active()->get();
-            $operators = $this->getAllOperators();
         } else {
             $roles = Role::where('name', 'collaborator')->active()->get();
-            $operators = $currentUser->operators->pluck('operator_name', 'operator_name');
         }
         
         // Determine if this user belongs to a sub-store
         $subStoreService = app(\App\Services\SubStoreService::class);
         $primaryOp = $user->primaryOperator();
         $isSubStoreUser = $primaryOp ? $subStoreService->isSubStoreOperator($primaryOp->operator_name) : false;
+        
+        // Show sub-stores list for sub-store users, payment operators for operator users
+        if ($currentUser->isSuperAdmin()) {
+            if ($isSubStoreUser) {
+                $operators = DB::table('stores')
+                    ->where('store_active', 1)
+                    ->where(function($q) {
+                        $q->where('is_sub_store', 1)->orWhere('store_id', 54);
+                    })
+                    ->orderBy('store_name')
+                    ->pluck('store_name', 'store_name')
+                    ->toArray();
+            } else {
+                $operators = $this->getAllOperators();
+            }
+        } else {
+            $operators = $currentUser->operators->pluck('operator_name', 'operator_name');
+        }
         
         // Déterminer le thème selon l'utilisateur connecté
         $theme = $currentUser->isTimweOoredooUser() ? 'ooredoo' : 'club_privileges';

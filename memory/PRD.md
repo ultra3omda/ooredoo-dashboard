@@ -90,6 +90,11 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - iteration_32: Unified navigation PASSED (100%) - navbar partagee sur toutes les pages admin
 - iteration_33: Sub-store user fixes PASSED (100%) - label Dashboard Sub-Store, redirection SubStoreService, first-login
 
+### Edit User Form - Sub-Store vs Opérateur (DONE - NEW)
+- Pour un utilisateur sub-store: affiche la liste des sub-stores (depuis table `stores`) avec label "Dashboard Sub-Store"
+- Pour un utilisateur opérateur: affiche les moyens de paiement avec label "Opérateurs Assignés"
+- Distinction correcte entre sub-stores (AAFCME, Club22, Club Privilèges By Pluxee...) et opérateurs (S'abonner via Orange, Solde Lefri9i...)
+
 ## Backlog
 - Aucune tâche prioritaire restante
 
