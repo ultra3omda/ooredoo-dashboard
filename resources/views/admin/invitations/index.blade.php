@@ -285,6 +285,26 @@
         .copy-btn:hover {
             background: var(--bg);
         }
+        
+        /* Responsive Admin */
+        @media (max-width: 768px) {
+            .container { padding: 12px 8px; }
+            .page-header { flex-direction: column; align-items: stretch; gap: 12px; }
+            .page-header h1 { font-size: 20px; text-align: center; }
+            .page-header .header-actions { justify-content: center; flex-wrap: wrap; gap: 8px; }
+            .page-header .header-actions a { font-size: 12px; padding: 8px 12px; }
+            .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            table { min-width: 800px; }
+            table th, table td { padding: 10px 8px; font-size: 12px; }
+            .breadcrumb { font-size: 12px; }
+            .invitation-link { max-width: 120px; word-break: break-all; font-size: 10px; }
+        }
+        @media (max-width: 480px) {
+            .container { padding: 8px 4px; }
+            .page-header h1 { font-size: 18px; }
+            table { min-width: 700px; font-size: 11px; }
+            table th, table td { padding: 8px 6px; }
+        }
     .dark-mode { --brand-dark:#FFF; --bg:#0D0A1A; --card:#161131; --card-hover:#1E1745; --muted:#A1A1AA; --border:#2A2350; --text-primary:#FFF; --text-secondary:#A1A1AA; --input-bg:#1E1745; --input-border:#2A2350; --shadow-sm:0 1px 3px rgba(0,0,0,0.3); --shadow-md:0 4px 12px rgba(0,0,0,0.4); --table-stripe:rgba(255,255,255,0.03); --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --accent:#D4A843; }
     </style>
 <script>(function(){var s=localStorage.getItem("dashboard-theme");if(s==="dark")document.documentElement.classList.add("dark-mode");}());</script>
@@ -329,6 +349,7 @@
         @endif
         
         <div class="card">
+            <div class="table-wrapper">
             <table class="table">
                 <thead>
                     <tr>
@@ -468,6 +489,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </div>
         
         @if($invitations->hasPages())

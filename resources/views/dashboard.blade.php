@@ -80,6 +80,8 @@
       <a href="{{ route('admin.merchant-reco.dashboard') }}" class="dropdown-item" data-testid="menu-merchant-reco">Recommandations Marchands</a>
       @if(Auth::user()->isSuperAdmin())
       <a href="{{ route('admin.pluxee.users.index') }}" class="dropdown-item" data-testid="menu-pluxee-users">Gestion Pluxee</a>
+      <a href="{{ route('admin.users.permissions') }}" class="dropdown-item" data-testid="menu-permissions">Permissions</a>
+      <a href="{{ route('admin.audit-logs.index') }}" class="dropdown-item" data-testid="menu-audit-logs">Journal d'Audit</a>
       @endif
       <div style="border-top: 1px solid var(--border); margin: 4px 0;"></div>
       <form action="{{ route('auth.logout') }}" method="POST" style="margin: 0;">

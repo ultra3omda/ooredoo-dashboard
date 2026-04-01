@@ -432,19 +432,37 @@
                     @endif
                     
                     <!-- Campaign Selection Section (dynamic) -->
-                    <div class="form-group full-width" id="campaign_section" style="display: none;">
+                    <div class="form-group full-width" id="campaign_section" style="display: none;" data-testid="campaign-section">
                         <label class="form-label">Campagnes accessibles</label>
                         <div style="font-size: 13px; color: var(--muted); margin-bottom: 8px;">
                             Si aucune campagne n'est selectionnee, le collaborateur aura acces a <strong>toutes les campagnes</strong> et pourra inviter d'autres collaborateurs.
                         </div>
-                        <div id="campaign_checkboxes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 300px; overflow-y: auto; padding: 12px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px;">
-                            <div style="text-align: center; padding: 16px; color: var(--muted); grid-column: span 2;">
-                                Selectionnez d'abord un sub-store pour charger les campagnes...
+                        <!-- Searchable Multi-Select -->
+                        <div id="campaign_multiselect" style="position:relative;" data-testid="campaign-multiselect">
+                            <!-- Selected tags display -->
+                            <div id="campaign_selected_tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:0;"></div>
+                            <!-- Search input -->
+                            <div style="position:relative;">
+                                <input type="text" id="campaign_search" placeholder="Rechercher une campagne..." autocomplete="off" data-testid="campaign-search-input"
+                                    style="width:100%;padding:10px 14px 10px 36px;border:1px solid var(--input-border);border-radius:8px;font-size:14px;background:var(--input-bg);color:var(--text-primary);outline:none;transition:border-color 0.2s;"
+                                    onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--input-border)'" oninput="filterCampaigns(this.value)">
+                                <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35" stroke-linecap="round"/></svg>
                             </div>
-                        </div>
-                        <div style="margin-top: 8px; display: flex; gap: 8px;">
-                            <button type="button" onclick="selectAllCampaigns()" class="btn btn-secondary" style="font-size: 12px; padding: 4px 12px;">Tout selectionner</button>
-                            <button type="button" onclick="deselectAllCampaigns()" class="btn btn-secondary" style="font-size: 12px; padding: 4px 12px;">Tout deselectionner</button>
+                            <!-- Counter + actions bar -->
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;margin-bottom:4px;">
+                                <span id="campaign_counter" style="font-size:12px;color:var(--muted);" data-testid="campaign-counter">0 campagne(s) selectionnee(s)</span>
+                                <div style="display:flex;gap:6px;">
+                                    <button type="button" onclick="selectAllCampaigns()" class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" data-testid="select-all-campaigns">Tout selectionner</button>
+                                    <button type="button" onclick="deselectAllCampaigns()" class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" data-testid="deselect-all-campaigns">Tout deselectionner</button>
+                                </div>
+                            </div>
+                            <!-- Scrollable checkbox list -->
+                            <div id="campaign_checkboxes" data-testid="campaign-checkboxes"
+                                style="max-height:280px;overflow-y:auto;border:1px solid var(--input-border);border-radius:8px;background:var(--input-bg);padding:4px;">
+                                <div style="text-align:center;padding:20px;color:var(--muted);">
+                                    Selectionnez d'abord un sub-store pour charger les campagnes...
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -569,6 +587,9 @@
             }
         }
 
+        // Store all loaded campaigns for filtering
+        let allCampaigns = [];
+
         async function loadCampaigns() {
             const substoreName = document.getElementById('substore_name');
             const campaignSection = document.getElementById('campaign_section');
@@ -582,38 +603,32 @@
                 return;
             }
 
-            // Only show campaigns for eligible roles
             if (!isCampaignEligibleRole()) {
                 campaignSection.style.display = 'none';
                 return;
             }
             
             campaignSection.style.display = 'block';
-            campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Chargement des campagnes...</div>';
+            campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Chargement des campagnes...</div>';
+            document.getElementById('campaign_search').value = '';
+            document.getElementById('campaign_selected_tags').innerHTML = '';
             
             try {
                 const res = await fetch(`{{ route('admin.invitations.campaigns') }}?store_name=${encodeURIComponent(storeName)}`);
                 const data = await res.json();
                 
                 if (!data.campaigns || data.campaigns.length === 0) {
-                    campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Aucune campagne trouvee pour ce sub-store.</div>';
+                    allCampaigns = [];
+                    campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Aucune campagne trouvee pour ce sub-store.</div>';
+                    updateCampaignCounter();
                     return;
                 }
                 
-                let html = '';
-                data.campaigns.forEach((c, i) => {
-                    html += `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--input-border);border-radius:6px;cursor:pointer;transition:all 0.15s;background:var(--card);" 
-                                  onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--input-border)'">
-                        <input type="checkbox" name="campaign_access[]" value="${c.name}" style="width:16px;height:16px;accent-color:var(--accent);">
-                        <div>
-                            <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${c.name}</div>
-                            <div style="font-size:11px;color:var(--muted);">${c.cards} cartes · ${c.batches} lots</div>
-                        </div>
-                    </label>`;
-                });
-                campaignCheckboxes.innerHTML = html;
+                allCampaigns = data.campaigns;
+                renderCampaignList(allCampaigns);
+                updateCampaignCounter();
             } catch (e) {
-                campaignCheckboxes.innerHTML = `<div style="text-align:center;padding:16px;color:var(--danger);grid-column:span 2;">Erreur: ${e.message}</div>`;
+                campaignCheckboxes.innerHTML = `<div style="text-align:center;padding:20px;color:var(--danger);">Erreur: ${e.message}</div>`;
             }
         }
 
@@ -623,40 +638,119 @@
             if (!campaignSection || !campaignCheckboxes) return;
 
             campaignSection.style.display = 'block';
-            campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Chargement des campagnes...</div>';
+            campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Chargement des campagnes...</div>';
+            document.getElementById('campaign_search').value = '';
+            document.getElementById('campaign_selected_tags').innerHTML = '';
 
             try {
                 const res = await fetch(`{{ route('admin.invitations.campaigns') }}?store_name=${encodeURIComponent(operatorValue)}`);
                 const data = await res.json();
                 
                 if (!data.campaigns || data.campaigns.length === 0) {
-                    campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Aucune campagne trouvee pour cet operateur.</div>';
+                    allCampaigns = [];
+                    campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Aucune campagne trouvee pour cet operateur.</div>';
+                    updateCampaignCounter();
                     return;
                 }
                 
-                let html = '';
-                data.campaigns.forEach((c, i) => {
-                    html += `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--input-border);border-radius:6px;cursor:pointer;transition:all 0.15s;background:var(--card);" 
-                                  onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--input-border)'">
-                        <input type="checkbox" name="campaign_access[]" value="${c.name}" style="width:16px;height:16px;accent-color:var(--accent);">
-                        <div>
-                            <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${c.name}</div>
-                            <div style="font-size:11px;color:var(--muted);">${c.cards} cartes · ${c.batches} lots</div>
-                        </div>
-                    </label>`;
-                });
-                campaignCheckboxes.innerHTML = html;
+                allCampaigns = data.campaigns;
+                renderCampaignList(allCampaigns);
+                updateCampaignCounter();
             } catch (e) {
-                campaignCheckboxes.innerHTML = `<div style="text-align:center;padding:16px;color:var(--danger);grid-column:span 2;">Erreur: ${e.message}</div>`;
+                campaignCheckboxes.innerHTML = `<div style="text-align:center;padding:20px;color:var(--danger);">Erreur: ${e.message}</div>`;
             }
         }
 
+        function renderCampaignList(campaigns) {
+            const container = document.getElementById('campaign_checkboxes');
+            if (!campaigns.length) {
+                container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Aucun resultat.</div>';
+                return;
+            }
+            let html = '';
+            campaigns.forEach(c => {
+                const checked = isCampaignSelected(c.name) ? 'checked' : '';
+                html += `<label class="campaign-item" data-name="${c.name.toLowerCase()}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--input-border);cursor:pointer;transition:background 0.15s;"
+                              onmouseover="this.style.background='rgba(107,70,193,0.06)'" onmouseout="this.style.background='transparent'">
+                    <input type="checkbox" name="campaign_access[]" value="${c.name}" ${checked} onchange="onCampaignToggle(this)" data-testid="campaign-checkbox-${c.name.replace(/\s+/g,'-').toLowerCase()}"
+                        style="width:18px;height:18px;accent-color:var(--brand-primary);flex-shrink:0;cursor:pointer;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${c.name}">${c.name}</div>
+                        <div style="font-size:11px;color:var(--muted);">${c.cards} cartes · ${c.batches} lots</div>
+                    </div>
+                </label>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function filterCampaigns(query) {
+            const q = query.toLowerCase().trim();
+            if (!q) {
+                renderCampaignList(allCampaigns);
+                return;
+            }
+            const filtered = allCampaigns.filter(c => c.name.toLowerCase().includes(q));
+            renderCampaignList(filtered);
+        }
+
+        function isCampaignSelected(name) {
+            const tags = document.getElementById('campaign_selected_tags');
+            return tags.querySelector(`[data-campaign="${CSS.escape(name)}"]`) !== null;
+        }
+
+        function onCampaignToggle(checkbox) {
+            if (checkbox.checked) {
+                addCampaignTag(checkbox.value);
+            } else {
+                removeCampaignTag(checkbox.value);
+            }
+            updateCampaignCounter();
+        }
+
+        function addCampaignTag(name) {
+            const tags = document.getElementById('campaign_selected_tags');
+            if (tags.querySelector(`[data-campaign="${CSS.escape(name)}"]`)) return;
+            const tag = document.createElement('span');
+            tag.setAttribute('data-campaign', name);
+            tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--brand-primary);color:#fff;border-radius:20px;font-size:12px;font-weight:500;max-width:220px;';
+            tag.innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${name}">${name}</span>
+                <button type="button" onclick="removeCampaignTagAndUncheck('${name.replace(/'/g, "\\'")}')" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;opacity:0.8;">&times;</button>`;
+            tags.appendChild(tag);
+        }
+
+        function removeCampaignTag(name) {
+            const tags = document.getElementById('campaign_selected_tags');
+            const tag = tags.querySelector(`[data-campaign="${CSS.escape(name)}"]`);
+            if (tag) tag.remove();
+        }
+
+        function removeCampaignTagAndUncheck(name) {
+            removeCampaignTag(name);
+            const checkboxes = document.querySelectorAll('#campaign_checkboxes input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                if (cb.value === name) cb.checked = false;
+            });
+            updateCampaignCounter();
+        }
+
+        function updateCampaignCounter() {
+            const counter = document.getElementById('campaign_counter');
+            const selected = document.querySelectorAll('#campaign_selected_tags [data-campaign]').length;
+            counter.textContent = selected === 0 ? 'Aucune campagne selectionnee (acces complet)' : `${selected} campagne(s) selectionnee(s)`;
+        }
+
         function selectAllCampaigns() {
-            document.querySelectorAll('#campaign_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = true);
+            document.querySelectorAll('#campaign_checkboxes input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+                addCampaignTag(cb.value);
+            });
+            updateCampaignCounter();
         }
 
         function deselectAllCampaigns() {
             document.querySelectorAll('#campaign_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+            document.getElementById('campaign_selected_tags').innerHTML = '';
+            updateCampaignCounter();
         }
         
         document.addEventListener('DOMContentLoaded', function() {

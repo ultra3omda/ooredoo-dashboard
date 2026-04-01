@@ -1588,6 +1588,7 @@
                   @if(Auth::user()->canInviteCollaborators())
                   <a href="{{ route('admin.users.index') }}" class="admin-btn" style="display:block; margin:8px;">Utilisateurs</a>
                   <a href="{{ route('admin.invitations.index') }}" class="admin-btn" style="display:block; margin:8px;">Invitations</a>
+                  <a href="{{ route('admin.audit-logs.index') }}" class="admin-btn" style="display:block; margin:8px;">Journal d'Audit</a>
                   @endif
                   <a href="{{ route('password.change') }}" class="admin-btn" style="display:block; margin:8px;">🔒 Mot de passe</a>
                   @if(Auth::user()->canAccessOperatorsDashboard())

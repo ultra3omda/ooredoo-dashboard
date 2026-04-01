@@ -287,6 +287,25 @@
         .breadcrumb a:hover {
             text-decoration: underline;
         }
+        
+        /* Responsive Admin */
+        @media (max-width: 768px) {
+            .container { padding: 12px 8px; }
+            .page-header { flex-direction: column; align-items: stretch; gap: 12px; }
+            .page-header h1 { font-size: 20px; text-align: center; }
+            .page-header .header-actions { justify-content: center; flex-wrap: wrap; gap: 8px; }
+            .page-header .header-actions a, .page-header .header-actions button { font-size: 12px; padding: 8px 12px; }
+            .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            table { min-width: 700px; }
+            table th, table td { padding: 10px 8px; font-size: 12px; }
+            .breadcrumb { font-size: 12px; }
+        }
+        @media (max-width: 480px) {
+            .container { padding: 8px 4px; }
+            .page-header h1 { font-size: 18px; }
+            table { min-width: 600px; font-size: 11px; }
+            table th, table td { padding: 8px 6px; }
+        }
     </style>
 </head>
 <body>
@@ -340,6 +359,7 @@
         @endif
         
         <div class="card">
+            <div class="table-wrapper">
             <table class="table">
                 <thead>
                     <tr>
@@ -431,6 +451,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </div>
         
         @if($users->hasPages())

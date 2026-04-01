@@ -34,7 +34,9 @@ class User extends Authenticatable
         'is_otp_enabled',
         'password_changed_at',
         'created_by',
-        'platform_type'
+        'platform_type',
+        'pluxee_campaign_access',
+        'operator_name',
     ];
 
     /**

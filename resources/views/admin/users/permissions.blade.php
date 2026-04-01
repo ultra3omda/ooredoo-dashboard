@@ -120,6 +120,17 @@
             .kpi-grid { grid-template-columns: repeat(2, 1fr); }
             .checkbox-grid { grid-template-columns: 1fr; }
             .search-bar { flex-direction: column; }
+            .container { padding: 12px 8px; }
+            .header h1 { font-size: 20px; }
+            .header p { font-size: 12px; }
+            .header { flex-direction: column; text-align: center; gap: 10px; }
+            .user-card { padding: 14px; }
+        }
+        @media (max-width: 480px) {
+            .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .kpi-card { padding: 12px; }
+            .kpi-card .value { font-size: 22px; }
+            .header h1 { font-size: 18px; }
         }
     </style>
 </head>
@@ -131,9 +142,10 @@
                 <h1><i class="fas fa-shield-alt"></i> Permissions Campagnes</h1>
                 <p>Gerez les acces campagnes de chaque utilisateur en temps reel</p>
             </div>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <a href="{{ route('admin.users.index') }}" class="btn btn-outline"><i class="fas fa-users"></i> Utilisateurs</a>
                 <a href="{{ route('admin.invitations.create') }}" class="btn btn-outline"><i class="fas fa-user-plus"></i> Inviter</a>
+                <a href="{{ route('admin.audit-logs.index') }}" class="btn btn-outline"><i class="fas fa-history"></i> Journal d'Audit</a>
             </div>
         </div>
 

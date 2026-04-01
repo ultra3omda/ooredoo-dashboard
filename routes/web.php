@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\EklektikCronController;
 use App\Http\Controllers\Admin\TimweDiagnosticController;
 use App\Http\Controllers\Admin\TimweDiagnosticApiController;
 use App\Http\Controllers\Admin\MLDashboardController;
+use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\EklektikSyncTrackingController;
 use App\Http\Controllers\Admin\ClubPrivilegesSyncController;
 use App\Http\Controllers\Admin\PluxeeUserController;
@@ -136,6 +137,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/users/permissions', [UserManagementController::class, 'permissions'])->name('users.permissions');
         Route::post('/users/{user}/campaign-access', [UserManagementController::class, 'updateCampaignAccess'])->name('users.campaign-access');
         Route::get('/users/available-campaigns', [UserManagementController::class, 'getAvailableCampaigns'])->name('users.available-campaigns');
+        
+        // Audit Logs
+        Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+        Route::get('/audit-logs/data', [AuditLogController::class, 'getData'])->name('audit-logs.data');
         
         // Invitations (admins seulement)
         Route::middleware('check.invitation')->group(function () {

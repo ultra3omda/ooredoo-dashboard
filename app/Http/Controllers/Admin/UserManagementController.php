@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Admin\AuditLogController;
 use App\Mail\PasswordResetMail;
 
 class UserManagementController extends Controller
@@ -447,12 +448,32 @@ class UserManagementController extends Controller
         }
 
         $campaigns = $request->input('campaigns', []);
+        $oldValue = $user->pluxee_campaign_access;
         
         if (empty($campaigns)) {
             $user->update(['pluxee_campaign_access' => null]);
+            $action = 'grant_full_access';
+            $details = "Acces complet accorde a {$user->name} ({$user->email})";
         } else {
             $user->update(['pluxee_campaign_access' => json_encode(array_values($campaigns))]);
+            $action = 'restrict_campaigns';
+            $details = "Campagnes restreintes pour {$user->name} ({$user->email}): " . implode(', ', $campaigns);
         }
+
+        // Log the permission change
+        AuditLogController::logPermissionChange(
+            $user->id,
+            $user->name,
+            $user->email,
+            $currentUser->id,
+            $currentUser->name,
+            $currentUser->email,
+            $action,
+            $oldValue,
+            $user->pluxee_campaign_access,
+            $details,
+            $request->ip()
+        );
 
         Log::info("Campaign access updated for user {$user->id} ({$user->name}) by {$currentUser->name}: " . json_encode($campaigns));
 
