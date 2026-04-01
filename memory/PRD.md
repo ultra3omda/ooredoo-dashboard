@@ -39,6 +39,11 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - POST `/admin/users/{user}/campaign-access` — Update campaigns (JSON body)
 - GET `/admin/users/available-campaigns` — All campaigns for all sub-stores
 
+### Bug Fixes (April 2026)
+- **Z-index Operator Dropdown**: Fixed `.enhanced-filters-bar` stacking context (added `position: relative; z-index: 50`) so dropdown overlays KPI cards
+- **Intelligence Marchands (Gemini AI)**: Restored PHP-FPM service for Laravel page serving; API was already returning 200 OK
+- **Campaign Selection for Pluxee**: Added `checkCampaignVisibility()` function with role-based logic (`data-role-name` attributes on options). Campaigns now appear when selecting Collaborateur/Administrateur role + Pluxee sub-store
+
 ### Test Reports
 - iteration_22: 20/20 (100%)
 - iteration_23: 37/37 (100%)
@@ -47,6 +52,11 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - iteration_26: 10/10 (100%)
 - iteration_27: 17/17 (100%)
 - iteration_28: 28/28 (100%)
+- iteration_29: 3/3 P0 bugs verified (100%)
+
+## Backlog
+- **P1**: Comprehensive Responsive UI & Navigation Check (all menu views)
+- **P2**: Audit Log for Permissions (journal tracking campaign access changes)
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
