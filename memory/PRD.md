@@ -69,6 +69,13 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - Auto-logging via `AuditLogController::logPermissionChange()` called from `updateCampaignAccess()`
 - Navigation links added to: dashboard profile menu, sub-stores dashboard, permissions page
 
+### Navigation Unifiée (DONE - NEW)
+**Partial:** `/app/resources/views/partials/_admin-header.blade.php`
+- Header/navbar partagé avec logo Club Privileges, liens de navigation, toggle thème, dropdown profil
+- Intégré dans: users/index, invitations/index, invitations/create, users/permissions, audit-logs/index, layouts/app.blade.php (ML, mot de passe, pluxee)
+- Mobile responsive: hamburger menu (<900px) avec menu déroulant complet
+- Onglet actif mis en surbrillance automatiquement selon la route courante
+
 ### Test Reports
 - iteration_22: 20/20 (100%)
 - iteration_23: 37/37 (100%)
@@ -80,6 +87,7 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - iteration_29: 3/3 P0 bugs verified (100%)
 - iteration_30: P2 features all PASSED (100%)
 - iteration_31: Permissions modal filtering PASSED (100%) - campaigns filtrees par operateur
+- iteration_32: Unified navigation PASSED (100%) - navbar partagee sur toutes les pages admin
 
 ## Backlog
 - Aucune tâche prioritaire restante
