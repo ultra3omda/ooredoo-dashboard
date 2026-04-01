@@ -346,15 +346,21 @@
             document.getElementById('modalUserName').textContent = userName;
             document.getElementById('modalUserOperator').textContent = 'Operateur: ' + userOperator;
             
+            // Filter campaigns to only show those from the user's operator/sub-store
+            let filteredCampaigns = allCampaigns;
+            if (userOperator && userOperator !== '-') {
+                filteredCampaigns = allCampaigns.filter(c => c.store_name === userOperator);
+            }
+
             // Build campaign checkboxes
             const grid = document.getElementById('modalCampaigns');
             
-            if (allCampaigns.length === 0) {
-                grid.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Aucune campagne disponible</div>';
+            if (filteredCampaigns.length === 0) {
+                grid.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);grid-column:span 2;">Aucune campagne disponible pour ' + userOperator + '</div>';
             } else {
                 // Group by store
                 const byStore = {};
-                allCampaigns.forEach(c => {
+                filteredCampaigns.forEach(c => {
                     const store = c.store_name || 'Autre';
                     if (!byStore[store]) byStore[store] = [];
                     byStore[store].push(c);
