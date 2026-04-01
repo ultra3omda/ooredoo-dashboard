@@ -156,6 +156,14 @@
         .admin-navbar .nav-hamburger { display: flex; }
         .admin-navbar .nav-user-name { display: none; }
     }
+    @media (max-width: 480px) {
+        .admin-navbar { padding: 0 10px; }
+        .admin-navbar-inner { gap: 8px; }
+        .admin-navbar .nav-logo { width: 80px; height: 28px; }
+        .admin-navbar .nav-right { gap: 6px; }
+        .admin-navbar .nav-user-btn { padding: 4px 8px; font-size: 12px; }
+        .admin-navbar .nav-theme-btn { padding: 4px 6px; }
+    }
 </style>
 
 @php

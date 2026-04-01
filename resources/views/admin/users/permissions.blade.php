@@ -125,6 +125,38 @@
             .header p { font-size: 12px; }
             .header { flex-direction: column; text-align: center; gap: 10px; }
             .user-card { padding: 14px; }
+            .modal { width: 95%; max-height: 90vh; padding: 16px; }
+            .modal h3 { font-size: 15px; }
+            /* Table -> Card layout on mobile */
+            table thead { display: none; }
+            table, table tbody, table tr, table td { display: block; width: 100%; }
+            table tr { 
+                padding: 16px; 
+                margin-bottom: 12px; 
+                border: 1px solid var(--border); 
+                border-radius: 10px; 
+                background: var(--card);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
+            table td { 
+                padding: 4px 0; 
+                border: none;
+                font-size: 13px;
+                text-align: left !important;
+            }
+            table td:before {
+                content: attr(data-label);
+                display: block;
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 2px;
+                margin-top: 8px;
+            }
+            table td:first-child:before { margin-top: 0; }
+            table td:last-child { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
         }
         @media (max-width: 480px) {
             .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -206,11 +238,11 @@
                         data-name="{{ strtolower($u['name'] . ' ' . $u['email']) }}"
                         data-role="{{ $u['role'] }}"
                         data-access="{{ $u['has_restriction'] ? 'restricted' : 'full' }}">
-                        <td>
+                        <td data-label="Utilisateur">
                             <div style="font-weight: 600;">{{ $u['name'] }}</div>
                             <div style="font-size: 11px; color: var(--muted);">{{ $u['email'] }}</div>
                         </td>
-                        <td>
+                        <td data-label="Role">
                             @if($u['role'] === 'super_admin')
                                 <span class="badge badge-super">Super Admin</span>
                             @elseif($u['role'] === 'admin')
@@ -219,8 +251,8 @@
                                 <span class="badge badge-collab">Collaborateur</span>
                             @endif
                         </td>
-                        <td style="font-size: 12px;">{{ $u['operator'] }}</td>
-                        <td>
+                        <td data-label="Operateur / Sub-Store" style="font-size: 12px;">{{ $u['operator'] }}</td>
+                        <td data-label="Acces campagnes">
                             <div id="campaigns-{{ $u['id'] }}" data-testid="campaigns-user-{{ $u['id'] }}">
                                 @if($u['role'] === 'super_admin')
                                     <span class="badge badge-full"><i class="fas fa-infinity"></i>&nbsp; Toutes</span>
@@ -233,14 +265,14 @@
                                 @endif
                             </div>
                         </td>
-                        <td style="text-align: center;">
+                        <td data-label="Peut inviter" style="text-align: center;">
                             @if($u['can_invite'])
                                 <span style="color: var(--success);"><i class="fas fa-check-circle"></i></span>
                             @else
                                 <span style="color: var(--muted);"><i class="fas fa-minus-circle"></i></span>
                             @endif
                         </td>
-                        <td style="text-align: center;">
+                        <td data-label="Actions" style="text-align: center;">
                             @if($u['role'] !== 'super_admin')
                                 <button class="btn btn-sm btn-primary" onclick="openEditModal({{ $u['id'] }}, '{{ addslashes($u['name']) }}', '{{ $u['operator'] }}', {{ json_encode($u['campaigns']) }})" data-testid="edit-btn-{{ $u['id'] }}">
                                     <i class="fas fa-edit"></i> Modifier

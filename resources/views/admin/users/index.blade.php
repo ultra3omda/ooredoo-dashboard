@@ -288,23 +288,51 @@
             text-decoration: underline;
         }
         
-        /* Responsive Admin */
+        /* Responsive Admin - Mobile Card Layout */
         @media (max-width: 768px) {
             .container { padding: 12px 8px; }
             .page-header { flex-direction: column; align-items: stretch; gap: 12px; }
             .page-header h1 { font-size: 20px; text-align: center; }
             .page-header .header-actions { justify-content: center; flex-wrap: wrap; gap: 8px; }
-            .page-header .header-actions a, .page-header .header-actions button { font-size: 12px; padding: 8px 12px; }
-            .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            table { min-width: 700px; }
-            table th, table td { padding: 10px 8px; font-size: 12px; }
+            .page-header .header-actions a, .page-header .header-actions button { font-size: 13px; padding: 10px 16px; }
             .breadcrumb { font-size: 12px; }
-        }
-        @media (max-width: 480px) {
-            .container { padding: 8px 4px; }
-            .page-header h1 { font-size: 18px; }
-            table { min-width: 600px; font-size: 11px; }
-            table th, table td { padding: 8px 6px; }
+            
+            /* Table -> Card layout on mobile */
+            .table thead { display: none; }
+            .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+            .table tr { 
+                padding: 16px; 
+                margin-bottom: 12px; 
+                border: 1px solid var(--border); 
+                border-radius: 10px; 
+                background: var(--card);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
+            .table td { 
+                padding: 4px 0; 
+                border: none;
+                font-size: 13px;
+            }
+            .table td:before {
+                content: attr(data-label);
+                display: block;
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 2px;
+                margin-top: 8px;
+            }
+            .table td:first-child:before { margin-top: 0; }
+            /* Hide last login column on mobile */
+            .table td.td-login { display: none; }
+            .table td:last-child > div { flex-direction: row; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+            /* Fix pagination overflow on mobile */
+            .pagination { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .pagination > nav { max-width: 100%; }
+            .pagination > nav > div { flex-wrap: wrap; justify-content: center; }
+            .pagination span, .pagination a { font-size: 12px; padding: 6px 10px; }
         }
     </style>
 </head>
@@ -353,7 +381,7 @@
                 <tbody>
                     @forelse($users as $user)
                         <tr>
-                            <td>
+                            <td data-label="Utilisateur">
                                 <div>
                                     <div style="font-weight: 600;">{{ $user->name }}</div>
                                     <div style="font-size: 12px; color: var(--muted);">{{ $user->email }}</div>
@@ -362,7 +390,7 @@
                                     @endif
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Role">
                                 @if($user->role)
                                     <span class="role-badge role-{{ $user->role->name }}">
                                         {{ $user->role->display_name }}
@@ -371,7 +399,7 @@
                                     <span style="color: var(--muted);">Aucun rôle</span>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="Operateurs" class="td-login">
                                 <div class="operators-list">
                                     @forelse($user->operators as $operator)
                                         <span>
@@ -385,12 +413,12 @@
                                     @endforelse
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Statut">
                                 <span class="status-badge status-{{ $user->status }}">
                                     {{ ucfirst($user->status) }}
                                 </span>
                             </td>
-                            <td>
+                            <td data-label="Derniere connexion" class="td-login">
                                 @if($user->last_login_at)
                                     <div>{{ $user->last_login_at->format('d/m/Y H:i') }}</div>
                                     @if($user->last_login_ip)

@@ -236,13 +236,19 @@
         }
         
         @media (max-width: 768px) {
+            .container { padding: 12px 8px; }
+            .page-header { flex-direction: column; gap: 12px; }
+            .page-header h1 { font-size: 22px; }
             .form-grid {
                 grid-template-columns: 1fr;
             }
-            
             .form-actions {
                 flex-direction: column;
             }
+            .form-input, .form-select { font-size: 14px; }
+            .info-box { padding: 14px; }
+            .info-box h3 { font-size: 16px; }
+            .info-box p { font-size: 13px; }
         }
     .dark-mode { --brand-dark:#FFF; --bg:#0D0A1A; --card:#161131; --card-hover:#1E1745; --muted:#A1A1AA; --border:#2A2350; --text-primary:#FFF; --text-secondary:#A1A1AA; --input-bg:#1E1745; --input-border:#2A2350; --shadow-sm:0 1px 3px rgba(0,0,0,0.3); --shadow-md:0 4px 12px rgba(0,0,0,0.4); --table-stripe:rgba(255,255,255,0.03); --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --accent:#D4A843; }
     </style>

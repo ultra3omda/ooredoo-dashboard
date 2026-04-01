@@ -103,7 +103,38 @@
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
             .filters-bar { flex-direction: column; }
             .filters-bar input[type="text"] { min-width: auto; }
-            .table { min-width: 700px; }
+            /* Table -> Card layout on mobile */
+            .table thead { display: none; }
+            .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+            .table { min-width: unset; }
+            .table tr { 
+                padding: 16px; 
+                margin-bottom: 12px; 
+                border: 1px solid var(--border); 
+                border-radius: 10px; 
+                background: var(--card);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
+            .table td { 
+                padding: 4px 0; 
+                border: none;
+                font-size: 13px;
+            }
+            .table td:before {
+                content: attr(data-label);
+                display: block;
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 2px;
+                margin-top: 8px;
+            }
+            .table td:first-child:before { margin-top: 0; }
+            .campaigns-list { max-width: 100%; }
+            .table-wrapper { overflow-x: visible; }
+            .pagination-bar { flex-direction: column; gap: 10px; text-align: center; }
         }
         @media (max-width: 480px) {
             .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -230,13 +261,13 @@
             const newCampaigns = renderCampaigns(log.new_value);
 
             return `<tr>
-                <td><div class="timestamp">${dateStr}<br>${timeStr}</div>${log.ip_address ? `<span class="ip">${log.ip_address}</span>` : ''}</td>
-                <td><div class="user-info"><span class="name">${log.user_name || '-'}</span><span class="email">${log.user_email || '-'}</span></div></td>
-                <td><div class="user-info"><span class="name">${log.changed_by_name || '-'}</span><span class="email">${log.changed_by_email || '-'}</span></div></td>
-                <td>${actionBadge}</td>
-                <td style="max-width:250px;font-size:12px;color:var(--text-secondary);">${log.details || '-'}</td>
-                <td>${oldCampaigns}</td>
-                <td>${newCampaigns}</td>
+                <td data-label="Date"><div class="timestamp">${dateStr}<br>${timeStr}</div>${log.ip_address ? `<span class="ip">${log.ip_address}</span>` : ''}</td>
+                <td data-label="Utilisateur modifie"><div class="user-info"><span class="name">${log.user_name || '-'}</span><span class="email">${log.user_email || '-'}</span></div></td>
+                <td data-label="Modifie par"><div class="user-info"><span class="name">${log.changed_by_name || '-'}</span><span class="email">${log.changed_by_email || '-'}</span></div></td>
+                <td data-label="Action">${actionBadge}</td>
+                <td data-label="Details" style="max-width:250px;font-size:12px;color:var(--text-secondary);">${log.details || '-'}</td>
+                <td data-label="Campagnes (avant)">${oldCampaigns}</td>
+                <td data-label="Campagnes (apres)">${newCampaigns}</td>
             </tr>`;
         }
 

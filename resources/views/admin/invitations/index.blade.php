@@ -286,24 +286,47 @@
             background: var(--bg);
         }
         
-        /* Responsive Admin */
+        /* Responsive Admin - Mobile Card Layout */
         @media (max-width: 768px) {
             .container { padding: 12px 8px; }
             .page-header { flex-direction: column; align-items: stretch; gap: 12px; }
             .page-header h1 { font-size: 20px; text-align: center; }
             .page-header .header-actions { justify-content: center; flex-wrap: wrap; gap: 8px; }
-            .page-header .header-actions a { font-size: 12px; padding: 8px 12px; }
-            .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            table { min-width: 800px; }
-            table th, table td { padding: 10px 8px; font-size: 12px; }
+            .page-header .header-actions a { font-size: 13px; padding: 10px 16px; }
             .breadcrumb { font-size: 12px; }
-            .invitation-link { max-width: 120px; word-break: break-all; font-size: 10px; }
-        }
-        @media (max-width: 480px) {
-            .container { padding: 8px 4px; }
-            .page-header h1 { font-size: 18px; }
-            table { min-width: 700px; font-size: 11px; }
-            table th, table td { padding: 8px 6px; }
+            
+            /* Table -> Card layout on mobile */
+            .table thead { display: none; }
+            .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+            .table tr { 
+                padding: 16px; 
+                margin-bottom: 12px; 
+                border: 1px solid var(--border); 
+                border-radius: 10px; 
+                background: var(--card);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
+            .table td { 
+                padding: 4px 0; 
+                border: none;
+                font-size: 13px;
+            }
+            .table td:before {
+                content: attr(data-label);
+                display: block;
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 2px;
+                margin-top: 8px;
+            }
+            .table td:first-child:before { margin-top: 0; }
+            /* Hide invitation link column on mobile */
+            .table td.td-link { display: none; }
+            .actions { flex-direction: row; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+            .actions .btn-sm { flex: 1; justify-content: center; padding: 8px 10px; font-size: 12px; }
         }
     .dark-mode { --brand-dark:#FFF; --bg:#0D0A1A; --card:#161131; --card-hover:#1E1745; --muted:#A1A1AA; --border:#2A2350; --text-primary:#FFF; --text-secondary:#A1A1AA; --input-bg:#1E1745; --input-border:#2A2350; --shadow-sm:0 1px 3px rgba(0,0,0,0.3); --shadow-md:0 4px 12px rgba(0,0,0,0.4); --table-stripe:rgba(255,255,255,0.03); --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --accent:#D4A843; }
     </style>
@@ -350,13 +373,13 @@
                 <tbody>
                     @forelse($invitations as $invitation)
                         <tr>
-                            <td>
+                            <td data-label="Invite">
                                 <div>
                                     <div style="font-weight: 600;">{{ $invitation->first_name }} {{ $invitation->last_name }}</div>
                                     <div style="font-size: 12px; color: var(--muted);">{{ $invitation->email }}</div>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Role & Operateur">
                                 <div>
                                     @if($invitation->role)
                                         <span class="role-badge role-{{ $invitation->role->name }}">
@@ -379,11 +402,11 @@
                                     </div>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Invite par">
                                 <div style="font-size: 14px;">{{ $invitation->invitedBy->name ?? 'Inconnu' }}</div>
                                 <div style="font-size: 12px; color: var(--muted);">{{ $invitation->invitedBy->email ?? '' }}</div>
                             </td>
-                            <td>
+                            <td data-label="Statut">
                                 <span class="status-badge status-{{ $invitation->status }}">
                                     @switch($invitation->status)
                                         @case('pending')
@@ -408,7 +431,7 @@
                                     </div>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="Date">
                                 <div>{{ $invitation->created_at->format('d/m/Y H:i') }}</div>
                                 @if($invitation->accepted_at)
                                     <div style="font-size: 12px; color: var(--success);">
@@ -416,7 +439,7 @@
                                     </div>
                                 @endif
                             </td>
-                            <td>
+                            <td class="td-link" data-label="Lien">
                                 @if($invitation->status === 'pending')
                                     <div style="max-width: 200px;">
                                         <div class="invitation-link">
