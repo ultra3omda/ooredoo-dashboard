@@ -43,6 +43,31 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - **Z-index Operator Dropdown**: Fixed `.enhanced-filters-bar` stacking context (added `position: relative; z-index: 50`) so dropdown overlays KPI cards
 - **Intelligence Marchands (Gemini AI)**: Restored PHP-FPM service for Laravel page serving; API was already returning 200 OK
 - **Campaign Selection for Pluxee**: Added `checkCampaignVisibility()` function with role-based logic (`data-role-name` attributes on options). Campaigns now appear when selecting Collaborateur/Administrateur role + Pluxee sub-store
+- **pluxee_campaign_access $fillable**: Added to User model so Eloquent `update()` properly persists campaign restrictions
+
+### Searchable Multi-Select Campagnes (DONE - NEW)
+**Location:** `/admin/invitations/create`
+- Replaced checkbox grid with searchable multi-select list
+- Search input with real-time filtering
+- Selected campaign tags displayed above search
+- "Tout sélectionner" / "Tout désélectionner" buttons
+- Counter showing number of selected campaigns
+- Scalable for thousands of campaigns
+
+### Responsive Admin Pages (DONE - NEW)
+- Added responsive CSS (`@media 768px, 480px`) to: users/index, invitations/index, users/permissions
+- Tables wrapped in `.table-wrapper` for horizontal scroll on mobile
+- Headers stack vertically, font sizes adapt on small screens
+
+### Permission Audit Log (DONE - NEW)
+**Route:** `/admin/audit-logs`
+**DB Table:** `permission_audit_logs`
+**Features:**
+- 5 KPI cards: Total modifications, Accès complet accordés, Restrictions, Utilisateurs concernés, Admins actifs
+- Filterable table: search, action type, date range, pagination
+- Columns: Date/IP, Utilisateur modifié, Modifié par, Action (badge), Détails, Campagnes avant/après
+- Auto-logging via `AuditLogController::logPermissionChange()` called from `updateCampaignAccess()`
+- Navigation links added to: dashboard profile menu, sub-stores dashboard, permissions page
 
 ### Test Reports
 - iteration_22: 20/20 (100%)
@@ -53,10 +78,10 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - iteration_27: 17/17 (100%)
 - iteration_28: 28/28 (100%)
 - iteration_29: 3/3 P0 bugs verified (100%)
+- iteration_30: P2 features all PASSED (100%)
 
 ## Backlog
-- **P1**: Comprehensive Responsive UI & Navigation Check (all menu views)
-- **P2**: Audit Log for Permissions (journal tracking campaign access changes)
+- Aucune tâche prioritaire restante
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
