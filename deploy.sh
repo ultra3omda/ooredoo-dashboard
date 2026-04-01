@@ -48,7 +48,13 @@ if [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 fi
 
-pip install -r requirements.txt --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ --quiet
+# Install with flexible versions for server Python compatibility
+sed 's/==/>=/g' requirements.txt > /tmp/requirements_flex.txt
+pip install -r /tmp/requirements_flex.txt --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ --quiet 2>&1 || {
+    echo "  -> Installation flexible echouee, tentative sans versions..."
+    awk -F'[=<>!]' '{print $1}' requirements.txt > /tmp/requirements_names.txt
+    pip install -r /tmp/requirements_names.txt --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ --quiet
+}
 
 sudo supervisorctl restart fastapi_dashboard
 
