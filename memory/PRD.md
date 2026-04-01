@@ -88,6 +88,7 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - iteration_30: P2 features all PASSED (100%)
 - iteration_31: Permissions modal filtering PASSED (100%) - campaigns filtrees par operateur
 - iteration_32: Unified navigation PASSED (100%) - navbar partagee sur toutes les pages admin
+- iteration_33: Sub-store user fixes PASSED (100%) - label Dashboard Sub-Store, redirection SubStoreService, first-login
 
 ## Backlog
 - Aucune tâche prioritaire restante
