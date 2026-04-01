@@ -61,9 +61,9 @@ class AIConversation extends Model
     {
         return self::where('user_id', $userId)
                   ->where('created_at', '>=', Carbon::now()->subHours(24))
-                  ->select('session_id', 'created_at')
+                  ->selectRaw('session_id, MAX(created_at) as created_at')
                   ->groupBy('session_id')
-                  ->orderBy('created_at', 'desc')
+                  ->orderByRaw('MAX(created_at) desc')
                   ->limit(10)
                   ->pluck('created_at', 'session_id')
                   ->toArray();
