@@ -257,7 +257,11 @@ class SubStoreController extends Controller
             $data = Cache::remember($cacheKey, 3600, function () use ($p) {
                 return $this->computeTopSubStores($p['sub_store'], $p['start_date'], $p['end_date']);
             });
-            return response()->json(['success' => true, 'section' => 'stores', 'data' => $data, 'execution_time_ms' => round((microtime(true) - $start) * 1000)]);
+            return response()->json([
+                'success' => true, 'section' => 'stores', 'data' => $data,
+                'campaign_filter' => $this->currentCampaign,
+                'execution_time_ms' => round((microtime(true) - $start) * 1000)
+            ]);
         } catch (\Exception $e) {
             Log::error("Split stores error: " . $e->getMessage());
             return response()->json(['success' => false, 'section' => 'stores', 'error' => $e->getMessage()], 500);
@@ -390,6 +394,12 @@ class SubStoreController extends Controller
     private function computeTopSubStores(string $ss, string $sd, string $ed): array
     {
         $isPluxee = $this->isPluxeeCampaign($ss);
+
+        // When a specific campaign filter is active, show campaign-level data
+        if ($isPluxee && $this->currentCampaign) {
+            return $this->computeCampaignRanking($ss);
+        }
+
         $query = DB::table('stores')
             ->leftJoin('client', 'client.sub_store', '=', 'stores.store_id')
             ->leftJoin('client_abonnement', 'client_abonnement.client_id', '=', 'client.client_id')
@@ -426,6 +436,53 @@ class SubStoreController extends Controller
                 'manager' => $item->store_manager_name ?? 'N/A',
             ];
         })->toArray();
+    }
+
+    /**
+     * Campaign-level ranking: show the campaign's stats within the sub-store.
+     */
+    private function computeCampaignRanking(string $ss): array
+    {
+        $campaign = $this->currentCampaign;
+
+        // Get campaign distributed cards
+        $distributed = (int) DB::table('carte_recharge')
+            ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
+            ->where('stores.store_name', 'LIKE', "%$ss%")
+            ->where('carte_recharge.campain_name', $campaign)
+            ->sum('carte_recharge.card_generated_number');
+
+        // Get clients who activated cards from this campaign
+        $activatedClients = (int) DB::table('carte_recharge_client')
+            ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+            ->where('carte_recharge.campain_name', $campaign)
+            ->distinct()
+            ->count('carte_recharge_client.client_id');
+
+        // Get transactions from activated clients of this campaign
+        $transactions = 0;
+        if ($activatedClients > 0) {
+            $transactions = (int) DB::table('history')
+                ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
+                ->whereIn('client_abonnement.client_id', function ($sub) use ($campaign) {
+                    $sub->select('carte_recharge_client.client_id')
+                        ->from('carte_recharge_client')
+                        ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+                        ->where('carte_recharge.campain_name', $campaign);
+                })
+                ->count();
+        }
+
+        return [
+            [
+                'rank' => 1,
+                'name' => $campaign,
+                'type' => 'campagne',
+                'customers' => $distributed,
+                'transactions' => $activatedClients,
+                'manager' => $ss,
+            ]
+        ];
     }
 
     // =========================================================================
@@ -615,8 +672,7 @@ class SubStoreController extends Controller
             $query->whereIn("$clientAlias.client_id", function ($sub) use ($campaign) {
                 $sub->select('carte_recharge_client.client_id')
                     ->from('carte_recharge_client')
-                    ->join('carte_recharge_code', 'carte_recharge_client.carte_recharge_code_id', '=', 'carte_recharge_code.carte_recharge_code_id')
-                    ->join('carte_recharge', 'carte_recharge_code.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
+                    ->join('carte_recharge', 'carte_recharge_client.carte_recharge_id', '=', 'carte_recharge.carte_recharge_id')
                     ->where('carte_recharge.campain_name', $campaign);
             });
         }

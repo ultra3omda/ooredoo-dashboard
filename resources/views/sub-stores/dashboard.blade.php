@@ -1247,26 +1247,28 @@
     /* ===== MOBILE: Merchants & Users KPIs (AFTER base styles) ===== */
     @media (max-width: 600px) {
       .merchants-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+      .merchants-kpis-row .kpi-card { width: 100% !important; flex: 1 1 auto !important; }
       .merchants-kpi { 
         min-height: 80px !important; padding: 12px 10px !important; gap: 6px !important;
         flex-direction: column !important; align-items: flex-start !important;
-        overflow: visible !important;
+        overflow: visible !important; width: 100% !important;
       }
       .merchants-kpi .kpi-icon { font-size: 16px !important; width: auto !important; flex-shrink: 0; }
       .merchants-kpi .kpi-content { overflow: visible !important; min-width: 0 !important; width: 100% !important; }
-      .merchants-kpi .kpi-title { font-size: 9px !important; line-height: 1.3 !important; word-break: break-word !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; }
+      .merchants-kpi .kpi-title { font-size: 9px !important; line-height: 1.3 !important; word-break: normal !important; overflow-wrap: normal !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; hyphens: none !important; }
       .merchants-kpi .kpi-value { font-size: 20px !important; white-space: normal !important; overflow: visible !important; }
       .merchants-kpi .kpi-delta { font-size: 10px !important; }
 
       .users-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+      .users-kpis-row .kpi-card { width: 100% !important; flex: 1 1 auto !important; }
       .users-kpi { 
         min-height: 80px !important; padding: 12px 10px !important;
         flex-direction: column !important; align-items: flex-start !important;
-        overflow: visible !important;
+        overflow: visible !important; width: 100% !important;
       }
       .users-kpi .kpi-icon { font-size: 16px !important; margin-right: 0 !important; flex-shrink: 0; }
       .users-kpi .kpi-content { overflow: visible !important; min-width: 0 !important; width: 100% !important; }
-      .users-kpi .kpi-title { font-size: 9px !important; line-height: 1.3 !important; word-break: break-word !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; }
+      .users-kpi .kpi-title { font-size: 9px !important; line-height: 1.3 !important; word-break: normal !important; overflow-wrap: normal !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; hyphens: none !important; }
       .users-kpi .kpi-value { font-size: 20px !important; white-space: normal !important; overflow: visible !important; }
       .users-kpi .kpi-delta { font-size: 10px !important; }
 
@@ -1276,7 +1278,7 @@
       }
       .overview-kpi .kpi-icon { font-size: 18px !important; width: 24px !important; }
       .overview-kpi .kpi-content { overflow: visible !important; }
-      .overview-kpi .kpi-title { font-size: 10px !important; word-break: break-word !important; white-space: normal !important; }
+      .overview-kpi .kpi-title { font-size: 10px !important; word-break: normal !important; overflow-wrap: normal !important; white-space: normal !important; hyphens: none !important; }
       .overview-kpi .kpi-value { font-size: 18px !important; }
     }
 
@@ -1596,7 +1598,7 @@
       }
       .kpi-icon { font-size: 22px !important; }
       .kpi-value { font-size: 20px !important; overflow: visible !important; white-space: normal !important; }
-      .kpi-title { font-size: 9px !important; letter-spacing: 0.3px !important; overflow: visible !important; white-space: normal !important; word-break: break-word !important; text-overflow: unset !important; }
+      .kpi-title { font-size: 9px !important; letter-spacing: 0.3px !important; overflow: visible !important; white-space: normal !important; word-break: normal !important; overflow-wrap: normal !important; text-overflow: unset !important; hyphens: none !important; }
       .kpi-delta { font-size: 10px !important; min-width: 50px !important; max-width: 70px !important; padding: 2px 6px !important; }
       .kpi-content { overflow: visible !important; }
       .overview-kpi { padding: 12px !important; gap: 10px !important; overflow: visible !important; }
@@ -1680,9 +1682,15 @@
       .reco-kpis-row .kpi-card {
         padding: 12px 10px !important;
         min-height: 80px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        width: 100% !important;
+        flex: 1 1 auto !important;
       }
-      .reco-kpis-row .kpi-title { font-size: 10px !important; }
-      .reco-kpis-row .kpi-value { font-size: 18px !important; }
+      .reco-kpis-row .kpi-title { font-size: 10px !important; word-break: normal !important; white-space: normal !important; color: var(--muted) !important; }
+      .reco-kpis-row .kpi-value { font-size: 16px !important; word-break: normal !important; white-space: normal !important; overflow: visible !important; color: var(--brand-dark) !important; }
+      .reco-kpis-row .kpi-content { overflow: visible !important; }
       .reco-panels-grid {
         grid-template-columns: 1fr !important;
         gap: 12px !important;
@@ -2027,7 +2035,7 @@
       <!-- Sub-stores content -->
       <div class="card table-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <div class="chart-title">Classement des Meilleurs Sub-Stores</div>
+          <div class="chart-title" id="storesRankingTitle">Classement des Meilleurs Sub-Stores</div>
           <button class="btn btn-secondary" onclick="exportSubStoresTable()">
             <span>📤</span> Exporter
           </button>
@@ -2035,7 +2043,7 @@
         <div class="table-wrapper">
                     <table class="enhanced-table">
                         <thead>
-                            <tr>
+                            <tr id="storesRankingHeader">
                 <th>Rang</th>
                 <th>Nom du Sub-Store</th>
                 <th>Type</th>
@@ -3158,6 +3166,34 @@
         // Stores
         if (stores.status === 'fulfilled' && stores.value.success) {
           updateSubStoresRankingTable(stores.value.data);
+          // Update title and headers if campaign filter is active
+          const titleEl = document.getElementById('storesRankingTitle');
+          const headerEl = document.getElementById('storesRankingHeader');
+          if (stores.value.campaign_filter) {
+            if (titleEl) titleEl.textContent = `Classement - Campagne ${stores.value.campaign_filter}`;
+            if (headerEl) {
+              headerEl.innerHTML = `
+                <th>Rang</th>
+                <th>Nom de la Campagne</th>
+                <th>Type</th>
+                <th>Cartes Distribuées</th>
+                <th>Clients Activés</th>
+                <th>Sub-Store</th>
+              `;
+            }
+          } else {
+            if (titleEl) titleEl.textContent = 'Classement des Meilleurs Sub-Stores';
+            if (headerEl) {
+              headerEl.innerHTML = `
+                <th>Rang</th>
+                <th>Nom du Sub-Store</th>
+                <th>Type</th>
+                <th>Clients</th>
+                <th>Transactions</th>
+                <th>Manager</th>
+              `;
+            }
+          }
           loadedSections++;
         }
 
@@ -3203,9 +3239,16 @@
           showExpirationsSkeleton();
           const eresp = await fetch(`/sub-stores/api/expirations?sub_store=${encodeURIComponent(subStore)}`);
           const edata = await eresp.json();
-          if (edata.expirationsByMonth && edata.expirationsByMonth.length > 0) createExpirationsChart(edata.expirationsByMonth);
+          if (edata.expirationsByMonth && edata.expirationsByMonth.length > 0) {
+            createExpirationsChart(edata.expirationsByMonth);
+          } else {
+            showNoDataMessage('expirationsChart', 'Aucune donnée d\'expiration disponible pour cette période');
+          }
           hideExpirationsSkeleton();
-        } catch (e) { hideExpirationsSkeleton(); }
+        } catch (e) { 
+          showNoDataMessage('expirationsChart', 'Erreur lors du chargement des expirations');
+          hideExpirationsSkeleton(); 
+        }
 
         hideGlobalKPIsDeltas();
         forceHideGlobalDeltas();
@@ -3801,11 +3844,10 @@
         showNoDataMessage('inscriptionsChart', 'Aucune donnée d\'inscription disponible pour cette période');
       }
 
-      // Expirations Chart
+      // Expirations Chart — handled by separate API call in loadDashboardData()
+      // Only render here if data is already available (e.g. from updateDashboard fallback)
       if (data.expirationsByMonth && data.expirationsByMonth.length > 0) {
         createExpirationsChart(data.expirationsByMonth);
-      } else {
-        showNoDataMessage('expirationsChart', 'Aucune donnée d\'expiration disponible pour cette période');
       }
     }
 
@@ -3880,6 +3922,12 @@
     function createExpirationsChart(data) {
       const ctx = document.getElementById('expirationsChart');
       if (!ctx) return;
+      
+      // Restore canvas if hidden by showNoDataMessage
+      ctx.style.display = '';
+      const noDataMsg = ctx.parentElement.querySelector('.no-data-message');
+      if (noDataMsg) noDataMsg.remove();
+      
       if (expirationsChart) expirationsChart.destroy();
       const labels = data.map(d => d.date);
       const values = data.map(d => d.value);
