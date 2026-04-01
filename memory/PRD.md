@@ -1,24 +1,23 @@
 # Club Privileges Dashboard - PRD
 
 ## Original Problem Statement
-High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-powered predictive recommendations inspired by AWS Personalize. Merchant Intelligence powered by Gemini AI. Digital Presence Scoring with real web scraping. Role-based campaign access for collaborators with real-time permission management.
+High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-powered predictive recommendations. Merchant Intelligence powered by Gemini AI. Digital Presence Scoring. Role-based campaign access for collaborators.
 
 ## Tech Stack
 - **Backend**: Laravel 10, FastAPI (Python), Redis Cache
 - **Database**: MySQL (remote)
 - **ML**: LightGBM LambdaRank + Exploration/Exploitation (28 features)
-- **AI**: Gemini 2.5 Flash (Emergent LLM Key) for Merchant Intelligence + Digital Audit
-- **Scraping**: httpx + BeautifulSoup (real web/social scraping)
+- **AI**: Gemini 2.5 Flash (Emergent LLM Key)
 - **Frontend**: Blade templates, Vanilla JS, Chart.js
 
 ## Implemented Features
 
 ### Core Dashboard (DONE)
 ### ML Recommendation Engine v2.0 (DONE)
-### P2: Client-Facing Widget (DONE)
+### Client-Facing Widget (DONE)
 ### Merchant Intelligence Engine (DONE)
-### P3: Analytics Temporel (DONE)
-### P3: A/B Test Framework (DONE)
+### Analytics Temporel (DONE)
+### A/B Test Framework (DONE)
 ### Digital Presence Scoring (DONE)
 ### Collaborateur Role with Campaign Access (DONE)
 ### Permissions Management Page (DONE)
@@ -28,39 +27,46 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 ### Edit User Form - Sub-Store vs Operateur (DONE)
 
 ### Formulaire Creation Utilisateur - Logique Dynamique (DONE)
-**Date:** Avril 2026
-- Selecteur Type (Operateur / Sub-Store) pour SuperAdmin
-- Si Operateur: affiche dropdown operateurs de paiement
-- Si Sub-Store: affiche dropdown sub-stores + multi-select campagnes (avec recherche)
-- Backend: `UserManagementController@store` accepte `type_selection`, `operator_name`/`substore_name`, `campaign_access[]`
-
 ### Re-invitation & Suppression Invitations (DONE)
-**Date:** Avril 2026
-- Validation modifiee: `Rule::unique('invitations', 'email')` avec clause WHERE `status=pending AND expires_at > now()`
-- Permet de re-inviter un email apres acceptation/annulation/expiration
-- Suppression d'invitations pendantes fonctionnelle
 
-### Responsive Mobile - Toutes les vues admin (DONE)
+### Responsive Mobile - TOUTES les pages (DONE)
 **Date:** Avril 2026
-- **Pattern:** Tables converties en cartes mobiles (CSS `display: block`, `data-label`, `::before`)
-- **Pages corrigees:**
-  - `invitations/index.blade.php` - Card layout, colonnes secondaires masquees (lien, date)
-  - `users/index.blade.php` - Card layout, colonnes secondaires masquees (operateurs, derniere connexion)
-  - `users/permissions.blade.php` - Table card layout, modal 95% width, KPI 2x2
-  - `audit-logs/index.blade.php` - Card layout, filtres empiles verticalement
-  - `users/edit.blade.php` - CSS responsive ajoute (grid 1 col, header colonne)
-  - `users/create.blade.php` - Deja responsive (grid 1 col)
-  - `invitations/create.blade.php` - Enrichi avec styles container/header mobile
-  - `partials/_admin-header.blade.php` - Fix overflow 480px, padding reduit
-- **Tests:** 13/13 (100%) - Mobile + Desktop regression
+**Pattern CSS:** Tables -> Card layout mobile, KPIs 2-per-row, Nav tabs scrollable, Forms 1 colonne
+
+**Pages corrigees (Phase 1 - Admin):**
+- invitations/index, users/index, permissions, audit-logs/index - Card layout avec data-label
+- users/edit - CSS responsive ajoute
+- users/create, invitations/create - Grid 1 colonne
+- _admin-header - Fix overflow 480px
+
+**Pages corrigees (Phase 2 - Dashboards):**
+- sub-stores/dashboard.blade.php - Header stack, KPIs calc(50% - 8px), .grid:not(#kpisGrid) pour charts column, tabs overflow-x auto + flex-wrap nowrap
+- dashboard.css - Header stack, KPIs compact, charts responsive
+- Eklektik dashboard - Deja responsive
+
+**Pages corrigees (Phase 3 - Auth):**
+- login, forgot-password, reset-password, first-login, otp-request, otp-verify - Padding compact 480px
+- change-password - Margin/padding reduits
+
+**Pages corrigees (Phase 4 - Admin restantes):**
+- layouts/eklektik-config - Nav pills stack, cards padding
+- pluxee-users - Grid 1 colonne, user-row wrap
+- ai-agent - Container padding, chat height
+- ml-dashboard - KPIs 2 per row compact
+- merchant-recommendations - Grid 2 col, cards wrap
+- timwe-diagnostic - Summary 2 col, tab buttons compact
+
+**Tests:** 
+- iteration_35: 13/13 (100%) - Admin pages mobile + desktop regression
+- iteration_36: 11/11 (100%) - All pages mobile + desktop regression
+
+### Donnees abonnements a expiration
+**Statut:** DONNEES REELLES de la base client_abonnement (champ client_abonnement_expiration)
+Les 38 expirations Mars 2026 et 1 en Avril 2026 sont des donnees reelles.
 
 ### CI/CD Pipeline (DONE)
 - `.github/workflows/deploy.yml` + `deploy.sh` pour branche `emergent`
-
-## Test Reports
-- iteration_22 to iteration_33: All 100%
-- iteration_34: 10/10 (100%) - User creation dynamic form + invitation re-invite
-- iteration_35: 13/13 (100%) - Mobile responsive all admin pages + desktop regression
+- Fonctionnel (confirme par utilisateur)
 
 ## Backlog
 - Aucune tache prioritaire restante
