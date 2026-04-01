@@ -20,35 +20,32 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - Edit User Form, Dynamic User Creation, Re-invitation/Deletion
 
 ### Responsive Mobile - COMPLETE (Avril 2026)
-**ALL pages responsive with unified mobile patterns**
-
-Key CSS fixes:
-- KPIs: overflow: visible, word-break: break-word, flex-direction: column on mobile
+All pages responsive. Key CSS fixes:
+- KPIs: `width: 100% !important`, `flex: 1 1 auto !important` for Merchant/Users/Reco in grid
 - Tables: Card layout with data-label on admin pages
 - Tabs: overflow-x: auto for scrollable navigation
-- Recommandations: reco-panels-grid -> 1 column on mobile
-- CSS specificity: All mobile overrides placed AFTER base styles with !important
+
+### RBAC Campaign Filtering - COMPLETE (Avril 2026)
+- **Expirations chart**: Now filters by campaign via `getExpirationsByMonth($ss, $months, $campaign)`
+- **Sub-Stores ranking**: `computeCampaignRanking()` shows campaign-level data for restricted users
+- **applyPluxeeCampaignFilter**: Fixed join path (carte_recharge_client → carte_recharge, NOT carte_recharge_code)
+- **Frontend**: Dynamic title/headers adapt between "Classement Sub-Stores" vs "Classement Campagne"
+- **Data integrity**: Hutchinson has 2013 cards, 0 activations → all KPIs/charts show 0 (correct per DB admin)
 
 ### Bug Fixes (Avril 2026)
-- Fixed SQL GROUP BY error on AI Agent page (AIConversation.php) - uses MAX(created_at) and orderByRaw
-- Fixed User Creation form dynamic logic (Sub-store/Operator toggles, Campaign multi-select)
-- Fixed invitation deletion and re-invitation for previously deleted users
-- Fixed KPI text truncation on mobile (overflow: visible)
-- Added "Aucune donnee disponible" empty state messages for charts
-- Fixed date range selectors to display inline on mobile
-
-### CI/CD Pipeline (DONE - blocked by VPS disk space)
+- Fixed SQL GROUP BY error on AI Agent page (AIConversation.php)
+- Fixed expirations chart race condition (updateCharts called before API response)
+- Fixed KPI card width on mobile (was 79px due to calc(50% - 8px) from parent flexbox)
+- Fixed Reco KPI text invisible (white on white → dark colors)
+- Fixed applyPluxeeCampaignFilter using non-existent carte_recharge_code table
 
 ## Test Reports
-- iteration_34: 10/10 | iteration_35: 13/13 | iteration_36: 11/11
-- iteration_37: 7/7 | iteration_38: 8/8 (multi-role)
-- iteration_39: 100% PASS (comprehensive re-validation - all roles, all pages, all APIs)
+- iteration_39: 100% | iteration_40: 100% | iteration_41: 100%
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
-- Admin Club Privileges: admin.pluxee@test.com / Test@2025
-- Collaborateur ALL: mohamed@pluxee.tn / Test@2025
-- Collaborateur restricted: imededdine.essefi@gmail.com / Test@2025
+- Admin Club Privileges: admin.pluxee@test.com / Test@2025 (pluxee_campaign_access=NULL → full access)
+- Collaborateur: imededdine.essefi@gmail.com / Test@2025 (restricted to Hutchinson)
 
 ## Backlog
 - CI/CD: Verify pipeline once user clears VPS disk space (P1)

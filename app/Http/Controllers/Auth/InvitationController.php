@@ -34,6 +34,33 @@ class InvitationController extends Controller
             $invitations = Invitation::with(['invitedBy', 'role'])
                 ->orderBy('created_at', 'desc')
                 ->paginate(20);
+        } elseif ($user->isAdminSubStore()) {
+            // Admin sub-store voit les invitations pour son sub-store
+            $subStoreName = $user->getPrimaryOperatorName();
+            $invitations = Invitation::where(function($query) use ($user, $subStoreName) {
+                $query->where('invited_by', $user->id)
+                      ->orWhere(function($q) use ($subStoreName) {
+                          // Invitations avec le même sub-store dans additional_data
+                          $q->whereNotNull('additional_data')
+                            ->where('additional_data', 'LIKE', '%' . $subStoreName . '%');
+                      });
+            })
+            ->with(['invitedBy', 'role'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+        } elseif ($user->isAdminOperator()) {
+            // Admin opérateur voit les invitations pour son opérateur
+            $operatorName = $user->getPrimaryOperatorName();
+            $invitations = Invitation::where(function($query) use ($user, $operatorName) {
+                $query->where('invited_by', $user->id)
+                      ->orWhere(function($q) use ($operatorName) {
+                          $q->whereNotNull('additional_data')
+                            ->where('additional_data', 'LIKE', '%' . $operatorName . '%');
+                      });
+            })
+            ->with(['invitedBy', 'role'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
         } else {
             // Tous les autres : SEULEMENT leurs propres invitations
             $invitations = Invitation::where('invited_by', $user->id)

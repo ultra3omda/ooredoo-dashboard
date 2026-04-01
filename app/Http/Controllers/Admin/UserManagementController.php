@@ -43,10 +43,34 @@ class UserManagementController extends Controller
                 break;
                 
             case 'admin_operator':
+                // Admin opérateur : voit les utilisateurs de son opérateur
+                $operatorName = $user->getPrimaryOperatorName();
+                $users = User::whereHas('operators', function($query) use ($operatorName) {
+                    $query->where('operator_name', $operatorName);
+                })
+                ->whereHas('role', function($query) {
+                    $query->where('name', '!=', 'super_admin');
+                })
+                ->with(['role', 'operators'])
+                ->paginate(20);
+                break;
+
             case 'admin_sub_store':
+                // Admin sub-store : voit TOUS les utilisateurs de son sub-store (campagnes et collaborateurs)
+                $subStoreName = $user->getPrimaryOperatorName();
+                $users = User::whereHas('operators', function($query) use ($subStoreName) {
+                    $query->where('operator_name', $subStoreName);
+                })
+                ->whereHas('role', function($query) {
+                    $query->where('name', '!=', 'super_admin');
+                })
+                ->with(['role', 'operators'])
+                ->paginate(20);
+                break;
+
             case 'collaborator':
             default:
-                // Tous les autres : SEULEMENT les utilisateurs qu'ils ont créés + eux-mêmes
+                // Collaborateur : SEULEMENT les utilisateurs qu'ils ont créés + eux-mêmes
                 $users = User::where(function($query) use ($user) {
                     $query->where('created_by', $user->id)
                           ->orWhere('id', $user->id);

@@ -15,8 +15,21 @@ class AuditLogController extends Controller
 
     public function getData(Request $request)
     {
+        $user = auth()->user();
         $query = DB::table('permission_audit_logs')
             ->orderBy('created_at', 'desc');
+
+        // Filtrer par sub-store pour admin_sub_store
+        if (!$user->isSuperAdmin()) {
+            $subStoreName = $user->getPrimaryOperatorName();
+            if ($subStoreName) {
+                // Voir seulement les logs des utilisateurs de son sub-store
+                $subStoreUserIds = \App\Models\User::whereHas('operators', function($q) use ($subStoreName) {
+                    $q->where('operator_name', $subStoreName);
+                })->pluck('id')->toArray();
+                $query->whereIn('user_id', $subStoreUserIds);
+            }
+        }
 
         // Filters
         if ($search = $request->input('search')) {
@@ -45,9 +58,18 @@ class AuditLogController extends Controller
         $perPage = 20;
         $logs = $query->skip(($page - 1) * $perPage)->take($perPage)->get();
 
-        // Stats
-        $stats = DB::table('permission_audit_logs')
-            ->selectRaw("
+        // Stats - filtered the same way as logs
+        $statsQuery = DB::table('permission_audit_logs');
+        if (!$user->isSuperAdmin()) {
+            $subStoreName = $user->getPrimaryOperatorName();
+            if ($subStoreName) {
+                $subStoreUserIds = \App\Models\User::whereHas('operators', function($q) use ($subStoreName) {
+                    $q->where('operator_name', $subStoreName);
+                })->pluck('id')->toArray();
+                $statsQuery->whereIn('user_id', $subStoreUserIds);
+            }
+        }
+        $stats = $statsQuery->selectRaw("
                 COUNT(*) as total,
                 SUM(CASE WHEN action = 'grant_full_access' THEN 1 ELSE 0 END) as full_access_grants,
                 SUM(CASE WHEN action = 'restrict_campaigns' THEN 1 ELSE 0 END) as restrictions,
