@@ -249,25 +249,10 @@
 <script>(function(){var s=localStorage.getItem("dashboard-theme");if(s==="dark")document.documentElement.classList.add("dark-mode");}());</script>
 </head>
 <body>
+    @include('partials._admin-header')
     <div class="container">
-        <div class="breadcrumb">
-            @if(Auth::user()->canAccessOperatorsDashboard())
-                <a href="{{ route('dashboard') }}">Dashboard</a>
-                <span>→</span>
-            @else
-                <a href="{{ route('sub-stores.dashboard') }}">Sub-Stores Dashboard</a>
-                <span>→</span>
-            @endif
-            <a href="{{ route('admin.invitations.index') }}">Invitations</a>
-            <span>→</span>
-            <span>Inviter</span>
-        </div>
-        
-        <div class="header">
+        <div class="page-header" style="margin-top: 16px;">
             <h1>Inviter un Utilisateur</h1>
-            <a href="{{ route('admin.invitations.index') }}" class="btn btn-secondary">
-                ← Retour aux invitations
-            </a>
         </div>
         
         <div class="info-box">

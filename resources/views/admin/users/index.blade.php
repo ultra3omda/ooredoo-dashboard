@@ -309,32 +309,11 @@
     </style>
 </head>
 <body>
+    @include('partials._admin-header')
     <div class="container">
-        <div class="breadcrumb">
-            @if(Auth::user()->canAccessOperatorsDashboard())
-                <a href="{{ route('dashboard') }}">Dashboard</a>
-                <span>→</span>
-            @else
-                <a href="{{ route('sub-stores.dashboard') }}">Sub-Stores Dashboard</a>
-                <span>→</span>
-            @endif
-            <span>Administration</span>
-            <span>→</span>
-            <span>Utilisateurs</span>
-        </div>
-        
-        <div class="header">
+        <div class="page-header" style="margin-top: 16px;">
             <h1>Gestion des Utilisateurs</h1>
             <div class="header-actions">
-                @if(Auth::user()->canAccessOperatorsDashboard())
-                    <a href="{{ route('dashboard') }}" class="btn btn-secondary">
-                        ← Retour au Dashboard
-                    </a>
-                @else
-                    <a href="{{ route('sub-stores.dashboard') }}" class="btn btn-secondary">
-                        ← Retour au Sub-Stores Dashboard
-                    </a>
-                @endif
                 @if(Auth::user()->isSuperAdmin() || Auth::user()->isAdmin())
                     <a href="{{ route('admin.users.permissions') }}" class="btn" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);">
                         <i class="fas fa-shield-alt"></i> Permissions Campagnes

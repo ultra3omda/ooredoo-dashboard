@@ -114,19 +114,10 @@
     <script>(function(){var s=localStorage.getItem("dashboard-theme");if(s==="dark")document.documentElement.classList.add("dark-mode");}());</script>
 </head>
 <body>
+    @include('partials._admin-header')
     <div class="container">
-        <div class="breadcrumb">
-            <a href="{{ route('dashboard') }}">Dashboard</a> &rarr;
-            <a href="{{ route('admin.users.index') }}">Administration</a> &rarr;
-            Journal d'Audit
-        </div>
-
-        <div class="page-header">
+        <div class="page-header" style="margin-top: 16px;">
             <h1 data-testid="audit-log-title">Journal d'Audit - Permissions</h1>
-            <div class="header-actions">
-                <a href="{{ route('admin.users.permissions') }}" class="btn btn-secondary" data-testid="back-to-permissions">&larr; Permissions</a>
-                <a href="{{ route('admin.users.index') }}" class="btn btn-secondary" data-testid="back-to-users">&larr; Utilisateurs</a>
-            </div>
         </div>
 
         <!-- KPI Stats -->

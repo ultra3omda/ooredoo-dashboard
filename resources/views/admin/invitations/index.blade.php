@@ -310,26 +310,11 @@
 <script>(function(){var s=localStorage.getItem("dashboard-theme");if(s==="dark")document.documentElement.classList.add("dark-mode");}());</script>
 </head>
 <body>
+    @include('partials._admin-header')
     <div class="container">
-        <div class="breadcrumb">
-            @if(Auth::user()->canAccessOperatorsDashboard())
-                <a href="{{ route('dashboard') }}">Dashboard</a>
-                <span>→</span>
-            @else
-                <a href="{{ route('sub-stores.dashboard') }}">Sub-Stores Dashboard</a>
-                <span>→</span>
-            @endif
-            <a href="{{ route('admin.users.index') }}">Administration</a>
-            <span>→</span>
-            <span>Invitations</span>
-        </div>
-        
-        <div class="header">
+        <div class="page-header" style="margin-top: 16px;">
             <h1>Gestion des Invitations</h1>
             <div class="header-actions">
-                <a href="{{ route('admin.users.index') }}" class="btn btn-secondary">
-                    Utilisateurs
-                </a>
                 <a href="{{ route('admin.invitations.create') }}" class="btn btn-primary">
                     + Nouvelle Invitation
                 </a>

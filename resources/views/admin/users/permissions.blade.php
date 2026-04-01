@@ -135,17 +135,13 @@
     </style>
 </head>
 <body>
+    @include('partials._admin-header')
     <div class="container">
         <!-- Header -->
-        <div class="header">
+        <div class="header" style="margin-top: 16px;">
             <div>
                 <h1><i class="fas fa-shield-alt"></i> Permissions Campagnes</h1>
                 <p>Gerez les acces campagnes de chaque utilisateur en temps reel</p>
-            </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <a href="{{ route('admin.users.index') }}" class="btn btn-outline"><i class="fas fa-users"></i> Utilisateurs</a>
-                <a href="{{ route('admin.invitations.create') }}" class="btn btn-outline"><i class="fas fa-user-plus"></i> Inviter</a>
-                <a href="{{ route('admin.audit-logs.index') }}" class="btn btn-outline"><i class="fas fa-history"></i> Journal d'Audit</a>
             </div>
         </div>
 
