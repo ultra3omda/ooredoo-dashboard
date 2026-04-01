@@ -12,48 +12,51 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 
 ## Implemented Features
 
-### Core Dashboard (DONE)
-### ML Recommendation Engine v2.0 (DONE)
-### Client-Facing Widget (DONE)
-### Merchant Intelligence Engine (DONE)
-### Analytics Temporel (DONE)
-### A/B Test Framework (DONE)
-### Digital Presence Scoring (DONE)
-### Collaborateur Role with Campaign Access (DONE)
-### Permissions Management Page (DONE)
-### Searchable Multi-Select Campagnes (DONE)
-### Permission Audit Log (DONE)
-### Navigation Unifiee (DONE)
-### Edit User Form - Sub-Store vs Operateur (DONE)
-### Formulaire Creation Utilisateur - Logique Dynamique (DONE)
-### Re-invitation & Suppression Invitations (DONE)
+### Core Features (ALL DONE)
+- Core Dashboard, ML Recommendation Engine v2.0, Client-Facing Widget
+- Merchant Intelligence Engine, Analytics Temporel, A/B Test Framework
+- Digital Presence Scoring, Collaborateur Role with Campaign Access
+- Permissions Management, Permission Audit Log, Navigation Unifiee
+- Edit User Form Sub-Store/Operateur, Dynamic User Creation Form
+- Re-invitation & Suppression Invitations
 
-### Responsive Mobile - TOUTES les pages (DONE)
-**Date:** Avril 2026
-- Admin pages: card layout mobile, KPIs 2-per-row, nav tabs scrollable
-- Dashboards: Sub-stores + Principal - header stack, KPIs compact, charts responsive
-- Auth pages: 6 pages avec padding compact
-- Admin restantes: 5 pages avec responsive enrichi
+### Responsive Mobile - COMPLETE (Avril 2026)
+**All pages responsive with unified mobile patterns:**
+- Admin tables: Card layout with data-label
+- KPIs: 2-per-row compact with word-break for long titles
+- Nav tabs: Horizontally scrollable (overflow-x: auto)
+- Forms: Single column on mobile
+- Auth pages: Compact padding
 
-### Fix: Dates compactes + Message "Pas de donnees" (DONE)
-**Date:** Avril 2026
-- Section dates: `.date-inputs { flex-direction: row }` sur mobile (dates en ligne au lieu de stackees)
-- Fonction `showNoDataMessage(canvasId, message)`: remplace canvas vide par message SVG + texte
-- Applique a: inscriptionsChart + expirationsChart (si donnees vides ou toutes a 0)
-- Message: icone SVG graphique + "Aucune donnee disponible..." + sous-titre "Les donnees apparaitront..."
+**Merchant/Users KPIs fix:**
+- flex-direction: column on cards (icon top, title below)
+- kpi-title: font-size 9px at 600px, 8px at 480px, word-break: break-word
+- grid-template-columns: 1fr 1fr (always 2-per-row on mobile)
 
-### Donnees abonnements a expiration
-**Statut:** DONNEES REELLES de la table `client_abonnement` (champ `client_abonnement_expiration`)
+**Date section fix:**
+- flex-direction: row on .date-inputs (dates inline, not stacked)
+- period-section gap: 6px for compact vertical spacing
+
+**Empty chart message:**
+- showNoDataMessage() function: SVG icon + text + subtitle
+- Applied to inscriptionsChart and expirationsChart
+
+### Campaign filtering (VERIFIED)
+- Backend enforces campaign restriction via normalizeSubStoreParams()
+- Frontend passes campaign parameter in all split API calls
+- Works for collaborators with pluxee_campaign_access restrictions
 
 ### CI/CD Pipeline (DONE)
 
 ## Test Reports
 - iteration_34: 10/10 - User creation + invitation
-- iteration_35: 13/13 - Admin mobile + desktop regression  
+- iteration_35: 13/13 - Admin mobile + desktop regression
 - iteration_36: 11/11 - All pages mobile + desktop regression
+- iteration_37: 7/7 - Merchant/Users KPIs + dates + collaborator
 
 ## Backlog
 - Aucune tache prioritaire restante
 
 ## Admin Credentials
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
+- Collaborator (test): imededdine.essefi@gmail.com / Test@2025
