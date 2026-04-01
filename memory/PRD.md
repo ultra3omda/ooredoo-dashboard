@@ -22,28 +22,27 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 ### Responsive Mobile - COMPLETE (Avril 2026)
 **ALL pages responsive with unified mobile patterns**
 
-**Key CSS fixes:**
-- KPIs: overflow: visible !important, word-break: break-word, flex-direction: column on mobile
+Key CSS fixes:
+- KPIs: overflow: visible, word-break: break-word, flex-direction: column on mobile
 - Tables: Card layout with data-label on admin pages
 - Tabs: overflow-x: auto for scrollable navigation
 - Recommandations: reco-panels-grid -> 1 column on mobile
 - CSS specificity: All mobile overrides placed AFTER base styles with !important
 
-**Multi-role testing (iteration_38: 8/8 - 100%):**
-- SuperAdmin: All tabs, all data
-- Admin Club Privileges: All tabs, Club data
-- Collaborator ALL campaigns: All tabs, 3 campaigns
-- Collaborator Hutchinson: Filtered data, campaign isolation verified
+### Bug Fixes (Avril 2026)
+- Fixed SQL GROUP BY error on AI Agent page (AIConversation.php) - uses MAX(created_at) and orderByRaw
+- Fixed User Creation form dynamic logic (Sub-store/Operator toggles, Campaign multi-select)
+- Fixed invitation deletion and re-invitation for previously deleted users
+- Fixed KPI text truncation on mobile (overflow: visible)
+- Added "Aucune donnee disponible" empty state messages for charts
+- Fixed date range selectors to display inline on mobile
 
-### Known Issues (Pre-existing)
-- AI Agent page: SQL GROUP BY error (SQLSTATE[42000] only_full_group_by)
-  Not related to responsive changes
-
-### CI/CD Pipeline (DONE)
+### CI/CD Pipeline (DONE - blocked by VPS disk space)
 
 ## Test Reports
 - iteration_34: 10/10 | iteration_35: 13/13 | iteration_36: 11/11
-- iteration_37: 7/7 | iteration_38: 8/8 (multi-role final)
+- iteration_37: 7/7 | iteration_38: 8/8 (multi-role)
+- iteration_39: 100% PASS (comprehensive re-validation - all roles, all pages, all APIs)
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
@@ -52,4 +51,5 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - Collaborateur restricted: imededdine.essefi@gmail.com / Test@2025
 
 ## Backlog
-- Fix AI Agent SQL GROUP BY error (pre-existing, not responsive related)
+- CI/CD: Verify pipeline once user clears VPS disk space (P1)
+- Extract inline CSS from Blade templates into dedicated CSS files (P2)
