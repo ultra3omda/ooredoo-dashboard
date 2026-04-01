@@ -20,7 +20,10 @@ echo "[1/6] Mode maintenance ON..."
 $PHP_BIN artisan down --retry=30 || true
 
 echo "[2/6] Composer install (production)..."
-$COMPOSER_BIN install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+$COMPOSER_BIN install --no-dev --no-interaction --prefer-dist --optimize-autoloader 2>&1 || {
+    echo "  -> Lock file desynchronise, execution de composer update..."
+    $COMPOSER_BIN update --no-dev --no-interaction --prefer-dist --optimize-autoloader
+}
 
 echo "[3/6] Migrations..."
 $PHP_BIN artisan migrate --force
