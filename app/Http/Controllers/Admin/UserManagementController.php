@@ -72,22 +72,32 @@ class UserManagementController extends Controller
     public function create()
     {
         $user = auth()->user();
+        $subStoreService = app(\App\Services\SubStoreService::class);
         
         // Les rôles disponibles selon le niveau de l'utilisateur connecté
         if ($user->isSuperAdmin()) {
             $roles = Role::active()->get();
-            $operators = $this->getAllOperators();
-        } else {
-            // Un admin ne peut créer que des collaborateurs
+            $operators = $subStoreService->getClassicOperators();
+            $subStores = $subStoreService->getSubStores();
+        } elseif ($user->isAdminOperator()) {
             $roles = Role::where('name', 'collaborator')->active()->get();
-            $operators = $user->operators->pluck('operator_name', 'operator_name');
+            $operators = $user->operators->pluck('operator_name', 'operator_name')->toArray();
+            $subStores = [];
+        } elseif ($user->isAdminSubStore() || $user->canInviteCollaborators()) {
+            $roles = Role::where('name', 'collaborator')->active()->get();
+            $operators = [];
+            $subStores = $user->operators->pluck('operator_name', 'operator_name')->toArray();
+        } else {
+            $roles = Role::where('name', 'collaborator')->active()->get();
+            $operators = $user->operators->pluck('operator_name', 'operator_name')->toArray();
+            $subStores = [];
         }
         
         // Déterminer le thème selon l'utilisateur connecté
         $theme = $user->isTimweOoredooUser() ? 'ooredoo' : 'club_privileges';
         $isOoredoo = $theme === 'ooredoo';
         
-        return view('admin.users.create', compact('roles', 'operators', 'theme', 'isOoredoo'));
+        return view('admin.users.create', compact('roles', 'operators', 'subStores', 'theme', 'isOoredoo'));
     }
 
     /**
@@ -104,8 +114,11 @@ class UserManagementController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'role_id' => 'required|exists:roles,id',
             'phone' => 'nullable|string|max:20',
-            'operators' => 'required|array|min:1',
-            'operators.*' => 'required|string'
+            'type_selection' => 'required|in:operator,substore',
+            'operator_name' => 'required_if:type_selection,operator|string|nullable',
+            'substore_name' => 'required_if:type_selection,substore|string|nullable',
+            'campaign_access' => 'nullable|array',
+            'campaign_access.*' => 'string|max:255',
         ], [
             'first_name.required' => 'Le prénom est obligatoire.',
             'last_name.required' => 'Le nom est obligatoire.',
@@ -116,7 +129,10 @@ class UserManagementController extends Controller
             'password.confirmed' => 'La confirmation du mot de passe ne correspond pas.',
             'role_id.required' => 'Le rôle est obligatoire.',
             'role_id.exists' => 'Le rôle sélectionné n\'existe pas.',
-            'operators.required' => 'Au moins un opérateur doit être sélectionné.',
+            'type_selection.required' => 'Le type est obligatoire.',
+            'type_selection.in' => 'Le type doit être opérateur ou sub-store.',
+            'operator_name.required_if' => 'L\'opérateur est obligatoire quand le type est opérateur.',
+            'substore_name.required_if' => 'Le sub-store est obligatoire quand le type est sub-store.',
         ]);
 
         // Vérifier les permissions
@@ -124,6 +140,9 @@ class UserManagementController extends Controller
         if (!$user->isSuperAdmin() && $role->name !== 'collaborator') {
             return back()->with('error', 'Vous ne pouvez créer que des collaborateurs.');
         }
+
+        // Déterminer le nom de l'opérateur/sub-store selon le type sélectionné
+        $operatorName = $request->type_selection === 'operator' ? $request->operator_name : $request->substore_name;
 
         DB::beginTransaction();
         try {
@@ -140,19 +159,27 @@ class UserManagementController extends Controller
                 'created_by' => $user->id
             ]);
 
-            // Assigner les opérateurs
-            foreach ($request->operators as $index => $operatorName) {
-                UserOperator::create([
-                    'user_id' => $newUser->id,
-                    'operator_name' => $operatorName,
-                    'is_primary' => $index === 0, // Le premier est principal
-                    'assigned_by' => $user->id
+            // Assigner l'opérateur/sub-store
+            UserOperator::create([
+                'user_id' => $newUser->id,
+                'operator_name' => $operatorName,
+                'is_primary' => true,
+                'assigned_by' => $user->id
+            ]);
+
+            // Appliquer les restrictions de campagne si spécifiées
+            $campaignAccess = $request->input('campaign_access', []);
+            if (!empty($campaignAccess)) {
+                $newUser->update([
+                    'pluxee_campaign_access' => json_encode(array_values($campaignAccess))
                 ]);
             }
 
             DB::commit();
+            
+            $campaignInfo = !empty($campaignAccess) ? ' (Campagnes: ' . implode(', ', $campaignAccess) . ')' : '';
             return redirect()->route('admin.users.index')
-                           ->with('success', 'Utilisateur créé avec succès.');
+                           ->with('success', "Utilisateur créé avec succès.{$campaignInfo}");
 
         } catch (\Exception $e) {
             DB::rollback();

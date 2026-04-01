@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 use App\Mail\InvitationMail;
 
@@ -100,7 +101,14 @@ class InvitationController extends Controller
         }
         
         $request->validate([
-            'email' => 'required|email|unique:users,email|unique:invitations,email',
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('invitations', 'email')->where(function ($query) {
+                    $query->where('status', 'pending')
+                          ->where('expires_at', '>', now());
+                }),
+            ],
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'role_id' => 'required|exists:roles,id',
@@ -113,7 +121,7 @@ class InvitationController extends Controller
         ], [
             'email.required' => 'L\'adresse e-mail est obligatoire.',
             'email.email' => 'L\'adresse e-mail doit être valide.',
-            'email.unique' => 'Cette adresse e-mail est déjà utilisée ou a déjà été invitée.',
+            'email.unique' => 'Une invitation active est déjà en cours pour cette adresse e-mail.',
             'first_name.required' => 'Le prénom est obligatoire.',
             'last_name.required' => 'Le nom est obligatoire.',
             'role_id.required' => 'Le rôle est obligatoire.',
