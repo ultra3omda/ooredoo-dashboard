@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
         if result.returncode != 0:
             print("Starting PHP-FPM...")
             subprocess.run(["mkdir", "-p", "/run/php"], check=False)
-            for fpm_bin in ["/usr/sbin/php-fpm8.2", "php-fpm8.2", "php-fpm"]:
+            for fpm_bin in ["/usr/sbin/php-fpm8.2", "/usr/sbin/php-fpm8.1", "php-fpm8.2", "php-fpm8.1", "php-fpm"]:
                 try:
                     subprocess.run([fpm_bin, "--daemonize"], check=False)
                     print(f"Started PHP-FPM via {fpm_bin}")
@@ -28,15 +28,23 @@ async def lifespan(app: FastAPI):
                 except FileNotFoundError:
                     continue
             else:
-                subprocess.run(["service", "php8.2-fpm", "start"], check=False, capture_output=True)
-                print("Started PHP-FPM via service command")
+                for svc in ["php8.2-fpm", "php8.1-fpm", "php-fpm"]:
+                    r = subprocess.run(["service", svc, "start"], check=False, capture_output=True)
+                    if r.returncode == 0:
+                        print(f"Started PHP-FPM via service {svc}")
+                        break
         # Ensure Nginx has the Laravel config and is serving port 8002
         result = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8002/"], capture_output=True, text=True)
         if result.stdout.strip() != "200":
             print("Reloading Nginx...")
             subprocess.run(["nginx", "-s", "reload"], check=False, capture_output=True)
         # Fix storage permissions
-        subprocess.run(["chmod", "-R", "777", "/app/storage/logs/", "/app/storage/framework/"], check=False, capture_output=True)
+        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        storage_logs = os.path.join(app_root, "storage", "logs")
+        storage_fw = os.path.join(app_root, "storage", "framework")
+        for path in [storage_logs, storage_fw]:
+            if os.path.exists(path):
+                subprocess.run(["chmod", "-R", "777", path], check=False, capture_output=True)
     except FileNotFoundError:
         print("Some system commands not found (pgrep/nginx) - skipping startup checks (VPS mode)")
     except Exception as e:
@@ -49,10 +57,41 @@ app = FastAPI(lifespan=lifespan)
 PHP_BASE_URL = "http://127.0.0.1:8002"
 EXTERNAL_HOST = os.environ.get("APP_URL", "").replace("https://", "").replace("http://", "")
 
+async def _call_llm(api_key: str, system_message: str, prompt: str, provider: str = "openai", model: str = "gpt-4o") -> str:
+    """Universal LLM caller: tries emergentintegrations first, falls back to direct OpenAI/Gemini SDK."""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=api_key, session_id=f"llm-{id(prompt)}", system_message=system_message)
+        chat.with_model(provider, model)
+        return await chat.send_message(UserMessage(text=prompt))
+    except ImportError:
+        pass
+
+    if provider == "openai" or provider == "":
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content
+    elif provider == "gemini":
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        gen_model = genai.GenerativeModel(model, system_instruction=system_message)
+        resp = await asyncio.to_thread(gen_model.generate_content, prompt)
+        return resp.text
+    else:
+        raise ValueError(f"Provider non supporte: {provider}")
+
+
 @app.post("/api/report-ai-suggestions")
 async def report_ai_suggestions(request: Request):
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
         body = await request.json()
         prompt = body.get("prompt", "")
         report_type = body.get("report_type", "ceo")
@@ -60,20 +99,13 @@ async def report_ai_suggestions(request: Request):
         if not prompt:
             return JSONResponse({"suggestions": ""})
 
-        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
-            return JSONResponse({"suggestions": "Clé API non configurée"}, status_code=500)
+            return JSONResponse({"suggestions": "Cle API non configuree (EMERGENT_LLM_KEY ou OPENAI_API_KEY)"}, status_code=500)
 
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"report-{report_type}-{id(request)}",
-            system_message="Tu es un analyste business senior expert en programmes de fidelite, marketing digital et data science en Tunisie. Tu analyses des KPIs hebdomadaires enrichis de predictions ML (machine learning) - segments clients, probabilites de churn, scores d'engagement et de lifetime value. Tu fournis des recommandations strategiques precises, actionables et prioritisees basees sur ces insights data-driven. Reponds toujours en francais. Format: liste numerotee avec priorite (P0/P1/P2) et impact estime."
-        )
-        chat.with_model("openai", "gpt-4o")
+        system_msg = "Tu es un analyste business senior expert en programmes de fidelite, marketing digital et data science en Tunisie. Tu analyses des KPIs hebdomadaires enrichis de predictions ML (machine learning) - segments clients, probabilites de churn, scores d'engagement et de lifetime value. Tu fournis des recommandations strategiques precises, actionables et prioritisees basees sur ces insights data-driven. Reponds toujours en francais. Format: liste numerotee avec priorite (P0/P1/P2) et impact estime."
 
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
-
+        response = await _call_llm(api_key, system_msg, prompt, "openai", "gpt-4o")
         return JSONResponse({"suggestions": response})
     except Exception as e:
         return JSONResponse({"suggestions": f"Suggestions IA indisponibles: {str(e)}"}, status_code=200)
@@ -451,15 +483,17 @@ async def track_interaction(request: Request):
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO cp_user_offer_interactions 
-                (client_id, partner_id, promotion_id, interaction_type, source,
-                 recommendation_id, recommendation_score, recommendation_rank, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-        """, (client_id, partner_id, promotion_id, interaction_type, source,
-              recommendation_id, recommendation_score, recommendation_rank))
-        conn.commit()
-        conn.close()
+        try:
+            cursor.execute("""
+                INSERT INTO cp_user_offer_interactions 
+                    (client_id, partner_id, promotion_id, interaction_type, source,
+                     recommendation_id, recommendation_score, recommendation_rank, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            """, (client_id, partner_id, promotion_id, interaction_type, source,
+                  recommendation_id, recommendation_score, recommendation_rank))
+            conn.commit()
+        finally:
+            conn.close()
         
         return JSONResponse({"success": True, "tracked": True})
     except Exception as e:
@@ -475,31 +509,31 @@ async def recommendation_stats():
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT 
-                interaction_type,
-                source,
-                COUNT(*) as cnt,
-                COUNT(DISTINCT client_id) as unique_users,
-                COUNT(DISTINCT partner_id) as unique_merchants
-            FROM cp_user_offer_interactions
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-            GROUP BY interaction_type, source
-            ORDER BY cnt DESC
-        """)
-        interactions = cursor.fetchall()
-        
-        cursor.execute("SELECT COUNT(*) as total FROM cp_user_offer_interactions")
-        total = cursor.fetchone()['total']
-        
-        cursor.execute("SELECT COUNT(*) as cnt FROM cp_merchants_catalog WHERE is_active = 1")
-        active_merchants = cursor.fetchone()['cnt']
-        
-        cursor.execute("SELECT COUNT(*) as cnt FROM cp_user_profile")
-        profiled_users = cursor.fetchone()['cnt']
-        
-        conn.close()
+        try:
+            cursor.execute("""
+                SELECT 
+                    interaction_type,
+                    source,
+                    COUNT(*) as cnt,
+                    COUNT(DISTINCT client_id) as unique_users,
+                    COUNT(DISTINCT partner_id) as unique_merchants
+                FROM cp_user_offer_interactions
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                GROUP BY interaction_type, source
+                ORDER BY cnt DESC
+            """)
+            interactions = cursor.fetchall()
+            
+            cursor.execute("SELECT COUNT(*) as total FROM cp_user_offer_interactions")
+            total = cursor.fetchone()['total']
+            
+            cursor.execute("SELECT COUNT(*) as cnt FROM cp_merchants_catalog WHERE is_active = 1")
+            active_merchants = cursor.fetchone()['cnt']
+            
+            cursor.execute("SELECT COUNT(*) as cnt FROM cp_user_profile")
+            profiled_users = cursor.fetchone()['cnt']
+        finally:
+            conn.close()
         
         return JSONResponse({
             "total_interactions": total,
@@ -524,41 +558,41 @@ async def recommendation_timeline(request: Request):
 
         conn = get_db_connection()
         cursor = conn.cursor()
+        try:
+            cursor.execute(f"""
+                SELECT DATE(created_at) as day, interaction_type, COUNT(*) as cnt
+                FROM cp_user_offer_interactions
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
+                GROUP BY DATE(created_at), interaction_type
+                ORDER BY day ASC
+            """)
+            rows = cursor.fetchall()
 
-        cursor.execute(f"""
-            SELECT DATE(created_at) as day, interaction_type, COUNT(*) as cnt
-            FROM cp_user_offer_interactions
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
-            GROUP BY DATE(created_at), interaction_type
-            ORDER BY day ASC
-        """)
-        rows = cursor.fetchall()
+            timeline = [{"day": str(r['day']) if r['day'] else None, "interaction_type": r['interaction_type'], "cnt": r['cnt']} for r in rows]
 
-        timeline = [{"day": str(r['day']) if r['day'] else None, "interaction_type": r['interaction_type'], "cnt": r['cnt']} for r in rows]
+            cursor.execute(f"""
+                SELECT mc.category_name, COUNT(*) as cnt, COUNT(DISTINCT uoi.client_id) as unique_users
+                FROM cp_user_offer_interactions uoi
+                JOIN cp_merchants_catalog mc ON uoi.partner_id = mc.partner_id
+                WHERE uoi.created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
+                GROUP BY mc.category_name
+                ORDER BY cnt DESC LIMIT 10
+            """)
+            categories = cursor.fetchall()
 
-        cursor.execute(f"""
-            SELECT mc.category_name, COUNT(*) as cnt, COUNT(DISTINCT uoi.client_id) as unique_users
-            FROM cp_user_offer_interactions uoi
-            JOIN cp_merchants_catalog mc ON uoi.partner_id = mc.partner_id
-            WHERE uoi.created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
-            GROUP BY mc.category_name
-            ORDER BY cnt DESC LIMIT 10
-        """)
-        categories = cursor.fetchall()
-
-        # Source breakdown (ML vs popularity)
-        cursor.execute(f"""
-            SELECT source, interaction_type, COUNT(*) as cnt,
-                   COUNT(DISTINCT client_id) as unique_users,
-                   COUNT(DISTINCT partner_id) as unique_merchants
-            FROM cp_user_offer_interactions
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
-            GROUP BY source, interaction_type
-            ORDER BY cnt DESC
-        """)
-        source_breakdown = cursor.fetchall()
-
-        conn.close()
+            # Source breakdown (ML vs popularity)
+            cursor.execute(f"""
+                SELECT source, interaction_type, COUNT(*) as cnt,
+                       COUNT(DISTINCT client_id) as unique_users,
+                       COUNT(DISTINCT partner_id) as unique_merchants
+                FROM cp_user_offer_interactions
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
+                GROUP BY source, interaction_type
+                ORDER BY cnt DESC
+            """)
+            source_breakdown = cursor.fetchall()
+        finally:
+            conn.close()
 
         return JSONResponse({
             "timeline": timeline,
@@ -579,14 +613,16 @@ async def get_categories():
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT DISTINCT category_id, category_name 
-            FROM cp_merchants_catalog 
-            WHERE is_active = 1 AND category_name IS NOT NULL
-            ORDER BY category_name
-        """)
-        cats = cursor.fetchall()
-        conn.close()
+        try:
+            cursor.execute("""
+                SELECT DISTINCT category_id, category_name 
+                FROM cp_merchants_catalog 
+                WHERE is_active = 1 AND category_name IS NOT NULL
+                ORDER BY category_name
+            """)
+            cats = cursor.fetchall()
+        finally:
+            conn.close()
         
         return JSONResponse({"categories": cats})
     except Exception as e:
@@ -928,33 +964,34 @@ async def ab_test_results(request: Request):
         days = int(request.query_params.get('days', '30'))
         conn = get_db_connection()
         cursor = conn.cursor()
+        try:
+            cursor.execute(f"""
+                SELECT source, interaction_type,
+                       COUNT(*) as cnt,
+                       COUNT(DISTINCT client_id) as unique_users,
+                       COUNT(DISTINCT partner_id) as unique_merchants
+                FROM cp_user_offer_interactions
+                WHERE source IN ('ab_ml_model', 'ab_popularity')
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
+                GROUP BY source, interaction_type
+                ORDER BY source, cnt DESC
+            """)
+            breakdown = cursor.fetchall()
 
-        cursor.execute(f"""
-            SELECT source, interaction_type,
-                   COUNT(*) as cnt,
-                   COUNT(DISTINCT client_id) as unique_users,
-                   COUNT(DISTINCT partner_id) as unique_merchants
-            FROM cp_user_offer_interactions
-            WHERE source IN ('ab_ml_model', 'ab_popularity')
-              AND created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
-            GROUP BY source, interaction_type
-            ORDER BY source, cnt DESC
-        """)
-        breakdown = cursor.fetchall()
-
-        cursor.execute(f"""
-            SELECT source,
-                   SUM(CASE WHEN interaction_type = 'impression' THEN 1 ELSE 0 END) as impressions,
-                   SUM(CASE WHEN interaction_type = 'click' THEN 1 ELSE 0 END) as clicks,
-                   SUM(CASE WHEN interaction_type = 'redeem' THEN 1 ELSE 0 END) as redeems,
-                   COUNT(DISTINCT client_id) as unique_users
-            FROM cp_user_offer_interactions
-            WHERE source IN ('ab_ml_model', 'ab_popularity')
-              AND created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
-            GROUP BY source
-        """)
-        summary_rows = cursor.fetchall()
-        conn.close()
+            cursor.execute(f"""
+                SELECT source,
+                       SUM(CASE WHEN interaction_type = 'impression' THEN 1 ELSE 0 END) as impressions,
+                       SUM(CASE WHEN interaction_type = 'click' THEN 1 ELSE 0 END) as clicks,
+                       SUM(CASE WHEN interaction_type = 'redeem' THEN 1 ELSE 0 END) as redeems,
+                       COUNT(DISTINCT client_id) as unique_users
+                FROM cp_user_offer_interactions
+                WHERE source IN ('ab_ml_model', 'ab_popularity')
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL {days} DAY)
+                GROUP BY source
+            """)
+            summary_rows = cursor.fetchall()
+        finally:
+            conn.close()
 
         groups = {}
         for row in summary_rows:
@@ -1021,13 +1058,15 @@ async def ab_test_recommend(client_id: int, request: Request):
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO cp_user_offer_interactions
-                    (client_id, partner_id, interaction_type, source, recommendation_score, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-            """, (client_id, items[0]['id'] if items else 0, 'impression', f'ab_{group}', 0))
-            conn.commit()
-            conn.close()
+            try:
+                cursor.execute("""
+                    INSERT INTO cp_user_offer_interactions
+                        (client_id, partner_id, interaction_type, source, recommendation_score, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+                """, (client_id, items[0]['id'] if items else 0, 'impression', f'ab_{group}', 0))
+                conn.commit()
+            finally:
+                conn.close()
         except Exception:
             pass
 

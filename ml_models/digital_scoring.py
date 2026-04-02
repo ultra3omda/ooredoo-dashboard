@@ -473,18 +473,30 @@ Reponds en JSON strict avec cette structure:
 }}"""
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        import json
-
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"digital-audit-{merchant_score['partner_id']}-{datetime.now().strftime('%Y%m%d%H%M')}",
-            system_message="Tu es un expert en marketing digital pour des commerces en Tunisie. Tu analyses la presence digitale et fournis des audits detailles. Reponds UNIQUEMENT en JSON valide."
-        )
-        chat.with_model(model_provider, model_name)
-
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            chat = LlmChat(api_key=api_key, session_id=f"digital-audit-{merchant_score['partner_id']}-{datetime.now().strftime('%Y%m%d%H%M')}", system_message="Tu es un expert en marketing digital pour des commerces en Tunisie. Tu analyses la presence digitale et fournis des audits detailles. Reponds UNIQUEMENT en JSON valide.")
+            chat.with_model(model_provider, model_name)
+            response = await chat.send_message(UserMessage(text=prompt))
+        except ImportError:
+            if model_provider == "gemini":
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                gen_model = genai.GenerativeModel(model_name, system_instruction="Tu es un expert en marketing digital pour des commerces en Tunisie. Tu analyses la presence digitale et fournis des audits detailles. Reponds UNIQUEMENT en JSON valide.")
+                resp = await asyncio.to_thread(gen_model.generate_content, prompt)
+                response = resp.text
+            else:
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=api_key)
+                resp = await client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": "Tu es un expert en marketing digital pour des commerces en Tunisie. Tu analyses la presence digitale et fournis des audits detailles. Reponds UNIQUEMENT en JSON valide."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.7,
+                )
+                response = resp.choices[0].message.content
 
         # Parse JSON from response
         clean = response.strip()

@@ -204,7 +204,7 @@ async def generate_merchant_intelligence_report(merchants_data: dict, llm_key: s
     Use Gemini/GPT to generate actionable commercial recommendations
     based on merchant traffic analysis.
     """
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    import asyncio as _asyncio
 
     # Build prompt with real data
     to_boost = merchants_data.get('to_boost', [])[:5]
@@ -285,15 +285,9 @@ Reponds en JSON avec cette structure:
   }}
 }}"""
 
-    chat = LlmChat(
-        api_key=llm_key,
-        session_id=f"merchant-intel-{datetime.now().strftime('%Y%m%d%H%M')}",
-        system_message="Tu es un consultant senior en strategie commerciale et marketing digital pour Club Privileges, un programme de fidelite en Tunisie avec 576 marchands partenaires. Tu analyses les donnees de performance des marchands et generes des recommandations actionables pour l'equipe commerciale. Tu es pragmatique et tes recommandations sont specifiques, mesurables et realisables dans la semaine. Reponds UNIQUEMENT en JSON valide."
-    )
-    chat.with_model(model_provider, model_name)
+    system_message = "Tu es un consultant senior en strategie commerciale et marketing digital pour Club Privileges, un programme de fidelite en Tunisie avec 576 marchands partenaires. Tu analyses les donnees de performance des marchands et generes des recommandations actionables pour l'equipe commerciale. Tu es pragmatique et tes recommandations sont specifiques, mesurables et realisables dans la semaine. Reponds UNIQUEMENT en JSON valide."
 
-    user_message = UserMessage(text=prompt)
-    response = await chat.send_message(user_message)
+    response = await _call_llm_universal(llm_key, system_message, prompt, model_provider, model_name)
 
     # Parse JSON response
     try:
@@ -315,3 +309,32 @@ Reponds en JSON avec cette structure:
             "success_patterns": [],
             "raw_response": response,
         }
+
+
+async def _call_llm_universal(api_key: str, system_message: str, prompt: str, provider: str = "gemini", model: str = "gemini-2.5-flash") -> str:
+    """Universal LLM caller: tries emergentintegrations first, falls back to direct SDK."""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=api_key, session_id=f"llm-{id(prompt)}", system_message=system_message)
+        chat.with_model(provider, model)
+        return await chat.send_message(UserMessage(text=prompt))
+    except ImportError:
+        pass
+
+    if provider == "openai":
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system_message}, {"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content
+    elif provider == "gemini":
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        gen_model = genai.GenerativeModel(model, system_instruction=system_message)
+        resp = await _asyncio.to_thread(gen_model.generate_content, prompt)
+        return resp.text
+    else:
+        raise ValueError(f"Provider non supporte: {provider}")

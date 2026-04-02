@@ -11,18 +11,29 @@ from datetime import datetime, timedelta
 
 import pymysql
 
-def get_db_config():
-    return {
-        'host': os.environ.get('DB_HOST', '51.38.187.245'),
-        'port': int(os.environ.get('DB_PORT', 3306)),
-        'user': os.environ.get('DB_USERNAME', 'looker_user'),
-        'password': os.environ.get('DB_PASSWORD', 'lokaszsh98@Datahive_looker'),
-        'database': os.environ.get('DB_DATABASE', 'clubprivileges'),
-    }
+def get_db_connection():
+    """Read DB credentials from .env file (same logic as predict_merchant.py)."""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+    config = {}
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line and not line.startswith('#'):
+                    key, val = line.split('=', 1)
+                    config[key] = val
+    return pymysql.connect(
+        host=config.get('DB_HOST', '127.0.0.1'),
+        port=int(config.get('DB_PORT', 3306)),
+        user=config.get('DB_USERNAME', 'root'),
+        password=config.get('DB_PASSWORD', ''),
+        database=config.get('DB_DATABASE', 'clubprivileges'),
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor
+    )
 
 def fetch_metrics():
-    config = get_db_config()
-    conn = pymysql.connect(**config)
+    conn = get_db_connection()
     cursor = conn.cursor(pymysql.cursors.DictCursor)
     
     today = datetime.now().strftime('%Y-%m-%d')
@@ -151,14 +162,11 @@ def fetch_merchant_recommendation_metrics():
     return reco_metrics
 
 async def generate_report(metrics):
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
-    api_key = os.environ.get('EMERGENT_LLM_KEY', '')
-    
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"weekly-report-{datetime.now().strftime('%Y%m%d')}",
-        system_message="""Tu es un analyste expert en data science et telecom. Tu generes des rapports hebdomadaires pour le dashboard Club Privileges d'Ooredoo Tunisie. 
+    api_key = os.environ.get('EMERGENT_LLM_KEY', '') or os.environ.get('OPENAI_API_KEY', '')
+    if not api_key:
+        return {"titre": "Rapport Hebdomadaire ML", "resume_executif": "Cle API non configuree (EMERGENT_LLM_KEY ou OPENAI_API_KEY)", "raw": True}
+
+    system_message = """Tu es un analyste expert en data science et telecom. Tu generes des rapports hebdomadaires pour le dashboard Club Privileges d'Ooredoo Tunisie. 
 Tes rapports sont:
 - En francais
 - Structures avec des sections claires
@@ -176,7 +184,27 @@ Reponds UNIQUEMENT en JSON valide avec cette structure:
   "recommandations_marchands": {"top_merchants": [], "categories_tendances": [], "engagement_reco": ""},
   "prochaines_etapes": [""]
 }"""
-    ).with_model("openai", "gpt-4o")
+
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=api_key, session_id=f"weekly-report-{datetime.now().strftime('%Y%m%d')}", system_message=system_message).with_model("openai", "gpt-4o")
+        send_msg = chat.send_message
+        make_msg = lambda text: UserMessage(text=text)
+    except ImportError:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
+        async def _send(msg):
+            resp = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": system_message}, {"role": "user", "content": msg.content}],
+                temperature=0.7,
+            )
+            return resp.choices[0].message.content
+        send_msg = _send
+        class _Msg:
+            def __init__(self, text):
+                self.content = text
+        make_msg = _Msg
     
     # Fetch merchant recommendation metrics
     reco_data = fetch_merchant_recommendation_metrics()
@@ -210,8 +238,8 @@ Reponds UNIQUEMENT en JSON valide avec cette structure:
 
 Genere le rapport hebdomadaire complet en JSON. Inclus une section specifique sur les recommandations marchands avec les tendances de categories et suggestions d'optimisation."""
     
-    message = UserMessage(text=prompt)
-    response = await chat.send_message(message)
+    message = make_msg(prompt)
+    response = await send_msg(message)
     
     # Parse JSON from response
     response_text = response.strip()
@@ -242,11 +270,12 @@ def main():
     filename = f"weekly_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     output_path = os.path.join(output_dir, filename)
     
+    reco_snapshot = fetch_merchant_recommendation_metrics()
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump({
             'report': report,
             'metrics_snapshot': metrics,
-            'merchant_reco_snapshot': fetch_merchant_recommendation_metrics(),
+            'merchant_reco_snapshot': reco_snapshot,
             'generated_at': datetime.now().isoformat(),
             'filename': filename
         }, f, ensure_ascii=False, indent=2)
