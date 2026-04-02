@@ -1,14 +1,17 @@
-name: Deploy to Preprod
+name: Deploy to Production
 
 on:
-  push:
+  pull_request:
     branches:
-      - emergent
+      - main
+    types:
+      - closed
 
 jobs:
   deploy:
-    name: Deploy Laravel + FastAPI
+    name: Deploy Laravel + FastAPI (Production)
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
 
     steps:
       - name: Deploy via SSH
@@ -21,8 +24,8 @@ jobs:
           script_stop: true
           timeout: 120s
           script: |
-            cd /var/www/preprod_dash_cp
-            git fetch origin emergent
-            git reset --hard origin/emergent
-            chmod +x deploy.sh
-            bash deploy.sh
+            cd /var/www/dashboard_cp
+            git fetch origin main
+            git reset --hard origin/main
+            chmod +x deploy_prod.sh
+            bash deploy_prod.sh
