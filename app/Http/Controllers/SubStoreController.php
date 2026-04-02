@@ -49,31 +49,47 @@ class SubStoreController extends Controller
     // =========================================================================
 
     private ?array $resolvedCampaignClientIds = null;
+    private bool $isPluxeeAllCampaigns = false;
 
     /**
      * Resolve campaign client IDs ONCE and cache them for 30 minutes.
-     * This replaces 15+ identical sub-queries with a single cached lookup.
+     * When no specific campaign is selected (all campaigns), resolve ALL
+     * clients from ALL campaigns linked to the current Pluxee sub-store.
      */
     private function getCampaignClientIds(): array
     {
         if ($this->resolvedCampaignClientIds !== null) {
             return $this->resolvedCampaignClientIds;
         }
-        if (!$this->currentCampaign) {
+
+        if ($this->currentCampaign) {
+            // Specific campaign selected
+            $cacheKey = 'campaign_cids:' . md5($this->currentCampaign);
+            $this->resolvedCampaignClientIds = Cache::remember($cacheKey, 1800, function () {
+                return DB::table('carte_recharge')
+                    ->where('campain_name', $this->currentCampaign)
+                    ->where('carte_recharge_used', 1)
+                    ->whereNotNull('client_id')
+                    ->where('client_id', '!=', '')
+                    ->distinct()
+                    ->pluck('client_id')
+                    ->toArray();
+            });
+        } elseif ($this->isPluxeeAllCampaigns) {
+            // All campaigns for this Pluxee sub-store: get ALL campaign client IDs
+            $cacheKey = 'campaign_cids_all_pluxee';
+            $this->resolvedCampaignClientIds = Cache::remember($cacheKey, 1800, function () {
+                return DB::table('carte_recharge')
+                    ->where('carte_recharge_used', 1)
+                    ->whereNotNull('client_id')
+                    ->where('client_id', '!=', '')
+                    ->distinct()
+                    ->pluck('client_id')
+                    ->toArray();
+            });
+        } else {
             $this->resolvedCampaignClientIds = [];
-            return [];
         }
-        $cacheKey = 'campaign_cids:' . md5($this->currentCampaign);
-        $this->resolvedCampaignClientIds = Cache::remember($cacheKey, 1800, function () {
-            return DB::table('carte_recharge')
-                ->where('campain_name', $this->currentCampaign)
-                ->where('carte_recharge_used', 1)
-                ->whereNotNull('client_id')
-                ->where('client_id', '!=', '')
-                ->distinct()
-                ->pluck('client_id')
-                ->toArray();
-        });
         return $this->resolvedCampaignClientIds;
     }
 
@@ -123,6 +139,12 @@ class SubStoreController extends Controller
 
         // Store campaign for use by Pluxee methods
         $this->currentCampaign = $campaign ?: null;
+
+        // When Pluxee sub-store but no specific campaign: flag for "all campaigns" mode
+        $isPluxee = ($subStore !== 'ALL') && $this->isPluxeeCampaign($subStore);
+        if ($isPluxee && !$this->currentCampaign) {
+            $this->isPluxeeAllCampaigns = true;
+        }
 
         return [
             'start_date' => $startDate,
@@ -387,7 +409,7 @@ class SubStoreController extends Controller
         $isPluxee = $this->isPluxeeCampaign($ss);
 
         // ── PLUXEE BATCH: 3 queries instead of 15+ ──
-        if ($isPluxee && $this->currentCampaign) {
+        if ($isPluxee && ($this->currentCampaign || $this->isPluxeeAllCampaigns)) {
             return $this->computeKpisPluxeeBatch($p);
         }
 
@@ -454,11 +476,13 @@ class SubStoreController extends Controller
         $clientIds = $this->getCampaignClientIds();
 
         // ── Query 1: Distributed cards ──
-        $distributed = (int) DB::table('carte_recharge')
+        $distQ = DB::table('carte_recharge')
             ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
-            ->where('stores.store_name', 'LIKE', "%$ss%")
-            ->where('carte_recharge.campain_name', $this->currentCampaign)
-            ->sum('carte_recharge.card_generated_number');
+            ->where('stores.store_name', 'LIKE', "%$ss%");
+        if ($this->currentCampaign) {
+            $distQ->where('carte_recharge.campain_name', $this->currentCampaign);
+        }
+        $distributed = (int) $distQ->sum('carte_recharge.card_generated_number');
 
         if (empty($clientIds)) {
             $z = $kpiPair(0, 0);
@@ -790,12 +814,12 @@ class SubStoreController extends Controller
     // =========================================================================
 
     /**
-     * Filter Pluxee clients by campaign using PRE-RESOLVED client IDs.
-     * Instead of running the same sub-query 15+ times, we use cached IDs.
+     * Filter Pluxee clients using PRE-RESOLVED client IDs.
+     * Works for both specific campaign AND "all campaigns" mode.
      */
     private function applyPluxeeCampaignFilter($query, string $clientAlias = 'client')
     {
-        if ($this->currentCampaign) {
+        if ($this->currentCampaign || $this->isPluxeeAllCampaigns) {
             $clientIds = $this->getCampaignClientIds();
             if (!empty($clientIds)) {
                 $query->whereIn("$clientAlias.client_id", $clientIds);
@@ -808,15 +832,15 @@ class SubStoreController extends Controller
 
     private function getPluxeeDistributed(string $ss): int
     {
+        $q = DB::table('carte_recharge')
+            ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
+            ->where('stores.store_name', 'LIKE', "%$ss%");
+
         if ($this->currentCampaign) {
-            return (int) DB::table('carte_recharge')
-                ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
-                ->where('stores.store_name', 'LIKE', "%$ss%")
-                ->where('carte_recharge.campain_name', $this->currentCampaign)
-                ->sum('carte_recharge.card_generated_number');
+            $q->where('carte_recharge.campain_name', $this->currentCampaign);
         }
-        return (int) DB::table('client')->join('stores', 'client.sub_store', '=', 'stores.store_id')
-            ->where('stores.store_name', 'LIKE', "%$ss%")->count('client.client_id');
+        // Both cases (specific campaign or all): SUM the distributed cards
+        return (int) $q->sum('carte_recharge.card_generated_number');
     }
 
     private function getPluxeeInscriptions(string $ss): int
@@ -1177,7 +1201,7 @@ class SubStoreController extends Controller
         $isPluxee = $this->isPluxeeCampaign($ss);
 
         // ── PLUXEE BATCH: 2 queries instead of 14 ──
-        if ($isPluxee && $this->currentCampaign) {
+        if ($isPluxee && ($this->currentCampaign || $this->isPluxeeAllCampaigns)) {
             return $this->getUsersKPIsPluxeeBatch($sd, $ed, $csd, $ced, $ss);
         }
 
