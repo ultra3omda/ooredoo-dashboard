@@ -50,11 +50,12 @@ class SubStoreController extends Controller
 
     private ?array $resolvedCampaignClientIds = null;
     private bool $isPluxeeAllCampaigns = false;
+    private array $allowedCampaigns = [];
 
     /**
      * Resolve campaign client IDs ONCE and cache them for 30 minutes.
      * When no specific campaign is selected (all campaigns), resolve ALL
-     * clients from ALL campaigns linked to the current Pluxee sub-store.
+     * clients from campaigns linked to the current user's access.
      */
     private function getCampaignClientIds(): array
     {
@@ -76,16 +77,20 @@ class SubStoreController extends Controller
                     ->toArray();
             });
         } elseif ($this->isPluxeeAllCampaigns) {
-            // All campaigns for this Pluxee sub-store: get ALL campaign client IDs
-            $cacheKey = 'campaign_cids_all_pluxee';
-            $this->resolvedCampaignClientIds = Cache::remember($cacheKey, 1800, function () {
-                return DB::table('carte_recharge')
+            // All campaigns mode: if user has restrictions, only their campaigns
+            $allowed = $this->allowedCampaigns;
+            $cacheKey = 'campaign_cids_all:' . md5(json_encode($allowed));
+            $this->resolvedCampaignClientIds = Cache::remember($cacheKey, 1800, function () use ($allowed) {
+                $query = DB::table('carte_recharge')
                     ->where('carte_recharge_used', 1)
                     ->whereNotNull('client_id')
-                    ->where('client_id', '!=', '')
-                    ->distinct()
-                    ->pluck('client_id')
-                    ->toArray();
+                    ->where('client_id', '!=', '');
+                
+                if (!empty($allowed)) {
+                    $query->whereIn('campain_name', $allowed);
+                }
+                
+                return $query->distinct()->pluck('client_id')->toArray();
             });
         } else {
             $this->resolvedCampaignClientIds = [];
@@ -126,13 +131,12 @@ class SubStoreController extends Controller
         // Apply campaign restriction for users with limited access
         $allowedCampaigns = $user->getAllowedCampaigns();
         if (!empty($allowedCampaigns)) {
-            if (empty($campaign)) {
-                // User has restrictions but no campaign selected: force first allowed campaign
-                $campaign = $allowedCampaigns[0];
-            } elseif (!in_array($campaign, $allowedCampaigns)) {
+            if (!empty($campaign) && !in_array($campaign, $allowedCampaigns)) {
                 // Selected campaign not in allowed list: force first allowed
                 $campaign = $allowedCampaigns[0];
             }
+            // If no campaign selected: leave empty → "all campaigns" mode
+            // but getCampaignClientIds will filter by allowedCampaigns
         }
         // If no restrictions but campaign selected via dropdown, apply it too
         // This allows SuperAdmin/Admin to filter by campaign when they choose one
@@ -144,6 +148,7 @@ class SubStoreController extends Controller
         $isPluxee = ($subStore !== 'ALL') && $this->isPluxeeCampaign($subStore);
         if ($isPluxee && !$this->currentCampaign) {
             $this->isPluxeeAllCampaigns = true;
+            $this->allowedCampaigns = $allowedCampaigns;
         }
 
         return [
@@ -699,11 +704,16 @@ class SubStoreController extends Controller
      */
     private function computeAllCampaignsRanking(string $ss): array
     {
-        // Get all campaigns for this sub-store
-        $campaigns = DB::table('carte_recharge')
+        // Get campaigns for this sub-store (filtered by allowed if restricted)
+        $q = DB::table('carte_recharge')
             ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
-            ->where('stores.store_name', 'LIKE', "%$ss%")
-            ->select('carte_recharge.campain_name', DB::raw('SUM(carte_recharge.card_generated_number) as distributed'))
+            ->where('stores.store_name', 'LIKE', "%$ss%");
+        
+        if (!empty($this->allowedCampaigns)) {
+            $q->whereIn('carte_recharge.campain_name', $this->allowedCampaigns);
+        }
+        
+        $campaigns = $q->select('carte_recharge.campain_name', DB::raw('SUM(carte_recharge.card_generated_number) as distributed'))
             ->groupBy('carte_recharge.campain_name')
             ->orderByDesc('distributed')
             ->get();
@@ -935,6 +945,9 @@ class SubStoreController extends Controller
 
         if ($this->currentCampaign) {
             $q->where('carte_recharge.campain_name', $this->currentCampaign);
+        } elseif (!empty($this->allowedCampaigns)) {
+            // Admin with restrictions: only their campaigns
+            $q->whereIn('carte_recharge.campain_name', $this->allowedCampaigns);
         }
         // Both cases (specific campaign or all): SUM the distributed cards
         return (int) $q->sum('carte_recharge.card_generated_number');
