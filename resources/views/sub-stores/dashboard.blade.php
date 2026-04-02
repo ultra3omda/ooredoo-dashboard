@@ -2759,7 +2759,8 @@
         
         // Déterminer si c'est un KPI global (pas de delta)
         const globalKPIs = ['distributed', 'inscriptions', 'totalSubscriptions', 'transactions', 'activeUsers'];
-        const isGlobalKPI = globalKPIs.includes(kpi.id);
+        const noShowDelta = kpi.showDelta === false;
+        const isGlobalKPI = globalKPIs.includes(kpi.id) || noShowDelta;
         
         kpiCard.innerHTML = `
           <div class="info-icon">i</div>
@@ -2767,7 +2768,7 @@
           <div class="kpi-value" id="${kpi.id}">
             <span style="color: #8B5CF6;">⏳ Chargement...</span>
           </div>
-          ${isGlobalKPI ? '' : '<div class="kpi-delta delta-badge delta-neutral">→ 0.0%</div>'}
+          ${isGlobalKPI ? '' : '<div class="kpi-delta delta-badge delta-neutral" style="display:none;">→ 0.0%</div>'}
           <span class="tooltiptext">${kpi.tooltip}</span>
         `;
         
@@ -3158,6 +3159,13 @@
         const kpisGrid = document.getElementById('kpisGrid');
         if (kpisGrid && kpisGrid.children.length === 0) createLoadingKPIs();
         showKPIsLoading();
+        
+        // Reset cached data to force reload
+        window.merchantKPIsData = null;
+        window.merchantsListData = null;
+        window.usersKPIsData = null;
+        window._merchantsLoaded = false;
+        window._usersLoaded = false;
 
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
@@ -3305,7 +3313,10 @@
         // Expirations (separate lightweight call)
         try {
           showExpirationsSkeleton();
-          const eresp = await fetch(`/sub-stores/api/expirations?sub_store=${encodeURIComponent(subStore)}`);
+          let expParams = `sub_store=${encodeURIComponent(subStore)}`;
+          if (campaign) expParams += `&campaign=${encodeURIComponent(campaign)}`;
+          expParams += `&start_date=${startDate}&end_date=${endDate}`;
+          const eresp = await fetch(`/sub-stores/api/expirations?${expParams}`);
           const edata = await eresp.json();
           if (edata.expirationsByMonth && edata.expirationsByMonth.length > 0) {
             createExpirationsChart(edata.expirationsByMonth);
@@ -4426,12 +4437,17 @@
       
       // Indicateur de chargement pour la vue d'ensemble
       const overviewKPIs = ['distributed', 'inscriptions', 'totalSubscriptions', 'transactions', 'activeUsers', 
-                           'inscriptionsCohorte', 'transactionsCohorte', 'activeUsersCohorte', 'conversionRate', 'renewalRate', 'usersLoss'];
+                           'inscriptionsCohorte', 'clientsWithTransactions', 'transactionsCohorte', 'activeUsersCohorte', 'conversionRate', 'renewalRate', 'usersLoss'];
       
       overviewKPIs.forEach(kpiId => {
         const valueElement = document.getElementById(kpiId);
         if (valueElement) {
           valueElement.innerHTML = '<span style="color: #8B5CF6;">⏳ Chargement...</span>';
+        }
+        // Also reset delta badges
+        const deltaElement = valueElement ? valueElement.parentElement?.querySelector('.kpi-delta') : null;
+        if (deltaElement) {
+          deltaElement.style.display = 'none';
         }
       });
       
@@ -4450,14 +4466,12 @@
         merchantKPIs.forEach(kpiId => {
           const valueElement = document.getElementById(kpiId);
           if (valueElement) {
-            const currentValue = valueElement.textContent || valueElement.innerHTML;
-            // Ne mettre en chargement que si la valeur est "Loading..." ou "Chargement..." ou vide
-            if (currentValue.includes('Loading') || currentValue.includes('Chargement') || currentValue.trim() === '') {
-              valueElement.innerHTML = '<span style="color: #8B5CF6;">⏳ Chargement...</span>';
-              debugLog(`⏳ ${kpiId} mis en chargement (valeur actuelle: ${currentValue})`);
-            } else {
-              debugLog(`✅ ${kpiId} garde sa valeur: ${currentValue}`);
-            }
+            valueElement.innerHTML = '<span style="color: #8B5CF6;">⏳ Chargement...</span>';
+          }
+          // Also reset merchant deltas
+          const deltaEl = document.getElementById(kpiId + 'Delta');
+          if (deltaEl) {
+            deltaEl.style.display = 'none';
           }
         });
       }

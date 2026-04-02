@@ -54,6 +54,9 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - RBAC campagnes auto-résolu: admin/collaborateur ne voit que ses campagnes via user_operators→stores→carte_recharge (sans pluxee_campaign_access explicite)
 - Fix distributed KPI centralisé via getPluxeeDistributed() avec filtre allowedCampaigns
 - **Fix KPI "Cartes Utilisées" (2 avril 2026)**: `totalSubscriptions` corrigé pour compter `count($clientIds)` (clients distincts avec cartes activées) au lieu de `COUNT(client_abonnement_id)` (lignes d'abonnement). Avant: 707, Après: 664/665. `cards_activated`/`newUsers` corrigés avec `COUNT(DISTINCT)` au lieu de `SUM`.
+- **Fix Graphique Expirations (2 avril 2026)**: Le graphique "Abonnements à expiration par mois" montrait des clients d'AUTRES campagnes Pluxee. Corrigé: le paramètre `campaign` est maintenant transmis à l'API expirations, et le backend filtre par `getCampaignClientIds()` en mode "toutes les campagnes".
+- **Fix Catégories Évolution (2 avril 2026)**: Le delta "Évolution" dans "Répartition par Catégories" était toujours 0% car la comparaison n'était pas calculée. Ajout de la comparaison avec la période précédente dans `getChartsSplit`.
+- **Fix Loading uniforme (2 avril 2026)**: Tous les KPIs (y compris `clientsWithTransactions`) passent en "Chargement..." uniformément. Les deltas sont masqués pendant le chargement. Les données Merchant/Users sont réinitialisées lors du refresh.
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
@@ -63,7 +66,7 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 ## Deployment Steps (VPS)
 1. git pull
 2. php artisan migrate (for indexes)
-3. php artisan cache:clear
+3. php artisan cache:clear (ou redis-cli -a hxtrJ74 FLUSHALL)
 4. sudo supervisorctl restart fastapi_dashboard_prod
 
 ## Backlog

@@ -401,8 +401,29 @@ class SubStoreController extends Controller
             $p = $this->normalizeSubStoreParams($request);
             $cacheKey = 'ss_split:charts:' . md5(json_encode($p));
             $data = Cache::remember($cacheKey, 14400, function () use ($p) {
+                $currentCategories = $this->getCategoryDistribution($p['start_date'], $p['end_date'], $p['sub_store']);
+                $compCategories = $this->getCategoryDistribution($p['comparison_start_date'], $p['comparison_end_date'], $p['sub_store']);
+                
+                // Build comparison lookup
+                $compMap = [];
+                foreach ($compCategories as $cc) {
+                    $compMap[$cc['category']] = $cc['transactions'];
+                }
+                
+                // Add evolution to current categories
+                foreach ($currentCategories as &$cat) {
+                    $prev = $compMap[$cat['category']] ?? 0;
+                    $cur = $cat['transactions'];
+                    if ($prev > 0) {
+                        $cat['evolution'] = round((($cur - $prev) / $prev) * 100, 1);
+                    } else {
+                        $cat['evolution'] = $cur > 0 ? 100.0 : 0.0;
+                    }
+                }
+                unset($cat);
+                
                 return [
-                    'categoryDistribution' => $this->getCategoryDistribution($p['start_date'], $p['end_date'], $p['sub_store']),
+                    'categoryDistribution' => $currentCategories,
                     'inscriptionsTrend' => $this->getInscriptionsTrend($p['start_date'], $p['end_date'], $p['sub_store']),
                 ];
             });
@@ -1301,6 +1322,14 @@ class SubStoreController extends Controller
                         ->whereNotNull('carte_recharge.client_id')
                         ->where('carte_recharge.client_id', '!=', '');
                 });
+            } elseif ($this->isPluxeeAllCampaigns && !empty($this->allowedCampaigns)) {
+                // "All campaigns" mode: use pre-resolved client IDs
+                $clientIds = $this->getCampaignClientIds();
+                if (!empty($clientIds)) {
+                    $q->whereIn('client.client_id', $clientIds);
+                } else {
+                    return [];
+                }
             }
 
             $this->applySubStoreFilter($q)
