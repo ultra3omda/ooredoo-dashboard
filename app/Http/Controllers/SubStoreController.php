@@ -1306,11 +1306,12 @@ class SubStoreController extends Controller
     {
         try {
             $start = Carbon::now()->subMonths($months)->startOfMonth();
-            $end = Carbon::now()->endOfMonth();
+            $end = Carbon::now()->addMonths(12)->endOfMonth();
             $q = DB::table('client_abonnement')
                 ->join('client', 'client_abonnement.client_id', '=', 'client.client_id')
                 ->join('stores', 'client.sub_store', '=', 'stores.store_id')
-                ->select(DB::raw("DATE_FORMAT(client_abonnement.client_abonnement_expiration, '%Y-%m') as ym"), DB::raw('COUNT(*) as total'));
+                ->select(DB::raw("DATE_FORMAT(client_abonnement.client_abonnement_expiration, '%Y-%m') as ym"), DB::raw('COUNT(*) as total'))
+                ->where('client_abonnement.status', '!=', 'removed');
 
             // Apply campaign filter: only include clients linked to this campaign
             if ($campaign) {
