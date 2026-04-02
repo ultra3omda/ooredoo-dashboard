@@ -541,11 +541,11 @@ class SubStoreController extends Controller
         }
 
         // ── Query 2: Subscription-based KPIs (single query) ──
+        // Note: $clientIds already filtered by campaign, no need to re-filter by sub_store
+        // (some clients have sub_store=NULL but still belong to the campaign)
         $sub = DB::table('client as c')
-            ->join('stores as s', 'c.sub_store', '=', 's.store_id')
             ->leftJoin('client_abonnement as ca', 'c.client_id', '=', 'ca.client_id')
             ->whereIn('c.client_id', $clientIds)
-            ->where('s.store_name', 'LIKE', "%$ss%")
             ->selectRaw("
                 COUNT(DISTINCT CASE WHEN ca.client_abonnement_id IS NOT NULL THEN c.client_id END) as inscriptions,
                 COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ? THEN c.client_id END) as active_users,
@@ -564,9 +564,7 @@ class SubStoreController extends Controller
         // ── Query 3: Transaction-based KPIs (single query) ──
         $tx = DB::table('history as h')
             ->join('client as c', 'h.client_id', '=', 'c.client_id')
-            ->join('stores as s', 'c.sub_store', '=', 's.store_id')
             ->whereIn('c.client_id', $clientIds)
-            ->where('s.store_name', 'LIKE', "%$ss%")
             ->selectRaw("
                 COUNT(h.history_id) as total_transactions,
                 COUNT(DISTINCT c.client_id) as clients_with_transactions,
@@ -1362,11 +1360,10 @@ class SubStoreController extends Controller
         }
 
         // Query 1: subscription-based
+        // $clientIds already filtered by campaign - no sub_store filter needed
         $sub = DB::table('client as c')
-            ->join('stores as s', 'c.sub_store', '=', 's.store_id')
             ->leftJoin('client_abonnement as ca', 'c.client_id', '=', 'ca.client_id')
             ->whereIn('c.client_id', $clientIds)
-            ->where('s.store_name', 'LIKE', "%$ss%")
             ->selectRaw("
                 COUNT(DISTINCT CASE WHEN ca.client_abonnement_id IS NOT NULL THEN c.client_id END) as total_users,
                 COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ? THEN c.client_id END) as active_users,
@@ -1383,9 +1380,7 @@ class SubStoreController extends Controller
         // Query 2: transaction-based
         $tx = DB::table('history as h')
             ->join('client as c', 'h.client_id', '=', 'c.client_id')
-            ->join('stores as s', 'c.sub_store', '=', 's.store_id')
             ->whereIn('c.client_id', $clientIds)
-            ->where('s.store_name', 'LIKE', "%$ss%")
             ->selectRaw("
                 COUNT(h.history_id) as total_transactions,
                 COUNT(CASE WHEN h.time BETWEEN ? AND ? THEN 1 END) as tx_cohorte,
