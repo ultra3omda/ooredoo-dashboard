@@ -143,12 +143,12 @@ class SubStoreController extends Controller
 
         // Store campaign for use by Pluxee methods
         $this->currentCampaign = $campaign ?: null;
+        $this->allowedCampaigns = $allowedCampaigns;
 
         // When Pluxee sub-store but no specific campaign: flag for "all campaigns" mode
         $isPluxee = ($subStore !== 'ALL') && $this->isPluxeeCampaign($subStore);
         if ($isPluxee && !$this->currentCampaign) {
             $this->isPluxeeAllCampaigns = true;
-            $this->allowedCampaigns = $allowedCampaigns;
         }
 
         return [
@@ -526,13 +526,7 @@ class SubStoreController extends Controller
         $clientIds = $this->getCampaignClientIds();
 
         // ── Query 1: Distributed cards ──
-        $distQ = DB::table('carte_recharge')
-            ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
-            ->where('stores.store_name', 'LIKE', "%$ss%");
-        if ($this->currentCampaign) {
-            $distQ->where('carte_recharge.campain_name', $this->currentCampaign);
-        }
-        $distributed = (int) $distQ->sum('carte_recharge.card_generated_number');
+        $distributed = $this->getPluxeeDistributed($ss);
 
         if (empty($clientIds)) {
             $z = $kpiPair(0, 0);

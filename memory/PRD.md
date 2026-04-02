@@ -51,10 +51,12 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
   - Pre-calcule les 5 sections pour chaque sub-store et campagne
   - Réduit le temps serveur de ~8.6s à ~530ms (16x plus rapide)
   - Route `/sub-stores/api/warmup` (POST, SuperAdmin) + `/sub-stores/api/warmup-status` (GET)
+- RBAC campagnes auto-résolu: admin/collaborateur ne voit que ses campagnes via user_operators→stores→carte_recharge (sans pluxee_campaign_access explicite)
+- Fix distributed KPI centralisé via getPluxeeDistributed() avec filtre allowedCampaigns
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
-- Admin Pluxee: admin.pluxee@test.com / Test@2025
+- Admin Pluxee: imedos001@gmail.com / Test@2025
 - Collaborateur: imededdine.essefi@gmail.com / Test@2025
 
 ## Deployment Steps (VPS)

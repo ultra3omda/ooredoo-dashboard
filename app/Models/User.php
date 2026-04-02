@@ -380,17 +380,40 @@ class User extends Authenticatable
      */
     public function getAllowedCampaigns(): array
     {
-        if (empty($this->pluxee_campaign_access)) {
-            return []; // Full access
+        // 1. Explicit campaign restrictions (collaborateur)
+        if (!empty($this->pluxee_campaign_access)) {
+            $decoded = json_decode($this->pluxee_campaign_access, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+            return [$this->pluxee_campaign_access];
         }
         
-        $decoded = json_decode($this->pluxee_campaign_access, true);
-        if (is_array($decoded)) {
-            return $decoded;
+        // 2. SuperAdmin = full access (no restrictions)
+        if ($this->isSuperAdmin()) {
+            return [];
         }
         
-        // Legacy: single campaign string
-        return [$this->pluxee_campaign_access];
+        // 3. Admin/Collaborateur without explicit restrictions:
+        //    auto-resolve campaigns from their operator's sub-store
+        $primaryOperator = $this->primaryOperator();
+        if ($primaryOperator) {
+            $storeName = $primaryOperator->operator_name;
+            $campaigns = \Illuminate\Support\Facades\DB::table('carte_recharge')
+                ->join('stores', function ($j) {
+                    $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)");
+                })
+                ->where('stores.store_name', 'LIKE', "%{$storeName}%")
+                ->distinct()
+                ->pluck('carte_recharge.campain_name')
+                ->toArray();
+            
+            if (!empty($campaigns)) {
+                return $campaigns;
+            }
+        }
+        
+        return []; // Fallback: full access
     }
 
     /**
@@ -398,7 +421,12 @@ class User extends Authenticatable
      */
     public function hasCampaignRestriction(): bool
     {
-        return !empty($this->pluxee_campaign_access);
+        // SuperAdmin never has restrictions
+        if ($this->isSuperAdmin()) {
+            return false;
+        }
+        // Everyone else is restricted to their operator's campaigns
+        return !empty($this->getAllowedCampaigns());
     }
 
     /**
