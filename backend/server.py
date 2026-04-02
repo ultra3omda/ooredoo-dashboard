@@ -802,11 +802,21 @@ async def merchant_intelligence_report(request: Request):
         model_name = body.get('model', 'gemini-2.5-flash')
 
         merchants_data = get_top_merchants_to_boost(limit=10)
-        report = await generate_merchant_intelligence_report(
-            merchants_data, api_key,
-            model_provider=model_provider,
-            model_name=model_name
-        )
+        try:
+            report = await generate_merchant_intelligence_report(
+                merchants_data, api_key,
+                model_provider=model_provider,
+                model_name=model_name
+            )
+        except Exception as gemini_err:
+            if model_provider == 'gemini':
+                report = await generate_merchant_intelligence_report(
+                    merchants_data, api_key,
+                    model_provider='openai',
+                    model_name='gpt-4o'
+                )
+            else:
+                raise gemini_err
 
         return JSONResponse({
             'success': True,
@@ -837,8 +847,14 @@ async def merchant_intelligence_report_html(request: Request):
                     merchants_data, api_key,
                     model_provider='gemini', model_name='gemini-2.5-flash'
                 )
-            except Exception as e:
-                ai_report = {'executive_summary': f'Analyse IA indisponible: {str(e)}', 'boost_recommendations': []}
+            except Exception:
+                try:
+                    ai_report = await generate_merchant_intelligence_report(
+                        merchants_data, api_key,
+                        model_provider='openai', model_name='gpt-4o'
+                    )
+                except Exception as e2:
+                    ai_report = {'executive_summary': f'Analyse IA indisponible: {str(e2)}', 'boost_recommendations': []}
 
         html = _build_intelligence_html(merchants_data, ai_report)
         return HTMLResponse(content=html)
@@ -1104,8 +1120,13 @@ async def weekly_email_preview(request: Request):
                 ai_report = await generate_merchant_intelligence_report(
                     merchants_data, api_key, model_provider='gemini', model_name='gemini-2.5-flash'
                 )
-            except Exception as e:
-                ai_report = {'executive_summary': f'Analyse IA indisponible: {str(e)}', 'boost_recommendations': []}
+            except Exception:
+                try:
+                    ai_report = await generate_merchant_intelligence_report(
+                        merchants_data, api_key, model_provider='openai', model_name='gpt-4o'
+                    )
+                except Exception as e2:
+                    ai_report = {'executive_summary': f'Analyse IA indisponible: {str(e2)}', 'boost_recommendations': []}
 
         html = _build_weekly_email_html(merchants_data, ai_report)
         return HTMLResponse(content=html)
@@ -1329,7 +1350,13 @@ async def digital_audit(partner_id: int, request: Request):
         provider = body.get('provider', 'gemini')
         model = body.get('model', 'gemini-2.5-flash')
 
-        audit_result = await generate_digital_audit(score_data, api_key, provider, model)
+        try:
+            audit_result = await generate_digital_audit(score_data, api_key, provider, model)
+        except Exception:
+            if provider == 'gemini':
+                audit_result = await generate_digital_audit(score_data, api_key, 'openai', 'gpt-4o')
+            else:
+                raise
         return JSONResponse(audit_result)
     except Exception as e:
         import traceback; traceback.print_exc()

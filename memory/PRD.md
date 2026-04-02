@@ -7,44 +7,41 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - **Backend**: Laravel 10, FastAPI (Python), Redis Cache
 - **Database**: MySQL (remote)
 - **ML**: LightGBM LambdaRank + Exploration/Exploitation (28 features)
-- **AI**: Gemini 2.5 Flash (Emergent LLM Key)
+- **AI**: Gemini 2.5 Flash / OpenAI GPT-4o (fallback)
 - **Frontend**: Blade templates, Vanilla JS, Chart.js
 
-## Data Model - Campaign Linking
-- `carte_recharge`: Cards with `client_id`, `campain_name`, `carte_recharge_used` (1=activated), `stores`, `card_generated_number`
-- **Campaign filter**: Uses `carte_recharge.client_id WHERE carte_recharge_used=1 AND campain_name=X`
-- NOT carte_recharge_client (empty for some campaigns)
+## RBAC Model
+- **SuperAdmin**: Full access (all dashboards, ML, Recommandations, Admin pages)
+- **Admin Sub-Store (Pluxee)**: Sub-Stores dashboard, Users, Invitations, Audit Logs (own sub-store only)
+- **Collaborateur**: Sub-Stores dashboard (own campaign only), no admin pages
+- **Recommandations ML / Dashboard ML**: SuperAdmin ONLY (hidden from menu + middleware protected)
 
-## KPI Definitions (Unified across Vue d'Ensemble and Users tabs)
-- **Distribue**: sum(card_generated_number) for campaign, or count(clients) for all
+## KPI Definitions
+- **Distribue**: sum(card_generated_number) for campaign
 - **Inscriptions**: Clients with at least one abonnement + campaign filter
 - **Active Users**: Clients with non-expired abonnement + campaign filter
 - **Transactions**: Count of history entries for campaign clients
-- **Clients avec transactions**: Distinct clients with at least one transaction (replaced "Transactions Cohorte" in Vue d'Ensemble)
-- **Cartes Utilisees/Subscriptions**: Count of abonnements created in period for campaign clients
-- **Inscriptions Cohorte**: Clients created within period + campaign filter
+- **Clients avec transactions**: Distinct clients with at least one transaction (Vue d'Ensemble)
 - **Taux de Conversion**: inscriptions / distribue * 100
 
 ## Implemented Features (ALL DONE)
 
-### Campaign Data Filtering - COMPLETE (Avril 2026)
-- `applyPluxeeCampaignFilter` uses `carte_recharge.client_id` (NOT carte_recharge_client)
-- `getUsersKPIs` now uses `getActiveUsersWithCards` (consistent with Vue d'Ensemble)
-- All Pluxee functions apply campaign filter consistently
-- SuperAdmin can filter by specific campaign via dropdown and see same data as Collaborateur
+### Code Review & Bug Fix (Avril 2026)
+- **emergentintegrations fallback**: All 4 files (server.py, merchant_intelligence.py, digital_scoring.py, generate_report.py) now try emergentintegrations first, fall back to direct OpenAI/Gemini SDK
+- **Gemini→OpenAI auto-fallback**: All merchant intelligence routes try Gemini first, if error (e.g. "pattern mismatch"), automatically retry with OpenAI GPT-4o
+- **DB credentials security**: Removed hardcoded credentials from generate_report.py, reads from .env
+- **DB connection leak fix**: All MySQL connections wrapped in try/finally
+- **PHP-FPM version detection**: Lifespan auto-detects PHP 8.1 or 8.2
+- **Storage path fix**: Uses relative paths instead of hardcoded /app/
+- **RBAC Recommandations**: Restricted ML/Reco pages to SuperAdmin only (menu + controller middleware)
+- **Invitation flow**: Admin Pluxee can invite Collaborateurs with multi-campaign assignment
 
-### RBAC Permission System - COMPLETE
-- Admin Sub-Store sees only their sub-store users/logs/invitations
-- Collaborateur gets 403 on admin pages, sees only campaign-filtered data
+### Campaign Data Filtering - COMPLETE
+- `applyPluxeeCampaignFilter` uses `carte_recharge.client_id`
+- SuperAdmin can filter by specific campaign via dropdown
 
-### KPI Renaming - COMPLETE (Avril 2026)
-- Replaced "Transactions Cohorte" with "Clients avec transactions" in Vue d'Ensemble
-- Backend API returns `clientsWithTransactions` key (not `transactionsCohorte`)
-- Both loading state and data-loaded state show correct label
-- Tooltips updated to remove old references
-
-## Test Reports
-- iteration_39-44: ALL 100% PASS
+### KPI Renaming - COMPLETE
+- "Transactions Cohorte" → "Clients avec transactions" in Vue d'Ensemble
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025

@@ -246,9 +246,9 @@
         <a href="{{ route('admin.eklektik.sync-tracking') }}" class="nav-dropdown-item">Suivi Sync</a>
         @endif
         <div class="nav-dropdown-sep"></div>
+        @if($isSuper)
         <a href="{{ route('admin.ml.dashboard') }}" class="nav-dropdown-item">Dashboard ML</a>
         <a href="{{ route('admin.merchant-reco.dashboard') }}" class="nav-dropdown-item">Recommandations ML</a>
-        @if($isSuper)
         <a href="{{ route('admin.pluxee.users.index') }}" class="nav-dropdown-item">Gestion Pluxee</a>
         @endif
         <div class="nav-dropdown-sep"></div>
@@ -268,9 +268,9 @@
         <a href="{{ route('admin.users.index') }}" class="{{ str_starts_with($currentRoute, 'admin.users') ? 'active' : '' }}">Utilisateurs</a>
         <a href="{{ route('admin.invitations.index') }}" class="{{ str_starts_with($currentRoute, 'admin.invitations') ? 'active' : '' }}">Invitations</a>
         @endif
+        @if($isSuper)
         <a href="{{ route('admin.merchant-reco.dashboard') }}" class="{{ $currentRoute === 'admin.merchant-reco.dashboard' ? 'active' : '' }}">Recommandations ML</a>
         <a href="{{ route('admin.ml.dashboard') }}" class="{{ $currentRoute === 'admin.ml.dashboard' ? 'active' : '' }}">Dashboard ML</a>
-        @if($isSuper)
         <a href="{{ route('admin.users.permissions') }}" class="{{ $currentRoute === 'admin.users.permissions' ? 'active' : '' }}">Permissions</a>
         <a href="{{ route('admin.audit-logs.index') }}" class="{{ str_starts_with($currentRoute, 'admin.audit-logs') ? 'active' : '' }}">Journal d'Audit</a>
         <a href="{{ route('admin.pluxee.users.index') }}" class="{{ $currentRoute === 'admin.pluxee.users.index' ? 'active' : '' }}">Gestion Pluxee</a>

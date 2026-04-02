@@ -1787,6 +1787,8 @@
       <button class="nav-tab" onclick="showTab('merchant')">Merchant</button>
       @if(Auth::user()->canAccessSubStoresDashboard())
       <button class="nav-tab" onclick="showTab('users')">Users</button>
+      @endif
+      @if(Auth::user()->isSuperAdmin())
       <button class="nav-tab" onclick="showTab('recommendations')" data-testid="tab-recommendations">Recommandations</button>
       @endif
                 </div>
@@ -2184,6 +2186,7 @@
     @endif
 
     <!-- Recommendations Tab -->
+    @if(Auth::user()->isSuperAdmin())
     <div id="recommendations" class="tab-content" data-testid="recommendations-tab">
       <!-- Reco KPIs -->
       <div class="reco-kpis-row" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
@@ -2254,6 +2257,7 @@
         </div>
       </div>
     </div>
+    @endif
 
     <script>
     // Helper pour désactiver les logs en production (DOIT être défini en premier)

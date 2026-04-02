@@ -8,6 +8,16 @@ use Illuminate\Http\Request;
 
 class MerchantRecommendationController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            if (!auth()->user() || !auth()->user()->isSuperAdmin()) {
+                abort(403, 'Accès réservé au Super Administrateur.');
+            }
+            return $next($request);
+        });
+    }
+
     public function index()
     {
         $service = new MLMerchantRecommendationService();
