@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\DataControllerOptimized;
 use App\Http\Controllers\Api\EklektikController;
 use App\Http\Controllers\Api\EklektikStatsController;
 use App\Http\Controllers\Api\EklektikDashboardController;
+use App\Http\Controllers\Api\MonitoringController;
+use App\Http\Controllers\Api\ReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,19 +25,13 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-// API pour récupérer les opérateurs
-Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
+// API pour récupérer les opérateurs (route principale dans web.php avec session auth)
+// Route::middleware('auth')->get('/operators', [\App\Http\Controllers\Api\OperatorsController::class, 'getOperators'])->name('api.operators');
 
-// Dashboard API routes
+// Dashboard API routes - Routes legacy stateless (utilisées par des clients API externes)
+// Les routes principales avec auth session sont dans web.php
 Route::prefix('dashboard')->name('api.dashboard.')->group(function () {
-    Route::get('/data', [DataControllerOptimized::class, 'getDashboardData'])->name('data');
-    Route::get('/subscriptions/{clientId}', [DataControllerOptimized::class, 'getUserSubscriptions'])->name('user.subscriptions');
-    Route::get('/operators', [DataController::class, 'getUserOperators'])->name('operators');
     Route::get('/partners', [DataController::class, 'getPartnersList'])->name('partners');
-    Route::get('/kpis', [DataController::class, 'getKpis'])->name('kpis');
-    Route::get('/merchants', [DataController::class, 'getMerchants'])->name('merchants');
-    Route::get('/transactions', [DataController::class, 'getTransactions'])->name('transactions');
-    Route::get('/subscriptions', [DataController::class, 'getSubscriptions'])->name('subscriptions');
 });
 
 // Eklektik API routes - Contrôleur consolidé (sans auth pour test)
@@ -81,3 +77,53 @@ Route::prefix('eklektik-dashboard')->name('api.eklektik-dashboard.')->group(func
 if (file_exists(base_path('routes/api_optimized.php'))) {
     require base_path('routes/api_optimized.php');
 }
+
+// Monitoring API routes
+Route::prefix('monitoring')->name('api.monitoring.')->group(function () {
+    Route::get('/dashboard', [MonitoringController::class, 'dashboard'])->name('dashboard');
+    Route::post('/record', [MonitoringController::class, 'recordApiTime'])->name('record');
+    Route::get('/health', [MonitoringController::class, 'healthCheck'])->name('health');
+    Route::get('/alerts', [MonitoringController::class, 'getAlerts'])->name('alerts');
+    Route::post('/alerts/{alertId}/acknowledge', [MonitoringController::class, 'acknowledgeAlert'])->name('alerts.acknowledge');
+    Route::post('/alerts/acknowledge-all', [MonitoringController::class, 'acknowledgeAllAlerts'])->name('alerts.acknowledge-all');
+    Route::delete('/alerts', [MonitoringController::class, 'clearAlerts'])->name('alerts.clear');
+    Route::get('/warmup-status', [MonitoringController::class, 'warmupStatus'])->name('warmup-status');
+});
+
+// Reporting routes
+Route::prefix('reports')->name('api.reports.')->group(function () {
+    Route::get('/recipients', [ReportController::class, 'getRecipients'])->name('recipients.index');
+    Route::post('/recipients', [ReportController::class, 'storeRecipient'])->name('recipients.store');
+    Route::put('/recipients/{id}', [ReportController::class, 'updateRecipient'])->name('recipients.update');
+    Route::delete('/recipients/{id}', [ReportController::class, 'deleteRecipient'])->name('recipients.destroy');
+    Route::post('/recipients/{id}/toggle', [ReportController::class, 'toggleRecipient'])->name('recipients.toggle');
+    Route::post('/send', [ReportController::class, 'sendNow'])->name('send');
+    Route::get('/preview/{id}', [ReportController::class, 'previewReport'])->name('preview');
+    Route::get('/logs', [ReportController::class, 'getLogs'])->name('logs');
+    Route::get('/partners', [ReportController::class, 'getPartners'])->name('partners');
+    Route::get('/schedule', [ReportController::class, 'getScheduleConfig'])->name('schedule');
+});
+
+// ML Merchant Recommendations (proxied to FastAPI)
+Route::prefix('merchant-recommendations')->name('api.merchant-reco.')->group(function () {
+    Route::get('/health', function () {
+        $service = new \App\Services\MLMerchantRecommendationService();
+        return response()->json($service->getHealth());
+    })->name('health');
+
+    Route::post('/', function (\Illuminate\Http\Request $request) {
+        $service = new \App\Services\MLMerchantRecommendationService();
+        $result = $service->getRecommendations(
+            (int) $request->input('client_id'),
+            (int) $request->input('top_k', 10),
+            $request->input('category_id') ? (int) $request->input('category_id') : null,
+            (bool) $request->input('exclude_visited', false)
+        );
+        return response()->json($result);
+    })->name('recommend');
+
+    Route::post('/retrain', function () {
+        $service = new \App\Services\MLMerchantRecommendationService();
+        return response()->json($service->triggerRetrain());
+    })->name('retrain');
+});

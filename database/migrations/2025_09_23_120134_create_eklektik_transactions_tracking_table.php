@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('eklektik_transactions_tracking')) {
+            return;
+        }
         Schema::create('eklektik_transactions_tracking', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('transaction_id')->index();

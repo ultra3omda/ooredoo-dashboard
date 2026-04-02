@@ -237,6 +237,14 @@
         }
         
         .hidden { display: none; }
+        
+        @media (max-width: 480px) {
+            .otp-container { padding: 28px 20px; margin: 12px; border-radius: 16px; }
+            .otp-title { font-size: 20px; }
+            .otp-subtitle { font-size: 12px; }
+            .form-input { padding: 10px 14px; font-size: 15px; }
+            .btn { padding: 14px 20px; font-size: 15px; }
+        }
     </style>
 </head>
 <body>

@@ -1,0 +1,28 @@
+name: Deploy to Preprod
+
+on:
+  push:
+    branches:
+      - emergent
+
+jobs:
+  deploy:
+    name: Deploy Laravel + FastAPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          timeout: 120s
+          script: |
+            cd /var/www/preprod_dash_cp
+            git fetch origin emergent
+            git reset --hard origin/emergent
+            chmod +x deploy.sh
+            bash deploy.sh

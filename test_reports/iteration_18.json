@@ -1,0 +1,60 @@
+{
+  "summary": "Tested ML Merchant Recommendation Engine - All 18 backend tests passed (100%). All FastAPI endpoints working: recommendations, health, track, stats, retrain. Laravel Artisan commands verified. Database tables populated with training data.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_merchant_recommendations.py",
+    "/app/test_reports/pytest/pytest_merchant_recommendations.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_merchant_recommendations.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "superadmin@ooredoo.tn / SuperAdmin@2025"
+  },
+  "seed_data_creation": "No new seed data. Used existing production data from MySQL DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "ML Merchant Recommendation Engine fully tested. Model trained with 111K samples, NDCG@5=1.0. All endpoints working: POST /api/merchant-recommendations (personalized + cold-start), GET /api/merchant-recommendations/health, POST /api/merchant-recommendations/track, GET /api/merchant-recommendations/stats, POST /api/merchant-recommendations/retrain. Laravel Artisan commands: php artisan ml:merchant-recommendations status|recommend|retrain. Database tables: cp_merchants_catalog (576), cp_user_merchant_history (57K), cp_user_profile (19K), cp_user_offer_interactions (3 test records).",
+  "features_verified": {
+    "POST /api/merchant-recommendations": "PASS - Returns personalized recommendations for known client_id=114218",
+    "Cold-start fallback": "PASS - Returns popularity-based recommendations for unknown client_id=999999",
+    "exclude_visited filter": "PASS - Filters out already visited merchants",
+    "category_id filter": "PASS - Filters by category",
+    "GET /api/merchant-recommendations/health": "PASS - Returns model status, trained_at, eval_results (NDCG@5=1.0)",
+    "POST /api/merchant-recommendations/track": "PASS - Tracks click/redeem interactions with validation",
+    "GET /api/merchant-recommendations/stats": "PASS - Returns interaction stats, active_merchants=576, profiled_users=19249",
+    "POST /api/merchant-recommendations/retrain": "PASS - Triggers model retraining (~60s)",
+    "Laravel Artisan status": "PASS - php artisan ml:merchant-recommendations status shows model ready",
+    "Laravel Artisan recommend": "PASS - php artisan ml:merchant-recommendations recommend --client=114218 --top=5 returns recommendations",
+    "cp_user_merchant_history table": "PASS - 57564 records",
+    "cp_merchants_catalog table": "PASS - 576 merchants",
+    "cp_user_profile table": "PASS - 19249 user profiles",
+    "cp_user_offer_interactions table": "PASS - 3 records (from tracking tests)",
+    "Sub-store merchants regression": "PASS - Endpoint exists and requires auth (expected behavior)"
+  },
+  "model_metrics": {
+    "trained_at": "2026-03-31T11:31:23.142588",
+    "n_train_samples": 111660,
+    "n_test_samples": 27660,
+    "n_features": 28,
+    "eval_results": {
+      "ndcg@5": 1.0,
+      "ndcg@10": 1.0
+    },
+    "top_features": ["user_avg_visits", "visit_count", "user_total_visits", "days_since_last_visit", "loyalty_score"]
+  }
+}

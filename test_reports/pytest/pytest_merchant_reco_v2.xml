@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="10" time="9.555" timestamp="2026-03-31T13:19:10.652376+00:00" hostname="agent-env-05e71150-e8ce-4b77-a854-80030459ae3b"><testcase classname="backend.tests.test_merchant_recommendations.TestMerchantRecommendationsAPI" name="test_recommendations_ml_model_source" time="3.356" /><testcase classname="backend.tests.test_merchant_recommendations.TestMerchantRecommendationsAPI" name="test_recommendations_fallback_popularity_source" time="0.856" /><testcase classname="backend.tests.test_merchant_recommendations.TestMerchantRecommendationsAPI" name="test_recommendations_with_category_filter" time="1.372" /><testcase classname="backend.tests.test_merchant_recommendations.TestMerchantRecommendationsAPI" name="test_recommendations_missing_client_id" time="0.122" /><testcase classname="backend.tests.test_merchant_recommendations.TestTimelineEndpoint" name="test_timeline_returns_arrays" time="0.983" /><testcase classname="backend.tests.test_merchant_recommendations.TestCategoriesEndpoint" name="test_categories_returns_11" time="0.857" /><testcase classname="backend.tests.test_merchant_recommendations.TestStatsEndpoint" name="test_stats_returns_kpis" time="1.167" /><testcase classname="backend.tests.test_merchant_recommendations.TestHealthEndpoint" name="test_health_check" time="0.104" /><testcase classname="backend.tests.test_merchant_recommendations.TestRedisCachePerformance" name="test_cache_performance" time="0.405" /><testcase classname="backend.tests.test_merchant_recommendations.TestRegressionMerchantKPIs" name="test_merchant_kpis_8_values" time="0.203"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:976: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_merchant_recommendations.py:194: in test_merchant_kpis_8_values
+    data = response.json()
+           ^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:980: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase></testsuite></testsuites>

@@ -24,8 +24,8 @@
                            href="{{ route('admin.eklektik.sync') }}" role="tab">
                             🔄 Gestion des Synchronisations
                         </a>
-                        <a class="nav-item nav-link {{ request()->routeIs('admin.eklektik.sync-tracking') ? 'active' : '' }}" 
-                           href="{{ route('admin.eklektik.sync-tracking') }}" role="tab">
+                        <a class="nav-item nav-link {{ request()->routeIs('admin.eklektik.sync.tracking') ? 'active' : '' }}" 
+                           href="{{ route('admin.eklektik.sync.tracking') }}" role="tab">
                             📈 Suivi des Synchronisations
                         </a>
                         <a class="nav-item nav-link" 
@@ -114,6 +114,46 @@
 .badge-warning {
     background-color: var(--warning);
     color: white;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .nav-pills.nav-fill {
+        flex-direction: column;
+        gap: 4px;
+    }
+    .nav-pills .nav-link {
+        text-align: left;
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+    .card-header {
+        padding: 12px;
+    }
+    .card-body {
+        padding: 12px;
+    }
+    .card-title {
+        font-size: 16px;
+    }
+    .card-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    .card-tools .btn {
+        font-size: 12px;
+        padding: 6px 12px;
+    }
+    .container {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+}
+@media (max-width: 480px) {
+    .nav-pills .nav-link { font-size: 12px; padding: 8px 12px; }
+    .card-title { font-size: 14px; }
 }
 </style>
 

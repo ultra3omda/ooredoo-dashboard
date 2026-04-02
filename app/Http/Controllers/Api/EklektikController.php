@@ -215,8 +215,8 @@ class EklektikController extends Controller
                 $response = Http::timeout(30)
                     ->asForm()
                     ->post('https://payment.eklectic.tn/API/oauth/token', [
-                        'client_id' => '0a2e605d-88f6-11ec-9feb-fa163e3dd8b3',
-                        'client_secret' => 'ee60bb148a0e468a5053f9db41008780',
+                        'client_id' => config('eklektik.client_id'),
+                        'client_secret' => config('eklektik.client_secret'),
                         'grant_type' => 'client_credentials'
                     ]);
 

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Admin\AuditLogController;
 use App\Mail\PasswordResetMail;
 
 class UserManagementController extends Controller
@@ -42,10 +43,34 @@ class UserManagementController extends Controller
                 break;
                 
             case 'admin_operator':
+                // Admin opérateur : voit les utilisateurs de son opérateur
+                $operatorName = $user->getPrimaryOperatorName();
+                $users = User::whereHas('operators', function($query) use ($operatorName) {
+                    $query->where('operator_name', $operatorName);
+                })
+                ->whereHas('role', function($query) {
+                    $query->where('name', '!=', 'super_admin');
+                })
+                ->with(['role', 'operators'])
+                ->paginate(20);
+                break;
+
             case 'admin_sub_store':
+                // Admin sub-store : voit TOUS les utilisateurs de son sub-store (campagnes et collaborateurs)
+                $subStoreName = $user->getPrimaryOperatorName();
+                $users = User::whereHas('operators', function($query) use ($subStoreName) {
+                    $query->where('operator_name', $subStoreName);
+                })
+                ->whereHas('role', function($query) {
+                    $query->where('name', '!=', 'super_admin');
+                })
+                ->with(['role', 'operators'])
+                ->paginate(20);
+                break;
+
             case 'collaborator':
             default:
-                // Tous les autres : SEULEMENT les utilisateurs qu'ils ont créés + eux-mêmes
+                // Collaborateur : SEULEMENT les utilisateurs qu'ils ont créés + eux-mêmes
                 $users = User::where(function($query) use ($user) {
                     $query->where('created_by', $user->id)
                           ->orWhere('id', $user->id);
@@ -71,22 +96,32 @@ class UserManagementController extends Controller
     public function create()
     {
         $user = auth()->user();
+        $subStoreService = app(\App\Services\SubStoreService::class);
         
         // Les rôles disponibles selon le niveau de l'utilisateur connecté
         if ($user->isSuperAdmin()) {
             $roles = Role::active()->get();
-            $operators = $this->getAllOperators();
-        } else {
-            // Un admin ne peut créer que des collaborateurs
+            $operators = $subStoreService->getClassicOperators();
+            $subStores = $subStoreService->getSubStores();
+        } elseif ($user->isAdminOperator()) {
             $roles = Role::where('name', 'collaborator')->active()->get();
-            $operators = $user->operators->pluck('operator_name', 'operator_name');
+            $operators = $user->operators->pluck('operator_name', 'operator_name')->toArray();
+            $subStores = [];
+        } elseif ($user->isAdminSubStore() || $user->canInviteCollaborators()) {
+            $roles = Role::where('name', 'collaborator')->active()->get();
+            $operators = [];
+            $subStores = $user->operators->pluck('operator_name', 'operator_name')->toArray();
+        } else {
+            $roles = Role::where('name', 'collaborator')->active()->get();
+            $operators = $user->operators->pluck('operator_name', 'operator_name')->toArray();
+            $subStores = [];
         }
         
         // Déterminer le thème selon l'utilisateur connecté
         $theme = $user->isTimweOoredooUser() ? 'ooredoo' : 'club_privileges';
         $isOoredoo = $theme === 'ooredoo';
         
-        return view('admin.users.create', compact('roles', 'operators', 'theme', 'isOoredoo'));
+        return view('admin.users.create', compact('roles', 'operators', 'subStores', 'theme', 'isOoredoo'));
     }
 
     /**
@@ -103,8 +138,11 @@ class UserManagementController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'role_id' => 'required|exists:roles,id',
             'phone' => 'nullable|string|max:20',
-            'operators' => 'required|array|min:1',
-            'operators.*' => 'required|string'
+            'type_selection' => 'required|in:operator,substore',
+            'operator_name' => 'required_if:type_selection,operator|string|nullable',
+            'substore_name' => 'required_if:type_selection,substore|string|nullable',
+            'campaign_access' => 'nullable|array',
+            'campaign_access.*' => 'string|max:255',
         ], [
             'first_name.required' => 'Le prénom est obligatoire.',
             'last_name.required' => 'Le nom est obligatoire.',
@@ -115,7 +153,10 @@ class UserManagementController extends Controller
             'password.confirmed' => 'La confirmation du mot de passe ne correspond pas.',
             'role_id.required' => 'Le rôle est obligatoire.',
             'role_id.exists' => 'Le rôle sélectionné n\'existe pas.',
-            'operators.required' => 'Au moins un opérateur doit être sélectionné.',
+            'type_selection.required' => 'Le type est obligatoire.',
+            'type_selection.in' => 'Le type doit être opérateur ou sub-store.',
+            'operator_name.required_if' => 'L\'opérateur est obligatoire quand le type est opérateur.',
+            'substore_name.required_if' => 'Le sub-store est obligatoire quand le type est sub-store.',
         ]);
 
         // Vérifier les permissions
@@ -123,6 +164,9 @@ class UserManagementController extends Controller
         if (!$user->isSuperAdmin() && $role->name !== 'collaborator') {
             return back()->with('error', 'Vous ne pouvez créer que des collaborateurs.');
         }
+
+        // Déterminer le nom de l'opérateur/sub-store selon le type sélectionné
+        $operatorName = $request->type_selection === 'operator' ? $request->operator_name : $request->substore_name;
 
         DB::beginTransaction();
         try {
@@ -139,19 +183,27 @@ class UserManagementController extends Controller
                 'created_by' => $user->id
             ]);
 
-            // Assigner les opérateurs
-            foreach ($request->operators as $index => $operatorName) {
-                UserOperator::create([
-                    'user_id' => $newUser->id,
-                    'operator_name' => $operatorName,
-                    'is_primary' => $index === 0, // Le premier est principal
-                    'assigned_by' => $user->id
+            // Assigner l'opérateur/sub-store
+            UserOperator::create([
+                'user_id' => $newUser->id,
+                'operator_name' => $operatorName,
+                'is_primary' => true,
+                'assigned_by' => $user->id
+            ]);
+
+            // Appliquer les restrictions de campagne si spécifiées
+            $campaignAccess = $request->input('campaign_access', []);
+            if (!empty($campaignAccess)) {
+                $newUser->update([
+                    'pluxee_campaign_access' => json_encode(array_values($campaignAccess))
                 ]);
             }
 
             DB::commit();
+            
+            $campaignInfo = !empty($campaignAccess) ? ' (Campagnes: ' . implode(', ', $campaignAccess) . ')' : '';
             return redirect()->route('admin.users.index')
-                           ->with('success', 'Utilisateur créé avec succès.');
+                           ->with('success', "Utilisateur créé avec succès.{$campaignInfo}");
 
         } catch (\Exception $e) {
             DB::rollback();
@@ -173,9 +225,30 @@ class UserManagementController extends Controller
         
         if ($currentUser->isSuperAdmin()) {
             $roles = Role::active()->get();
-            $operators = $this->getAllOperators();
         } else {
             $roles = Role::where('name', 'collaborator')->active()->get();
+        }
+        
+        // Determine if this user belongs to a sub-store
+        $subStoreService = app(\App\Services\SubStoreService::class);
+        $primaryOp = $user->primaryOperator();
+        $isSubStoreUser = $primaryOp ? $subStoreService->isSubStoreOperator($primaryOp->operator_name) : false;
+        
+        // Show sub-stores list for sub-store users, payment operators for operator users
+        if ($currentUser->isSuperAdmin()) {
+            if ($isSubStoreUser) {
+                $operators = DB::table('stores')
+                    ->where('store_active', 1)
+                    ->where(function($q) {
+                        $q->where('is_sub_store', 1)->orWhere('store_id', 54);
+                    })
+                    ->orderBy('store_name')
+                    ->pluck('store_name', 'store_name')
+                    ->toArray();
+            } else {
+                $operators = $this->getAllOperators();
+            }
+        } else {
             $operators = $currentUser->operators->pluck('operator_name', 'operator_name');
         }
         
@@ -183,7 +256,7 @@ class UserManagementController extends Controller
         $theme = $currentUser->isTimweOoredooUser() ? 'ooredoo' : 'club_privileges';
         $isOoredoo = $theme === 'ooredoo';
         
-        return view('admin.users.edit', compact('user', 'roles', 'operators', 'theme', 'isOoredoo'));
+        return view('admin.users.edit', compact('user', 'roles', 'operators', 'theme', 'isOoredoo', 'isSubStoreUser'));
     }
 
     /**
@@ -385,5 +458,137 @@ class UserManagementController extends Controller
                  ->distinct()
                  ->pluck('country_payments_methods_name', 'country_payments_methods_name')
                  ->toArray();
+    }
+
+    /**
+     * Page de gestion des permissions campagnes
+     */
+    public function permissions()
+    {
+        $currentUser = auth()->user();
+        
+        if (!$currentUser->isSuperAdmin() && !$currentUser->canInviteCollaborators()) {
+            abort(403, 'Acces refuse.');
+        }
+
+        // Get all users with their operators and campaign access
+        $query = User::with(['role', 'operators']);
+        
+        if (!$currentUser->isSuperAdmin()) {
+            // Non-super admins see only users from their operators
+            $myOperators = $currentUser->operators->pluck('operator_name');
+            $query->whereHas('operators', function($q) use ($myOperators) {
+                $q->whereIn('operator_name', $myOperators);
+            });
+        }
+        
+        $users = $query->orderBy('name')->get()->map(function($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role ? $user->role->name : 'unknown',
+                'role_display' => $user->role ? $user->role->display_name : 'Inconnu',
+                'operator' => $user->primaryOperator() ? $user->primaryOperator()->operator_name : '-',
+                'campaigns' => $user->getAllowedCampaigns(),
+                'has_restriction' => $user->hasCampaignRestriction(),
+                'can_invite' => $user->canInviteCollaborators(),
+                'status' => $user->status ?? 'active',
+            ];
+        });
+
+        $theme = $currentUser->isTimweOoredooUser() ? 'ooredoo' : 'club_privileges';
+        $isOoredoo = $theme === 'ooredoo';
+        
+        return view('admin.users.permissions', compact('users', 'theme', 'isOoredoo'));
+    }
+
+    /**
+     * API: Update campaign access for a user
+     */
+    public function updateCampaignAccess(Request $request, User $user)
+    {
+        $currentUser = auth()->user();
+        
+        if (!$currentUser->isSuperAdmin() && !$currentUser->canInviteCollaborators()) {
+            return response()->json(['success' => false, 'error' => 'Acces refuse'], 403);
+        }
+
+        // Cannot modify super admins
+        if ($user->isSuperAdmin()) {
+            return response()->json(['success' => false, 'error' => 'Impossible de modifier un super administrateur'], 403);
+        }
+
+        $campaigns = $request->input('campaigns', []);
+        $oldValue = $user->pluxee_campaign_access;
+        
+        if (empty($campaigns)) {
+            $user->update(['pluxee_campaign_access' => null]);
+            $action = 'grant_full_access';
+            $details = "Acces complet accorde a {$user->name} ({$user->email})";
+        } else {
+            $user->update(['pluxee_campaign_access' => json_encode(array_values($campaigns))]);
+            $action = 'restrict_campaigns';
+            $details = "Campagnes restreintes pour {$user->name} ({$user->email}): " . implode(', ', $campaigns);
+        }
+
+        // Log the permission change
+        AuditLogController::logPermissionChange(
+            $user->id,
+            $user->name,
+            $user->email,
+            $currentUser->id,
+            $currentUser->name,
+            $currentUser->email,
+            $action,
+            $oldValue,
+            $user->pluxee_campaign_access,
+            $details,
+            $request->ip()
+        );
+
+        Log::info("Campaign access updated for user {$user->id} ({$user->name}) by {$currentUser->name}: " . json_encode($campaigns));
+
+        return response()->json([
+            'success' => true,
+            'user_id' => $user->id,
+            'campaigns' => $user->getAllowedCampaigns(),
+            'has_restriction' => $user->hasCampaignRestriction(),
+            'can_invite' => $user->canInviteCollaborators(),
+        ]);
+    }
+
+    /**
+     * API: Get all available campaigns for a store
+     */
+    public function getAvailableCampaigns(Request $request)
+    {
+        $storeName = $request->input('store_name', '');
+        
+        if (empty($storeName)) {
+            // Get all campaigns from all sub-stores
+            $campaigns = DB::table('carte_recharge')
+                ->join('stores', 'stores.store_id', '=', 'carte_recharge.stores')
+                ->where('stores.is_sub_store', 1)
+                ->select('carte_recharge.campain_name', 'stores.store_name', 
+                         DB::raw('COUNT(*) as total_batches'), 
+                         DB::raw('SUM(carte_recharge.card_generated_number) as total_cards'))
+                ->groupBy('carte_recharge.campain_name', 'stores.store_name')
+                ->orderBy('stores.store_name')
+                ->orderBy('carte_recharge.campain_name')
+                ->get();
+        } else {
+            $campaigns = DB::table('carte_recharge')
+                ->join('stores', 'stores.store_id', '=', 'carte_recharge.stores')
+                ->where('stores.store_name', $storeName)
+                ->select('carte_recharge.campain_name', 'stores.store_name',
+                         DB::raw('COUNT(*) as total_batches'), 
+                         DB::raw('SUM(carte_recharge.card_generated_number) as total_cards'))
+                ->groupBy('carte_recharge.campain_name', 'stores.store_name')
+                ->orderBy('carte_recharge.campain_name')
+                ->get();
+        }
+
+        return response()->json(['campaigns' => $campaigns]);
     }
 }

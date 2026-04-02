@@ -10,52 +10,71 @@ use App\Models\EklektikStatsDaily;
 class EklektikCacheService
 {
     private $cachePrefix = 'eklektik_stats_';
-    private $cacheDuration = 300; // 5 minutes
+    
+    /**
+     * Calculer le TTL adaptatif selon la période
+     */
+    private function getCacheTTL($startDate, $endDate): int
+    {
+        $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
+        
+        // TTL adaptatif : plus la période est longue, plus le cache dure
+        return match(true) {
+            $periodDays <= 7 => 300,      // 5 minutes pour période courte
+            $periodDays <= 30 => 600,      // 10 minutes pour période moyenne
+            $periodDays <= 90 => 1800,     // 30 minutes pour période longue
+            default => 3600                // 1 heure pour très longue période
+        };
+    }
 
     /**
-     * Récupérer les KPIs Eklektik avec cache
+     * Récupérer les KPIs Eklektik avec cache adaptatif
      */
     public function getCachedKPIs($startDate, $endDate, $operator = null)
     {
         $cacheKey = $this->cachePrefix . 'kpis_' . md5($startDate . $endDate . $operator);
+        $ttl = $this->getCacheTTL($startDate, $endDate);
         
-        return Cache::remember($cacheKey, $this->cacheDuration, function () use ($startDate, $endDate, $operator) {
+        return Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate, $operator) {
             return $this->calculateKPIs($startDate, $endDate, $operator);
         });
     }
 
     /**
-     * Récupérer les statistiques détaillées avec cache
+     * Récupérer les statistiques détaillées avec cache adaptatif
      */
     public function getCachedDetailedStats($startDate, $endDate, $operator = null)
     {
         $cacheKey = $this->cachePrefix . 'detailed_' . md5($startDate . $endDate . $operator);
+        $ttl = $this->getCacheTTL($startDate, $endDate);
         
-        return Cache::remember($cacheKey, $this->cacheDuration, function () use ($startDate, $endDate, $operator) {
+        return Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate, $operator) {
             return $this->getDetailedStats($startDate, $endDate, $operator);
         });
     }
 
     /**
-     * Récupérer la répartition par opérateur avec cache
+     * Récupérer la répartition par opérateur avec cache adaptatif
      */
     public function getCachedOperatorsDistribution($startDate, $endDate)
     {
         $cacheKey = $this->cachePrefix . 'operators_' . md5($startDate . $endDate);
+        $ttl = $this->getCacheTTL($startDate, $endDate);
         
-        return Cache::remember($cacheKey, $this->cacheDuration, function () use ($startDate, $endDate) {
+        return Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate) {
             return $this->getOperatorsDistribution($startDate, $endDate);
         });
     }
 
     /**
-     * Récupérer les revenus BigDeal avec cache
+     * Récupérer les revenus BigDeal avec cache adaptatif
      */
     public function getCachedBigDealRevenue($startDate, $endDate, $operator = null)
     {
         $cacheKey = $this->cachePrefix . 'bigdeal_' . md5($startDate . $endDate . $operator);
+        $ttl = $this->getCacheTTL($startDate, $endDate);
         
-        return Cache::remember($cacheKey, $this->cacheDuration, function () use ($startDate, $endDate, $operator) {
+        return Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate, $operator) {
             return $this->getBigDealRevenue($startDate, $endDate, $operator);
         });
     }
@@ -140,10 +159,11 @@ class EklektikCacheService
     }
 
     /**
-     * Récupérer les statistiques détaillées
+     * Récupérer les statistiques détaillées (optimisé avec agrégation SQL)
      */
     private function getDetailedStats($startDate, $endDate, $operator = null)
     {
+        // OPTIMISATION: Utiliser une agrégation SQL au lieu de charger toutes les lignes puis grouper
         $query = DB::table('eklektik_stats_daily')
             ->whereBetween('date', [$startDate, $endDate]);
 
@@ -151,34 +171,70 @@ class EklektikCacheService
             $query->where('operator', $operator);
         }
 
-        $stats = $query->orderBy('date', 'desc')->get();
+        // OPTIMISATION: Agréger directement en SQL par date
+        $dailyAggregated = $query
+            ->select(
+                'date',
+                DB::raw('SUM(active_subscribers) as total_active_subscribers'),
+                DB::raw('SUM(new_subscriptions) as total_new_subscriptions'),
+                DB::raw('SUM(unsubscriptions) as total_unsubscriptions'),
+                DB::raw('SUM(simchurn) as total_simchurn'),
+                DB::raw('SUM(nb_facturation) as total_facturation'),
+                DB::raw('SUM(revenu_ttc_tnd) as total_revenue_ttc'),
+                DB::raw('SUM(montant_total_ht) as total_revenue_ht'),
+                DB::raw('SUM(ca_operateur) as total_ca_operateur'),
+                DB::raw('SUM(ca_agregateur) as total_ca_agregateur'),
+                DB::raw('SUM(ca_bigdeal) as total_ca_bigdeal'),
+                DB::raw('AVG(billing_rate) as average_billing_rate')
+            )
+            ->groupBy('date')
+            ->orderBy('date', 'desc')
+            ->get();
+
+        // Pour les détails par opérateur, charger seulement les données nécessaires
+        $operatorsQuery = DB::table('eklektik_stats_daily')
+            ->whereBetween('date', [$startDate, $endDate]);
+
+        if ($operator && $operator !== 'ALL') {
+            $operatorsQuery->where('operator', $operator);
+        }
+
+        $operatorsStats = $operatorsQuery
+            ->select('date', 'operator', 'offre_id', 'offer_name', 
+                     'new_subscriptions', 'unsubscriptions', 'simchurn', 
+                     'nb_facturation', 'revenu_ttc_tnd', 'montant_total_ht',
+                     'ca_operateur', 'ca_agregateur', 'ca_bigdeal')
+            ->orderBy('date', 'desc')
+            ->get()
+            ->groupBy('date');
 
         // Log pour debug
         \Log::info('EklektikCacheService::getDetailedStats - Stats récupérés:', [
-            'count' => $stats->count(),
+            'count' => $dailyAggregated->count(),
             'start_date' => $startDate,
             'end_date' => $endDate,
-            'operator' => $operator,
-            'sample_data' => $stats->take(3)->toArray()
+            'operator' => $operator
         ]);
 
-        // Grouper par date pour l'évolution temporelle
-        $dailyStats = $stats->groupBy('date')->map(function ($dayStats) {
+        // Construire le résultat avec agrégation par date
+        $dailyStats = $dailyAggregated->map(function ($dayStat) use ($operatorsStats) {
+            $date = $dayStat->date;
+            $dayOperators = $operatorsStats->get($date, collect());
+            
             return [
-                'date' => $dayStats->first()->date,
-                // Somme réelle des abonnés actifs pour la date
-                'total_active_subscribers' => $dayStats->sum('active_subscribers'),
-                'total_new_subscriptions' => $dayStats->sum('new_subscriptions'),
-                'total_unsubscriptions' => $dayStats->sum('unsubscriptions'),
-                'total_simchurn' => $dayStats->sum('simchurn'),
-                'total_facturation' => $dayStats->sum('nb_facturation'),
-                'total_revenue_ttc' => $dayStats->sum('revenu_ttc_tnd'),
-                'total_revenue_ht' => $dayStats->sum('montant_total_ht'),
-                'total_ca_operateur' => $dayStats->sum('ca_operateur'),
-                'total_ca_agregateur' => $dayStats->sum('ca_agregateur'),
-                'total_ca_bigdeal' => $dayStats->sum('ca_bigdeal'),
-                'average_billing_rate' => $dayStats->avg('billing_rate'),
-                'operators' => $dayStats->map(function ($stat) {
+                'date' => $date,
+                'total_active_subscribers' => (float)$dayStat->total_active_subscribers,
+                'total_new_subscriptions' => (int)$dayStat->total_new_subscriptions,
+                'total_unsubscriptions' => (int)$dayStat->total_unsubscriptions,
+                'total_simchurn' => (int)$dayStat->total_simchurn,
+                'total_facturation' => (int)$dayStat->total_facturation,
+                'total_revenue_ttc' => (float)$dayStat->total_revenue_ttc,
+                'total_revenue_ht' => (float)$dayStat->total_revenue_ht,
+                'total_ca_operateur' => (float)$dayStat->total_ca_operateur,
+                'total_ca_agregateur' => (float)$dayStat->total_ca_agregateur,
+                'total_ca_bigdeal' => (float)$dayStat->total_ca_bigdeal,
+                'average_billing_rate' => (float)$dayStat->average_billing_rate,
+                'operators' => $dayOperators->map(function ($stat) {
                     return [
                         'operator' => $stat->operator,
                         'offre_id' => $stat->offre_id,
@@ -201,30 +257,56 @@ class EklektikCacheService
     }
 
     /**
-     * Récupérer la répartition par opérateur
+     * Récupérer la répartition par opérateur (optimisé avec agrégation SQL)
      */
     private function getOperatorsDistribution($startDate, $endDate)
     {
-        $stats = DB::table('eklektik_stats_daily')
+        // OPTIMISATION: Agréger directement en SQL au lieu de charger toutes les lignes
+        $operatorsAggregated = DB::table('eklektik_stats_daily')
             ->whereBetween('date', [$startDate, $endDate])
+            ->select(
+                'operator',
+                DB::raw('COUNT(*) as total_records'),
+                DB::raw('SUM(new_subscriptions) as new_subscriptions'),
+                DB::raw('SUM(unsubscriptions) as unsubscriptions'),
+                DB::raw('SUM(simchurn) as simchurn'),
+                DB::raw('SUM(nb_facturation) as facturation'),
+                DB::raw('SUM(revenu_ttc_tnd) as revenue_ttc'),
+                DB::raw('SUM(montant_total_ht) as revenue_ht'),
+                DB::raw('SUM(ca_operateur) as ca_operateur'),
+                DB::raw('SUM(ca_agregateur) as ca_agregateur'),
+                DB::raw('SUM(ca_bigdeal) as ca_bigdeal')
+            )
+            ->groupBy('operator')
             ->get();
 
-        $operators = $stats->groupBy('operator');
-        $distribution = [];
+        // Pour les détails par offre, charger seulement les données nécessaires
+        $offersStats = DB::table('eklektik_stats_daily')
+            ->whereBetween('date', [$startDate, $endDate])
+            ->select('operator', 'offre_id', 'offer_name', 'offer_type',
+                     'new_subscriptions', 'unsubscriptions', 'simchurn',
+                     'nb_facturation', 'revenu_ttc_tnd', 'montant_total_ht',
+                     'ca_operateur', 'ca_agregateur', 'ca_bigdeal')
+            ->get()
+            ->groupBy(['operator', 'offre_id']);
 
-        foreach ($operators as $operatorName => $operatorStats) {
+        $distribution = [];
+        foreach ($operatorsAggregated as $operatorStat) {
+            $operatorName = $operatorStat->operator;
+            $operatorOffers = $offersStats->get($operatorName, collect());
+            
             $distribution[$operatorName] = [
-                'total_records' => $operatorStats->count(),
-                'new_subscriptions' => $operatorStats->sum('new_subscriptions'),
-                'unsubscriptions' => $operatorStats->sum('unsubscriptions'),
-                'simchurn' => $operatorStats->sum('simchurn'),
-                'facturation' => $operatorStats->sum('nb_facturation'),
-                'revenue_ttc' => $operatorStats->sum('revenu_ttc_tnd'),
-                'revenue_ht' => $operatorStats->sum('montant_total_ht'),
-                'ca_operateur' => $operatorStats->sum('ca_operateur'),
-                'ca_agregateur' => $operatorStats->sum('ca_agregateur'),
-                'ca_bigdeal' => $operatorStats->sum('ca_bigdeal'),
-                'offers' => $operatorStats->groupBy('offre_id')->map(function ($offerStats) {
+                'total_records' => (int)$operatorStat->total_records,
+                'new_subscriptions' => (int)$operatorStat->new_subscriptions,
+                'unsubscriptions' => (int)$operatorStat->unsubscriptions,
+                'simchurn' => (int)$operatorStat->simchurn,
+                'facturation' => (int)$operatorStat->facturation,
+                'revenue_ttc' => (float)$operatorStat->revenue_ttc,
+                'revenue_ht' => (float)$operatorStat->revenue_ht,
+                'ca_operateur' => (float)$operatorStat->ca_operateur,
+                'ca_agregateur' => (float)$operatorStat->ca_agregateur,
+                'ca_bigdeal' => (float)$operatorStat->ca_bigdeal,
+                'offers' => $operatorOffers->map(function ($offerStats) {
                     $offer = $offerStats->first();
                     return [
                         'offre_id' => $offer->offre_id,
@@ -325,8 +407,9 @@ class EklektikCacheService
     public function getCachedOperatorsRevenueEvolution($startDate, $endDate)
     {
         $cacheKey = "eklektik_operators_revenue_evolution_{$startDate}_{$endDate}";
+        $ttl = $this->getCacheTTL($startDate, $endDate);
         
-        return Cache::remember($cacheKey, $this->cacheDuration, function() use ($startDate, $endDate) {
+        return Cache::remember($cacheKey, $ttl, function() use ($startDate, $endDate) {
             $stats = EklektikStatsDaily::whereBetween('date', [$startDate, $endDate])
                 ->selectRaw('
                     date,

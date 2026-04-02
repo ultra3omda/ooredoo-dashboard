@@ -52,8 +52,8 @@ class TimweStatsService
                 ->whereColumn(DB::raw('DATE(ca.client_abonnement_creation)'), DB::raw('DATE(ca.client_abonnement_expiration)'))
                 ->count();
 
-            // 4. Revenu Simchurn (calculé depuis transactions_history avec pricepointId = 63980)
-            $billingPpid = env('TIMWE_BILLING_PPID', '63980');
+            // 4. Revenu Simchurn (calculé depuis transactions_history avec pricepointId = 63980, 63981, 63982)
+            $billingPpids = array_map('trim', explode(',', env('TIMWE_BILLING_PPIDS', '63980,63981,63982')));
             
             // Récupérer les IDs des abonnements simchurn
             $simchurnIds = DB::table('client_abonnement as ca')
@@ -79,7 +79,7 @@ class TimweStatsService
                 foreach ($transactions as $transaction) {
                     if ($transaction->result) {
                         $result = json_decode($transaction->result, true);
-                        if (isset($result['pricepointId']) && $result['pricepointId'] == $billingPpid) {
+                        if (isset($result['pricepointId']) && in_array((string)$result['pricepointId'], $billingPpids)) {
                             if (isset($result['mnoDeliveryCode']) && $result['mnoDeliveryCode'] === 'DELIVERED') {
                                 if (isset($result['totalCharged'])) {
                                     $simchurnRevenue += floatval($result['totalCharged']);
@@ -111,49 +111,44 @@ class TimweStatsService
                 ->distinct('ca.client_id')
                 ->count('ca.client_id');
 
-            // 7. Facturations (transactions avec pricepointId = 63980 ET mnoDeliveryCode = DELIVERED)
+            // 7. Facturations (toutes transactions avec pricepointId in (63980,63981,63982), mnoDeliveryCode = DELIVERED, totalCharged > 0)
+            // Comptage par transaction (sans déduplication par téléphone) pour coller au rapport Timwe
             $transactions = DB::table('transactions_history as th')
-                ->join('client_abonnement as ca', 'th.client_id', '=', 'ca.client_id')
-                ->whereIn('ca.country_payments_methods_id', $timweOperatorIds)
                 ->whereBetween('th.created_at', [$startOfDay, $endOfDay])
                 ->where(function($q) {
                     $q->where('th.status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
                       ->orWhere('th.status', 'LIKE', '%TIMWE_CHARGE_DELIVERED%');
                 })
+                ->select('th.result')
                 ->get();
             
             $billings = 0;
             foreach ($transactions as $transaction) {
                 if ($transaction->result) {
                     $result = json_decode($transaction->result, true);
-                    if (isset($result['pricepointId']) && $result['pricepointId'] == $billingPpid) {
-                        if (isset($result['mnoDeliveryCode']) && $result['mnoDeliveryCode'] === 'DELIVERED') {
-                            $billings++;
-                        }
+                    if (!is_array($result)) {
+                        continue;
                     }
+                    
+                    $ppid = $result['pricepointId'] ?? null;
+                    $delivery = $result['mnoDeliveryCode'] ?? null;
+                    $totalCharged = isset($result['totalCharged']) ? (int)$result['totalCharged'] : 0;
+                    
+                    // pricepointId in (63980,63981,63982), mnoDeliveryCode = DELIVERED, totalCharged > 0
+                    if (!in_array((string)$ppid, $billingPpids) || $delivery !== 'DELIVERED' || $totalCharged <= 0) {
+                        continue;
+                    }
+                    
+                    $billings++;
                 }
             }
+
+            // Revenu TTC (TND) = Nbfacturation × 3 DT (prix abonnement) — formule explicite
+            $revenueTnd = $billings * 3.0;
 
             // 8. Taux de facturation
             $billingRate = $totalClients > 0 ? round(($billings / $totalClients) * 100, 2) : 0;
 
-            // 9. Revenus (calculés depuis transactions_history avec pricepointId = 63980 et totalCharged)
-            // totalCharged est en millimes, donc on divise par 1000 pour obtenir des TND
-            $revenueTnd = 0;
-            foreach ($transactions as $transaction) {
-                if ($transaction->result) {
-                    $result = json_decode($transaction->result, true);
-                    if (isset($result['pricepointId']) && $result['pricepointId'] == $billingPpid) {
-                        if (isset($result['mnoDeliveryCode']) && $result['mnoDeliveryCode'] === 'DELIVERED') {
-                            if (isset($result['totalCharged'])) {
-                                // Convertir millimes en TND (diviser par 1000)
-                                $revenueTnd += floatval($result['totalCharged']) / 1000;
-                            }
-                        }
-                    }
-                }
-            }
-            
             $revenueUsd = $revenueTnd * 0.343; // Conversion approximative: 1 TND = 0.343 USD
 
             // 10. Détail par offre (désactivé pour l'instant - table offre n'existe pas)

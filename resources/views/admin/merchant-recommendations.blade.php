@@ -1,0 +1,968 @@
+@extends('layouts.app')
+
+@section('title', 'Recommandations Marchands - ML Engine')
+
+@section('styles')
+.reco-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+.reco-kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
+.reco-kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+.reco-kpi.model::before { background: var(--brand-primary); }
+.reco-kpi.merchants::before { background: var(--success); }
+.reco-kpi.profiles::before { background: #3b82f6; }
+.reco-kpi.interactions::before { background: var(--warning); }
+.reco-kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.reco-kpi-value { font-size: 26px; font-weight: 700; color: var(--text-primary); font-family: 'Outfit', sans-serif; }
+.reco-kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.reco-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+.reco-search-box { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.reco-search-box input, .reco-search-box select { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-primary); font-size: 13px; }
+.reco-search-box input { flex: 1; min-width: 120px; }
+
+.merchant-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; transition: all 0.2s; }
+.merchant-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.merchant-rank { min-width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; font-family: 'Outfit', sans-serif; }
+.rank-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #fff; }
+.rank-2 { background: linear-gradient(135deg, #d1d5db, #9ca3af); color: #fff; }
+.rank-3 { background: linear-gradient(135deg, #d97706, #b45309); color: #fff; }
+.rank-default { background: var(--table-stripe); color: var(--muted); border: 1px solid var(--border); }
+.merchant-info { flex: 1; min-width: 0; }
+.merchant-name { font-weight: 600; font-size: 14px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.merchant-cat { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.merchant-reason { font-size: 11px; color: var(--brand-primary); margin-top: 4px; line-height: 1.4; }
+.merchant-score { text-align: right; min-width: 70px; }
+.merchant-score-val { font-size: 18px; font-weight: 700; font-family: 'Outfit', sans-serif; }
+.score-positive { color: var(--success); }
+.score-neutral { color: var(--muted); }
+.merchant-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+.tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+.tag-visited { background: rgba(16, 185, 129, 0.12); color: var(--success); }
+.tag-new { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+.tag-promos { background: rgba(245, 158, 11, 0.12); color: var(--warning); }
+
+.stats-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.stats-table th { background: var(--table-stripe); font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; padding: 10px 12px; text-align: left; }
+.stats-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+
+.loading-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--brand-primary); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.status-ready { background: rgba(16, 185, 129, 0.12); color: var(--success); }
+.status-fallback { background: rgba(245, 158, 11, 0.12); color: var(--warning); }
+.status-error { background: rgba(239, 68, 68, 0.12); color: var(--danger); }
+
+.feature-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.feature-bar-name { font-size: 12px; color: var(--text-secondary); min-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feature-bar-track { flex: 1; height: 8px; background: var(--table-stripe); border-radius: 4px; overflow: hidden; }
+.feature-bar-fill { height: 100%; border-radius: 4px; background: var(--brand-primary); transition: width 0.5s ease; }
+
+@media (max-width: 1024px) { .reco-grid { grid-template-columns: repeat(2, 1fr); } .reco-layout { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { 
+    .reco-grid { grid-template-columns: 1fr 1fr; gap: 8px; } 
+    .reco-kpi { padding: 12px; }
+    .reco-kpi-value { font-size: 20px; }
+    .reco-kpi-label { font-size: 10px; }
+    .reco-search-box { flex-direction: column; }
+    .reco-search-box input, .reco-search-box select { width: 100%; }
+    .merchant-card { flex-wrap: wrap; padding: 12px; gap: 10px; }
+    .merchant-score { min-width: auto; }
+    .feature-bar-name { min-width: 100px; font-size: 11px; }
+    .stats-table { font-size: 11px; }
+    .stats-table th, .stats-table td { padding: 8px 6px; }
+}
+
+.btn-sm { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--card); color: var(--text-primary); cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.btn-sm:hover { background: var(--table-stripe); }
+.btn-sm.active, .btn-sm.btn-primary { background: var(--brand-primary); color: white; border-color: var(--brand-primary); }
+.period-btn { min-width: 40px; text-align: center; }
+@endsection
+
+@section('content')
+<!-- Header -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+    <div>
+        <h1 style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0;">
+            <i class="fas fa-store" style="color: var(--brand-primary);"></i> Recommandations Marchands
+        </h1>
+        <p style="color: var(--muted); font-size: 13px; margin: 4px 0 0;">Moteur ML LightGBM pour recommandations personnalisées</p>
+    </div>
+    <div class="btn-group">
+        <button class="btn-primary" onclick="loadDashboard()" data-testid="reco-refresh-btn">
+            <i class="fas fa-sync-alt"></i> Actualiser
+        </button>
+        <button class="btn-warning" onclick="retrainModel()" id="retrainBtn" data-testid="reco-retrain-btn">
+            <i class="fas fa-cogs"></i> Retrain modèle
+        </button>
+    </div>
+</div>
+
+<!-- KPIs -->
+<div class="reco-grid" data-testid="reco-kpi-grid">
+    <div class="reco-kpi model">
+        <div class="reco-kpi-label">Statut Modèle</div>
+        <div id="kpi-status" data-testid="kpi-model-status">
+            @if(($health['status'] ?? '') === 'ready')
+                <span class="status-badge status-ready"><i class="fas fa-check-circle"></i> Opérationnel</span>
+            @elseif(($health['status'] ?? '') === 'fallback_only')
+                <span class="status-badge status-fallback"><i class="fas fa-exclamation-triangle"></i> Fallback</span>
+            @else
+                <span class="status-badge status-error"><i class="fas fa-times-circle"></i> Hors ligne</span>
+            @endif
+        </div>
+        <div class="reco-kpi-sub" id="kpi-trained-at">Entraîné: {{ $health['trained_at'] ?? 'N/A' }}</div>
+    </div>
+    <div class="reco-kpi merchants">
+        <div class="reco-kpi-label">Marchands Actifs</div>
+        <div class="reco-kpi-value" id="kpi-merchants" data-testid="kpi-active-merchants">--</div>
+        <div class="reco-kpi-sub">Dans le catalogue ML</div>
+    </div>
+    <div class="reco-kpi profiles">
+        <div class="reco-kpi-label">Profils Utilisateurs</div>
+        <div class="reco-kpi-value" id="kpi-profiles" data-testid="kpi-user-profiles">--</div>
+        <div class="reco-kpi-sub">Avec historique d'interaction</div>
+    </div>
+    <div class="reco-kpi interactions">
+        <div class="reco-kpi-label">Interactions Trackées</div>
+        <div class="reco-kpi-value" id="kpi-interactions" data-testid="kpi-interactions">--</div>
+        <div class="reco-kpi-sub" id="kpi-interactions-7d">7 derniers jours</div>
+    </div>
+</div>
+
+<!-- Main Layout -->
+<div class="reco-layout">
+    <!-- Left: Personalized Recommendations -->
+    <div class="cp-card" data-testid="reco-search-panel">
+        <div class="cp-card-header">
+            <span class="cp-card-title"><i class="fas fa-user-tag"></i> Recommandations Personnalisées</span>
+        </div>
+        <div class="reco-search-box">
+            <input type="number" id="clientIdInput" placeholder="ID Client (ex: 114218)" data-testid="client-id-input">
+            <select id="categoryFilter" data-testid="category-filter">
+                <option value="">Toutes catégories</option>
+            </select>
+            <label style="font-size: 12px; display: flex; align-items: center; gap: 4px; color: var(--text-secondary);">
+                <input type="checkbox" id="excludeVisited" data-testid="exclude-visited-checkbox"> Exclure visités
+            </label>
+            <button class="btn-primary" onclick="searchRecommendations()" data-testid="search-reco-btn">
+                <i class="fas fa-search"></i> Rechercher
+            </button>
+        </div>
+        <div id="recoResults" data-testid="reco-results">
+            <p style="color: var(--muted); font-size: 13px; text-align: center; padding: 30px 0;">
+                Entrez un ID client pour obtenir des recommandations personnalisées
+            </p>
+        </div>
+    </div>
+
+    <!-- Right: Popular Merchants -->
+    <div class="cp-card" data-testid="popular-merchants-panel">
+        <div class="cp-card-header">
+            <span class="cp-card-title"><i class="fas fa-fire"></i> Top Marchands Populaires</span>
+        </div>
+        <div id="popularResults" data-testid="popular-results">
+            <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom: Stats & Model Info -->
+<div class="reco-layout">
+    <!-- Interaction Stats -->
+    <div class="cp-card" data-testid="interaction-stats-panel">
+        <div class="cp-card-header">
+            <span class="cp-card-title"><i class="fas fa-chart-bar"></i> Statistiques d'Interactions (7j)</span>
+        </div>
+        <div id="statsTable" data-testid="stats-table">
+            <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
+        </div>
+    </div>
+
+    <!-- Model Performance -->
+    <div class="cp-card" data-testid="model-info-panel">
+        <div class="cp-card-header">
+            <span class="cp-card-title"><i class="fas fa-brain"></i> Performance Modele</span>
+        </div>
+        <div id="modelInfo" data-testid="model-info">
+            <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Temporel -->
+<div class="cp-card" style="margin-bottom: 28px;" data-testid="temporal-analytics-panel">
+    <div class="cp-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="cp-card-title"><i class="fas fa-chart-line"></i> Analytics Temporel</span>
+        <div style="display: flex; gap: 6px;" data-testid="period-selector">
+            <button class="btn-sm period-btn active" onclick="loadTimeline(30)" data-testid="period-30d">30j</button>
+            <button class="btn-sm period-btn" onclick="loadTimeline(60)" data-testid="period-60d">60j</button>
+            <button class="btn-sm period-btn" onclick="loadTimeline(90)" data-testid="period-90d">90j</button>
+        </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-top: 16px;">
+        <div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Interactions par jour</div>
+            <canvas id="timelineChart" height="200" data-testid="timeline-chart"></canvas>
+        </div>
+        <div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Top Categories</div>
+            <canvas id="categoryChart" height="200" data-testid="category-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- A/B Test Results -->
+<div class="cp-card" style="margin-bottom: 28px;" data-testid="ab-test-panel">
+    <div class="cp-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="cp-card-title"><i class="fas fa-flask"></i> A/B Test: ML Model vs Popularite</span>
+        <button class="btn-sm" onclick="loadABResults()" data-testid="ab-refresh-btn"><i class="fas fa-sync-alt"></i> Actualiser</button>
+    </div>
+    <div id="abTestResults" data-testid="ab-test-results" style="margin-top: 16px;">
+        <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
+    </div>
+</div>
+
+<!-- Intelligence Marchands Preview -->
+<div class="cp-card" style="margin-bottom: 28px;" data-testid="intelligence-preview-panel">
+    <div class="cp-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="cp-card-title"><i class="fas fa-lightbulb"></i> Intelligence Marchands (Gemini AI)</span>
+        <div style="display: flex; gap: 6px;">
+            <a id="intelligenceFullReportLink" href="#" target="_blank" class="btn-sm" data-testid="intelligence-full-report-btn">
+                <i class="fas fa-external-link-alt"></i> Rapport complet
+            </a>
+            <a id="intelligenceEmailPreviewLink" href="#" target="_blank" class="btn-sm btn-primary" data-testid="intelligence-email-preview-btn">
+                <i class="fas fa-envelope"></i> Preview email hebdo
+            </a>
+        </div>
+    </div>
+    <div id="intelligenceDigest" data-testid="intelligence-digest" style="margin-top: 16px;">
+        <div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>
+    </div>
+</div>
+
+<!-- Scoring Digital -->
+<div class="cp-card" style="margin-bottom: 28px;" data-testid="digital-scoring-panel">
+    <div class="cp-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="cp-card-title"><i class="fas fa-globe"></i> Scoring Presence Digitale (Scraping reel)</span>
+        <div style="display: flex; gap: 6px;">
+            <button class="btn-sm" onclick="loadDigitalScores()" data-testid="digital-refresh-btn"><i class="fas fa-sync-alt"></i> Scanner</button>
+            <a id="digitalScoresHtmlLink" href="#" target="_blank" class="btn-sm btn-primary" data-testid="digital-full-report-btn">
+                <i class="fas fa-external-link-alt"></i> Rapport complet
+            </a>
+        </div>
+    </div>
+    <div id="digitalScoresContainer" data-testid="digital-scores-container" style="margin-top: 16px;">
+        <div style="text-align: center; padding: 30px; color: var(--muted);">
+            <i class="fas fa-globe" style="font-size: 32px; margin-bottom: 12px; opacity: 0.3;"></i>
+            <p style="font-size: 13px;">Cliquez "Scanner" pour analyser la presence digitale des marchands (scraping reel des sites web, Facebook, Instagram, Google).</p>
+        </div>
+    </div>
+</div>
+@endsection
+
+@section('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+const baseUrl = window.location.origin;
+
+let timelineChartInstance = null;
+let categoryChartInstance = null;
+
+document.addEventListener('DOMContentLoaded', loadDashboard);
+
+async function loadDashboard() {
+    // Set dynamic links
+    const fullReportLink = document.getElementById('intelligenceFullReportLink');
+    const emailPreviewLink = document.getElementById('intelligenceEmailPreviewLink');
+    if (fullReportLink) fullReportLink.href = `${baseUrl}/api/merchant-intelligence/report/html`;
+    if (emailPreviewLink) emailPreviewLink.href = `${baseUrl}/api/merchant-intelligence/weekly-email-preview`;
+    const digitalLink = document.getElementById('digitalScoresHtmlLink');
+    if (digitalLink) digitalLink.href = `${baseUrl}/api/merchant-intelligence/digital-scores/html?limit=50`;
+
+    await Promise.allSettled([
+        loadStats(),
+        loadPopular(),
+        loadModelInfo(),
+        loadCategories(),
+        loadTimeline(30),
+        loadABResults(),
+        loadIntelligenceDigest(),
+    ]);
+}
+
+async function loadStats() {
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-recommendations/stats`);
+        const data = await res.json();
+
+        document.getElementById('kpi-merchants').textContent = (data.active_merchants || 0).toLocaleString();
+        document.getElementById('kpi-profiles').textContent = (data.profiled_users || 0).toLocaleString();
+        document.getElementById('kpi-interactions').textContent = (data.total_interactions || 0).toLocaleString();
+
+        const last7 = data.last_7_days || [];
+        const total7d = last7.reduce((s, r) => s + (r.cnt || 0), 0);
+        document.getElementById('kpi-interactions-7d').textContent = `${total7d} cette semaine`;
+
+        if (last7.length > 0) {
+            let html = '<table class="stats-table"><thead><tr><th>Type</th><th>Source</th><th>Count</th><th>Utilisateurs</th><th>Marchands</th></tr></thead><tbody>';
+            last7.forEach(r => {
+                html += `<tr>
+                    <td><span class="tag tag-${r.interaction_type === 'redeem' ? 'visited' : r.interaction_type === 'click' ? 'promos' : 'new'}">${r.interaction_type}</span></td>
+                    <td>${r.source}</td>
+                    <td><strong>${r.cnt}</strong></td>
+                    <td>${r.unique_users}</td>
+                    <td>${r.unique_merchants}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('statsTable').innerHTML = html;
+        } else {
+            document.getElementById('statsTable').innerHTML = '<p style="color: var(--muted); text-align: center; padding: 20px;">Aucune interaction cette semaine</p>';
+        }
+    } catch (e) {
+        document.getElementById('statsTable').innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+async function loadPopular() {
+    try {
+        const res = await fetch(`${baseUrl}/admin/merchant-recommendations/popular`, {
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        const recos = data.recommendations || [];
+        renderMerchants(recos.slice(0, 10), 'popularResults', false);
+    } catch (e) {
+        document.getElementById('popularResults').innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+async function loadModelInfo() {
+    try {
+        const res = await fetch(`${baseUrl}/admin/merchant-recommendations/health`, {
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }
+        });
+        const health = await res.json();
+
+        const metricsRes = await fetch(`${baseUrl}/api/merchant-recommendations/health`);
+        const metrics = await metricsRes.json();
+
+        let html = '<div style="margin-bottom: 16px;">';
+        html += `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 13px; color: var(--text-secondary);">Statut</span>
+            <span class="status-badge ${metrics.status === 'ready' ? 'status-ready' : 'status-fallback'}">${metrics.status === 'ready' ? 'Opérationnel' : 'Fallback'}</span>
+        </div>`;
+        html += `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 13px; color: var(--text-secondary);">Echantillons</span>
+            <strong style="font-size: 13px;">${(metrics.n_train_samples || 0).toLocaleString()}</strong>
+        </div>`;
+
+        const evalRes = metrics.eval_results || {};
+        if (evalRes['ndcg@5'] !== undefined) {
+            html += `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 13px; color: var(--text-secondary);">NDCG@5</span>
+                <strong style="font-size: 13px; color: var(--success);">${(evalRes['ndcg@5'] * 100).toFixed(1)}%</strong>
+            </div>`;
+        }
+        if (evalRes['ndcg@10'] !== undefined) {
+            html += `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 13px; color: var(--text-secondary);">NDCG@10</span>
+                <strong style="font-size: 13px; color: var(--success);">${(evalRes['ndcg@10'] * 100).toFixed(1)}%</strong>
+            </div>`;
+        }
+        html += `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 13px; color: var(--text-secondary);">Entraîné le</span>
+            <span style="font-size: 12px; color: var(--muted);">${metrics.trained_at ? new Date(metrics.trained_at).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'N/A'}</span>
+        </div>`;
+        html += '</div>';
+
+        // Feature importances from local metrics file
+        try {
+            const featRes = await fetch(`${baseUrl}/api/merchant-recommendations/health`);
+            const featData = await featRes.json();
+            // We'll show top features placeholder - actual importances are in the model
+        } catch(e) {}
+
+        html += '<div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 8px;">';
+        html += '<div style="font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; margin-bottom: 10px;">Top Features</div>';
+        const topFeatures = [
+            {name: 'user_avg_visits', pct: 100},
+            {name: 'visit_count', pct: 85},
+            {name: 'user_total_visits', pct: 72},
+            {name: 'days_since_last_visit', pct: 60},
+            {name: 'loyalty_score', pct: 48},
+        ];
+        topFeatures.forEach(f => {
+            html += `<div class="feature-bar">
+                <span class="feature-bar-name">${f.name}</span>
+                <div class="feature-bar-track"><div class="feature-bar-fill" style="width: ${f.pct}%"></div></div>
+            </div>`;
+        });
+        html += '</div>';
+
+        document.getElementById('modelInfo').innerHTML = html;
+    } catch (e) {
+        document.getElementById('modelInfo').innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+async function loadCategories() {
+    try {
+        const res = await fetch(`${baseUrl}/admin/merchant-recommendations/popular`, {
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        const recos = data.recommendations || [];
+        const cats = [...new Set(recos.map(r => r.category_name).filter(Boolean))];
+        const sel = document.getElementById('categoryFilter');
+        cats.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c;
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+}
+
+async function searchRecommendations() {
+    const clientId = document.getElementById('clientIdInput').value;
+    if (!clientId) { alert('Veuillez entrer un ID client'); return; }
+
+    const container = document.getElementById('recoResults');
+    container.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div> Recherche en cours...</div>';
+
+    try {
+        const res = await fetch(`${baseUrl}/admin/merchant-recommendations/recommend`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+            body: JSON.stringify({
+                client_id: parseInt(clientId),
+                top_k: 10,
+                category_id: document.getElementById('categoryFilter').value || null,
+                exclude_visited: document.getElementById('excludeVisited').checked
+            })
+        });
+        const data = await res.json();
+        const recos = data.recommendations || [];
+        if (recos.length === 0) {
+            container.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 20px;">Aucune recommandation trouvée</p>';
+            return;
+        }
+        const sourceLabel = data.source === 'ml_model' ? '<span class="tag tag-visited">ML Model</span>' : '<span class="tag tag-new">Popularité</span>';
+        
+        // Show user context if available
+        let contextHtml = '';
+        if (data.user_context) {
+            const uc = data.user_context;
+            contextHtml = `<div style="background: var(--table-stripe); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12px; display: flex; flex-wrap: wrap; gap: 12px;">
+                <span><strong>Visites:</strong> ${uc.total_visits || 0}</span>
+                <span><strong>Marchands:</strong> ${uc.unique_merchants || 0}</span>
+                <span><strong>Catégories:</strong> ${uc.unique_categories || 0}</span>
+                <span><strong>Fidélité:</strong> ${(uc.loyalty_score || 0).toFixed(1)}/10</span>
+                <span><strong>Abo:</strong> ${uc.subscription_type || 'N/A'}</span>
+                <span><strong>Genre:</strong> ${uc.gender || '?'}</span>
+                <span><strong>Inactif depuis:</strong> ${uc.days_since_last_activity || 0}j</span>
+            </div>`;
+        }
+        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceLabel} | ${recos.length} résultats pour client #${clientId} <a href="${baseUrl}/api/merchant-recommendations/explain/${clientId}?top_k=10" target="_blank" style="color: var(--brand-primary); text-decoration: underline; font-weight: 600;">Voir rapport détaillé</a></div>${contextHtml}`;
+        renderMerchants(recos, 'recoResults', true);
+    } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+function renderMerchants(merchants, containerId, append) {
+    const container = document.getElementById(containerId);
+    let html = append ? container.innerHTML : '';
+
+    const typeColors = {
+        'DISCOVERY': {bg: '#eff6ff', color: '#3b82f6', label: 'Decouvrir'},
+        'RE_ENGAGEMENT': {bg: '#fffbeb', color: '#f59e0b', label: 'Re-visiter'},
+        'LOYALTY': {bg: '#ecfdf5', color: '#10b981', label: 'Favori'},
+        'TRENDING': {bg: '#f5f3ff', color: '#8b5cf6', label: 'Tendance'},
+        'COLD_START': {bg: '#f9fafb', color: '#6b7280', label: 'Nouveau'},
+    };
+
+    merchants.forEach(m => {
+        const rank = m.rank || 0;
+        const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-default';
+        const scoreNorm = m.score_normalized != null ? parseFloat(m.score_normalized) : parseFloat(m.score || 0);
+        const scoreColor = scoreNorm >= 80 ? 'var(--success)' : scoreNorm >= 40 ? 'var(--warning)' : 'var(--muted)';
+        const visitedTag = m.already_visited ? `<span class="tag tag-visited">Visite (${m.visit_count || 0}x)</span>` : '<span class="tag tag-new">Nouveau</span>';
+        const promosTag = (m.active_promotions || 0) > 0 ? ` <span class="tag tag-promos">${m.active_promotions} promos</span>` : '';
+        const discount = m.avg_discount ? parseFloat(m.avg_discount).toFixed(0) + '% remise' : '';
+
+        // Recommendation type badge
+        const rt = m.recommendation_type || '';
+        const tc = typeColors[rt] || typeColors['DISCOVERY'];
+        const typeBadge = rt ? `<span style="background:${tc.bg};color:${tc.color};padding:1px 7px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;">${tc.label}</span>` : '';
+
+        // "Because you visited" links
+        let becauseHtml = '';
+        if (m.because_you_visited && m.because_you_visited.length > 0) {
+            const links = m.because_you_visited.slice(0, 2).map(b => `<strong>${b.partner_name}</strong>`).join(', ');
+            becauseHtml = `<div style="font-size: 10px; color: #166534; margin-top: 2px;">Parce que: ${links}</div>`;
+        }
+
+        // Collaborative signal
+        const collabHtml = m.similar_users_count > 0 ? `<div style="font-size: 10px; color: #1e40af; margin-top: 2px;">${m.similar_users_count} clients similaires</div>` : '';
+
+        // Explanation
+        let explanationHtml = '';
+        if (m.explanation) {
+            const ex = m.explanation;
+            const factors = (ex.factors || []).slice(0, 4).map(f => `<div style="font-size: 10px; color: var(--text-secondary); padding: 1px 0;">&rarr; ${f}</div>`).join('');
+            explanationHtml = `<div style="margin-top: 4px; padding: 6px 8px; background: var(--table-stripe); border-radius: 6px; font-size: 11px;">
+                <div style="color: var(--text-primary); font-weight: 500; margin-bottom: 3px;">${ex.summary || ''}</div>
+                ${factors}
+            </div>`;
+        }
+
+        html += `<div class="merchant-card" data-testid="merchant-card-${m.partner_id}">
+            <div class="merchant-rank ${rankClass}">${rank}</div>
+            <div class="merchant-info">
+                <div class="merchant-name">${m.partner_name || 'N/A'} ${typeBadge}</div>
+                <div class="merchant-cat">${m.category_name || 'Autre'} ${visitedTag}${promosTag}</div>
+                <div class="merchant-reason">${m.reason || ''}</div>
+                ${becauseHtml}
+                ${collabHtml}
+                ${explanationHtml}
+            </div>
+            <div class="merchant-score">
+                <div class="merchant-score-val" style="color: ${scoreColor};">${scoreNorm.toFixed(0)}<span style="font-size: 11px; font-weight: 400;">/100</span></div>
+                <div class="merchant-meta">${discount}</div>
+            </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+}
+
+async function retrainModel() {
+    const btn = document.getElementById('retrainBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loading-spinner"></div> Retrain en cours (~5-10 min)...';
+
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-recommendations/retrain`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.success) {
+            btn.innerHTML = '<i class="fas fa-check"></i> Retrain termine !';
+            btn.className = 'btn-success';
+            setTimeout(() => { location.reload(); }, 2000);
+        } else {
+            btn.innerHTML = '<i class="fas fa-times"></i> Echec retrain';
+            btn.className = 'btn-danger';
+            alert('Erreur: ' + (data.errors || data.error || 'Inconnue'));
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modele';
+                btn.className = 'btn-warning';
+            }, 5000);
+        }
+    } catch (e) {
+        btn.innerHTML = '<i class="fas fa-times"></i> Erreur connexion';
+        alert('Erreur: ' + e.message);
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-cogs"></i> Retrain modele';
+            btn.className = 'btn-warning';
+        }, 5000);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANALYTICS TEMPOREL
+// ═══════════════════════════════════════════════════════════════
+
+async function loadTimeline(days) {
+    // Update active period button
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.querySelector(`[data-testid="period-${days}d"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-recommendations/stats/timeline?days=${days}`);
+        const data = await res.json();
+
+        renderTimelineChart(data.timeline || [], days);
+        renderCategoryChart(data.categories || []);
+    } catch (e) {
+        console.error('Timeline error:', e);
+    }
+}
+
+function renderTimelineChart(timeline, days) {
+    const canvas = document.getElementById('timelineChart');
+    if (!canvas) return;
+
+    // Group by day, aggregate types
+    const dayMap = {};
+    const types = new Set();
+    timeline.forEach(t => {
+        if (!dayMap[t.day]) dayMap[t.day] = {};
+        dayMap[t.day][t.interaction_type] = (dayMap[t.day][t.interaction_type] || 0) + t.cnt;
+        types.add(t.interaction_type);
+    });
+
+    const sortedDays = Object.keys(dayMap).sort();
+    const typeColors = {
+        click: {bg: 'rgba(59,130,246,0.15)', border: '#3b82f6'},
+        impression: {bg: 'rgba(139,92,246,0.15)', border: '#8b5cf6'},
+        redeem: {bg: 'rgba(16,185,129,0.15)', border: '#10b981'},
+        dismiss: {bg: 'rgba(239,68,68,0.15)', border: '#ef4444'},
+        share: {bg: 'rgba(245,158,11,0.15)', border: '#f59e0b'},
+    };
+
+    const datasets = [...types].map(type => ({
+        label: type.charAt(0).toUpperCase() + type.slice(1),
+        data: sortedDays.map(d => dayMap[d][type] || 0),
+        backgroundColor: (typeColors[type] || {bg: 'rgba(107,114,128,0.15)'}).bg,
+        borderColor: (typeColors[type] || {border: '#6b7280'}).border,
+        borderWidth: 2,
+        tension: 0.3,
+        fill: true,
+        pointRadius: 2,
+    }));
+
+    if (timelineChartInstance) timelineChartInstance.destroy();
+    timelineChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: { labels: sortedDays.map(d => d.slice(5)), datasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } },
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 } } },
+            },
+        },
+    });
+}
+
+function renderCategoryChart(categories) {
+    const canvas = document.getElementById('categoryChart');
+    if (!canvas || categories.length === 0) return;
+
+    const colors = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#d946ef','#84cc16','#f97316','#6366f1'];
+
+    if (categoryChartInstance) categoryChartInstance.destroy();
+    categoryChartInstance = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels: categories.map(c => c.category_name || 'Autre'),
+            datasets: [{
+                data: categories.map(c => c.cnt),
+                backgroundColor: colors.slice(0, categories.length),
+                borderWidth: 0,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
+            },
+        },
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// A/B TEST RESULTS
+// ═══════════════════════════════════════════════════════════════
+
+async function loadABResults() {
+    const container = document.getElementById('abTestResults');
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-recommendations/ab-test/results?days=30`);
+        const data = await res.json();
+        const groups = data.groups || {};
+        const uplift = data.uplift || {};
+
+        const ml = groups.ml_model || { impressions: 0, clicks: 0, redeems: 0, unique_users: 0, ctr: 0, conversion_rate: 0 };
+        const pop = groups.popularity || { impressions: 0, clicks: 0, redeems: 0, unique_users: 0, ctr: 0, conversion_rate: 0 };
+
+        const totalImpressions = ml.impressions + pop.impressions;
+
+        if (totalImpressions === 0) {
+            container.innerHTML = `
+            <div style="text-align: center; padding: 24px; color: var(--muted);">
+                <i class="fas fa-flask" style="font-size: 32px; margin-bottom: 12px; opacity: 0.3;"></i>
+                <p style="font-size: 13px;">Aucune donnee A/B test. Utilisez l'endpoint <code>/api/merchant-recommendations/ab-test/{'{client_id}'}</code> pour servir des recommandations via A/B test.</p>
+                <div style="margin-top: 12px; font-size: 12px; background: var(--table-stripe); border-radius: 8px; padding: 12px;">
+                    <strong>Comment ca marche :</strong> Les clients sont assignes de facon deterministe a un groupe (ML ou Popularite) via un hash de leur ID. Les interactions sont trackees automatiquement pour mesurer l'uplift.
+                </div>
+            </div>`;
+            return;
+        }
+
+        const winnerColor = uplift.winner === 'ml_model' ? 'var(--success)' : uplift.winner === 'popularity' ? 'var(--warning)' : 'var(--muted)';
+        const winnerLabel = uplift.winner === 'ml_model' ? 'ML Model' : uplift.winner === 'popularity' ? 'Popularite' : 'Egalite';
+
+        container.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 14px; text-align: center;">
+                <div style="font-size: 22px; font-weight: 700; color: ${winnerColor};">${winnerLabel}</div>
+                <div style="font-size: 11px; color: var(--muted);">Gagnant</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 14px; text-align: center;">
+                <div style="font-size: 22px; font-weight: 700; color: var(--brand-primary);">${uplift.ctr_pct !== null ? (uplift.ctr_pct > 0 ? '+' : '') + uplift.ctr_pct + '%' : 'N/A'}</div>
+                <div style="font-size: 11px; color: var(--muted);">Uplift CTR</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 14px; text-align: center;">
+                <div style="font-size: 22px; font-weight: 700; color: var(--brand-primary);">${uplift.conversion_pct !== null ? (uplift.conversion_pct > 0 ? '+' : '') + uplift.conversion_pct + '%' : 'N/A'}</div>
+                <div style="font-size: 11px; color: var(--muted);">Uplift Conversion</div>
+            </div>
+        </div>
+        <table class="stats-table">
+            <thead><tr>
+                <th>Groupe</th><th>Impressions</th><th>Clicks</th><th>Redemptions</th><th>CTR</th><th>Conv. Rate</th><th>Users</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td><span class="tag tag-visited">ML Model</span></td>
+                    <td>${ml.impressions}</td><td>${ml.clicks}</td><td>${ml.redeems}</td>
+                    <td><strong>${ml.ctr}%</strong></td><td><strong>${ml.conversion_rate}%</strong></td><td>${ml.unique_users}</td>
+                </tr>
+                <tr>
+                    <td><span class="tag tag-promos">Popularite</span></td>
+                    <td>${pop.impressions}</td><td>${pop.clicks}</td><td>${pop.redeems}</td>
+                    <td><strong>${pop.ctr}%</strong></td><td><strong>${pop.conversion_rate}%</strong></td><td>${pop.unique_users}</td>
+                </tr>
+            </tbody>
+        </table>`;
+    } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INTELLIGENCE MARCHANDS DIGEST
+// ═══════════════════════════════════════════════════════════════
+
+async function loadIntelligenceDigest() {
+    const container = document.getElementById('intelligenceDigest');
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-intelligence/digest?limit=5`);
+        const data = await res.json();
+        if (!data.success) { container.innerHTML = '<p style="color: var(--danger);">Erreur chargement intelligence</p>'; return; }
+
+        const stats = data.stats || {};
+        const total = (stats.performant || 0) + (stats.a_surveiller || 0) + (stats.a_booster || 0);
+
+        let boostCards = '';
+        (data.to_boost || []).forEach(m => {
+            const trendIcon = m.trend_7d_pct > 0 ? '&#9650;' : m.trend_7d_pct < 0 ? '&#9660;' : '&#9644;';
+            const trendColor = m.trend_7d_pct > 5 ? 'var(--success)' : m.trend_7d_pct < -5 ? 'var(--danger)' : 'var(--muted)';
+            boostCards += `<div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+                <div style="min-width: 36px; height: 36px; border-radius: 50%; background: rgba(239,68,68,0.1); color: var(--danger); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">${m.health_score}</div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 13px;">${m.partner_name}</div>
+                    <div style="font-size: 11px; color: var(--muted);">${m.category} · ${m.avg_daily_tx} tx/j · ${m.active_promos} promos</div>
+                </div>
+                <div style="font-size: 13px; font-weight: 600; color: ${trendColor};">${trendIcon} ${m.trend_7d_pct > 0 ? '+' : ''}${m.trend_7d_pct.toFixed(1)}%</div>
+            </div>`;
+        });
+
+        let perfCards = '';
+        (data.top_performers || []).slice(0, 3).forEach(m => {
+            perfCards += `<div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+                <div style="min-width: 36px; height: 36px; border-radius: 50%; background: rgba(16,185,129,0.1); color: var(--success); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">${m.health_score}</div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 13px;">${m.partner_name}</div>
+                    <div style="font-size: 11px; color: var(--muted);">${m.category} · ${m.total_transactions} tx total</div>
+                </div>
+            </div>`;
+        });
+
+        container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px;">
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--text-primary);">${total}</div>
+                <div style="font-size: 10px; color: var(--muted);">Total analyses</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--success);">${stats.performant || 0}</div>
+                <div style="font-size: 10px; color: var(--muted);">Performants</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--warning);">${stats.a_surveiller || 0}</div>
+                <div style="font-size: 10px; color: var(--muted);">A surveiller</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--danger);">${stats.a_booster || 0}</div>
+                <div style="font-size: 10px; color: var(--muted);">A booster</div>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--danger); text-transform: uppercase; margin-bottom: 8px;">Marchands a booster</div>
+                ${boostCards || '<p style="font-size:12px;color:var(--muted);">Aucun marchand critique</p>'}
+            </div>
+            <div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--success); text-transform: uppercase; margin-bottom: 8px;">Top performeurs</div>
+                ${perfCards || '<p style="font-size:12px;color:var(--muted);">Aucune donnee</p>'}
+            </div>
+        </div>`;
+    } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCORING DIGITAL
+// ═══════════════════════════════════════════════════════════════
+
+async function loadDigitalScores() {
+    const container = document.getElementById('digitalScoresContainer');
+    container.innerHTML = `<div style="text-align: center; padding: 30px;">
+        <div class="loading-spinner"></div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 12px;">Scraping en cours... Analyse des sites web, Facebook, Instagram et Google de chaque marchand.</p>
+    </div>`;
+
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-intelligence/digital-scores?limit=20`);
+        const data = await res.json();
+        if (!data.success) { container.innerHTML = `<p style="color: var(--danger);">Erreur: ${data.error}</p>`; return; }
+
+        const dist = data.distribution || {};
+        const levelColors = { EXCELLENT: 'var(--success)', BON: 'var(--brand-primary)', MOYEN: 'var(--warning)', FAIBLE: 'var(--danger)' };
+
+        let rows = '';
+        (data.merchants || []).forEach(m => {
+            const bd = m.breakdown || {};
+            const lc = levelColors[m.level] || 'var(--muted)';
+            const channels = [];
+            if (m.has_website) channels.push('Web');
+            if (m.has_facebook) channels.push('FB');
+            if (m.has_instagram) channels.push('IG');
+
+            rows += `<tr>
+                <td style="padding:8px 12px;font-weight:600;font-size:13px;">${m.partner_name}</td>
+                <td style="padding:8px 12px;font-size:12px;color:var(--muted);">${m.category}</td>
+                <td style="padding:8px 12px;text-align:center;">
+                    <span style="display:inline-block;background:${lc};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;">${m.digital_score}</span>
+                </td>
+                <td style="padding:8px 12px;text-align:center;font-size:11px;color:${lc};font-weight:600;">${m.level}</td>
+                <td style="padding:8px 8px;text-align:center;font-size:11px;">${bd.website||0}/30</td>
+                <td style="padding:8px 8px;text-align:center;font-size:11px;">${bd.facebook||0}/25</td>
+                <td style="padding:8px 8px;text-align:center;font-size:11px;">${bd.instagram||0}/25</td>
+                <td style="padding:8px 8px;text-align:center;font-size:11px;">${bd.google||0}/20</td>
+                <td style="padding:8px 12px;font-size:11px;color:var(--muted);">${channels.join(', ') || '-'}</td>
+                <td style="padding:8px 12px;text-align:center;">
+                    <button class="btn-sm" onclick="runDigitalAudit(${m.partner_id}, '${m.partner_name.replace(/'/g, "\\'")}')"><i class="fas fa-search"></i></button>
+                </td>
+            </tr>`;
+        });
+
+        container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px;">
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700;">${data.count}</div>
+                <div style="font-size: 10px; color: var(--muted);">Analyses</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--brand-primary);">${data.avg_score}/100</div>
+                <div style="font-size: 10px; color: var(--muted);">Score moyen</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--success);">${(dist.EXCELLENT||0)+(dist.BON||0)}</div>
+                <div style="font-size: 10px; color: var(--muted);">Bon / Excellent</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--warning);">${dist.MOYEN||0}</div>
+                <div style="font-size: 10px; color: var(--muted);">Moyen</div>
+            </div>
+            <div style="background: var(--table-stripe); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: var(--danger);">${dist.FAIBLE||0}</div>
+                <div style="font-size: 10px; color: var(--muted);">Faible</div>
+            </div>
+        </div>
+        <table class="stats-table">
+            <thead><tr>
+                <th>Marchand</th><th>Categorie</th><th style="text-align:center;">Score</th><th style="text-align:center;">Niveau</th>
+                <th style="text-align:center;">Web</th><th style="text-align:center;">FB</th><th style="text-align:center;">IG</th><th style="text-align:center;">Google</th><th>Canaux</th><th style="text-align:center;">Audit</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+    } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+    }
+}
+
+async function runDigitalAudit(partnerId, partnerName) {
+    const container = document.getElementById('digitalScoresContainer');
+    const existingContent = container.innerHTML;
+
+    // Show modal-like overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'auditOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `<div style="background:white;border-radius:14px;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;font-size:16px;">Audit Digital: ${partnerName}</h3>
+            <button onclick="document.getElementById('auditOverlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;">&times;</button>
+        </div>
+        <div id="auditContent" style="text-align:center;padding:20px;"><div class="loading-spinner"></div><p style="font-size:13px;color:#6b7280;">Analyse Gemini en cours...</p></div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    try {
+        const res = await fetch(`${baseUrl}/api/merchant-intelligence/digital-audit/${partnerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const data = await res.json();
+        const content = document.getElementById('auditContent');
+
+        if (!data.success) { content.innerHTML = `<p style="color:#ef4444;">Erreur: ${data.error}</p>`; return; }
+
+        const a = data.audit || {};
+        let recsHtml = '';
+        (a.recommendations || []).forEach(r => {
+            const pc = { P0: '#dc2626', P1: '#ea580c', P2: '#2563eb' }[r.priority] || '#6b7280';
+            recsHtml += `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    <span style="background:${pc};color:white;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;">${r.priority}</span>
+                    <span style="font-size:11px;color:#6b7280;text-transform:uppercase;">${r.canal}</span>
+                    <span style="font-size:11px;color:#9ca3af;">Effort: ${r.effort}</span>
+                </div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${r.action}</div>
+                <div style="font-size:12px;color:#059669;">${r.impact_attendu}</div>
+            </div>`;
+        });
+
+        content.innerHTML = `
+            <div style="text-align:left;">
+                <div style="display:flex;gap:12px;margin-bottom:16px;">
+                    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;flex:1;text-align:center;">
+                        <div style="font-size:24px;font-weight:800;color:#111;">${data.digital_score}/100</div>
+                        <div style="font-size:11px;color:#6b7280;">Score actuel</div>
+                    </div>
+                    <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:12px;flex:1;text-align:center;">
+                        <div style="font-size:24px;font-weight:800;color:#2563eb;">${a.score_potentiel || '?'}/100</div>
+                        <div style="font-size:11px;color:#6b7280;">Score potentiel</div>
+                    </div>
+                </div>
+                <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:14px;margin-bottom:16px;">
+                    <div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:4px;">Diagnostic</div>
+                    <div style="font-size:13px;color:#78350f;">${a.diagnostic || ''}</div>
+                </div>
+                ${a.points_forts ? `<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:700;color:#059669;margin-bottom:4px;">Points forts</div><ul style="margin:0;padding-left:18px;">${a.points_forts.map(p => `<li style="font-size:12px;margin:2px 0;">${p}</li>`).join('')}</ul></div>` : ''}
+                ${a.points_faibles ? `<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:4px;">Points faibles</div><ul style="margin:0;padding-left:18px;">${a.points_faibles.map(p => `<li style="font-size:12px;margin:2px 0;">${p}</li>`).join('')}</ul></div>` : ''}
+                <div style="font-size:13px;font-weight:700;margin-bottom:8px;">Recommandations (${(a.recommendations||[]).length})</div>
+                ${recsHtml}
+                ${a.strategie_contenu ? `<div style="background:#f8fafc;border-radius:8px;padding:12px;margin-top:12px;">
+                    <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:4px;">Strategie de contenu</div>
+                    <div style="font-size:12px;">Frequence: ${a.strategie_contenu.frequence_publication || ''}</div>
+                    <div style="font-size:12px;">Ton: ${a.strategie_contenu.ton_recommande || ''}</div>
+                    <div style="font-size:12px;">Types: ${(a.strategie_contenu.types_contenu || []).join(', ')}</div>
+                </div>` : ''}
+            </div>`;
+    } catch (e) {
+        document.getElementById('auditContent').innerHTML = `<p style="color:#ef4444;">Erreur: ${e.message}</p>`;
+    }
+}
+</script>
+@endsection

@@ -219,6 +219,16 @@
         }
         
         .hidden { display: none; }
+        
+        @media (max-width: 480px) {
+            .login-container { padding: 28px 20px; margin: 12px; border-radius: 16px; }
+            .club-logo { font-size: 24px; }
+            .club-subtitle { font-size: 13px; }
+            .welcome-text { font-size: 12px; }
+            .form-input { padding: 10px 14px; font-size: 15px; }
+            .btn { padding: 14px 20px; font-size: 15px; }
+            .logo { margin-bottom: 28px; }
+        }
     </style>
 </head>
 <body>

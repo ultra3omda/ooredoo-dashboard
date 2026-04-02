@@ -240,30 +240,32 @@
             font-size: 14px;
             color: var(--brand-dark);
         }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 12px 8px; }
+            .header { flex-direction: column; gap: 12px; text-align: center; padding: 16px; }
+            .header h1 { font-size: 22px; }
+            .header-actions { justify-content: center; flex-wrap: wrap; }
+            .card { padding: 16px; }
+            .form-group { margin-bottom: 16px; }
+            .form-input, .form-select { font-size: 14px; padding: 10px; }
+            .breadcrumb { font-size: 12px; flex-wrap: wrap; }
+            .info-grid { grid-template-columns: 1fr; }
+        }
+        
+        .dark-mode { 
+            --brand-dark:#FFF; --bg:#0D0A1A; --card:#161131; --card-hover:#1E1745; 
+            --muted:#A1A1AA; --border:#2A2350; --text-primary:#FFF; --text-secondary:#A1A1AA; 
+            --input-bg:#1E1745; --input-border:#2A2350; 
+        }
     </style>
 </head>
 <body>
+    @include('partials._admin-header')
     <div class="container">
-        <div class="breadcrumb">
-            @if(Auth::user()->canAccessOperatorsDashboard())
-                <a href="{{ route('dashboard') }}">Dashboard</a>
-                <span>→</span>
-            @else
-                <a href="{{ route('sub-stores.dashboard') }}">Sub-Stores Dashboard</a>
-                <span>→</span>
-            @endif
-            <a href="{{ route('admin.users.index') }}">Utilisateurs</a>
-            <span>→</span>
-            <span>Modifier</span>
-        </div>
-        
-        <div class="header">
-            <h1>✏️ Modifier l'Utilisateur</h1>
-            <div class="header-actions">
-                <a href="{{ route('admin.users.index') }}" class="btn btn-secondary">
-                    ← Retour à la Liste
-                </a>
-            </div>
+        <div class="header" style="margin-top: 16px;">
+            <h1>Modifier l'Utilisateur</h1>
         </div>
         
         @if(session('success'))
@@ -345,11 +347,15 @@
                     @enderror
                 </div>
 
-                <!-- Opérateurs (si Admin/Collaborator) -->
+                <!-- Opérateurs / Sub-Store (si Admin/Collaborator) -->
                 @if(auth()->user()->isSuperAdmin() || $user->role_id !== 1)
                 <div id="operators-section" class="form-group" style="{{ $user->role && $user->role->name === 'super_admin' ? 'display: none;' : '' }}">
                     <label for="operators" class="form-label">
-                        📱 Opérateurs Assignés
+                        @if(isset($isSubStoreUser) && $isSubStoreUser)
+                            Dashboard Sub-Store
+                        @else
+                            Operateurs Assignes
+                        @endif
                     </label>
                     <select id="operators" name="operators[]" multiple 
                             class="form-select @error('operators') error @enderror"
@@ -360,12 +366,16 @@
                         @foreach($operators as $operator => $operatorLabel)
                             <option value="{{ $operator }}" 
                                     {{ in_array($operator, old('operators', $userOperators)) ? 'selected' : '' }}>
-                                📱 {{ $operatorLabel }}
+                                {{ $operatorLabel }}
                             </option>
                         @endforeach
                     </select>
                     <div class="form-text">
-                        Maintenir Ctrl/Cmd pour sélectionner plusieurs opérateurs
+                        @if(isset($isSubStoreUser) && $isSubStoreUser)
+                            Sub-store auquel cet utilisateur est rattache
+                        @else
+                            Maintenir Ctrl/Cmd pour selectionner plusieurs operateurs
+                        @endif
                     </div>
                     @error('operators')
                         <div class="error-text">{{ $message }}</div>

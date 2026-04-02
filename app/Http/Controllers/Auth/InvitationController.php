@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 use App\Mail\InvitationMail;
 
@@ -33,6 +34,33 @@ class InvitationController extends Controller
             $invitations = Invitation::with(['invitedBy', 'role'])
                 ->orderBy('created_at', 'desc')
                 ->paginate(20);
+        } elseif ($user->isAdminSubStore()) {
+            // Admin sub-store voit les invitations pour son sub-store
+            $subStoreName = $user->getPrimaryOperatorName();
+            $invitations = Invitation::where(function($query) use ($user, $subStoreName) {
+                $query->where('invited_by', $user->id)
+                      ->orWhere(function($q) use ($subStoreName) {
+                          // Invitations avec le même sub-store dans additional_data
+                          $q->whereNotNull('additional_data')
+                            ->where('additional_data', 'LIKE', '%' . $subStoreName . '%');
+                      });
+            })
+            ->with(['invitedBy', 'role'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+        } elseif ($user->isAdminOperator()) {
+            // Admin opérateur voit les invitations pour son opérateur
+            $operatorName = $user->getPrimaryOperatorName();
+            $invitations = Invitation::where(function($query) use ($user, $operatorName) {
+                $query->where('invited_by', $user->id)
+                      ->orWhere(function($q) use ($operatorName) {
+                          $q->whereNotNull('additional_data')
+                            ->where('additional_data', 'LIKE', '%' . $operatorName . '%');
+                      });
+            })
+            ->with(['invitedBy', 'role'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
         } else {
             // Tous les autres : SEULEMENT leurs propres invitations
             $invitations = Invitation::where('invited_by', $user->id)
@@ -56,7 +84,8 @@ class InvitationController extends Controller
         $user = auth()->user();
         
         // Vérifier les permissions d'accès
-        if (!$user->isSuperAdmin() && !$user->isAdminOperator() && !$user->isAdminSubStore()) {
+        // Super Admin, Admin Operator, Admin SubStore, ou Collaborateur CP by Pluxee sans restriction campagne
+        if (!$user->isSuperAdmin() && !$user->isAdminOperator() && !$user->isAdminSubStore() && !$user->canInviteCollaborators()) {
             abort(403, 'Vous n\'avez pas les permissions pour inviter des utilisateurs.');
         }
         
@@ -71,8 +100,9 @@ class InvitationController extends Controller
             $roles = Role::where('name', 'collaborator')->active()->get();
             $operators = $user->operators->pluck('operator_name', 'operator_name');
             $subStores = [];
-        } elseif ($user->isAdminSubStore()) {
-            // Admin sub-store ne peut inviter que des collaborateurs pour son sub-store
+        } elseif ($user->isAdminSubStore() || $user->canInviteCollaborators()) {
+            // Admin sub-store ou collaborateur CP by Pluxee (sans restriction campagne) 
+            // ne peut inviter que des collaborateurs pour son sub-store
             $roles = Role::where('name', 'collaborator')->active()->get();
             $operators = [];
             $subStores = $user->operators->pluck('operator_name', 'operator_name');
@@ -93,23 +123,32 @@ class InvitationController extends Controller
         $user = auth()->user();
         
         // Vérifier les permissions d'accès
-        if (!$user->isSuperAdmin() && !$user->isAdminOperator() && !$user->isAdminSubStore()) {
+        if (!$user->isSuperAdmin() && !$user->isAdminOperator() && !$user->isAdminSubStore() && !$user->canInviteCollaborators()) {
             abort(403, 'Vous n\'avez pas les permissions pour inviter des utilisateurs.');
         }
         
         $request->validate([
-            'email' => 'required|email|unique:users,email|unique:invitations,email',
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('invitations', 'email')->where(function ($query) {
+                    $query->where('status', 'pending')
+                          ->where('expires_at', '>', now());
+                }),
+            ],
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'role_id' => 'required|exists:roles,id',
             'type_selection' => 'required|in:operator,substore',
             'operator_name' => 'required_if:type_selection,operator|string|nullable',
             'substore_name' => 'required_if:type_selection,substore|string|nullable',
+            'campaign_access' => 'nullable|array',
+            'campaign_access.*' => 'string|max:255',
             'message' => 'nullable|string|max:500'
         ], [
             'email.required' => 'L\'adresse e-mail est obligatoire.',
             'email.email' => 'L\'adresse e-mail doit être valide.',
-            'email.unique' => 'Cette adresse e-mail est déjà utilisée ou a déjà été invitée.',
+            'email.unique' => 'Une invitation active est déjà en cours pour cette adresse e-mail.',
             'first_name.required' => 'Le prénom est obligatoire.',
             'last_name.required' => 'Le nom est obligatoire.',
             'role_id.required' => 'Le rôle est obligatoire.',
@@ -126,25 +165,35 @@ class InvitationController extends Controller
         $operatorName = $request->type_selection === 'operator' ? $request->operator_name : $request->substore_name;
         
         if ($user->isSuperAdmin()) {
-            // Super admin peut inviter admin ou collaborateur
             if (!in_array($role->name, ['admin', 'collaborator'])) {
                 return back()->with('error', 'Vous ne pouvez inviter que des administrateurs ou collaborateurs.');
             }
-        } elseif ($user->isAdminOperator() || $user->isAdminSubStore()) {
-            // Admin opérateur/sub-store ne peut inviter que des collaborateurs
+        } elseif ($user->isAdminOperator() || $user->isAdminSubStore() || $user->canInviteCollaborators()) {
             if ($role->name !== 'collaborator') {
                 return back()->with('error', 'Vous ne pouvez inviter que des collaborateurs.');
             }
             
-            // Vérifier que l'opérateur/sub-store est dans la liste autorisée
             $userOperators = $user->operators->pluck('operator_name');
             if (!$userOperators->contains($operatorName)) {
                 return back()->with('error', 'Vous ne pouvez pas inviter pour cet opérateur/sub-store.');
             }
         }
 
+        // Process campaign access
+        $campaignAccess = $request->input('campaign_access', []);
+
+        // Validate: admin can only assign campaigns they have access to
+        if (!$user->isSuperAdmin() && !empty($campaignAccess)) {
+            $userAllowed = $user->getAllowedCampaigns();
+            if (!empty($userAllowed)) {
+                $invalidCampaigns = array_diff($campaignAccess, $userAllowed);
+                if (!empty($invalidCampaigns)) {
+                    return back()->with('error', 'Vous ne pouvez pas assigner des campagnes auxquelles vous n\'avez pas accès: ' . implode(', ', $invalidCampaigns));
+                }
+            }
+        }
+
         try {
-            // Créer l'invitation (SANS créer l'utilisateur immédiatement)
             $invitation = Invitation::create([
                 'email' => $request->email,
                 'token' => Str::random(64),
@@ -153,29 +202,31 @@ class InvitationController extends Controller
                 'operator_name' => $operatorName,
                 'first_name' => $request->first_name,
                 'last_name' => $request->last_name,
-                'status' => 'pending', // Invitation en attente
-                'expires_at' => now()->addDays(7), // Expiration dans 7 jours
+                'status' => 'pending',
+                'expires_at' => now()->addDays(7),
                 'additional_data' => [
                     'message' => $request->message,
                     'invited_by_name' => $user->name,
-                    'type_selection' => $request->type_selection
+                    'type_selection' => $request->type_selection,
+                    'campaign_access' => $campaignAccess,
                 ]
             ]);
 
-            // Générer l'URL d'invitation
             $invitationUrl = route('auth.invitation', $invitation->token);
             
             try {
-                // Envoyer l'email avec le lien d'invitation
                 Mail::to($invitation->email)->send(new InvitationMail($invitation, $invitationUrl));
                 
                 Log::info("=== INVITATION ENVOYÉE ===");
                 Log::info("Email: {$invitation->email}");
                 Log::info("Invité par: {$user->name}");
+                Log::info("Campagnes: " . json_encode($campaignAccess));
                 Log::info("Lien d'invitation: {$invitationUrl}");
                 
+                $campaignInfo = !empty($campaignAccess) ? ' (Campagnes: ' . implode(', ', $campaignAccess) . ')' : ' (Toutes les campagnes)';
+                
                 return redirect()->route('admin.invitations.index')
-                               ->with('success', "Invitation envoyée avec succès à {$invitation->email}.");
+                               ->with('success', "Invitation envoyée avec succès à {$invitation->email}{$campaignInfo}.");
                                
             } catch (\Exception $e) {
                 Log::error("Erreur envoi email invitation: " . $e->getMessage());
@@ -292,6 +343,16 @@ class InvitationController extends Controller
                     'operator_name' => $invitation->operator_name,
                     'is_primary' => true,
                     'assigned_by' => $invitation->invited_by
+                ]);
+            }
+
+            // Apply campaign access restrictions if specified
+            $additionalData = $invitation->additional_data ?? [];
+            $campaignAccess = $additionalData['campaign_access'] ?? [];
+            if (!empty($campaignAccess)) {
+                // Store as JSON array in pluxee_campaign_access
+                $user->update([
+                    'pluxee_campaign_access' => json_encode($campaignAccess)
                 ]);
             }
 
@@ -427,5 +488,54 @@ class InvitationController extends Controller
     {
         $subStoreService = app(\App\Services\SubStoreService::class);
         return $subStoreService->getSubStores();
+    }
+
+    /**
+     * API: Récupérer les campagnes d'un sub-store
+     */
+    public function getCampaigns(Request $request)
+    {
+        $storeName = $request->input('store_name', '');
+        
+        if (empty($storeName)) {
+            return response()->json(['campaigns' => []]);
+        }
+
+        try {
+            $user = auth()->user();
+            $storeId = DB::table('stores')
+                ->where('store_name', $storeName)
+                ->value('store_id');
+            
+            if (!$storeId) {
+                return response()->json(['campaigns' => []]);
+            }
+
+            $query = DB::table('carte_recharge')
+                ->where('stores', $storeId)
+                ->select('campain_name', DB::raw('COUNT(*) as total_batches'), DB::raw('SUM(card_generated_number) as total_cards'))
+                ->groupBy('campain_name')
+                ->orderBy('campain_name');
+
+            // Filter by admin's own allowed campaigns (admin can only assign campaigns they have access to)
+            if ($user && !$user->isSuperAdmin()) {
+                $userAllowed = $user->getAllowedCampaigns();
+                if (!empty($userAllowed)) {
+                    $query->whereIn('campain_name', $userAllowed);
+                }
+            }
+
+            $campaigns = $query->get()
+                ->map(fn($c) => [
+                    'name' => $c->campain_name,
+                    'batches' => (int) $c->total_batches,
+                    'cards' => (int) $c->total_cards,
+                ])
+                ->toArray();
+
+            return response()->json(['campaigns' => $campaigns, 'store_name' => $storeName]);
+        } catch (\Exception $e) {
+            return response()->json(['campaigns' => [], 'error' => $e->getMessage()]);
+        }
     }
 }

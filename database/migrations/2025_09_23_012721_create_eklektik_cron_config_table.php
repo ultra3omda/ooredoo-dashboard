@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('eklektik_cron_config')) {
+            return;
+        }
         Schema::create('eklektik_cron_config', function (Blueprint $table) {
             $table->id();
             $table->string('config_key', 100)->unique();

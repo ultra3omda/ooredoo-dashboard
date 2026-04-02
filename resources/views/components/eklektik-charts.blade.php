@@ -1,8 +1,9 @@
-{{-- Vue d'ensemble Multi-Axes --}}
+{{-- Vue d'ensemble (aligné style Timwe/Ooredoo) --}}
 <div class="grid">
     <div class="card chart-card full-width">
         <div class="chart-title">
             📊 Vue d'ensemble Multi-Axes
+            <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Revenus, abonnés actifs et CA BigDeal sur la période">ⓘ</span>
             <div style="float: right;">
                 <select id="eklektik-operator-select" class="enhanced-select" style="font-size: 14px;">
                     <option value="ALL">Tous les opérateurs</option>
@@ -19,19 +20,15 @@
     </div>
 </div>
 
-{{-- Grille des graphiques --}}
 <div class="grid">
-    {{-- Graphique Évolution CA BigDeal par Opérateur --}}
-        <div class="card chart-card" style="grid-column: span 6;">
-            <div class="chart-title">💰 Revenus par Opérateur + CA BigDeal</div>
+    <div class="card chart-card" style="grid-column: span 6;">
+        <div class="chart-title">💰 Revenus par Opérateur + CA BigDeal <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Évolution des revenus par opérateur">ⓘ</span></div>
         <div class="chart-container">
             <canvas id="eklektik-revenue-evolution-chart"></canvas>
         </div>
     </div>
-
-    {{-- Graphique Répartition par Opérateur --}}
     <div class="card chart-card" style="grid-column: span 6;">
-        <div class="chart-title">📱 Répartition par Opérateur</div>
+        <div class="chart-title">📱 Répartition par Opérateur <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Part des revenus par opérateur">ⓘ</span></div>
         <div class="chart-container">
             <canvas id="eklektik-operators-distribution-chart"></canvas>
         </div>
@@ -39,9 +36,8 @@
 </div>
 
 <div class="grid">
-    {{-- Graphique Évolution Active Subs et Abonnements Facturés --}}
     <div class="card chart-card full-width">
-        <div class="chart-title">📈 Évolution Active Subs et Abonnements Facturés</div>
+        <div class="chart-title">📈 Évolution Active Subs et Abonnements Facturés <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Abonnés actifs et facturés dans le temps">ⓘ</span></div>
         <div class="chart-container">
             <canvas id="eklektik-ca-partners-chart"></canvas>
         </div>
@@ -60,25 +56,25 @@
     // Configuration spécifique pour les graphiques Eklektik (pas de modification globale)
     console.log('🎨 Configuration des graphiques Eklektik...');
     
-    // Palette de couleurs cohérente avec "Distribution by Category"
+    // Palette de couleurs cohérente avec le thème Club Privilèges (violet/or)
     const eklektikColors = {
-        primary: '#E30613',      // Rouge principal
-        secondary: '#3b82f6',    // Bleu
-        success: '#10b981',      // Vert
-        warning: '#f59e0b',      // Orange/Jaune
-        purple: '#8b5cf6',       // Violet
-        cyan: '#06b6d4',         // Cyan
-        orange: '#f97316',       // Orange vif
-        gray: '#64748b',         // Gris
+        primary: '#6C4BA0',      // Violet principal
+        secondary: '#D4A843',    // Or/Gold
+        success: '#8B6FC0',      // Violet clair
+        warning: '#B8860B',      // Or sombre
+        purple: '#9B7EC8',       // Lavande
+        cyan: '#A0522D',         // Brun doré
+        orange: '#7B68A0',       // Violet gris
+        gray: '#C4A265',         // Or pâle
         // Versions avec transparence
-        primaryAlpha: 'rgba(227, 6, 19, 0.8)',
-        secondaryAlpha: 'rgba(59, 130, 246, 0.8)',
-        successAlpha: 'rgba(16, 185, 129, 0.8)',
-        warningAlpha: 'rgba(245, 158, 11, 0.8)',
-        purpleAlpha: 'rgba(139, 92, 246, 0.8)',
-        cyanAlpha: 'rgba(6, 182, 212, 0.8)',
-        orangeAlpha: 'rgba(249, 115, 22, 0.8)',
-        grayAlpha: 'rgba(100, 116, 139, 0.8)'
+        primaryAlpha: 'rgba(108, 75, 160, 0.8)',
+        secondaryAlpha: 'rgba(212, 168, 67, 0.8)',
+        successAlpha: 'rgba(139, 111, 192, 0.8)',
+        warningAlpha: 'rgba(184, 134, 11, 0.8)',
+        purpleAlpha: 'rgba(155, 126, 200, 0.8)',
+        cyanAlpha: 'rgba(160, 82, 45, 0.8)',
+        orangeAlpha: 'rgba(123, 104, 160, 0.8)',
+        grayAlpha: 'rgba(196, 162, 101, 0.8)'
     };
     
     // Palette de couleurs pour les graphiques multi-opérateurs
@@ -672,21 +668,15 @@
                 subs_data: subsEvolution?.data
             });
 
-            // Vérifier si toutes les données sont valides
-            if (!kpis?.success || !overviewChart?.success || !revenueEvolution?.success || !revenueDistribution?.success || !subsEvolution?.success) {
-                console.error('❌ Certaines APIs ont échoué, abandon du chargement');
-                console.error('Détails des échecs:', {
-                    kpis: kpis?.error,
-                    overviewChart: overviewChart?.error,
-                    revenueEvolution: revenueEvolution?.error,
-                    revenueDistribution: revenueDistribution?.error,
-                    subsEvolution: subsEvolution?.error
-                });
-                throw new Error('API Error: Une ou plusieurs APIs ont échoué');
-            }
-            
-            // Mettre à jour les KPIs
-            if (kpis && kpis.data) {
+            // Continuer avec les données disponibles (ne pas tout abandonner si une API échoue)
+            if (!kpis?.success) console.warn('⚠️ API KPIs échouée:', kpis?.error || kpis?.message);
+            if (!overviewChart?.success) console.warn('⚠️ API overview-chart échouée:', overviewChart?.error || overviewChart?.message);
+            if (!revenueEvolution?.success) console.warn('⚠️ API revenue-evolution échouée:', revenueEvolution?.error || revenueEvolution?.message);
+            if (!revenueDistribution?.success) console.warn('⚠️ API revenue-distribution échouée:', revenueDistribution?.error || revenueDistribution?.message);
+            if (!subsEvolution?.success) console.warn('⚠️ API subs-evolution échouée:', subsEvolution?.error || subsEvolution?.message);
+
+            // Mettre à jour les KPIs si disponibles
+            if (kpis?.success && kpis.data) {
                 updateEklektikKPIs(kpis.data);
             }
             
@@ -755,29 +745,20 @@
             console.log('📊 Données du graphique distribution:', revenueDistribution.data?.pie_chart);
             console.log('📊 Données du graphique subs evolution:', subsEvolution.data?.chart);
 
-            if (!overviewChart.data?.chart) {
-                console.error('❌ Pas de données de graphique overview');
-                return;
-            }
-            if (!revenueEvolution.data?.chart) {
-                console.error('❌ Pas de données de graphique revenue evolution');
-                return;
-            }
-            if (!revenueDistribution.data?.pie_chart) {
-                console.error('❌ Pas de données de graphique distribution');
-                return;
-            }
-            if (!subsEvolution.data?.chart) {
-                console.error('❌ Pas de données de graphique subs evolution');
-                return;
-            }
+            // Créer uniquement les graphiques pour lesquels on a des données (ne pas tout abandonner)
+            if (!overviewChart.data?.chart) console.warn('⚠️ Pas de données overview, graphique ignoré');
+            if (!revenueEvolution.data?.chart) console.warn('⚠️ Pas de données revenue evolution, graphique ignoré');
+            if (!revenueDistribution.data?.pie_chart) console.warn('⚠️ Pas de données distribution, graphique ignoré');
+            if (!subsEvolution.data?.chart) console.warn('⚠️ Pas de données subs evolution, graphique ignoré');
 
-            // Vérifier si les données sont toutes à 0
+            // Vérifier si les données sont toutes à 0 (seulement si overview disponible)
+            if (overviewChart.data?.chart) {
             const overviewData = overviewChart.data.chart;
-            const hasData = overviewData.datasets.some(dataset =>
-                dataset.data.some(value => value > 0)
+            const hasData = overviewData.datasets && overviewData.datasets.some(dataset =>
+                dataset.data && dataset.data.some(value => value > 0)
             );
             console.log('📊 Le graphique overview a-t-il des données > 0 ?', hasData);
+            }
 
             // Vérifier la visibilité du conteneur avant de créer le graphique
             const container = document.querySelector('.chart-container');
@@ -788,7 +769,8 @@
                 height: container ? container.offsetHeight : 'N/A'
             });
 
-            createChartSafely('eklektik-overview-chart', 'overview', overviewChart.data?.chart, 'bar', {
+            if (overviewChart.data?.chart) {
+            createChartSafely('eklektik-overview-chart', 'overview', overviewChart.data.chart, 'bar', {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 0 },
@@ -864,7 +846,8 @@
                     }
                 }
             }, 100);
-            
+            }
+
             // Modifier les couleurs du graphique Revenue Evolution
             if (revenueEvolution.data?.chart?.datasets) {
                 revenueEvolution.data.chart.datasets.forEach((dataset, index) => {
@@ -875,7 +858,8 @@
                 });
             }
             
-            createChartSafely('eklektik-revenue-evolution-chart', 'revenueEvolution', revenueEvolution.data?.chart, 'line', {
+            if (revenueEvolution.data?.chart) {
+            createChartSafely('eklektik-revenue-evolution-chart', 'revenueEvolution', revenueEvolution.data.chart, 'line', {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 0 },
@@ -942,21 +926,21 @@
                     }
                 }
             }, 200);
-            
-            // Modifier les couleurs du graphique Operators Distribution
-            if (revenueDistribution.data?.pie_chart?.datasets?.[0]) {
-                // Couleurs spécifiques: TT (dégradé bleu→blanc), Orange (orange), Taraji (rouge→jaune)
-                const colors = [
-                    'rgba(59, 130, 246, 0.9)', // TT - bleu
-                    '#f97316',                 // Orange
-                    'rgba(239, 68, 68, 0.9)'  // Taraji - rouge
-                ];
-                revenueDistribution.data.pie_chart.datasets[0].backgroundColor = colors;
-                revenueDistribution.data.pie_chart.datasets[0].borderColor = colors;
-                revenueDistribution.data.pie_chart.datasets[0].borderWidth = 2;
             }
             
-            createChartSafely('eklektik-operators-distribution-chart', 'operatorsDistribution', revenueDistribution.data?.pie_chart, 'doughnut', {
+            // Modifier les couleurs du graphique Operators Distribution pour thème Club Privilèges
+            if (revenueDistribution.data?.pie_chart) {
+            if (revenueDistribution.data.pie_chart?.datasets?.[0]) {
+                const colors = [
+                    '#6C4BA0',  // Violet principal
+                    '#D4A843',  // Or
+                    '#8B6FC0'   // Violet clair
+                ];
+                revenueDistribution.data.pie_chart.datasets[0].backgroundColor = colors;
+                revenueDistribution.data.pie_chart.datasets[0].borderColor = '#1a1a2e';
+                revenueDistribution.data.pie_chart.datasets[0].borderWidth = 2;
+            }
+            createChartSafely('eklektik-operators-distribution-chart', 'operatorsDistribution', revenueDistribution.data.pie_chart, 'doughnut', {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 0 },
@@ -976,6 +960,7 @@
                     intersect: false
                 }
             }, 300);
+            }
 
             // Mettre à jour la carte "Statistiques par Opérateur" (si la fonction globale existe)
             try {
@@ -989,8 +974,9 @@
                 console.warn('⚠️ Impossible de mettre à jour Statistiques par Opérateur:', e);
             }
             
+            if (subsEvolution.data?.chart) {
             // Modifier les couleurs du graphique Subs Evolution
-            if (subsEvolution.data?.chart?.datasets) {
+            if (subsEvolution.data.chart?.datasets) {
                 subsEvolution.data.chart.datasets.forEach((dataset, index) => {
                     switch(dataset.label) {
                         case 'Active Subs':
@@ -1008,8 +994,7 @@
                     dataset.borderWidth = 1;
                 });
             }
-            
-            createChartSafely('eklektik-ca-partners-chart', 'subsEvolution', subsEvolution.data?.chart, 'line', {
+            createChartSafely('eklektik-ca-partners-chart', 'subsEvolution', subsEvolution.data.chart, 'line', {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 0 },
@@ -1066,6 +1051,7 @@
                     }
                 }
             }, 400);
+            }
 
             // (Supprimé) Graphique Active Subs cumulés
             
@@ -1103,10 +1089,12 @@
         console.log(`🔗 Appel API: ${url.toString()}`);
 
         const response = await fetch(url, {
+            credentials: 'same-origin',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
             }
         });
 

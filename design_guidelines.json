@@ -1,0 +1,69 @@
+{
+  "theme": "dark",
+  "archetype": "4 (Swiss & High-Contrast) infused with 2 (Tactical)",
+  "emotional_tone": "Authoritative, cutting-edge, data-forward, exclusive",
+  "fonts": {
+    "headings": "Outfit",
+    "body": "Manrope",
+    "installation_instruction": "Import via Google Fonts or standard next/font methods"
+  },
+  "colors": {
+    "background": "#050505",
+    "surface": "#121212",
+    "surface_hover": "#1A1A1A",
+    "border": "#27272A",
+    "primary": "#E60000",
+    "secondary": "#00E5FF",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "success": "#10B981",
+    "danger": "#EF4444",
+    "warning": "#F59E0B"
+  },
+  "spacing_and_layout": {
+    "strategy": "The 'Control Room' Grid",
+    "container": "w-full max-w-[1600px] mx-auto px-4 md:px-8",
+    "grid_gaps": "gap-4 md:gap-6",
+    "filter_bar": "flex flex-wrap items-center justify-between gap-4 bg-[#121212]/80 border border-[#27272A] p-3 rounded-2xl sticky top-20 z-40 backdrop-blur-xl",
+    "kpi_cards": "p-6 rounded-2xl bg-[#121212] border border-[#27272A] relative overflow-hidden group flex flex-col justify-between"
+  },
+  "surface_strategies": {
+    "header": "Crystal Glass: bg-[#050505]/80 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50",
+    "kpi_primary": "The 'Tracing Beam': For the main 'Activated Subscriptions' KPI, add a subtle glowing border effect or an inner drop-shadow.",
+    "floating_ai": "Glassmorphism pill: bg-white/5 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(230,0,0,0.15)] bottom-6 right-6 fixed"
+  },
+  "components": {
+    "navigation_tabs": "Floating pill menu. Wrap the 8 tabs in a scrollable horizontal flex container. bg-zinc-900/50 p-1 rounded-full border border-white/5. Active tab gets bg-zinc-800 text-white. Use framer-motion layoutId for the sliding active background.",
+    "kpi_numbers": "text-4xl lg:text-5xl font-outfit font-semibold tracking-tighter text-white mt-4 mb-1",
+    "buttons": "Action buttons (Actualiser, Comparaison, etc.) grouped in an icon-first toolbar. bg-[#121212] border border-zinc-800 hover:border-zinc-600 transition-all shadow-sm",
+    "charts": "Recharts Area/Bar charts. Minimalist. Remove standard grids. Use faint strokeDasharray lines for Y-axis only. Gradients under Area lines using <defs><linearGradient>.",
+    "data_tables": "Minimalist layout. Horizontal borders only (border-b border-zinc-800). text-sm for data, uppercase text-xs tracking-[0.1em] text-zinc-500 for headers."
+  },
+  "animations": {
+    "kpi_entrance": "Staggered fade-up with framer-motion (y: 20, opacity: 0 -> y: 0, opacity: 1)",
+    "tabs": "Framer motion shared layout animation for the active state pill"
+  },
+  "media": {
+    "images": [
+      {
+        "category": "texture_background",
+        "url": "https://images.unsplash.com/photo-1762258344624-52d8c3b74c66?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwxfHxkYXJrJTIwYWJzdHJhY3QlMjBtaW5pbWFsaXN0JTIwdGV4dHVyZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc0NzIzOTk1fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Subtle dark noise/texture. Place absolutely behind the dashboard wrapper at 3-5% opacity to break the flat black."
+      }
+    ],
+    "icons": {
+      "library": "@phosphor-icons/react",
+      "instruction": "Use Duotone or Regular weights. Essential for telecom metrics (Signal, Users, ChartLineUp, Storefront)."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Install and use @phosphor-icons/react for all iconography.",
+    "Install and use framer-motion for tab transitions, hover effects, and KPI entrance animations.",
+    "Install recharts for the analytics visualizations.",
+    "Fix the UI/UX problem: Completely eliminate the 40% height white-space of the old date filters. Collapse them into a single horizontal toolbar below the main header.",
+    "Implement the 'Control Room' grid layout for the main content (dense, highly utilized space).",
+    "Add 'data-testid' to all interactive elements (tabs, filters, buttons, AI widget).",
+    "Use standard Shadcn UI primitives (Tables, Popovers, Calendars) but heavily customize their Tailwind classes to match this ultra-dark premium theme (override pure white backgrounds to #121212 and apply zinc-800 borders).",
+    "Ensure 'Outfit' font is used for KPIs and Headings, 'Manrope' for body data."
+  ]
+}

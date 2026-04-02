@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class DataControllerOptimized extends Controller
@@ -20,6 +21,41 @@ class DataControllerOptimized extends Controller
     {
         $this->dashboardService = $dashboardService;
         $this->cacheService = $cacheService;
+    }
+    
+    /**
+     * Ultra-fast response from pre-serialized JSON cache.
+     * Returns raw cached JSON string directly, bypassing all PHP serialization.
+     */
+    private function fastCacheResponse(Request $request, string $section): ?\Illuminate\Http\Response
+    {
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            // Try simplified key first (start_date + end_date + operator only)
+            $simpleKey = [
+                'start_date' => $params['start_date'],
+                'end_date' => $params['end_date'],
+                'operator' => $params['operator'],
+            ];
+            $rawKey = 'split_raw:' . $section . ':' . md5(json_encode($simpleKey));
+            $cached = Cache::get($rawKey);
+            if ($cached) {
+                return response($cached, 200)->header('Content-Type', 'application/json');
+            }
+            
+            // Fallback: try full params key (legacy)
+            $fullKey = 'split_raw:' . $section . ':' . md5(json_encode($params));
+            $cached = Cache::get($fullKey);
+            if ($cached) {
+                return response($cached, 200)->header('Content-Type', 'application/json');
+            }
+        } catch (\Exception $e) {
+            // Fall through to normal processing
+        }
+        return null;
     }
     
     /**
@@ -60,8 +96,17 @@ class DataControllerOptimized extends Controller
             $data['api_execution_time_ms'] = $totalTime;
             $data['optimized_version'] = true;
             
-            Log::info("Données récupérées avec succès en {$totalTime}ms");
-            Log::info("Source: " . ($data['data_source'] ?? 'inconnu'));
+            // Enregistrer pour le monitoring
+            $cacheHit = ($data['cache_mode'] ?? '') === 'standard_subcached' && $totalTime < 5000;
+            $history = Cache::get('monitoring:api_history', []);
+            $history[] = [
+                'endpoint' => '/api/dashboard/data',
+                'time_ms' => $totalTime,
+                'cache_hit' => $cacheHit,
+                'operator' => $params['operator'] ?? 'unknown',
+                'timestamp' => now()->toISOString(),
+            ];
+            Cache::put('monitoring:api_history', array_slice($history, -100), 3600);
             
             return response()->json($data);
             
@@ -100,6 +145,11 @@ class DataControllerOptimized extends Controller
         $comparisonEndDate = $request->input("comparison_end_date");
         $selectedOperator = $request->input("operator", "Timwe");
         
+        // Normaliser "all" -> "ALL"
+        if (strtolower($selectedOperator) === 'all') {
+            $selectedOperator = 'ALL';
+        }
+        
         // Validation des dates
         if ($startDate && !$this->isValidDate($startDate)) {
             throw new \InvalidArgumentException("Date de début invalide: {$startDate}");
@@ -125,10 +175,10 @@ class DataControllerOptimized extends Controller
             throw new \InvalidArgumentException("La date de début doit être antérieure à la date de fin");
         }
         
-        // Limitation de la période maximale (1 an)
+        // Limitation de la période maximale (6 ans)
         $periodDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate));
-        if ($periodDays > 365) {
-            throw new \InvalidArgumentException("Période maximale autorisée: 365 jours (demandé: {$periodDays} jours)");
+        if ($periodDays > 2200) {
+            throw new \InvalidArgumentException("Période maximale autorisée: 6 ans (demandé: {$periodDays} jours)");
         }
         
         return [
@@ -447,117 +497,320 @@ class DataControllerOptimized extends Controller
         }
     }
 
+    // ==========================================
+    // ENDPOINTS SPLIT POUR CHARGEMENT PROGRESSIF
+    // ==========================================
+    
     /**
-     * DÉSACTIVÉ POUR OPTIMISATION
-     * Récupère les transactions Timwe d'un client spécifique
+     * KPIs seuls (rapide ~15s cold, ~1s cached)
      */
-    /*
-    public function getClientTimweTransactions(Request $request, int $clientId): JsonResponse
+    public function getKpisSplit(Request $request): JsonResponse|\Illuminate\Http\Response
     {
+        $fast = $this->fastCacheResponse($request, 'kpis');
+        if ($fast) return $fast;
+        
+        set_time_limit(120);
+        $startTime = microtime(true);
         try {
-            $startDate = $request->query('start_date', now()->subDays(30)->format('Y-m-d'));
-            $endDate = $request->query('end_date', now()->format('Y-m-d'));
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
             
-            Log::info("Récupération des transactions Timwe pour le client: {$clientId}", [
-                'start_date' => $startDate,
-                'end_date' => $endDate
-            ]);
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            // Récupérer les transactions du client (exclure FROM_TIMWE_RENEWED_NOTIF qui ne sont pas utiles)
-            $transactions = DB::table('transactions_history')
-                ->where('client_id', $clientId)
-                ->where(function($query) {
-                    $query->where('reference', 'LIKE', '%TIMWE-OPTIN%')
-                          ->orWhere('reference', 'LIKE', '%FROM_TIMWE_RENEWED%');
-                })
-                ->where(function($query) {
-                    // Garder TIMWE_RENEWED_NOTIF mais pas FROM_TIMWE_RENEWED_NOTIF
-                    $query->where(function($q) {
-                        $q->where('status', 'LIKE', '%TIMWE_RENEWED_NOTIF%')
-                          ->where('status', 'NOT LIKE', '%FROM_TIMWE_RENEWED_NOTIF%');
-                    })
-                    ->orWhere('status', 'LIKE', '%UNSUBSCRIPTION%');
-                })
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->orderBy('created_at', 'DESC')
-                ->select('transaction_history_id', 'reference', 'status', 'created_at', 'result')
-                ->get();
-            
-            // Analyser le result de chaque transaction et ajouter un statut calculé
-            $tentativeNB = 0;
-            $facture = 0;
-            $tentative = 0;
-            
-            foreach ($transactions as $transaction) {
-                // Parser le JSON result
-                $result = null;
-                if ($transaction->result) {
-                    $result = json_decode($transaction->result, true);
-                }
-                
-                // Déterminer le statut selon la logique
-                if ($result && isset($result['mnoDeliveryCode'])) {
-                    if ($result['mnoDeliveryCode'] === 'NO_BALANCE' && 
-                        isset($result['totalCharged']) && $result['totalCharged'] == 0) {
-                        $transaction->billing_status = 'tentative_nb';
-                        $transaction->billing_status_label = 'Tentative NB';
-                        $tentativeNB++;
-                    } elseif ($result['mnoDeliveryCode'] === 'DELIVERED' && 
-                              isset($result['totalCharged']) && $result['totalCharged'] > 0) {
-                        $transaction->billing_status = 'facture';
-                        $transaction->billing_status_label = 'Facturé';
-                        $transaction->amount_charged = $result['totalCharged'];
-                        $facture++;
-                    } else {
-                        $transaction->billing_status = 'tentative';
-                        $transaction->billing_status_label = 'Tentative';
-                        $tentative++;
-                    }
-                } else {
-                    $transaction->billing_status = 'tentative';
-                    $transaction->billing_status_label = 'Tentative';
-                    $tentative++;
-                }
-                
-                // Ajouter les détails du result pour affichage
-                $transaction->result_details = $result;
-                $transaction->mno_delivery_code = $result['mnoDeliveryCode'] ?? '-';
-                $transaction->total_charged = $result['totalCharged'] ?? 0;
-            }
-            
-            // Calculer les statistiques
-            $stats = [
-                'total_transactions' => $transactions->count(),
-                'renewals' => $transactions->filter(function($tx) {
-                    return str_contains($tx->status, 'RENEWED');
-                })->count(),
-                'unsubscriptions' => $transactions->filter(function($tx) {
-                    return str_contains($tx->status, 'UNSUBSCRIPTION');
-                })->count(),
-                'facture' => $facture,
-                'tentative_nb' => $tentativeNB,
-                'tentative' => $tentative,
-                'first_transaction_date' => $transactions->min('created_at'),
-                'last_transaction_date' => $transactions->max('created_at')
-            ];
+            $cacheKey = 'split:kpis:' . md5(json_encode($params));
+            $kpis = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+                return $this->dashboardService->getKPIsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
+            });
             
             return response()->json([
                 'success' => true,
-                'client_id' => $clientId,
-                'transactions' => $transactions,
-                'stats' => $stats
+                'section' => 'kpis',
+                'data' => $kpis,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
             ]);
-            
         } catch (\Exception $e) {
-            Log::error("Erreur lors de la récupération des transactions Timwe du client {$clientId}: " . $e->getMessage());
-            
-            return response()->json([
-                'success' => false,
-                'error' => 'Impossible de récupérer les transactions',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'section' => 'kpis', 'error' => $e->getMessage()], 500);
         }
     }
-    */
+    
+    /**
+     * Marchands seuls
+     */
+    public function getMerchantsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
+    {
+        $fast = $this->fastCacheResponse($request, 'merchants');
+        if ($fast) return $fast;
+        
+        set_time_limit(120);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:merchants:' . md5(json_encode($params));
+            $merchants = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+                return $this->dashboardService->getMerchantsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'merchants',
+                'data' => $merchants['data'],
+                'categoryDistribution' => $merchants['categories'],
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'merchants', 'error' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Transactions seules (rapide ~1s)
+     */
+    public function getTransactionsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
+    {
+        $fast = $this->fastCacheResponse($request, 'transactions');
+        if ($fast) return $fast;
+        
+        set_time_limit(60);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:transactions:' . md5(json_encode($params));
+            $transactions = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $params) {
+                return $this->dashboardService->getTransactionsDataPublic($startBound, $endExclusive, $params['operator']);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'transactions',
+                'data' => $transactions,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'transactions', 'error' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Abonnements seuls (le plus lourd)
+     */
+    public function getSubscriptionsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
+    {
+        $fast = $this->fastCacheResponse($request, 'subscriptions');
+        if ($fast) return $fast;
+        
+        set_time_limit(180);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:subscriptions:' . md5(json_encode($params));
+            $subscriptions = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $params, $compStartBound, $compEndExclusive) {
+                return $this->dashboardService->getSubscriptionsDataPublic($startBound, $endExclusive, $params['operator'], $compStartBound, $compEndExclusive);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'subscriptions',
+                'data' => $subscriptions,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'subscriptions', 'error' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Ooredoo stats seuls (rapide ~1s)
+     */
+    public function getOoredooStatsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
+    {
+        $fast = $this->fastCacheResponse($request, 'ooredoo');
+        if ($fast) return $fast;
+        
+        set_time_limit(60);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:ooredoo:' . md5(json_encode($params));
+            $ooredooStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive) {
+                $daily = $this->dashboardService->getOoredooDailyStatisticsPublic($startBound, $endExclusive);
+                $dailyComp = $this->dashboardService->getOoredooDailyStatisticsPublic($compStartBound, $compEndExclusive);
+                return [
+                    'daily_statistics' => $daily,
+                    'daily_statistics_comparison' => $dailyComp,
+                    'ooredoo_monthly_stats' => $this->dashboardService->groupOoredooStatsByMonthPublic($daily),
+                    'ooredoo_monthly_stats_comparison' => $this->dashboardService->groupOoredooStatsByMonthPublic($dailyComp)
+                ];
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'ooredoo_stats',
+                'data' => $ooredooStats,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'ooredoo_stats', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Timwe stats seuls (similaire à ooredoo)
+     */
+    public function getTimweStatsSplit(Request $request): JsonResponse|\Illuminate\Http\Response
+    {
+        $fast = $this->fastCacheResponse($request, 'timwe');
+        if ($fast) return $fast;
+        
+        set_time_limit(120);
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
+            $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:timwe:' . md5(json_encode($params));
+            $timweStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
+                $daily = $this->dashboardService->getDailyStatistics($startBound, $endExclusive, $params['operator']);
+                $dailyComp = $this->dashboardService->getDailyStatistics($compStartBound, $compEndExclusive, $params['operator']);
+                return [
+                    'daily_statistics' => $daily,
+                    'daily_statistics_comparison' => $dailyComp,
+                    'timwe_monthly_stats' => $this->dashboardService->groupTimweStatsByMonth($daily),
+                    'timwe_monthly_stats_comparison' => $this->dashboardService->groupTimweStatsByMonth($dailyComp)
+                ];
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'timwe_stats',
+                'data' => $timweStats,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'timwe_stats', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Eklektik daily stats split
+     */
+    public function getEklektikStatsSplit(Request $request): JsonResponse
+    {
+        $startTime = microtime(true);
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+            
+            $cacheKey = 'split:eklektik:' . md5(json_encode($params));
+            $eklektikStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive) {
+                $daily = \App\Models\EklektikStatsDaily::where('date', '>=', $startBound->toDateString())
+                    ->where('date', '<', $endExclusive->toDateString())
+                    ->orderBy('date', 'asc')
+                    ->get()
+                    ->toArray();
+                
+                return [
+                    'eklektik_monthly_stats' => $this->groupEklektikStatsByMonth($daily),
+                ];
+            });
+            
+            return response()->json([
+                'success' => true,
+                'section' => 'eklektik_stats',
+                'data' => $eklektikStats,
+                'execution_time_ms' => round((microtime(true) - $startTime) * 1000)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'section' => 'eklektik_stats', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function groupEklektikStatsByMonth(array $dailyStats): array
+    {
+        if (empty($dailyStats)) return [];
+        
+        $grouped = [];
+        
+        foreach ($dailyStats as $stat) {
+            $date = Carbon::parse($stat['date']);
+            $monthKey = $date->format('Y-m');
+            $monthLabel = $date->locale('fr')->isoFormat('MMMM YYYY');
+            
+            if (!isset($grouped[$monthKey])) {
+                $grouped[$monthKey] = [
+                    'month_key' => $monthKey, 'month_label' => $monthLabel,
+                    'daily_details' => [],
+                    'total_new_sub' => 0, 'total_renewals' => 0, 'total_charges' => 0,
+                    'total_unsub' => 0, 'total_nb_facturation' => 0,
+                    'total_active_sub' => 0,
+                    'total_revenu_ttc_tnd' => 0, 'total_ca_bigdeal' => 0,
+                    'sum_billing_rate' => 0, 'total_taux_facturation' => 0,
+                    'days_count' => 0
+                ];
+            }
+            
+            $grouped[$monthKey]['daily_details'][] = $stat;
+            $grouped[$monthKey]['total_new_sub'] += floatval($stat['new_subscriptions'] ?? 0);
+            $grouped[$monthKey]['total_renewals'] += floatval($stat['renewals'] ?? 0);
+            $grouped[$monthKey]['total_charges'] += floatval($stat['charges'] ?? 0);
+            $grouped[$monthKey]['total_unsub'] += floatval($stat['unsubscriptions'] ?? 0);
+            $grouped[$monthKey]['total_nb_facturation'] += floatval($stat['nb_facturation'] ?? 0);
+            $grouped[$monthKey]['total_revenu_ttc_tnd'] += floatval($stat['revenu_ttc_tnd'] ?? 0);
+            $grouped[$monthKey]['total_ca_bigdeal'] += floatval($stat['ca_bigdeal'] ?? 0);
+            $grouped[$monthKey]['sum_billing_rate'] += floatval($stat['billing_rate'] ?? 0);
+            $grouped[$monthKey]['total_active_sub'] = floatval($stat['active_subscribers'] ?? 0);
+            $grouped[$monthKey]['days_count']++;
+        }
+        
+        foreach ($grouped as $monthKey => &$month) {
+            if ($month['days_count'] > 0) {
+                $month['total_taux_facturation'] = $month['sum_billing_rate'] / $month['days_count'];
+            }
+            $month['display_label'] = $month['month_label'] . ' (' . $month['days_count'] . ')';
+            unset($month['sum_billing_rate']);
+        }
+        
+        krsort($grouped);
+        return array_values($grouped);
+    }
 }
 

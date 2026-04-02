@@ -1,0 +1,51 @@
+{
+  "summary": "Tested Weekly Reporting System V2 with 6 report types. Fixed critical database schema issue - ENUM column 'type' was missing new types (associe, store, sub-store). All 6 report types now work correctly. ML Dashboard and AI Suggestions verified via UI testing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/admin/ml-dashboard/*", "issue": "Returns 401 for unauthenticated API calls - expected behavior for session-based auth"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reporting_v2.py",
+    "/app/test_reports/pytest/pytest_results_v2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Database migration needed: The ENUM column 'type' in report_recipients table was missing new types. Fixed via ALTER TABLE but should be added to Laravel migration for future deployments."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reporting_v2.py"
+  ],
+  "success_rate": {
+    "backend": "87% (20/23 passed - 3 expected auth failures)",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "Test recipients created with TEST_ prefix and cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Database schema was fixed to include all 6 report types (ceo, marketing, partner, associe, store, sub-store). ML Dashboard requires session auth - test via Playwright not direct API calls.",
+  "features_verified": {
+    "6_report_types_dropdown": "PASS - All 6 types visible in both filter and modal dropdowns",
+    "recipient_crud": "PASS - Create, Read, Update, Delete, Toggle all working",
+    "partner_field_validation": "PASS - partner_id required for partner/store/sub-store types",
+    "report_preview_api": "PASS - Returns HTML with ML data sections for all types",
+    "ml_dashboard_extraction": "PASS - Feature extraction button visible and functional",
+    "ml_dashboard_training": "PASS - Train model button visible and functional",
+    "ml_dashboard_report_generation": "PASS - Generate Report IA button visible, latest report displayed",
+    "ml_dashboard_report_viewer": "PASS - Shows report from 2026-03-30 with KPIs",
+    "ml_insights_widget_overview": "PASS - Shows real model data (100% accuracy, 242 churn risk, 48.1% success rate)"
+  },
+  "database_fix_applied": {
+    "table": "report_recipients",
+    "column": "type",
+    "old_enum": "('ceo','marketing','partner')",
+    "new_enum": "('ceo','marketing','partner','associe','store','sub-store')",
+    "command": "ALTER TABLE report_recipients MODIFY COLUMN type ENUM('ceo','marketing','partner','associe','store','sub-store') NOT NULL"
+  }
+}

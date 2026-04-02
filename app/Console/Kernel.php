@@ -40,6 +40,14 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/timwe-stats.log'));
+
+            // Calcul du diagnostic Timwe quotidien - Chaque jour à 2h35 du matin
+            $yesterday = \Carbon\Carbon::yesterday()->format('Y-m-d');
+            $schedule->command("timwe:diagnostic-backfill --start-date={$yesterday} --end-date={$yesterday} --force")
+                ->dailyAt('02:35')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/timwe-diagnostic.log'));
             
             // Calcul des statistiques Ooredoo/DGV quotidiennes - Chaque jour à 2h45 du matin
             $schedule->command('ooredoo:update-daily-stats')
@@ -47,6 +55,128 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping()
                 ->runInBackground()
                 ->appendOutputTo(storage_path('logs/ooredoo-stats.log'));
+            
+            // Cache warmup dashboard - Toutes les 25 minutes (éviter cold cache)
+            $schedule->command('dashboard:warmup --operator=ALL')
+                ->cron('*/25 * * * *')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/dashboard-warmup.log'));
+
+            // Envoi des rapports hebdomadaires - Chaque lundi a 8h00
+            $schedule->command('reports:send-weekly')
+                ->weeklyOn(1, '08:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/weekly-reports.log'));
+
+            // Warmup split endpoints - Toutes les 3 heures (< TTL 4h)
+            $schedule->command('dashboard:warmup-split --ttl=14400')
+                ->cron('0 */3 * * *')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/split-warmup.log'));
+
+            // Warmup Sub-Stores split endpoints - Toutes les 3h30 (< TTL 4h)
+            $schedule->command('substores:warmup --ttl=14400')
+                ->cron('30 */3 * * *')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/substores-warmup.log'));
+            
+            // Matérialisation des KPIs quotidiens - Chaque jour à 3h00 (365 jours)
+            $schedule->command('dashboard:materialize --days=7')
+                ->dailyAt('03:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/dashboard-materialize.log'));
+
+            // Matérialisation complète 365 jours - Chaque dimanche à 4h30
+            $schedule->command('dashboard:materialize --days=365 --force')
+                ->weeklyOn(0, '04:30')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/dashboard-materialize-full.log'));
+
+            // Matérialisation des subscriptions quotidiennes - Chaque jour à 3h15
+            $schedule->command('dashboard:materialize-subscriptions --days=7')
+                ->dailyAt('03:15')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/subscription-materialize.log'));
+
+            // Matérialisation complète subscriptions - Chaque dimanche à 5h00
+            $schedule->command('dashboard:materialize-subscriptions --days=365 --force')
+                ->weeklyOn(0, '05:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/subscription-materialize-full.log'));
+
+            // Matérialisation des transactions quotidiennes - Chaque jour à 3h30
+            $schedule->command('dashboard:materialize-transactions --days=7')
+                ->dailyAt('03:30')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/transaction-materialize.log'));
+
+            // Matérialisation complète transactions - Chaque dimanche à 5h30
+            $schedule->command('dashboard:materialize-transactions --days=365 --force')
+                ->weeklyOn(0, '05:30')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/transaction-materialize-full.log'));
+
+            // Cache intelligent (contexte agent IA, KPIs, features ML) - Tous les jours à 6h
+            $schedule->command('cache:warmup')
+                ->dailyAt('06:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/cache-warmup.log'));
+
+            // ============================================================
+            // SYSTÈME ML INCRÉMENTAL - Architecture optimisée
+            // ============================================================
+
+            // Ingestion incrémentale des transactions vers tx_daily_agg
+            $schedule->command('ml:tx-daily-ingest --batch-size=100000 --max-batches=5')
+                ->everyFiveMinutes()
+                ->withoutOverlapping(30)
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-ingest.log'));
+
+            // Construction des features ML 90 jours depuis les agrégats
+            $schedule->command('ml:build-90d-features --chunk=2000')
+                ->everyTwoHours()
+                ->withoutOverlapping(60)
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-features-90d.log'));
+
+            // Maintenance et nettoyage des agrégats (rétention 120 jours)
+            $schedule->command('ml:tx-daily-maintenance --retention-days=120 --vacuum')
+                ->weekly()
+                ->sundays()
+                ->at('04:00')
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/ml-maintenance.log'));
+
+            // Health Check automatique - Toutes les 15 minutes
+            $schedule->command('monitoring:health-check --json')
+                ->everyFifteenMinutes()
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/health-check.log'));
+
+            // ============================================================
+            // ML MERCHANT RECOMMENDATIONS - Retrain hebdomadaire
+            // ============================================================
+
+            // Retrain du modèle de recommandation marchands - Chaque dimanche à 6h30
+            $schedule->command('ml:merchant-recommendations retrain')
+                ->weeklyOn(0, '06:30')
+                ->withoutOverlapping(300)
+                ->runInBackground()
+                ->appendOutputTo(storage_path('logs/merchant-reco-retrain.log'));
     }
 
     /**

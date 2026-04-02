@@ -106,7 +106,9 @@ class EklektikStatsService
         
         Log::info("🌐 [EKLEKTIK STATS] Appel API pour $operatorName (offre $offreId)", ['url' => $url]);
 
+        $verifySsl = config('eklektik.stats.verify_ssl', true);
         $response = Http::timeout(30)
+            ->withOptions(['verify' => $verifySsl])
             ->withBasicAuth($username, $password)
             ->withHeaders([
                 'Accept' => 'application/json',

@@ -8,10 +8,10 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <style>
         :root {
-            --club-primary: #6B46C1;
-            --club-secondary: #8B5CF6;
+            --club-primary: #6C4BA0;
+            --club-secondary: #D4A843;
             --club-accent: #F59E0B;
-            --club-bg: linear-gradient(135deg, #6B46C1 0%, #8B5CF6 100%);
+            --club-bg: linear-gradient(135deg, #6C4BA0 0%, #D4A843 100%);
             --brand-dark: #1f2937;
             --card: #ffffff;
             --muted: #64748b;
@@ -217,6 +217,24 @@
         }
         
         .hidden { display: none; }
+        
+        /* Mobile responsive */
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 28px 20px;
+                margin: 12px;
+                border-radius: 16px;
+            }
+            .club-logo { font-size: 24px; }
+            .club-subtitle { font-size: 13px; }
+            .welcome-text { font-size: 12px; margin-top: 10px; }
+            .form-group { margin-bottom: 18px; }
+            .form-input { padding: 10px 14px; font-size: 15px; }
+            .btn { padding: 14px 20px; font-size: 15px; }
+            .otp-link { margin-top: 18px; }
+            .otp-link a { font-size: 13px; }
+            .logo { margin-bottom: 28px; }
+        }
     </style>
 </head>
 <body>

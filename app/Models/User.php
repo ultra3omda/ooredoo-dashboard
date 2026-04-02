@@ -34,7 +34,9 @@ class User extends Authenticatable
         'is_otp_enabled',
         'password_changed_at',
         'created_by',
-        'platform_type'
+        'platform_type',
+        'pluxee_campaign_access',
+        'operator_name',
     ];
 
     /**
@@ -231,40 +233,31 @@ class User extends Authenticatable
     {
         // Dispatching selon le type de plateforme
         if ($this->isTimweOoredooUser()) {
-            // Utilisateurs Timwe/Ooredoo : Dashboard avec thème Ooredoo
             return url('/?theme=ooredoo');
         }
 
-        // Utilisateurs Club Privilèges : Logique existante
         // Super Admin : Dashboard principal avec vue globale
         if ($this->isSuperAdmin()) {
             return url('/?theme=club_privileges');
         }
 
+        // Use centralized SubStoreService to determine dashboard
+        $subStoreService = app(\App\Services\SubStoreService::class);
+        $primaryOperator = $this->primaryOperator();
+
         // Admin : Vérifier si orienté sub-stores ou dashboard principal
         if ($this->isAdmin()) {
-            $primaryOperator = $this->primaryOperator();
-            
-            // Si l'admin est orienté sub-stores, rediriger vers sub-stores dashboard
-            if ($primaryOperator && in_array($primaryOperator->operator_name, ['Sub-Stores', 'Retail', 'Partnership', 'Sofrecom'])) {
+            if ($primaryOperator && $subStoreService->isSubStoreOperator($primaryOperator->operator_name)) {
                 return url('/sub-stores/?theme=club_privileges');
             }
-            
-            // Sinon, dashboard principal avec vue filtrée par opérateur
             return url('/?theme=club_privileges');
         }
 
-        // Collaborator : Selon les permissions et le contexte
+        // Collaborator : Selon l'opérateur principal
         if ($this->isCollaborator()) {
-            // Si l'utilisateur a accès aux sub-stores uniquement
-            $primaryOperator = $this->primaryOperator();
-            
-            // Si l'opérateur principal est lié aux sub-stores, rediriger vers sub-stores dashboard
-            if ($primaryOperator && in_array($primaryOperator->operator_name, ['Sub-Stores', 'Retail', 'Partnership', 'Sofrecom'])) {
+            if ($primaryOperator && $subStoreService->isSubStoreOperator($primaryOperator->operator_name)) {
                 return url('/sub-stores/?theme=club_privileges');
             }
-            
-            // Sinon, dashboard principal
             return url('/?theme=club_privileges');
         }
 
@@ -361,6 +354,79 @@ class User extends Authenticatable
     public function isCollaboratorWithContext(): bool
     {
         return $this->isCollaborator();
+    }
+
+    /**
+     * Check if user can invite other collaborators
+     * Admin, SuperAdmin, or Collaborator assigned to a sub-store WITHOUT campaign restrictions
+     */
+    public function canInviteCollaborators(): bool
+    {
+        if ($this->isSuperAdmin() || $this->isAdminOperator() || $this->isAdminSubStore()) {
+            return true;
+        }
+        
+        // Collaborator with sub-store access and NO campaign restriction
+        if ($this->isCollaborator() && $this->isSubStoreUser()) {
+            return empty($this->pluxee_campaign_access);
+        }
+        
+        return false;
+    }
+
+    /**
+     * Get the list of campaigns this user is allowed to access
+     * Returns empty array if the user has full access (admin or unrestricted collaborator)
+     */
+    public function getAllowedCampaigns(): array
+    {
+        // 1. Explicit campaign restrictions (collaborateur)
+        if (!empty($this->pluxee_campaign_access)) {
+            $decoded = json_decode($this->pluxee_campaign_access, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+            return [$this->pluxee_campaign_access];
+        }
+        
+        // 2. SuperAdmin = full access (no restrictions)
+        if ($this->isSuperAdmin()) {
+            return [];
+        }
+        
+        // 3. Admin/Collaborateur without explicit restrictions:
+        //    auto-resolve campaigns from their operator's sub-store
+        $primaryOperator = $this->primaryOperator();
+        if ($primaryOperator) {
+            $storeName = $primaryOperator->operator_name;
+            $campaigns = \Illuminate\Support\Facades\DB::table('carte_recharge')
+                ->join('stores', function ($j) {
+                    $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)");
+                })
+                ->where('stores.store_name', 'LIKE', "%{$storeName}%")
+                ->distinct()
+                ->pluck('carte_recharge.campain_name')
+                ->toArray();
+            
+            if (!empty($campaigns)) {
+                return $campaigns;
+            }
+        }
+        
+        return []; // Fallback: full access
+    }
+
+    /**
+     * Check if user has restricted campaign access
+     */
+    public function hasCampaignRestriction(): bool
+    {
+        // SuperAdmin never has restrictions
+        if ($this->isSuperAdmin()) {
+            return false;
+        }
+        // Everyone else is restricted to their operator's campaigns
+        return !empty($this->getAllowedCampaigns());
     }
 
     /**
@@ -520,15 +586,6 @@ class User extends Authenticatable
     public function canViewTimweSection(): bool
     {
         return $this->isSuperAdmin();
-    }
-
-    /**
-     * Vérifier si l'utilisateur peut inviter des collaborateurs
-     * Seuls les admins (tous types) peuvent inviter des collaborateurs
-     */
-    public function canInviteCollaborators(): bool
-    {
-        return $this->isAdmin() || $this->isSuperAdmin();
     }
 
     // Méthodes privées

@@ -29,8 +29,8 @@
                 /* Backward compatibility */
                 --brand-red: var(--brand-primary);
             @else
-                --brand-primary: #6B46C1;
-                --brand-secondary: #8B5CF6;
+                --brand-primary: #6C4BA0;
+                --brand-secondary: #D4A843;
                 --brand-accent: #F59E0B;
                 --brand-dark: #1f2937;
                 --bg: #f8fafc;
@@ -51,7 +51,7 @@
             margin: 0; 
             padding: 0; 
             background: var(--bg); 
-            color: var(--brand-dark); 
+            color: var(--text-primary); 
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
         }
@@ -111,7 +111,7 @@
         
         .btn-secondary {
             background: var(--bg);
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border: 1px solid var(--border);
         }
         
@@ -157,7 +157,7 @@
             padding: 16px;
             text-align: left;
             font-weight: 600;
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border-bottom: 1px solid var(--border);
         }
         
@@ -167,7 +167,7 @@
         }
         
         .table tr:hover {
-            background: #f9fafb;
+            background: var(--table-stripe);
         }
         
         .status-badge {
@@ -285,29 +285,59 @@
         .copy-btn:hover {
             background: var(--bg);
         }
+        
+        /* Responsive Admin - Mobile Card Layout */
+        @media (max-width: 768px) {
+            .container { padding: 12px 8px; }
+            .page-header { flex-direction: column; align-items: stretch; gap: 12px; }
+            .page-header h1 { font-size: 20px; text-align: center; }
+            .page-header .header-actions { justify-content: center; flex-wrap: wrap; gap: 8px; }
+            .page-header .header-actions a { font-size: 13px; padding: 10px 16px; }
+            .breadcrumb { font-size: 12px; }
+            
+            /* Table -> Card layout on mobile */
+            .table thead { display: none; }
+            .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+            .table tr { 
+                padding: 16px; 
+                margin-bottom: 12px; 
+                border: 1px solid var(--border); 
+                border-radius: 10px; 
+                background: var(--card);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
+            .table td { 
+                padding: 4px 0; 
+                border: none;
+                font-size: 13px;
+            }
+            .table td:before {
+                content: attr(data-label);
+                display: block;
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 2px;
+                margin-top: 8px;
+            }
+            .table td:first-child:before { margin-top: 0; }
+            /* Hide invitation link column on mobile */
+            .table td.td-link { display: none; }
+            .actions { flex-direction: row; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+            .actions .btn-sm { flex: 1; justify-content: center; padding: 8px 10px; font-size: 12px; }
+        }
+    .dark-mode { --brand-dark:#FFF; --bg:#0D0A1A; --card:#161131; --card-hover:#1E1745; --muted:#A1A1AA; --border:#2A2350; --text-primary:#FFF; --text-secondary:#A1A1AA; --input-bg:#1E1745; --input-border:#2A2350; --shadow-sm:0 1px 3px rgba(0,0,0,0.3); --shadow-md:0 4px 12px rgba(0,0,0,0.4); --table-stripe:rgba(255,255,255,0.03); --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --accent:#D4A843; }
     </style>
+<script>(function(){var s=localStorage.getItem("dashboard-theme");if(s==="dark")document.documentElement.classList.add("dark-mode");}());</script>
 </head>
 <body>
+    @include('partials._admin-header')
     <div class="container">
-        <div class="breadcrumb">
-            @if(Auth::user()->canAccessOperatorsDashboard())
-                <a href="{{ route('dashboard') }}">Dashboard</a>
-                <span>→</span>
-            @else
-                <a href="{{ route('sub-stores.dashboard') }}">Sub-Stores Dashboard</a>
-                <span>→</span>
-            @endif
-            <a href="{{ route('admin.users.index') }}">Administration</a>
-            <span>→</span>
-            <span>Invitations</span>
-        </div>
-        
-        <div class="header">
+        <div class="page-header" style="margin-top: 16px;">
             <h1>Gestion des Invitations</h1>
             <div class="header-actions">
-                <a href="{{ route('admin.users.index') }}" class="btn btn-secondary">
-                    Utilisateurs
-                </a>
                 <a href="{{ route('admin.invitations.create') }}" class="btn btn-primary">
                     + Nouvelle Invitation
                 </a>
@@ -327,6 +357,7 @@
         @endif
         
         <div class="card">
+            <div class="table-wrapper">
             <table class="table">
                 <thead>
                     <tr>
@@ -342,13 +373,13 @@
                 <tbody>
                     @forelse($invitations as $invitation)
                         <tr>
-                            <td>
+                            <td data-label="Invite">
                                 <div>
                                     <div style="font-weight: 600;">{{ $invitation->first_name }} {{ $invitation->last_name }}</div>
                                     <div style="font-size: 12px; color: var(--muted);">{{ $invitation->email }}</div>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Role & Operateur">
                                 <div>
                                     @if($invitation->role)
                                         <span class="role-badge role-{{ $invitation->role->name }}">
@@ -357,14 +388,25 @@
                                     @endif
                                     <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
                                         {{ $invitation->operator_name }}
+                                        @php
+                                            $additionalData = $invitation->additional_data;
+                                            $campaigns = is_array($additionalData) ? ($additionalData['campaign_access'] ?? []) : [];
+                                        @endphp
+                                        @if(!empty($campaigns))
+                                            <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px;">
+                                                @foreach($campaigns as $camp)
+                                                    <span style="background: rgba(59,130,246,0.1); color: #2563eb; padding: 1px 6px; border-radius: 4px; font-size: 10px;">{{ $camp }}</span>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Invite par">
                                 <div style="font-size: 14px;">{{ $invitation->invitedBy->name ?? 'Inconnu' }}</div>
                                 <div style="font-size: 12px; color: var(--muted);">{{ $invitation->invitedBy->email ?? '' }}</div>
                             </td>
-                            <td>
+                            <td data-label="Statut">
                                 <span class="status-badge status-{{ $invitation->status }}">
                                     @switch($invitation->status)
                                         @case('pending')
@@ -389,7 +431,7 @@
                                     </div>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="Date">
                                 <div>{{ $invitation->created_at->format('d/m/Y H:i') }}</div>
                                 @if($invitation->accepted_at)
                                     <div style="font-size: 12px; color: var(--success);">
@@ -397,7 +439,7 @@
                                     </div>
                                 @endif
                             </td>
-                            <td>
+                            <td class="td-link" data-label="Lien">
                                 @if($invitation->status === 'pending')
                                     <div style="max-width: 200px;">
                                         <div class="invitation-link">
@@ -455,6 +497,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </div>
         
         @if($invitations->hasPages())

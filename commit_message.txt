@@ -1,0 +1,9 @@
+Ajout des commandes ML, améliorations du dashboard et synchronisation
+
+- Ajout de nouvelles commandes ML pour l'extraction de features et l'entraînement
+- Amélioration de l'authentification dans DataControllerOptimized
+- Alignement des métriques Dashboard Timwe avec Diagnostic Timwe
+- Configuration Sanctum pour le port 8001
+- Documentation complète de la synchronisation Eklektik
+- Nouvelles migrations pour l'architecture ML incrémentale
+- Fichiers CSV et PKL volumineux exclus du repository

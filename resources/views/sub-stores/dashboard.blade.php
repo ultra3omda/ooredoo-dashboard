@@ -44,6 +44,9 @@
             color: var(--brand-dark); 
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         .container { 
@@ -161,10 +164,11 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 200;
       overflow-x: auto;
       scrollbar-width: none;
       -ms-overflow-style: none;
+      -webkit-overflow-scrolling: touch;
     }
     
     .nav-tabs::-webkit-scrollbar {
@@ -199,6 +203,8 @@
     /* Tab Content */
     .tab-content {
       display: none;
+      overflow-x: hidden;
+      max-width: 100%;
     }
     
     .tab-content.active {
@@ -332,8 +338,13 @@
     
     @media (max-width: 480px) {
       .kpi-card {
-        width: calc(100% - 12px); /* 1 par ligne */
-        flex: 0 0 calc(100% - 12px);
+        width: calc(50% - 8px); /* 2 par ligne sur mobile */
+        flex: 0 0 calc(50% - 8px);
+        min-height: 90px;
+        padding: 12px 10px;
+      }
+      #kpisGrid {
+        gap: 8px;
       }
     }
     
@@ -802,7 +813,7 @@
       .chart-card { min-height: 220px; }
       .container { padding: 12px 8px; }
       .nav-tabs { padding: 4px; margin-bottom: 12px; }
-      .nav-tab { padding: 6px 8px; font-size: 12px; }
+      .nav-tab { padding: 6px 8px; font-size: 12px; flex: 0 0 auto; }
     }
 
     /* Merchants Section Styles */
@@ -828,29 +839,6 @@
       .merchants-kpis-row {
         grid-template-columns: repeat(2, 1fr);
       }
-    }
-    
-    @media (max-width: 600px) {
-      .merchants-kpis-row {
-        grid-template-columns: 1fr;
-        gap: 16px;
-      }
-      .merchants-kpi { 
-        min-height: 100px; 
-        padding: 16px;
-      }
-      .merchants-kpi .kpi-value { font-size: 28px; }
-    }
-    
-    @media (max-width: 480px) {
-      .merchants-kpis-row {
-        gap: 12px;
-      }
-      .merchants-kpi { 
-        min-height: 90px; 
-        padding: 12px;
-      }
-      .merchants-kpi .kpi-value { font-size: 24px; }
     }
 
     /* Users Section Styles */
@@ -918,41 +906,6 @@
     @media (max-width: 900px) {
       .users-kpis-row {
         grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    
-    @media (max-width: 600px) {
-      .users-kpis-row {
-        grid-template-columns: 1fr;
-        gap: 16px;
-      }
-      .users-kpi { 
-        min-height: 100px; 
-        padding: 16px;
-      }
-      .users-kpi .kpi-value { font-size: 28px; }
-      .users-kpi .kpi-icon { 
-        font-size: 20px; 
-        margin-right: 12px;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .users-kpis-row {
-        gap: 12px;
-      }
-      .users-kpi { 
-        min-height: 90px; 
-        padding: 12px;
-      }
-      .users-kpi .kpi-value { font-size: 24px; }
-      .users-kpi .kpi-icon { 
-        font-size: 18px; 
-        margin-right: 10px;
-      }
-      .users-kpi .kpi-title { 
-        font-size: 11px; 
-        margin-bottom: 6px;
       }
     }
 
@@ -1296,6 +1249,76 @@
       display: inline-block;
     }
 
+
+    /* ===== MOBILE: Merchants & Users KPIs (AFTER base styles) ===== */
+    @media (max-width: 600px) {
+      .container {
+        padding: 12px 8px;
+        overflow-x: hidden;
+      }
+
+      .merchants-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+      .merchants-kpis-row .kpi-card { width: 100% !important; flex: 1 1 auto !important; }
+      .merchants-kpi { 
+        min-height: 80px !important; padding: 12px 10px !important; gap: 6px !important;
+        flex-direction: column !important; align-items: flex-start !important;
+        overflow: visible !important; width: 100% !important;
+      }
+      .merchants-kpi .kpi-icon { font-size: 16px !important; width: auto !important; flex-shrink: 0; }
+      .merchants-kpi .kpi-content { overflow: visible !important; min-width: 0 !important; width: 100% !important; }
+      .merchants-kpi .kpi-title { font-size: 9px !important; line-height: 1.3 !important; word-break: normal !important; overflow-wrap: normal !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; hyphens: none !important; }
+      .merchants-kpi .kpi-value { font-size: 20px !important; white-space: normal !important; overflow: visible !important; }
+      .merchants-kpi .kpi-delta { font-size: 10px !important; }
+
+      .users-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+      .users-kpis-row .kpi-card { width: 100% !important; flex: 1 1 auto !important; }
+      .users-kpi { 
+        min-height: 80px !important; padding: 12px 10px !important;
+        flex-direction: column !important; align-items: flex-start !important;
+        overflow: visible !important; width: 100% !important;
+      }
+      .users-kpi .kpi-icon { font-size: 16px !important; margin-right: 0 !important; flex-shrink: 0; }
+      .users-kpi .kpi-content { overflow: visible !important; min-width: 0 !important; width: 100% !important; }
+      .users-kpi .kpi-title { font-size: 9px !important; line-height: 1.3 !important; word-break: normal !important; overflow-wrap: normal !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; hyphens: none !important; }
+      .users-kpi .kpi-value { font-size: 20px !important; white-space: normal !important; overflow: visible !important; }
+      .users-kpi .kpi-delta { font-size: 10px !important; }
+
+      .overview-kpi {
+        padding: 12px 10px !important; gap: 8px !important;
+        overflow: visible !important;
+      }
+      .overview-kpi .kpi-icon { font-size: 18px !important; width: 24px !important; }
+      .overview-kpi .kpi-content { overflow: visible !important; }
+      .overview-kpi .kpi-title { font-size: 10px !important; word-break: normal !important; overflow-wrap: normal !important; white-space: normal !important; hyphens: none !important; }
+      .overview-kpi .kpi-value { font-size: 18px !important; }
+
+      .tab-content {
+        overflow-x: hidden !important;
+        max-width: 100vw;
+      }
+
+      .table-wrapper {
+        max-width: calc(100vw - 24px);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .enhanced-table {
+        min-width: 600px;
+        font-size: 12px;
+      }
+
+      .enhanced-table th,
+      .enhanced-table td {
+        padding: 8px 6px;
+        white-space: nowrap;
+      }
+
+      .chart-title {
+        font-size: 14px !important;
+      }
+    }
+
     /* Sub-store specific styles */
     .substore-header {
             display: flex;
@@ -1555,6 +1578,191 @@
         justify-content: center;
             }
         }
+
+    /* =============================================
+       COMPREHENSIVE MOBILE FIXES
+       ============================================= */
+    
+    /* --- Mobile: Header compact --- */
+    @media (max-width: 600px) {
+      .header {
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+        text-align: center;
+      }
+      .header-left {
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+      }
+      .header h1 {
+        font-size: 16px;
+        line-height: 1.3;
+      }
+      .logo {
+        width: 100px;
+        height: 35px;
+      }
+      .header-right {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 12px;
+      }
+      .user-menu {
+        padding: 6px 10px;
+      }
+      .user-name { font-size: 12px; }
+      .user-role { font-size: 10px; }
+      .admin-btn, .logout-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+      }
+    }
+    
+    /* --- Mobile: KPIs 2 per row compact --- */
+    @media (max-width: 480px) {
+      .kpi-card {
+        width: calc(50% - 8px) !important;
+        flex: 0 0 calc(50% - 8px) !important;
+        min-height: 90px !important;
+        padding: 12px 10px !important;
+        overflow: visible !important;
+      }
+      #kpisGrid {
+        gap: 8px !important;
+      }
+      .kpi-icon { font-size: 22px !important; }
+      .kpi-value { font-size: 20px !important; overflow: visible !important; white-space: normal !important; }
+      .kpi-title { font-size: 9px !important; letter-spacing: 0.3px !important; overflow: visible !important; white-space: normal !important; word-break: normal !important; overflow-wrap: normal !important; text-overflow: unset !important; hyphens: none !important; }
+      .kpi-delta { font-size: 10px !important; min-width: 50px !important; max-width: 70px !important; padding: 2px 6px !important; }
+      .kpi-content { overflow: visible !important; }
+      .overview-kpi { padding: 12px !important; gap: 10px !important; overflow: visible !important; }
+      .overview-kpi .kpi-icon { font-size: 20px !important; width: 30px !important; }
+      .overview-kpi .kpi-value { font-size: 18px !important; }
+      .overview-kpi .kpi-title { font-size: 11px !important; margin-bottom: 4px !important; }
+      .overview-kpi .kpi-content { overflow: visible !important; }
+    }
+
+    /* --- Mobile: Nav tabs scrollable --- */
+    @media (max-width: 600px) {
+      .nav-tabs {
+        padding: 4px;
+        margin-bottom: 12px;
+        gap: 2px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        flex-wrap: nowrap;
+      }
+      .nav-tabs::-webkit-scrollbar { display: none; }
+      .nav-tab {
+        padding: 8px 12px;
+        font-size: 12px;
+        flex: 0 0 auto;
+        white-space: nowrap;
+      }
+    }
+
+    /* --- Mobile: Period selection compact --- */
+    @media (max-width: 600px) {
+      .period-selection-card { padding: 12px; margin-bottom: 12px; }
+      .period-grid { grid-template-columns: 1fr; gap: 10px; }
+      .period-section { gap: 6px; }
+      .date-inputs { flex-direction: row; gap: 8px; align-items: center; }
+      .date-input { padding: 8px 10px; font-size: 13px; }
+      .date-separator { font-size: 12px; flex-shrink: 0; }
+      .period-label { font-size: 13px; margin-bottom: 2px; }
+      .substore-selector { padding: 12px; margin-bottom: 12px; }
+    }
+
+    /* --- Mobile: Charts responsive --- */
+    @media (max-width: 600px) {
+      .grid:not(#kpisGrid) {
+        display: flex !important;
+        flex-direction: column;
+        gap: 12px !important;
+      }
+      .chart-card {
+        min-height: 220px !important;
+        padding: 14px !important;
+      }
+      .chart-container { height: 200px !important; }
+      .chart-title { font-size: 14px !important; margin-bottom: 10px !important; }
+      .table-card { padding: 12px !important; margin: 0 !important; border-radius: 10px !important; }
+    }
+    
+    /* --- Mobile: Tables responsive --- */
+    @media (max-width: 600px) {
+      .enhanced-table { min-width: unset !important; }
+      .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      table th, table td { padding: 8px 6px; font-size: 12px; }
+    }
+    
+    /* --- Mobile: Tooltip --- */
+    @media (max-width: 600px) {
+      .tooltip .tooltiptext { width: 250px; font-size: 12px; padding: 12px; }
+    }
+    
+    /* --- Mobile: Container --- */
+    @media (max-width: 480px) {
+      .container { padding: 8px !important; }
+    }
+    
+    /* --- Mobile: Recommandations tab --- */
+    @media (max-width: 600px) {
+      .reco-kpis-row {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+      }
+      .reco-kpis-row .kpi-card {
+        padding: 12px 10px !important;
+        min-height: 80px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        width: 100% !important;
+        flex: 1 1 auto !important;
+      }
+      .reco-kpis-row .kpi-title { font-size: 10px !important; word-break: normal !important; white-space: normal !important; color: var(--muted) !important; }
+      .reco-kpis-row .kpi-value { font-size: 16px !important; word-break: normal !important; white-space: normal !important; overflow: visible !important; color: var(--brand-dark) !important; }
+      .reco-kpis-row .kpi-content { overflow: visible !important; }
+      .reco-panels-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+      }
+      #reco-client-results, #reco-popular-results { max-height: 300px !important; }
+    }
+    
+    /* --- Mobile: Tables (Merchant & Users) --- */
+    @media (max-width: 600px) {
+      .enhanced-table { min-width: unset !important; font-size: 12px; }
+      .enhanced-table th, .enhanced-table td { padding: 8px 6px; white-space: nowrap; }
+      .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .table-card { padding: 12px !important; }
+      .pagination-row { flex-direction: column; gap: 8px; align-items: center; }
+      .pagination-info { font-size: 11px; }
+      .pagination-controls .btn { padding: 4px 8px; font-size: 11px; }
+    }
+    
+    /* --- Mobile: Pagination compact --- */
+    @media (max-width: 480px) {
+      .pagination-row { gap: 8px; }
+      .pagination-info { font-size: 11px; min-width: auto; }
+      .pagination-controls .btn { padding: 4px 8px; font-size: 10px; min-width: 60px; }
+      .page-numbers { gap: 2px; margin: 0 4px; }
+    }
+
+    /* --- Mobile: Profile dropdown fix --- */
+    @media (max-width: 600px) {
+      #profileDropdown {
+        left: 10px !important;
+        right: 10px !important;
+        top: auto !important;
+        min-width: auto !important;
+      }
+    }
     </style>
 </head>
 <body>
@@ -1589,6 +1797,9 @@
                   <a href="{{ route('admin.users.index') }}" class="admin-btn" style="display:block; margin:8px;">Utilisateurs</a>
                   <a href="{{ route('admin.invitations.index') }}" class="admin-btn" style="display:block; margin:8px;">Invitations</a>
                   @endif
+                  @if(Auth::user()->isSuperAdmin())
+                  <a href="{{ route('admin.audit-logs.index') }}" class="admin-btn" style="display:block; margin:8px;">Journal d'Audit</a>
+                  @endif
                   <a href="{{ route('password.change') }}" class="admin-btn" style="display:block; margin:8px;">🔒 Mot de passe</a>
                   @if(Auth::user()->canAccessOperatorsDashboard())
                   <a href="{{ route('dashboard') }}" class="admin-btn" style="display:block; margin:8px;">📊 Dashboard Opérateurs</a>
@@ -1616,6 +1827,9 @@
       @if(Auth::user()->canAccessSubStoresDashboard())
       <button class="nav-tab" onclick="showTab('users')">Users</button>
       @endif
+      @if(Auth::user()->isSuperAdmin())
+      <button class="nav-tab" onclick="showTab('recommendations')" data-testid="tab-recommendations">Recommandations</button>
+      @endif
                 </div>
                 
     <!-- Period Selection -->
@@ -1638,9 +1852,9 @@
             Période de Comparaison
                         </div>
                         <div class="date-inputs">
-            <input type="date" id="comparisonStartDate" class="date-input" value="2024-09-15">
+            <input type="date" id="comparisonStartDate" class="date-input">
             <span class="date-separator">au</span>
-            <input type="date" id="comparisonEndDate" class="date-input" value="2025-03-14">
+            <input type="date" id="comparisonEndDate" class="date-input">
                             </div>
                     </div>
                 </div>
@@ -1655,9 +1869,12 @@
           <div style="font-size: 14px; color: var(--muted);">Accès global à tous les sub-stores</div>
                     </div>
                     </div>
-      <select id="subStoreSelect" class="substore-dropdown">
+      <select id="subStoreSelect" class="substore-dropdown" data-testid="sub-store-select">
         <option value="ALL">Tous les sub-stores</option>
         <!-- Options will be populated by JavaScript -->
+      </select>
+      <select id="campaignSelect" class="substore-dropdown" style="display: none; margin-top: 8px;" data-testid="campaign-select">
+        <option value="">Toutes les campagnes</option>
       </select>
                 <div class="action-buttons">
         <button class="btn btn-primary" onclick="refreshData()">
@@ -1672,6 +1889,11 @@
         <button class="btn btn-warning" onclick="showHelp()">
           <span>❓</span> Aide
                     </button>
+        @if(Auth::user()->isSuperAdmin())
+        <button class="btn" style="background:#059669;color:white;border:none;" onclick="triggerCacheWarmup()" id="warmupBtn" data-testid="warmup-btn" title="Pre-calculer le cache pour un chargement instantané">
+          <span>⚡</span> Warmup Cache
+        </button>
+        @endif
                 </div>
             </div>
 
@@ -1859,7 +2081,7 @@
       <!-- Sub-stores content -->
       <div class="card table-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <div class="chart-title">Classement des Meilleurs Sub-Stores</div>
+          <div class="chart-title" id="storesRankingTitle">Classement des Meilleurs Sub-Stores</div>
           <button class="btn btn-secondary" onclick="exportSubStoresTable()">
             <span>📤</span> Exporter
           </button>
@@ -1867,7 +2089,7 @@
         <div class="table-wrapper">
                     <table class="enhanced-table">
                         <thead>
-                            <tr>
+                            <tr id="storesRankingHeader">
                 <th>Rang</th>
                 <th>Nom du Sub-Store</th>
                 <th>Type</th>
@@ -1927,16 +2149,16 @@
             <div class="card kpi-card users-kpi">
               <div class="kpi-icon">🎯</div>
               <div class="kpi-content">
-                <div class="kpi-title">Total Subscriptions <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total d'abonnements des utilisateurs.">ⓘ</span></div>
+                <div class="kpi-title">Total Cartes Utilisées <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre total de cartes de recharge utilisées par les utilisateurs.">ⓘ</span></div>
                 <div class="kpi-value" id="users-totalSubscriptions">Loading...</div>
                 <div class="kpi-delta" id="users-totalSubscriptionsDelta" style="display: none;"></div>
               </div>
             </div>
             
             <div class="card kpi-card users-kpi">
-              <div class="kpi-icon">👤</div>
+              <div class="kpi-icon">💳</div>
               <div class="kpi-content">
-                <div class="kpi-title">New Users <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nouveaux utilisateurs dans la période.">ⓘ</span></div>
+                <div class="kpi-title">Cartes Activées <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de cartes de recharge activées dans la période.">ⓘ</span></div>
                 <div class="kpi-value" id="users-newUsers">Loading...</div>
                 <div class="kpi-delta" id="users-newUsersDelta">→ 0.0%</div>
               </div>
@@ -1945,7 +2167,7 @@
             <div class="card kpi-card users-kpi">
               <div class="kpi-icon">💳</div>
               <div class="kpi-content">
-                <div class="kpi-title">Transactions (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée (même que TRANSACTIONS COHORTE vue d'ensemble).">ⓘ</span></div>
+                <div class="kpi-title">Transactions (Cohorte) <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée.">ⓘ</span></div>
                 <div class="kpi-value" id="users-transactionsCohorte">Loading...</div>
                 <div class="kpi-delta" id="users-transactionsCohorteDelta">→ 0.0%</div>
               </div>
@@ -1957,6 +2179,14 @@
                 <div class="kpi-title">Retention Rate <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Taux de rétention des utilisateurs.">ⓘ</span></div>
                 <div class="kpi-value" id="users-retentionRate">Loading...</div>
                 <div class="kpi-delta" id="users-retentionRateDelta" style="display: none;"></div>
+              </div>
+            </div>
+            <div class="card kpi-card users-kpi" style="border-left: 3px solid #ef4444;">
+              <div class="kpi-icon" style="color: #ef4444;">📉</div>
+              <div class="kpi-content">
+                <div class="kpi-title">Users Loss <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Clients supprimés ayant activé une carte de la campagne. Equilibre: Inscriptions + Users Loss = Total clients avec abonnement.">ⓘ</span></div>
+                <div class="kpi-value" id="users-usersLoss" data-testid="users-loss-value" style="color: #ef4444;">Loading...</div>
+                <div class="kpi-delta" id="users-usersLossDelta" style="display: none;"></div>
               </div>
             </div>
           </div>
@@ -1977,7 +2207,8 @@
                     <th onclick="sortUsersTable('id')" class="sortable">ID Utilisateur <span class="sort-indicator"></span></th>
                     <th onclick="sortUsersTable('sub_store_name')" class="sortable">Sub-Store <span class="sort-indicator"></span></th>
                     <th onclick="sortUsersTable('total_transactions')" class="sortable">Transactions <span class="sort-indicator"></span></th>
-                    <th onclick="sortUsersTable('total_subscriptions')" class="sortable">Abonnements <span class="sort-indicator"></span></th>
+                        <th onclick="sortUsersTable('total_subscriptions')" class="sortable">Cartes Utilisées <span class="sort-indicator"></span></th>
+                    <th onclick="sortUsersTable('recharge_cards')" class="sortable">Cartes de Recharge <span class="sort-indicator"></span></th>
                     <th onclick="sortUsersTable('last_activity')" class="sortable">Dernière Activité <span class="sort-indicator"></span></th>
                     <th onclick="sortUsersTable('status')" class="sortable">Statut <span class="sort-indicator"></span></th>
                   </tr>
@@ -2004,6 +2235,80 @@
             </div>
           </div>
         </div>
+    @endif
+
+    <!-- Recommendations Tab -->
+    @if(Auth::user()->isSuperAdmin())
+    <div id="recommendations" class="tab-content" data-testid="recommendations-tab">
+      <!-- Reco KPIs -->
+      <div class="reco-kpis-row" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
+        <div class="card kpi-card" data-testid="reco-kpi-model">
+          <div class="kpi-content">
+            <div class="kpi-title">Statut Moteur ML</div>
+            <div class="kpi-value" id="reco-status" style="font-size: 16px;">Chargement...</div>
+          </div>
+        </div>
+        <div class="card kpi-card" data-testid="reco-kpi-merchants">
+          <div class="kpi-content">
+            <div class="kpi-title">Marchands Catalogues</div>
+            <div class="kpi-value" id="reco-merchants">--</div>
+          </div>
+        </div>
+        <div class="card kpi-card" data-testid="reco-kpi-profiles">
+          <div class="kpi-content">
+            <div class="kpi-title">Profils Utilisateurs</div>
+            <div class="kpi-value" id="reco-profiles">--</div>
+          </div>
+        </div>
+        <div class="card kpi-card" data-testid="reco-kpi-interactions">
+          <div class="kpi-content">
+            <div class="kpi-title">Interactions (7j)</div>
+            <div class="kpi-value" id="reco-interactions-count">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="reco-panels-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        <!-- Client Reco Search -->
+        <div class="card" data-testid="reco-client-search">
+          <div class="card-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0; color: var(--brand-dark);">Recommandations par Client</h3>
+          </div>
+          <div style="padding: 14px 18px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+              <input type="number" id="reco-client-input" placeholder="ID Client (ex: 114218)" style="flex: 1; min-width: 120px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary); font-size: 13px;" data-testid="reco-client-input">
+              <select id="reco-category-filter" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary); font-size: 13px;" data-testid="reco-category-filter">
+                <option value="">Toutes catégories</option>
+              </select>
+              <button class="btn btn-primary" onclick="loadClientRecommendations()" style="padding: 8px 16px;" data-testid="reco-search-btn">Rechercher</button>
+            </div>
+            <div id="reco-client-results" data-testid="reco-client-results" style="max-height: 400px; overflow-y: auto;">
+              <p style="color: var(--muted); font-size: 13px; text-align: center; padding: 20px;">Entrez un ID client</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Popular -->
+        <div class="card" data-testid="reco-popular-panel">
+          <div class="card-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0; color: var(--brand-dark);">Top Marchands Populaires</h3>
+          </div>
+          <div id="reco-popular-results" data-testid="reco-popular-results" style="padding: 14px 18px; max-height: 400px; overflow-y: auto;">
+            <p style="color: var(--muted); text-align: center;">Chargement...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interaction Chart -->
+      <div class="card" data-testid="reco-interactions-chart-panel" style="margin-bottom: 20px;">
+        <div class="card-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+          <h3 style="font-size: 14px; font-weight: 600; margin: 0; color: var(--brand-dark);">Évolution des Interactions (30 derniers jours)</h3>
+        </div>
+        <div style="padding: 14px 18px; height: 280px;">
+          <canvas id="reco-interactions-chart" data-testid="reco-interactions-chart"></canvas>
+        </div>
+      </div>
+    </div>
     @endif
 
     <script>
@@ -2035,7 +2340,7 @@
         valueElement.textContent = kpiData.current + suffix;
         
         // Masquer les deltas des KPIs globaux
-        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate'];
+        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate', 'users-usersLoss'];
         const isGlobalKPI = globalKPIs.includes(id);
         
         // Gérer le delta si disponible
@@ -2078,6 +2383,7 @@
       updateSingleKPI('users-newUsers', normalizeKPI(usersData.newUsers));
       updateSingleKPI('users-transactionsCohorte', normalizeKPI(usersData.transactionsCohorte));
       updateSingleKPI('users-retentionRate', normalizeKPI(usersData.retentionRate), '%');
+      updateSingleKPI('users-usersLoss', normalizeKPI(usersData.usersLoss));
       
       debugLog('✅ Tous les KPIs Users ont été mis à jour');
     }
@@ -2110,7 +2416,7 @@
       if (!tbody) return;
       
       if (allUsers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Aucune donnée utilisateur disponible</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center">Aucune donnée utilisateur disponible</td></tr>';
         updateUsersPagination();
         return;
       }
@@ -2135,6 +2441,11 @@
           rankBadge = `<span class="rank-number">${globalIndex}</span>`;
         }
         
+        // Formater les cartes de recharge
+        const cardsDisplay = user.recharge_cards && user.recharge_cards.length > 0 
+          ? user.recharge_cards.slice(0, 3).join(', ') + (user.recharge_cards.length > 3 ? '...' : '')
+          : 'N/A';
+        
         return `
           <tr>
             <td>${rankBadge}</td>
@@ -2142,6 +2453,7 @@
             <td>${user.sub_store_name || 'N/A'}</td>
             <td>${user.total_transactions}</td>
             <td>${user.total_subscriptions}</td>
+            <td title="${user.recharge_cards && user.recharge_cards.length > 0 ? user.recharge_cards.join(', ') : 'Aucune carte'}">${cardsDisplay}</td>
             <td>${user.last_activity}</td>
             <td>
               <span class="badge badge-${user.status === 'active' ? 'success' : 'secondary'}">
@@ -2201,6 +2513,12 @@
         if (column === 'total_transactions' || column === 'total_subscriptions' || column === 'id') {
           aValue = parseInt(aValue) || 0;
           bValue = parseInt(bValue) || 0;
+        }
+        
+        // Gestion spéciale pour les cartes de recharge (compter le nombre)
+        if (column === 'recharge_cards') {
+          aValue = Array.isArray(aValue) ? aValue.length : 0;
+          bValue = Array.isArray(bValue) ? bValue.length : 0;
         }
         
         // Gestion spéciale pour les dates
@@ -2266,10 +2584,11 @@
             { id: 'users-activeUsers', title: 'Active Users', icon: '⚡', tooltip: 'Utilisateurs avec abonnements actifs dans la période sélectionnée (même logique que ACTIVE USERS COHORTE).', showDelta: false },
             { id: 'users-totalTransactions', title: 'Total Transactions', icon: '💳', tooltip: 'Nombre total de transactions lifetime (toutes périodes, même que TRANSACTIONS vue d\'ensemble).', showDelta: false },
             { id: 'users-avgTransactionsPerUser', title: 'Avg Transactions/User', icon: '📊', tooltip: 'Moyenne de transactions par utilisateur actif dans la période.', showDelta: false },
-            { id: 'users-totalSubscriptions', title: 'Total Subscriptions', icon: '🎯', tooltip: 'Nombre total d\'abonnements actifs (toutes périodes, même que ABONNEMENTS vue d\'ensemble).', showDelta: false },
-            { id: 'users-newUsers', title: 'New Users', icon: '👤', tooltip: 'Nouveaux utilisateurs inscrits dans la période (même que INSCRIPTIONS COHORTE).' },
-            { id: 'users-transactionsCohorte', title: 'Transactions (Cohorte)', icon: '💳', tooltip: 'Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée (même que TRANSACTIONS COHORTE vue d\'ensemble).' },
-            { id: 'users-retentionRate', title: 'Retention Rate', icon: '🔄', tooltip: 'Pourcentage d\'utilisateurs actifs par rapport au total (ACTIVE USERS / TOTAL USERS).', showDelta: false }
+            { id: 'users-totalSubscriptions', title: 'Total Cartes Utilisées', icon: '🎯', tooltip: 'Nombre total de cartes de recharge utilisées par les utilisateurs (toutes périodes, même que CARTES UTILISÉES vue d\'ensemble).', showDelta: false },
+            { id: 'users-newUsers', title: 'Cartes Activées', icon: '💳', tooltip: 'Nombre de cartes de recharge activées dans la période.' },
+            { id: 'users-transactionsCohorte', title: 'Transactions (Cohorte)', icon: '💳', tooltip: 'Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée.' },
+            { id: 'users-retentionRate', title: 'Retention Rate', icon: '🔄', tooltip: 'Pourcentage d\'utilisateurs actifs par rapport au total (ACTIVE USERS / TOTAL USERS).', showDelta: false },
+            { id: 'users-usersLoss', title: 'Users Loss', icon: '📉', tooltip: 'Clients supprimés ayant activé une carte. Equilibre: Inscriptions + Users Loss = Total clients avec abonnement.', showDelta: false }
       ];
       
       kpisContainer.innerHTML = kpisData.map(kpi => `
@@ -2287,61 +2606,9 @@
     }
 
     async function loadUsersData() {
-      try {
-        debugLog('👥 Chargement des données utilisateurs...');
-        
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-        const subStore = document.getElementById('subStoreSelect').value;
-        
-        if (!startDate || !endDate) {
-          debugError('❌ Dates manquantes pour le chargement des utilisateurs');
-          showNotification('Veuillez sélectionner une période', 'error');
-          return;
-        }
-        
-        // Calculer la période de comparaison
-        const startDateObj = new Date(startDate);
-        const endDateObj = new Date(endDate);
-        const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24)) + 1;
-        const comparisonStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        const comparisonEndDate = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        
-        debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
-        
-        const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        debugLog('✅ Données utilisateurs reçues:', data);
-        
-        // Sauvegarder les données en cache
-        window.usersKPIsData = data;
-        
-        // Mettre à jour les KPIs Users
-        if (data.kpis) {
-          updateUsersKPIs(data.kpis);
-        }
-        
-        // Mettre à jour le tableau Users
-        if (data.users) {
-          updateUsersTable(data.users);
-        }
-        
-        showNotification(`Données utilisateurs ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
-        
-      } catch (error) {
-        debugError('❌ Erreur lors du chargement des données utilisateurs:', error);
-        showNotification('Erreur lors du chargement des données utilisateurs', 'error');
-      }
+      // Users are now loaded via the split endpoint in loadDashboardData()
+      debugLog('loadUsersData: delegated to split endpoint');
+      loadDashboardData();
     }
     // ===== FIN FONCTIONS USERS =====
 
@@ -2372,21 +2639,26 @@
     function initializeDashboard() {
       debugLog('🚀 Initialisation du dashboard sub-stores');
       
-      // Initialiser les dates par défaut avec une période contenant des données réelles des sub-stores
-      // Période optimale détectée: 2025-08-18 → 2025-08-24 (7 jours avec activité sub-stores clients avec cartes)
-      // Dates par défaut : 30 derniers jours
+      // Période par défaut : 365 derniers jours (1 an)
       const today = new Date();
-      const thirtyDaysAgo = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
+      const yearAgo = new Date(today);
+      yearAgo.setDate(today.getDate() - 364);
       
-      // Vérifier que les dates sont valides avant de les assigner
-      if (isNaN(today.getTime()) || isNaN(thirtyDaysAgo.getTime())) {
+      if (isNaN(today.getTime()) || isNaN(yearAgo.getTime())) {
         debugError('❌ Erreur lors de la création des dates par défaut');
-        // Utiliser des dates de fallback
         document.getElementById('startDate').value = '2025-01-01';
-        document.getElementById('endDate').value = '2025-01-31';
+        document.getElementById('endDate').value = '2025-12-31';
+        document.getElementById('comparisonStartDate').value = '2024-01-01';
+        document.getElementById('comparisonEndDate').value = '2024-12-31';
       } else {
-        document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+        document.getElementById('startDate').value = yearAgo.toISOString().split('T')[0];
         document.getElementById('endDate').value = today.toISOString().split('T')[0];
+        // Période de comparaison : 365 jours précédents
+        const comparisonEnd = new Date(yearAgo.getTime() - 24 * 60 * 60 * 1000);
+        const comparisonStart = new Date(comparisonEnd);
+        comparisonStart.setDate(comparisonEnd.getDate() - 364);
+        document.getElementById('comparisonStartDate').value = comparisonStart.toISOString().split('T')[0];
+        document.getElementById('comparisonEndDate').value = comparisonEnd.toISOString().split('T')[0];
       }
       
       // Masquer les deltas des KPIs globaux au chargement initial
@@ -2467,14 +2739,15 @@
       const loadingKPIs = [
         { id: 'distributed', title: 'DISTRIBUÉ', tooltip: 'Le nombre total de cartes de recharge distribuées' },
         { id: 'inscriptions', title: 'INSCRIPTIONS', tooltip: 'Le nombre total de clients inscrits avec des cartes de recharge' },
-        { id: 'totalSubscriptions', title: 'ABONNEMENTS', tooltip: 'Le nombre total d\'abonnements' },
+        { id: 'totalSubscriptions', title: 'CARTES UTILISÉES', tooltip: 'Le nombre total de cartes de recharge utilisées' },
         { id: 'transactions', title: 'TRANSACTIONS', tooltip: 'Le nombre total de transactions effectuées' },
         { id: 'activeUsers', title: 'ACTIVE USERS', tooltip: 'Le nombre d\'utilisateurs actifs' },
         { id: 'inscriptionsCohorte', title: 'INSCRIPTIONS COHORTE', tooltip: 'Inscriptions dans la période sélectionnée' },
-        { id: 'transactionsCohorte', title: 'TRANSACTIONS COHORTE', tooltip: 'Transactions dans la période sélectionnée' },
+        { id: 'clientsWithTransactions', title: 'CLIENTS AVEC TRANSACTIONS', tooltip: 'Nombre de clients ayant effectué au moins une transaction.' },
         { id: 'activeUsersCohorte', title: 'ACTIVE USERS COHORTE', tooltip: 'Utilisateurs actifs dans la période sélectionnée' },
-        { id: 'conversionRate', title: 'TAUX DE CONVERSION', tooltip: 'Ratio inscriptions/distribué' },
-        { id: 'renewalRate', title: 'TAUX DE RENOUVELLEMENT', tooltip: 'Ratio renouvellements/abonnements' }
+        { id: 'conversionRate', title: 'TAUX DE CONVERSION', tooltip: 'Ratio inscriptions/distribué', showDelta: false },
+        { id: 'renewalRate', title: 'CARTES ACTIVÉES COHORTE', tooltip: 'Le nombre total de cartes de recharge activées dans la période' },
+        { id: 'usersLoss', title: 'USERS LOSS', tooltip: 'Clients supprimés ayant activé une carte de la campagne (inscrits puis désinscrits)', showDelta: false }
       ];
       
       // Vider le contenu existant
@@ -2488,7 +2761,8 @@
         
         // Déterminer si c'est un KPI global (pas de delta)
         const globalKPIs = ['distributed', 'inscriptions', 'totalSubscriptions', 'transactions', 'activeUsers'];
-        const isGlobalKPI = globalKPIs.includes(kpi.id);
+        const noShowDelta = kpi.showDelta === false;
+        const isGlobalKPI = globalKPIs.includes(kpi.id) || noShowDelta;
         
         kpiCard.innerHTML = `
           <div class="info-icon">i</div>
@@ -2496,7 +2770,7 @@
           <div class="kpi-value" id="${kpi.id}">
             <span style="color: #8B5CF6;">⏳ Chargement...</span>
           </div>
-          ${isGlobalKPI ? '' : '<div class="kpi-delta delta-badge delta-neutral">→ 0.0%</div>'}
+          ${isGlobalKPI ? '' : '<div class="kpi-delta delta-badge delta-neutral" style="display:none;">→ 0.0%</div>'}
           <span class="tooltiptext">${kpi.tooltip}</span>
         `;
         
@@ -2547,7 +2821,8 @@
         { id: 'transactionsCohorte', value: kpis.transactionsCohorte?.current || 0, suffix: '' },
         { id: 'activeUsersCohorte', value: kpis.activeUsersCohorte?.current || 0, suffix: '' },
         { id: 'conversionRate', value: kpis.conversionRate?.current || 0, suffix: '%' },
-        { id: 'renewalRate', value: kpis.renewalRate?.current || 0, suffix: '%' }
+        { id: 'renewalRate', value: kpis.renewalRate?.current || 0, suffix: '' },
+        { id: 'usersLoss', value: kpis.usersLoss?.current || 0, suffix: '' }
       ];
       
       // Mettre à jour chaque KPI
@@ -2586,177 +2861,484 @@
             const navTabs = document.querySelectorAll('.nav-tab');
             navTabs.forEach(tab => {
                 if (tab.textContent.toLowerCase().includes(tabName.toLowerCase()) || 
-                    (tabName === 'overview' && tab.textContent.includes('Vue d\'Ensemble'))) {
+                    (tabName === 'overview' && tab.textContent.includes('Vue d\'Ensemble')) ||
+                    (tabName === 'recommendations' && tab.textContent.includes('Recommandations'))) {
                     tab.classList.add('active');
                 }
             });
             
     // Si on active l'onglet Merchant, utiliser les données en cache si disponibles
     if (tabName === 'merchant') {
-      debugLog('🏪 Activation onglet Merchant');
+      debugLog('Activation onglet Merchant');
       
-      // Attendre que l'onglet soit visible dans le DOM
       setTimeout(() => {
-        // Vérifier si on a des données Merchant en cache
         if (window.merchantKPIsData) {
-          debugLog('💾 Utilisation des données en cache pour Merchant');
-          // Forcer la mise à jour même si les données sont en cache
+          debugLog('Utilisation des donnees en cache pour Merchant');
           updateMerchantKPIs(window.merchantKPIsData);
+          if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
         } else {
-          debugLog('🔄 Pas de données Merchant en cache, rechargement nécessaire');
+          debugLog('Pas de donnees Merchant, rechargement...');
           loadDashboardData();
         }
-      }, 300); // Attendre que l'onglet soit visible
+      }, 200);
     }
     
     // Si on active l'onglet Users, utiliser les données en cache si disponibles
     if (tabName === 'users') {
-      debugLog('👥 Activation onglet Users');
+      debugLog('Activation onglet Users');
       
-      // Attendre que l'onglet soit visible dans le DOM
       setTimeout(() => {
-        // Vérifier si on a des données Users en cache
         if (window.usersKPIsData) {
-          debugLog('💾 Utilisation des données en cache pour Users');
-          // Forcer la mise à jour même si les données sont en cache
+          debugLog('Utilisation des donnees en cache pour Users');
           updateUsersKPIs(window.usersKPIsData.kpis);
           updateUsersTable(window.usersKPIsData.users);
+        } else if (window._usersLoading) {
+          debugLog('Users en cours de chargement, attente...');
         } else {
-          debugLog('🔄 Pas de données Users en cache, rechargement nécessaire');
-          // Créer les KPIs de chargement s'ils n'existent pas
+          debugLog('Pas de donnees Users, chargement...');
           createUsersLoadingKPIs();
-          // Charger les données utilisateurs
           loadUsersData();
         }
-      }, 300); // Attendre que l'onglet soit visible
+      }, 200);
     }
+    // Si on active l'onglet Recommandations, charger les données ML
+    if (tabName === 'recommendations') {
+      debugLog('🤖 Activation onglet Recommandations');
+      setTimeout(() => loadRecommendationsTab(), 200);
+    }
+    }
+
+    // ========================================
+    // RECOMMENDATIONS TAB FUNCTIONS
+    // ========================================
+    let recoChartInstance = null;
+    let recoTabLoaded = false;
+
+    async function loadRecommendationsTab() {
+      if (recoTabLoaded) return;
+      recoTabLoaded = true;
+      
+      try {
+        const baseUrl = window.location.origin;
+        
+        // Load stats, popular, categories, timeline in parallel
+        const [statsRes, popularRes, catsRes, timelineRes] = await Promise.allSettled([
+          fetch(`${baseUrl}/api/merchant-recommendations/stats`),
+          fetch(`${baseUrl}/api/merchant-recommendations`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({client_id: 0, top_k: 10}) }),
+          fetch(`${baseUrl}/api/merchant-recommendations/categories`),
+          fetch(`${baseUrl}/api/merchant-recommendations/stats/timeline`)
+        ]);
+        
+        // Stats KPIs
+        if (statsRes.status === 'fulfilled') {
+          const stats = await statsRes.value.json();
+          document.getElementById('reco-merchants').textContent = (stats.active_merchants || 0).toLocaleString();
+          document.getElementById('reco-profiles').textContent = (stats.profiled_users || 0).toLocaleString();
+          document.getElementById('reco-interactions-count').textContent = (stats.total_interactions || 0).toLocaleString();
+          document.getElementById('reco-status').innerHTML = '<span style="color: var(--success); font-weight: 600;">Opérationnel</span>';
+        }
+        
+        // Popular merchants
+        if (popularRes.status === 'fulfilled') {
+          const popData = await popularRes.value.json();
+          const recos = popData.recommendations || [];
+          renderRecoCards(recos, 'reco-popular-results');
+        }
+        
+        // Categories
+        if (catsRes.status === 'fulfilled') {
+          const catData = await catsRes.value.json();
+          const select = document.getElementById('reco-category-filter');
+          (catData.categories || []).forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.category_id;
+            opt.textContent = c.category_name;
+            select.appendChild(opt);
+          });
+        }
+        
+        // Timeline chart
+        if (timelineRes.status === 'fulfilled') {
+          const tlData = await timelineRes.value.json();
+          renderInteractionsChart(tlData.timeline || [], tlData.categories || []);
+        }
+      } catch (e) {
+        debugLog('Erreur chargement recommandations:', e);
+      }
+    }
+
+    async function loadClientRecommendations() {
+      const clientId = document.getElementById('reco-client-input').value;
+      if (!clientId) { alert('Entrez un ID client'); return; }
+      
+      const container = document.getElementById('reco-client-results');
+      container.innerHTML = '<p style="text-align: center; color: var(--muted);">Chargement...</p>';
+      
+      try {
+        const catFilter = document.getElementById('reco-category-filter').value;
+        const baseUrl = window.location.origin;
+        const res = await fetch(`${baseUrl}/api/merchant-recommendations`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            client_id: parseInt(clientId),
+            top_k: 10,
+            category_id: catFilter || null,
+            exclude_visited: false
+          })
+        });
+        const data = await res.json();
+        const recos = data.recommendations || [];
+        
+        if (recos.length === 0) {
+          container.innerHTML = '<p style="color: var(--muted); text-align: center;">Aucun résultat</p>';
+          return;
+        }
+        
+        const sourceTag = data.source === 'ml_model' 
+          ? '<span style="background: rgba(16,185,129,0.12); color: var(--success); padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600;">ML Model</span>'
+          : '<span style="background: rgba(59,130,246,0.12); color: #3b82f6; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600;">Popularité</span>';
+        
+        let contextHtml = '';
+        if (data.user_context) {
+            const uc = data.user_context;
+            contextHtml = `<div style="background: var(--table-stripe); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; font-size: 11px; display: flex; flex-wrap: wrap; gap: 10px;">
+                <span><strong>${uc.total_visits || 0}</strong> visites</span>
+                <span><strong>${uc.unique_merchants || 0}</strong> marchands</span>
+                <span><strong>${uc.unique_categories || 0}</strong> catég.</span>
+                <span>Fidélité: <strong>${(uc.loyalty_score || 0).toFixed(1)}/10</strong></span>
+                <span>${uc.subscription_type || ''}</span>
+            </div>`;
+        }
+        container.innerHTML = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">Source: ${sourceTag} | ${recos.length} résultats</div>${contextHtml}`;
+        renderRecoCards(recos, 'reco-client-results', true);
+      } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger);">Erreur: ${e.message}</p>`;
+      }
+    }
+
+    function renderRecoCards(merchants, containerId, append = false) {
+      const container = document.getElementById(containerId);
+      let html = append ? container.innerHTML : '';
+      
+      const typeColors = {
+        'DISCOVERY': {bg: '#eff6ff', color: '#3b82f6', label: 'Decouvrir'},
+        'RE_ENGAGEMENT': {bg: '#fffbeb', color: '#f59e0b', label: 'Re-visiter'},
+        'LOYALTY': {bg: '#ecfdf5', color: '#10b981', label: 'Favori'},
+        'TRENDING': {bg: '#f5f3ff', color: '#8b5cf6', label: 'Tendance'},
+        'COLD_START': {bg: '#f9fafb', color: '#6b7280', label: 'Nouveau'},
+      };
+      
+      merchants.forEach(m => {
+        const rank = m.rank || 0;
+        const scoreNorm = m.score_normalized != null ? parseFloat(m.score_normalized) : parseFloat(m.score || 0);
+        const rankColors = {1: 'linear-gradient(135deg, #fbbf24, #f59e0b)', 2: 'linear-gradient(135deg, #d1d5db, #9ca3af)', 3: 'linear-gradient(135deg, #d97706, #b45309)'};
+        const rankBg = rankColors[rank] || 'var(--table-stripe)';
+        const rankColor = rank <= 3 ? '#fff' : 'var(--muted)';
+        const scoreColor = scoreNorm >= 80 ? 'var(--success)' : scoreNorm >= 40 ? 'var(--warning)' : 'var(--muted)';
+
+        // Type badge
+        const rt = m.recommendation_type || '';
+        const tc = typeColors[rt] || typeColors['DISCOVERY'];
+        const typeBadge = rt ? `<span style="background:${tc.bg};color:${tc.color};padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;">${tc.label}</span>` : '';
+
+        const visitTag = m.already_visited 
+          ? `<span style="background:rgba(16,185,129,0.12);color:var(--success);padding:1px 6px;border-radius:4px;font-size:10px;">${m.visit_count || 0}x visite</span>`
+          : '';
+        const promoTag = (m.active_promotions || 0) > 0 ? ` <span style="background:rgba(245,158,11,0.12);color:var(--warning);padding:1px 6px;border-radius:4px;font-size:10px;">${m.active_promotions} promos</span>` : '';
+        
+        // "Because you visited" compact
+        let becauseHtml = '';
+        if (m.because_you_visited && m.because_you_visited.length > 0) {
+          const names = m.because_you_visited.slice(0, 2).map(b => b.partner_name).join(', ');
+          becauseHtml = `<div style="font-size:10px;color:#166534;margin-top:2px;">Parce que: <strong>${names}</strong></div>`;
+        }
+
+        // Collaborative
+        const collabHtml = m.similar_users_count > 0 ? `<div style="font-size:10px;color:#1e40af;margin-top:1px;">${m.similar_users_count} clients similaires</div>` : '';
+
+        // Explanation (compact)
+        let explanationHtml = '';
+        if (m.explanation && m.explanation.summary) {
+            explanationHtml = `<div style="margin-top:4px;padding:4px 8px;background:var(--table-stripe);border-radius:4px;">
+                <div style="font-size:10px;font-weight:500;color:var(--text-primary);">${m.explanation.summary}</div>
+            </div>`;
+        }
+
+        html += `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--card);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'" data-testid="reco-card-${m.partner_id}">
+          <div style="min-width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;background:${rankBg};color:${rankColor};flex-shrink:0;margin-top:2px;">${rank}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-weight:600;font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.partner_name || 'N/A'}</span>
+              ${typeBadge}
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">${m.category_name || 'Autre'} ${visitTag}${promoTag}</div>
+            ${m.reason ? `<div style="font-size:10px;color:var(--brand-primary);margin-top:3px;">${m.reason}</div>` : ''}
+            ${becauseHtml}
+            ${collabHtml}
+            ${explanationHtml}
+          </div>
+          <div style="text-align:right;min-width:55px;flex-shrink:0;">
+            <div style="font-size:16px;font-weight:700;color:${scoreColor};">${scoreNorm.toFixed(0)}<span style="font-size:10px;font-weight:400;">/100</span></div>
+            ${m.avg_discount ? `<div style="font-size:10px;color:var(--muted);">${parseFloat(m.avg_discount).toFixed(0)}% remise</div>` : ''}
+          </div>
+        </div>`;
+      });
+      
+      container.innerHTML = html;
+    }
+
+    function renderInteractionsChart(timeline, categories) {
+      const canvas = document.getElementById('reco-interactions-chart');
+      if (!canvas) return;
+      
+      // If no data, show placeholder
+      if (timeline.length === 0) {
+        const ctx = canvas.getContext('2d');
+        ctx.font = '14px sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('Pas encore de données d\'interaction', canvas.width / 2, canvas.height / 2);
+        
+        // Show categories if available
+        if (categories.length > 0) {
+          const parent = canvas.parentElement;
+          let catHtml = '<div style="margin-top: 16px;"><h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--brand-dark);">Catégories par Interactions</h4>';
+          categories.forEach(c => {
+            catHtml += `<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px;"><span>${c.category_name || 'Autre'}</span><strong>${c.cnt} (${c.unique_users} users)</strong></div>`;
+          });
+          catHtml += '</div>';
+          parent.insertAdjacentHTML('beforeend', catHtml);
+        }
+        return;
+      }
+      
+      // Group by day
+      const dayMap = {};
+      const types = new Set();
+      timeline.forEach(r => {
+        if (!dayMap[r.day]) dayMap[r.day] = {};
+        dayMap[r.day][r.interaction_type] = (dayMap[r.day][r.interaction_type] || 0) + r.cnt;
+        types.add(r.interaction_type);
+      });
+      
+      const labels = Object.keys(dayMap).sort();
+      const typeColors = {
+        'click': {bg: 'rgba(59, 130, 246, 0.6)', border: '#3b82f6'},
+        'impression': {bg: 'rgba(16, 185, 129, 0.6)', border: '#10b981'},
+        'redeem': {bg: 'rgba(245, 158, 11, 0.6)', border: '#f59e0b'},
+        'dismiss': {bg: 'rgba(239, 68, 68, 0.4)', border: '#ef4444'},
+        'share': {bg: 'rgba(139, 92, 246, 0.6)', border: '#8b5cf6'},
+      };
+      
+      const datasets = Array.from(types).map(t => ({
+        label: t.charAt(0).toUpperCase() + t.slice(1),
+        data: labels.map(d => dayMap[d][t] || 0),
+        backgroundColor: (typeColors[t] || {bg: 'rgba(107,114,128,0.4)'}).bg,
+        borderColor: (typeColors[t] || {border: '#6b7280'}).border,
+        borderWidth: 1,
+      }));
+      
+      if (recoChartInstance) recoChartInstance.destroy();
+      
+      recoChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: { labels: labels.map(d => new Date(d).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'})), datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+          scales: {
+            x: { stacked: true, grid: { display: false } },
+            y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+          }
+        }
+      });
     }
 
     async function loadDashboardData() {
       try {
-        // S'assurer que les KPIs de la vue d'ensemble sont créés s'ils n'existent pas
         const kpisGrid = document.getElementById('kpisGrid');
-        if (kpisGrid && kpisGrid.children.length === 0) {
-          createLoadingKPIs();
-        }
-        
-        // Ajouter un indicateur de chargement dans les KPIs (après création)
-        // Ne pas mettre les KPIs Merchant en chargement s'ils ont déjà des données
+        if (kpisGrid && kpisGrid.children.length === 0) createLoadingKPIs();
         showKPIsLoading();
         
+        // Reset cached data to force reload
+        window.merchantKPIsData = null;
+        window.merchantsListData = null;
+        window.usersKPIsData = null;
+        window._merchantsLoaded = false;
+        window._usersLoaded = false;
+
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         const subStore = document.getElementById('subStoreSelect').value;
-        
-        // Validation des dates
+
         if (!startDate || !endDate || startDate.trim() === '' || endDate.trim() === '') {
-          debugError('❌ Dates manquantes ou vides:', { startDate, endDate });
-          showNotification('Veuillez sélectionner des dates valides', 'error');
+          showNotification('Veuillez selectionner des dates valides', 'error');
           return;
         }
-        
-        // Calculer automatiquement les dates de comparaison (même durée que la période principale)
         const startDateObj = new Date(startDate);
         const endDateObj = new Date(endDate);
-        
-        // Vérifier que les dates sont valides
-        if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
-          debugError('❌ Dates invalides:', { startDate, endDate, startDateObj, endDateObj });
-          showNotification('Format de date invalide. Utilisez le format YYYY-MM-DD', 'error');
+        if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime()) || startDateObj >= endDateObj) {
+          showNotification('Dates invalides', 'error');
           return;
         }
-        
-        // Vérifier que la date de début est antérieure à la date de fin
-        if (startDateObj >= endDateObj) {
-          debugError('❌ Date de début >= date de fin:', { startDate, endDate });
-          showNotification('La date de début doit être antérieure à la date de fin', 'error');
-          return;
-        }
-        
         const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24)) + 1;
-        
-        const comparisonStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        const comparisonEndDate = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        
-        // Vérifier que les dates de comparaison sont valides
-        if (isNaN(comparisonStartDate.getTime()) || isNaN(comparisonEndDate.getTime())) {
-          debugError('❌ Dates de comparaison invalides:', { comparisonStartDate, comparisonEndDate });
-          showNotification('Erreur dans le calcul des dates de comparaison', 'error');
-          return;
-        }
-        
-        debugLog('📅 Période principale:', startDate, '→', endDate);
-        debugLog('📅 Période comparaison:', comparisonStartDate.toISOString().split('T')[0], '→', comparisonEndDate.toISOString().split('T')[0]);
-        
-        debugLog('📊 Chargement des données:', { startDate, endDate, subStore });
-        
-        // Timeout fixe pour toutes les périodes (mode optimisé gère les longues périodes)
-        const timeoutMs = 120000; // 2 minutes pour toutes les périodes
-        
-        debugLog(`🕐 Période: ${periodDays} jours, Timeout: ${timeoutMs/1000}s`);
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-            controller.abort();
-        }, timeoutMs);
-        
-        const response = await fetch(`/sub-stores/api/dashboard/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            signal: controller.signal
+        const compStart = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
+        const compEnd = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
+
+        const paramsObj = new URLSearchParams({
+          start_date: startDate,
+          end_date: endDate,
+          comparison_start_date: compStart.toISOString().split('T')[0],
+          comparison_end_date: compEnd.toISOString().split('T')[0],
+          sub_store: subStore
         });
-        
-        clearTimeout(timeoutId);
-        
-        // Enregistrer le timestamp du chargement
+        const campaign = document.getElementById('campaignSelect').value;
+        if (campaign) paramsObj.append('campaign', campaign);
+        const params = paramsObj.toString();
+
+        debugLog('Chargement split parallele:', { startDate, endDate, subStore, periodDays });
+
+        const loadStartTime = Date.now();
+        const fetchSection = (section) =>
+          fetch(`/sub-stores/api/split/${section}?${params}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(180000)
+          }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+
+        // Fire only essential sections first (kpis, stores, charts)
+        // Merchants & Users are lazy-loaded when their tabs are clicked
+        const [kpis, stores, charts] = await Promise.allSettled([
+          fetchSection('kpis'),
+          fetchSection('stores'),
+          fetchSection('charts')
+        ]);
+
+        // Pre-fetch merchants & users in background (low priority)
+        const lazyPromises = Promise.allSettled([
+          fetchSection('merchants'),
+          fetchSection('users')
+        ]).then(([merchants, users]) => {
+          if (merchants.status === 'fulfilled' && merchants.value.success) {
+            const md = merchants.value.data;
+            if (md.kpis) window.merchantKPIsData = md.kpis;
+            if (md.merchants) window.merchantsListData = md.merchants;
+            window._merchantsLoaded = true;
+            debugLog('Background merchants loaded:', merchants.value.execution_time_ms + 'ms');
+          }
+          if (users.status === 'fulfilled' && users.value.success) {
+            const ud = users.value.data;
+            if (ud.users_kpis) window.usersKPIsData = { kpis: ud.users_kpis, users: ud.users || [] };
+            window._usersLoaded = true;
+            debugLog('Background users loaded:', users.value.execution_time_ms + 'ms');
+          }
+        });
+
         window.lastDashboardLoadTime = Date.now();
-        
-        // Reset le flag de changement de dates après le chargement
         window.datesChanged = false;
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let loadedSections = 0;
+
+        // KPIs
+        if (kpis.status === 'fulfilled' && kpis.value.success) {
+          updateKPIs(kpis.value.data);
+          loadedSections++;
+          debugLog('Split kpis OK:', kpis.value.execution_time_ms + 'ms');
+        } else { showKPIsError(); debugLog('Split kpis FAIL', kpis.reason || kpis.value?.error); }
+
+        // Stores
+        if (stores.status === 'fulfilled' && stores.value.success) {
+          updateSubStoresRankingTable(stores.value.data);
+          // Update title and headers if campaign filter is active
+          const titleEl = document.getElementById('storesRankingTitle');
+          const headerEl = document.getElementById('storesRankingHeader');
+          if (stores.value.campaign_filter) {
+            if (stores.value.campaign_filter === 'all') {
+              if (titleEl) titleEl.textContent = 'Classement par Campagne - Toutes les campagnes';
+            } else {
+              if (titleEl) titleEl.textContent = `Classement - Campagne ${stores.value.campaign_filter}`;
+            }
+            if (headerEl) {
+              headerEl.innerHTML = `
+                <th>Rang</th>
+                <th>Nom de la Campagne</th>
+                <th>Type</th>
+                <th>Cartes Distribuées</th>
+                <th>Clients Activés</th>
+                <th>Sub-Store</th>
+              `;
+            }
+          } else {
+            if (titleEl) titleEl.textContent = 'Classement des Meilleurs Sub-Stores';
+            if (headerEl) {
+              headerEl.innerHTML = `
+                <th>Rang</th>
+                <th>Nom du Sub-Store</th>
+                <th>Type</th>
+                <th>Clients</th>
+                <th>Transactions</th>
+                <th>Manager</th>
+              `;
+            }
+          }
+          loadedSections++;
         }
-        
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await response.text();
-            debugError('❌ Réponse non-JSON reçue:', text.substring(0, 200));
-            throw new Error('Le serveur a renvoyé du HTML au lieu de JSON. Vérifiez les logs du serveur.');
+
+        // Charts
+        if (charts.status === 'fulfilled' && charts.value.success) {
+          const cd = charts.value.data;
+          if (cd.categoryDistribution) updateCategoryTable(cd.categoryDistribution);
+          if (cd.inscriptionsTrend) {
+            currentData = currentData || {};
+            currentData.inscriptionsTrend = cd.inscriptionsTrend;
+            updateCharts(currentData);
+          }
+          loadedSections++;
         }
-        
-        const data = await response.json();
-                
-        debugLog('✅ Données reçues:', data);
-        
-        debugLog('✅ Réponse API reçue:', data);
-        debugLog('🔍 Structure des KPIs:', Object.keys(data.kpis || {}));
-        debugLog('🔍 totalPartners dans kpis:', data.kpis?.totalPartners);
-        debugLog('🔍 merchants array:', data.merchants);
-        currentData = data;
-        updateDashboard(data);
-        
-        // Les KPIs sont déjà visibles avec le chargement intégré
-        
-        showNotification(`Données ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
-                
-            } catch (error) {
-        debugError('❌ Erreur lors du chargement des données:', error);
-        
-        let errorMessage = 'Erreur de connexion';
-        if (error.name === 'AbortError') {
-            errorMessage = `⏱️ Timeout: Le chargement a pris trop de temps (${periodDays} jours). Le mode optimisé est utilisé pour les longues périodes.`;
-        } else if (error.message.includes('JSON')) {
-            errorMessage = '🔧 Erreur serveur: Vérifiez les logs Laravel';
-        } else if (error.message.includes('400')) {
-            errorMessage = '📅 Période invalide';
-        } else {
-            errorMessage = 'Erreur: ' + error.message;
+
+        // Merchants & Users are loaded in background — update UI if their tabs are already visible
+        lazyPromises.then(() => {
+          const activeTab = document.querySelector('.nav-tab.active');
+          if (activeTab) {
+            const tabText = activeTab.textContent;
+            if (tabText.includes('Merchant') && window.merchantKPIsData) {
+              updateMerchantKPIs(window.merchantKPIsData);
+              if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
+            }
+            if (tabText.includes('Users') && window.usersKPIsData) {
+              updateUsersKPIs(window.usersKPIsData.kpis);
+              updateUsersTable(window.usersKPIsData.users);
+            }
+          }
+        });
+
+        // Expirations (separate lightweight call)
+        try {
+          showExpirationsSkeleton();
+          let expParams = `sub_store=${encodeURIComponent(subStore)}`;
+          if (campaign) expParams += `&campaign=${encodeURIComponent(campaign)}`;
+          expParams += `&start_date=${startDate}&end_date=${endDate}`;
+          const eresp = await fetch(`/sub-stores/api/expirations?${expParams}`);
+          const edata = await eresp.json();
+          if (edata.expirationsByMonth && edata.expirationsByMonth.length > 0) {
+            createExpirationsChart(edata.expirationsByMonth);
+          } else {
+            showNoDataMessage('expirationsChart', 'Aucune donnée d\'expiration disponible pour cette période');
+          }
+          hideExpirationsSkeleton();
+        } catch (e) { 
+          showNoDataMessage('expirationsChart', 'Erreur lors du chargement des expirations');
+          hideExpirationsSkeleton(); 
         }
-        
-        showNotification(errorMessage, 'error');
+
+        hideGlobalKPIsDeltas();
+        forceHideGlobalDeltas();
+        const totalLoadTime = ((Date.now() - loadStartTime) / 1000).toFixed(1);
+        showNotification(`${loadedSections}/3 sections principales chargees en ${totalLoadTime}s`, 'success');
+
+      } catch (error) {
+        debugError('Erreur chargement split:', error);
+        showNotification('Erreur: ' + error.message, 'error');
       }
     }
 
@@ -2784,11 +3366,14 @@
         debugWarn('⚠️ Pas de sub-stores dans les données');
       }
       
-      // Charger les données Users si l'onglet Users est actif
-      const activeTab = document.querySelector('.nav-tab.active');
-      if (activeTab && activeTab.textContent.includes('Users')) {
-        debugLog('👥 Onglet Users actif, chargement des données utilisateurs');
-        loadUsersData();
+      // Synchroniser la rubrique Users comme les autres : KPIs et liste depuis la réponse principale
+      if (data.users_kpis) {
+        window.usersKPIsData = { kpis: data.users_kpis, users: data.users || [] };
+        updateUsersKPIs(data.users_kpis);
+        if (data.users && Array.isArray(data.users)) {
+          updateUsersTable(data.users);
+        }
+        debugLog('✅ Données Users synchronisées depuis la réponse principale');
       }
       
       if (data.categoryDistribution) {
@@ -2842,7 +3427,7 @@
         debugLog('💾 Données sauvegardées dans window.merchantKPIsData:', window.merchantKPIsData);
         
         // Vérifier si l'onglet Merchant est actif
-        const activeTab = document.querySelector('.nav-link.active');
+        const activeTab = document.querySelector('.nav-tab.active');
         const isMerchantActive = activeTab && activeTab.textContent.includes('Merchant');
         debugLog('🔍 Onglet actif:', activeTab?.textContent, 'Merchant actif:', isMerchantActive);
         
@@ -2882,11 +3467,11 @@
         },
         { 
           id: 'totalSubscriptions', 
-          title: 'ABONNEMENTS', 
+          title: 'CARTES UTILISÉES', 
           value: kpis.totalSubscriptions?.current || 0,
           className: 'subscriptions',
           icon: '💳',
-          tooltip: 'Le nombre total de personnes qui ont un abonnement. C\'est comme avoir une carte de membre de notre club !',
+          tooltip: 'Le nombre total de cartes de recharge utilisées par les clients. C\'est comme compter toutes les cartes de membre utilisées !',
           showDelta: false
         },
         { 
@@ -2917,12 +3502,12 @@
           tooltip: 'Les nouvelles inscriptions pendant cette période. C\'est comme compter les nouveaux amis de cette semaine !'
         },
         { 
-          id: 'transactionsCohorte', 
-          title: 'TRANSACTIONS COHORTE', 
-          value: kpis.transactionsCohorte?.current || 0,
+          id: 'clientsWithTransactions', 
+          title: 'CLIENTS AVEC TRANSACTIONS', 
+          value: kpis.clientsWithTransactions?.current || 0,
           className: 'cohort',
           icon: '📊',
-          tooltip: 'Les achats faits pendant cette période précise. C\'est comme compter les achats de cette semaine seulement !'
+          tooltip: 'Nombre de clients ayant effectué au moins une transaction.'
         },
         { 
           id: 'activeUsersCohorte', 
@@ -2939,16 +3524,17 @@
           suffix: '%',
           className: 'conversion',
           icon: '🎯',
-          tooltip: 'Sur 100 cartes données, combien de personnes s\'inscrivent vraiment. C\'est comme mesurer si nos cadeaux plaisent aux gens !'
+          tooltip: 'Sur 100 cartes données, combien de personnes s\'inscrivent vraiment. C\'est comme mesurer si nos cadeaux plaisent aux gens !',
+          showDelta: false
         },
         { 
           id: 'renewalRate', 
-          title: 'TAUX DE RENOUVELLEMENT', 
+          title: 'CARTES ACTIVÉES COHORTE', 
           value: kpis.renewalRate?.current || 0, 
-          suffix: '%',
+          suffix: '',
           className: 'renewal',
           icon: '🔄',
-          tooltip: 'Sur 100 abonnements qui finissent, combien sont renouvelés. C\'est comme mesurer si les gens aiment tellement notre club qu\'ils veulent rester !'
+          tooltip: 'Le nombre total de cartes de recharge activées dans la période sélectionnée. C\'est comme compter combien de cartes de membre ont été utilisées !'
         }
       ];
 
@@ -2980,13 +3566,18 @@
         const globalKPIs = ['distributed', 'inscriptions', 'totalSubscriptions', 'transactions', 'activeUsers'];
         const isGlobalKPI = globalKPIs.includes(kpi.id);
         
+        // Vérifier si le KPI a explicitement showDelta: false
+        const shouldHideDelta = isGlobalKPI || kpi.showDelta === false;
+        
         // Formater la valeur - utiliser la valeur du KPI défini
         let formattedValue = '0';
         const kpiValue = kpi.value;
         
         if (kpiValue !== undefined && kpiValue !== 0) {
-          if (kpi.id === 'conversionRate' || kpi.id === 'renewalRate') {
+          if (kpi.id === 'conversionRate') {
             formattedValue = kpiValue.toFixed(1) + '%';
+          } else if (kpi.id === 'renewalRate') {
+            formattedValue = formatNumber(kpiValue);
           } else {
             formattedValue = kpiValue.toLocaleString();
           }
@@ -2999,7 +3590,7 @@
           <div class="kpi-content">
             <div class="kpi-title">${kpi.title} <span style="margin-left:4px; cursor: help; color: var(--muted);" title="${kpi.tooltip}">ⓘ</span></div>
             <div class="kpi-value" id="${kpi.id}">${formattedValue}</div>
-            ${isGlobalKPI ? '' : `<div class="kpi-delta delta-badge ${changeClass}">${changeText}</div>`}
+            ${shouldHideDelta ? '' : `<div class="kpi-delta delta-badge ${changeClass}">${changeText}</div>`}
           </div>
         `;
         
@@ -3057,48 +3648,23 @@
 
     function updateMerchantKPIs(kpis) {
       debugLog('📊 Mise à jour des KPIs Merchant:', kpis);
-      debugLog('🔍 Vérification: kpis.totalPartners =', kpis.totalPartners);
-      debugLog('🔍 Vérification: type de kpis =', typeof kpis);
-      debugLog('🔍 Vérification: clés de kpis =', Object.keys(kpis));
-      debugLog('🔍 État de l\'onglet Merchant:', document.getElementById('merchant')?.classList.contains('active'));
       
-      // Vérifier que nous avons les bonnes données
-      if (!kpis.totalPartners) {
-        debugLog('❌ ERREUR: Pas de données totalPartners dans kpis');
+      if (!kpis || !kpis.totalPartners) {
+        debugLog('❌ Pas de données totalPartners dans kpis');
         return;
       }
       
-      debugLog('✅ Données totalPartners trouvées, procédure normale');
-      
-      // VÉRIFICATION CRITIQUE: Les éléments HTML existent-ils ?
-      debugLog('🔍 Test: Recherche éléments HTML Merchant...');
       const testElement = document.getElementById('merch-totalPartners');
-      debugLog('🔍 Élément merch-totalPartners:', testElement ? 'TROUVÉ' : 'INTROUVABLE');
-      
       if (!testElement) {
-        debugLog('❌ PROBLÈME: Les éléments Merchant ne sont pas dans le DOM !');
-        debugLog('🔍 Onglet merchant existe-t-il?', document.getElementById('merchant') ? 'OUI' : 'NON');
-        debugLog('🔍 Contenu de l\'onglet merchant:', document.getElementById('merchant')?.innerHTML?.substring(0, 200) + '...');
-        
-        // Attendre un peu plus et réessayer
-        setTimeout(() => {
-          debugLog('🔄 Nouvelle tentative de mise à jour Merchant...');
-          updateMerchantKPIs(kpis);
-        }, 500);
+        debugLog('❌ Éléments Merchant pas encore dans le DOM, retry...');
+        if (!window._merchantRetryCount) window._merchantRetryCount = 0;
+        window._merchantRetryCount++;
+        if (window._merchantRetryCount < 10) {
+          setTimeout(() => updateMerchantKPIs(kpis), 500);
+        }
         return;
       }
-      
-      // Vérifier que l'onglet Merchant est visible
-      const merchantTab = document.getElementById('merchant');
-      if (merchantTab && !merchantTab.classList.contains('active')) {
-        debugLog('⚠️ Onglet Merchant non visible, attente...');
-        setTimeout(() => {
-          updateMerchantKPIs(kpis);
-        }, 200);
-        return;
-      }
-      
-      debugLog('✅ Éléments HTML trouvés, procédure de mise à jour...');
+      window._merchantRetryCount = 0;
       
       
       
@@ -3123,7 +3689,6 @@
       
       // Top Merchant et Diversity avec gestion spéciale
       const topMerchantShare = normalizeKPI(kpis.topMerchantShare);
-      const diversity = normalizeKPI(kpis.diversity);
       
       // Gestion spéciale pour Top Merchant Share avec nom du marchand
       if (topMerchantShare.merchant_name) {
@@ -3139,7 +3704,20 @@
       } else {
         updateSingleKPI('merch-topMerchantShare', topMerchantShare, '%');
       }
-      updateSingleKPI('merch-diversity', diversity);
+      
+      // Gestion spéciale pour Diversity avec level et score (utiliser kpis.diversity directement)
+      const rawDiversity = kpis.diversity || {};
+      if (rawDiversity.level) {
+        const diversityValue = `${rawDiversity.level} (${rawDiversity.score || 0})`;
+        const diversityElement = document.getElementById('merch-diversity');
+        if (diversityElement) {
+          diversityElement.innerHTML = diversityValue;
+          debugLog(`✅ merch-diversity mis à jour: ${diversityValue}`);
+        }
+      } else {
+        const diversity = normalizeKPI(kpis.diversity);
+        updateSingleKPI('merch-diversity', diversity);
+      }
       
       // Forcer le masquage des deltas globaux après la mise à jour
       forceHideGlobalDeltas();
@@ -3194,7 +3772,7 @@
       
       // Générer les lignes du tableau avec deltas colorés
       tbody.innerHTML = currentPageMerchants.map((merchant, index) => {
-        const delta = merchant.delta || 0;
+        const delta = merchant.delta || merchant.change || 0;
         let deltaClass = 'neutral';
         let deltaIcon = '→';
         const rank = startIndex + index + 1;
@@ -3221,9 +3799,9 @@
           <tr>
             <td>${rankBadge}</td>
             <td><strong>${merchant.name}</strong></td>
-            <td>${merchant.category}</td>
-            <td>${merchant.current.toLocaleString()}</td>
-            <td>${merchant.share}%</td>
+            <td>${merchant.category || '-'}</td>
+            <td>${Number(merchant.current || merchant.transactions || 0).toLocaleString()}</td>
+            <td>${Number(merchant.share || 0).toFixed(1)}%</td>
             <td>
               <span class="delta-badge delta-${deltaClass}">
                 ${deltaIcon} ${delta > 0 ? '+' : ''}${delta.toFixed(1)}%
@@ -3315,7 +3893,7 @@
       const csvContent = "data:text/csv;charset=utf-8," + 
         "Rang,Nom du Marchand,Catégorie,Transactions,Part de Marché,Delta\n" +
         allMerchants.map(merchant => {
-          return `${merchant.rank},"${merchant.name}","${merchant.category}",${merchant.current},${merchant.share}%,"${merchant.delta ? (merchant.delta > 0 ? '+' : '') + merchant.delta.toFixed(1) + '%' : '0.0%'}"`;
+          return `${merchant.rank || 0},"${merchant.name || ''}","${merchant.category || ''}",${merchant.current || merchant.transactions || 0},${Number(merchant.share || 0).toFixed(1)}%,"${merchant.delta ? (merchant.delta > 0 ? '+' : '') + merchant.delta.toFixed(1) + '%' : '0.0%'}"`;
         }).join("\n");
       
       const encodedUri = encodeURI(csvContent);
@@ -3345,10 +3923,11 @@
         createInscriptionsBarChart(data.inscriptionsTrend);
       } else {
         debugLog('❌ Pas de données inscriptionsTrend disponibles');
-        // Ne pas créer de données par défaut - laisser le graphique vide
+        showNoDataMessage('inscriptionsChart', 'Aucune donnée d\'inscription disponible pour cette période');
       }
 
-      // Expirations Chart
+      // Expirations Chart — handled by separate API call in loadDashboardData()
+      // Only render here if data is already available (e.g. from updateDashboard fallback)
       if (data.expirationsByMonth && data.expirationsByMonth.length > 0) {
         createExpirationsChart(data.expirationsByMonth);
       }
@@ -3357,6 +3936,14 @@
     function createInscriptionsBarChart(data) {
       const ctx = document.getElementById('inscriptionsChart');
       if (!ctx) return;
+
+      // Vérifier si toutes les valeurs sont 0
+      const values = data.map(item => item.value || item.count || 0);
+      const allZero = values.every(v => v === 0);
+      if (allZero) {
+        showNoDataMessage('inscriptionsChart', 'Aucune inscription enregistrée pour cette période');
+        return;
+      }
 
       if (inscriptionsChart) {
         inscriptionsChart.destroy();
@@ -3417,6 +4004,12 @@
     function createExpirationsChart(data) {
       const ctx = document.getElementById('expirationsChart');
       if (!ctx) return;
+      
+      // Restore canvas if hidden by showNoDataMessage
+      ctx.style.display = '';
+      const noDataMsg = ctx.parentElement.querySelector('.no-data-message');
+      if (noDataMsg) noDataMsg.remove();
+      
       if (expirationsChart) expirationsChart.destroy();
       const labels = data.map(d => d.date);
       const values = data.map(d => d.value);
@@ -3474,44 +4067,130 @@
         const select = document.getElementById('subStoreSelect');
         select.innerHTML = '';
         
-        // Vérifier si l'utilisateur est super admin
         const isSuperAdmin = data.user_role === 'super_admin';
+        const hasCampaignRestriction = data.has_campaign_restriction || false;
+        
+        // Store restriction info globally
+        window.hasCampaignRestriction = hasCampaignRestriction;
+        window.allowedCampaigns = data.allowed_campaigns || [];
+        window.canInvite = data.can_invite || false;
         
         if (isSuperAdmin) {
-          // Super admin voit tous les sub-stores + option "ALL"
           const defaultOption = document.createElement('option');
           defaultOption.value = 'ALL';
           defaultOption.textContent = 'Tous les sub-stores';
           select.appendChild(defaultOption);
           
-          // Add sub-stores options
           data.sub_stores.forEach(store => {
             const option = document.createElement('option');
             option.value = store.name;
-            option.textContent = `🏪 ${store.name}`;
+            option.textContent = store.name;
             if (store.name === data.default_sub_store) {
               option.selected = true;
             }
             select.appendChild(option);
           });
         } else {
-          // Admin/Collaborateur voit seulement son sub-store assigné
+          // Admin/Collaborateur voit seulement son sub-store assigne
           const assignedStore = data.sub_stores.find(store => store.name === data.default_sub_store);
           if (assignedStore) {
             const option = document.createElement('option');
             option.value = assignedStore.name;
-            option.textContent = `🏪 ${assignedStore.name}`;
+            option.textContent = assignedStore.name;
             option.selected = true;
             select.appendChild(option);
           }
+          // Disable dropdown for restricted users
+          if (hasCampaignRestriction) {
+            select.disabled = true;
+          }
         }
         
-        debugLog('✅ Sub-stores chargés:', data.sub_stores.length, 'Super Admin:', isSuperAdmin);
+        debugLog('Sub-stores charges:', data.sub_stores.length, 'Restriction campagne:', hasCampaignRestriction);
+
+        window.pluxeeCampaigns = data.campaigns || {};
+        await updateCampaignDropdown(select.value);
+
         return data;
         
       } catch (error) {
-        debugError('❌ Erreur lors du chargement des sub-stores:', error);
+        debugError('Erreur lors du chargement des sub-stores:', error);
         return { sub_stores: [] };
+      }
+    }
+
+    // Campaign dropdown for Pluxee sub-stores
+    async function updateCampaignDropdown(selectedSubStore) {
+      const campaignSelect = document.getElementById('campaignSelect');
+      const isPluxee = selectedSubStore && (selectedSubStore.toLowerCase().includes('pluxee') || selectedSubStore.toLowerCase().includes('privilèges by pluxee') || selectedSubStore.toLowerCase().includes('privileges by pluxee'));
+      const campaigns = window.pluxeeCampaigns || {};
+      const hasCampaignRestriction = window.hasCampaignRestriction || false;
+      const allowedCampaigns = window.allowedCampaigns || [];
+      
+      // Find campaigns for this sub-store (already filtered by backend for restricted users)
+      let storeCampaigns = [];
+      for (const [storeName, campList] of Object.entries(campaigns)) {
+        if (selectedSubStore === storeName || (isPluxee && storeName.toLowerCase().includes('pluxee'))) {
+          storeCampaigns = campList;
+          break;
+        }
+      }
+      
+      // Fallback: if no campaigns found but this is a Pluxee store, fetch directly
+      if (isPluxee && storeCampaigns.length === 0) {
+        debugLog('⚠️ Aucune campagne en cache, tentative de récupération directe...');
+        try {
+          const resp = await fetch(`/sub-stores/api/split/campaigns?sub_store=${encodeURIComponent(selectedSubStore)}`);
+          const cdata = await resp.json();
+          if (cdata.success && cdata.data && cdata.data.length > 0) {
+            storeCampaigns = cdata.data;
+            // Cache for next time
+            if (!window.pluxeeCampaigns) window.pluxeeCampaigns = {};
+            window.pluxeeCampaigns[selectedSubStore] = storeCampaigns;
+            debugLog('✅ Campagnes récupérées directement:', storeCampaigns.length);
+          }
+        } catch (e) {
+          debugError('Erreur récupération campagnes:', e);
+        }
+      }
+      
+      if (isPluxee && storeCampaigns.length > 0) {
+        campaignSelect.style.display = 'block';
+        
+        if (hasCampaignRestriction && storeCampaigns.length === 1) {
+          // User restricted to a single campaign: auto-select, disable dropdown
+          campaignSelect.innerHTML = '';
+          const opt = document.createElement('option');
+          opt.value = storeCampaigns[0].name;
+          opt.textContent = storeCampaigns[0].name + (storeCampaigns[0].cards ? ' (' + storeCampaigns[0].cards + ' cartes)' : '');
+          opt.selected = true;
+          campaignSelect.appendChild(opt);
+          campaignSelect.disabled = true;
+        } else if (hasCampaignRestriction && storeCampaigns.length > 1) {
+          // Multiple allowed campaigns but restricted
+          campaignSelect.innerHTML = '<option value="">Mes campagnes (' + storeCampaigns.length + ')</option>';
+          storeCampaigns.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.name;
+            opt.textContent = c.name + (c.cards ? ' (' + c.cards + ' cartes)' : '');
+            campaignSelect.appendChild(opt);
+          });
+          campaignSelect.disabled = false;
+        } else {
+          // Unrestricted: show all
+          campaignSelect.innerHTML = '<option value="">Toutes les campagnes (' + storeCampaigns.length + ')</option>';
+          storeCampaigns.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.name;
+            opt.textContent = c.name + (c.cards ? ' (' + c.cards + ' cartes)' : '');
+            campaignSelect.appendChild(opt);
+          });
+          campaignSelect.disabled = false;
+        }
+      } else {
+        campaignSelect.style.display = 'none';
+        campaignSelect.innerHTML = '<option value="">Toutes les campagnes</option>';
+        campaignSelect.disabled = false;
       }
     }
 
@@ -3537,7 +4216,7 @@
         row.insertCell(0).textContent = category.category || 'Non spécifié';
         
         // Usage count
-        row.insertCell(1).textContent = formatNumber(category.utilizations || 0);
+        row.insertCell(1).textContent = formatNumber(category.transactions || 0);
         
         // Percentage
         row.insertCell(2).textContent = `${category.percentage || 0}%`;
@@ -3591,6 +4270,35 @@
         row.insertCell(5).textContent = store.manager || 'Non spécifié';
       });
     }
+
+    /**
+     * Affiche un message "Pas de données" à la place d'un canvas de graphique vide
+     */
+    function showNoDataMessage(canvasId, message) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      
+      const container = canvas.parentElement;
+      canvas.style.display = 'none';
+      
+      // Supprimer un message existant
+      const existing = container.querySelector('.no-data-message');
+      if (existing) existing.remove();
+      
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'no-data-message';
+      msgDiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:#94a3b8;text-align:center;gap:12px;';
+      msgDiv.innerHTML = `
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v18h18"/>
+          <path d="M7 16l4-8 4 4 4-6"/>
+        </svg>
+        <div style="font-size:14px;font-weight:500;">${message}</div>
+        <div style="font-size:12px;color:#cbd5e1;">Les données apparaîtront une fois les abonnements activés</div>
+      `;
+      container.appendChild(msgDiv);
+    }
+
 
 
     function formatNumber(num) {
@@ -3657,6 +4365,64 @@
       // Forcer l'actualisation de toutes les rubriques
       loadDashboardData();
     }
+
+    async function triggerCacheWarmup() {
+      const btn = document.getElementById('warmupBtn');
+      const subStore = document.getElementById('subStoreSelect').value;
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳</span> Warmup en cours...';
+      btn.style.opacity = '0.7';
+      
+      try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        const response = await fetch('/sub-stores/api/warmup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ sub_store: subStore !== 'ALL' ? subStore : null })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          showNotification('Cache warmup lance en arriere-plan pour ' + (data.sub_store || 'tous les sub-stores'), 'success');
+          btn.innerHTML = '<span>✅</span> Warmup lance';
+          
+          // Poll status
+          setTimeout(async () => {
+            try {
+              const statusResp = await fetch('/sub-stores/api/warmup-status');
+              const statusData = await statusResp.json();
+              if (statusData.last_warmup) {
+                const lw = statusData.last_warmup;
+                showNotification(
+                  'Dernier warmup: ' + lw.warmed + ' sections en ' + lw.duration_seconds + 's',
+                  'success'
+                );
+              }
+            } catch(e) {}
+            
+            btn.disabled = false;
+            btn.innerHTML = '<span>⚡</span> Warmup Cache';
+            btn.style.opacity = '1';
+          }, 30000);
+        } else {
+          showNotification('Erreur: ' + (data.error || 'Echec du warmup'), 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<span>⚡</span> Warmup Cache';
+          btn.style.opacity = '1';
+        }
+      } catch (error) {
+        showNotification('Erreur reseau: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<span>⚡</span> Warmup Cache';
+        btn.style.opacity = '1';
+      }
+    }
+
     
     // Fonction pour actualiser toutes les rubriques
     function refreshAllSections() {
@@ -3690,12 +4456,17 @@
       
       // Indicateur de chargement pour la vue d'ensemble
       const overviewKPIs = ['distributed', 'inscriptions', 'totalSubscriptions', 'transactions', 'activeUsers', 
-                           'inscriptionsCohorte', 'transactionsCohorte', 'activeUsersCohorte', 'conversionRate', 'renewalRate'];
+                           'inscriptionsCohorte', 'clientsWithTransactions', 'transactionsCohorte', 'activeUsersCohorte', 'conversionRate', 'renewalRate', 'usersLoss'];
       
       overviewKPIs.forEach(kpiId => {
         const valueElement = document.getElementById(kpiId);
         if (valueElement) {
           valueElement.innerHTML = '<span style="color: #8B5CF6;">⏳ Chargement...</span>';
+        }
+        // Also reset delta badges
+        const deltaElement = valueElement ? valueElement.parentElement?.querySelector('.kpi-delta') : null;
+        if (deltaElement) {
+          deltaElement.style.display = 'none';
         }
       });
       
@@ -3714,14 +4485,12 @@
         merchantKPIs.forEach(kpiId => {
           const valueElement = document.getElementById(kpiId);
           if (valueElement) {
-            const currentValue = valueElement.textContent || valueElement.innerHTML;
-            // Ne mettre en chargement que si la valeur est "Loading..." ou "Chargement..." ou vide
-            if (currentValue.includes('Loading') || currentValue.includes('Chargement') || currentValue.trim() === '') {
-              valueElement.innerHTML = '<span style="color: #8B5CF6;">⏳ Chargement...</span>';
-              debugLog(`⏳ ${kpiId} mis en chargement (valeur actuelle: ${currentValue})`);
-            } else {
-              debugLog(`✅ ${kpiId} garde sa valeur: ${currentValue}`);
-            }
+            valueElement.innerHTML = '<span style="color: #8B5CF6;">⏳ Chargement...</span>';
+          }
+          // Also reset merchant deltas
+          const deltaEl = document.getElementById(kpiId + 'Delta');
+          if (deltaEl) {
+            deltaEl.style.display = 'none';
           }
         });
       }
@@ -3836,7 +4605,7 @@
         valueElement.textContent = kpiData.current + suffix;
         
         // Masquer les deltas des KPIs globaux
-        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate'];
+        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate', 'users-usersLoss'];
         const isGlobalKPI = globalKPIs.includes(id);
         
         // Gérer le delta si disponible
@@ -3879,6 +4648,7 @@
       updateSingleKPI('users-newUsers', normalizeKPI(usersData.newUsers));
       updateSingleKPI('users-transactionsCohorte', normalizeKPI(usersData.transactionsCohorte));
       updateSingleKPI('users-retentionRate', normalizeKPI(usersData.retentionRate), '%');
+      updateSingleKPI('users-usersLoss', normalizeKPI(usersData.usersLoss));
       
       debugLog('✅ Tous les KPIs Users ont été mis à jour');
     }
@@ -3896,7 +4666,7 @@
       const usersKPIs = [
         'users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 
         'users-avgTransactionsPerUser', 'users-totalSubscriptions', 
-        'users-newUsers', 'users-transactionsCohorte', 'users-retentionRate'
+        'users-newUsers', 'users-transactionsCohorte', 'users-retentionRate', 'users-usersLoss'
       ];
       
       usersKPIs.forEach(kpiId => {
@@ -3908,63 +4678,7 @@
       });
     }
 
-    async function loadUsersData() {
-      try {
-        debugLog('👥 Chargement des données utilisateurs...');
-        
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-        const subStore = document.getElementById('subStoreSelect').value;
-        
-        if (!startDate || !endDate) {
-          debugError('❌ Dates manquantes pour le chargement des utilisateurs');
-          showNotification('Veuillez sélectionner une période', 'error');
-          return;
-        }
-        
-        // Calculer la période de comparaison
-        const startDateObj = new Date(startDate);
-        const endDateObj = new Date(endDate);
-        const periodDays = Math.ceil((endDateObj - startDateObj) / (1000 * 60 * 60 * 24)) + 1;
-        const comparisonStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        const comparisonEndDate = new Date(endDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000);
-        
-        debugLog('📊 Chargement des données utilisateurs:', { startDate, endDate, subStore });
-        
-        const response = await fetch(`/sub-stores/api/users/data?start_date=${startDate}&end_date=${endDate}&comparison_start_date=${comparisonStartDate.toISOString().split('T')[0]}&comparison_end_date=${comparisonEndDate.toISOString().split('T')[0]}&sub_store=${subStore}`, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        debugLog('✅ Données utilisateurs reçues:', data);
-        
-        // Sauvegarder les données en cache
-        window.usersKPIsData = data;
-        
-        // Mettre à jour les KPIs Users
-        if (data.kpis) {
-          updateUsersKPIs(data.kpis);
-        }
-        
-        // Mettre à jour le tableau Users
-        if (data.users) {
-          updateUsersTable(data.users);
-        }
-        
-        showNotification(`Données utilisateurs ${subStore === 'ALL' ? 'tous sub-stores' : subStore} mises à jour!`, 'success');
-        
-      } catch (error) {
-        debugError('❌ Erreur lors du chargement des données utilisateurs:', error);
-        showNotification('Erreur lors du chargement des données utilisateurs', 'error');
-      }
-    }
+    // loadUsersData is now handled by the split endpoint in loadDashboardData()
 
     function exportTable() {
       // Table export logic
@@ -3978,13 +4692,24 @@
 
     // Event listeners
     // Seul le sub-store déclenche un rechargement automatique
-    document.getElementById('subStoreSelect').addEventListener('change', function() {
+    document.getElementById('subStoreSelect').addEventListener('change', async function() {
         debugLog('🏪 Sub-Store modifié, rechargement de toutes les données');
+        // Update campaign dropdown for Pluxee
+        await updateCampaignDropdown(this.value);
         // Effacer tous les caches
         window.merchantKPIsData = null;
         window.usersKPIsData = null;
         window.lastDashboardLoadTime = 0;
         // Recharger toutes les données
+        loadDashboardData();
+    });
+
+    // Campaign change also triggers reload
+    document.getElementById('campaignSelect').addEventListener('change', function() {
+        debugLog('📋 Campagne modifiée, rechargement');
+        window.merchantKPIsData = null;
+        window.usersKPIsData = null;
+        window.lastDashboardLoadTime = 0;
         loadDashboardData();
     });
     

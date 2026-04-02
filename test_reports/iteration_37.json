@@ -1,0 +1,65 @@
+{
+  "summary": "Frontend testing completed for mobile KPI text truncation fix on Merchant/Users tabs. All 7 test scenarios PASS. Mobile (375px): KPIs show 2-per-row with word-break applied, titles fully visible without clipping. Desktop (1920px): No regression, proper grid layout. Collaborator login works with campaign filtering applied.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "mobile_merchant_kpis": {
+      "status": "PASS",
+      "viewport": "375x812",
+      "details": "8 KPIs displayed 2-per-row (width: 79.8px each), word-break: break-word applied, font-size: 8px, no text clipping. Titles visible: TOTAL MERCHANTS, ACTIVE MERCHANTS, TOTAL LOCATIONS ACTIVE, ACTIVE MERCHANT RATIO, TOTAL TRANSACTIONS, TRANSACTIONS PER MERCHANT, TOP MERCHANT SHARE, DIVERSITY"
+    },
+    "mobile_users_kpis": {
+      "status": "PASS",
+      "viewport": "375x812",
+      "details": "8 KPIs displayed 2-per-row, word-break: break-word applied, font-size: 8px, no text clipping. Titles visible: TOTAL USERS, ACTIVE USERS, TOTAL TRANSACTIONS, AVG TRANSACTIONS/USER, TOTAL CARTES UTILISÉES, CARTES ACTIVÉES, TRANSACTIONS (COHORTE), RETENTION RATE"
+    },
+    "mobile_vue_ensemble_kpis": {
+      "status": "PASS",
+      "viewport": "375x812",
+      "details": "10 KPIs displayed 2-per-row (width: 171.5px each). Titles visible: DISTRIBUÉ, INSCRIPTIONS, CARTES UTILISÉES, TRANSACTIONS, ACTIVE USERS, INSCRIPTIONS COHORTE, TRANSACTIONS COHORTE, ACTIVE USERS COHORTE, TAUX DE CONVERSION, CARTES ACTIVÉES COHORTE"
+    },
+    "mobile_substores_ranking": {
+      "status": "PASS",
+      "viewport": "375x812",
+      "details": "15 rows in ranking table, table readable with horizontal scroll available. Columns: RANG, NOM DU SUB-STORE, TYPE, CLIENTS, TRANSACTIONS"
+    },
+    "mobile_dates_section": {
+      "status": "PASS",
+      "viewport": "375x812",
+      "details": "Dates inline within each period section (flex-direction: row). Période Principale and Période de Comparaison each show start date, 'au', end date on same line. Height: 38px per section."
+    },
+    "desktop_all_tabs": {
+      "status": "PASS",
+      "viewport": "1920x1080",
+      "details": "No regression. Vue d'Ensemble: 5 KPIs per row. Merchant: 4 KPIs per row. Users: 4 KPIs per row. All titles fully visible."
+    },
+    "collaborator_login": {
+      "status": "PASS",
+      "viewport": "375x812",
+      "details": "Login with imededdine.essefi@gmail.com / Test@2025 successful. Redirected to /sub-stores?theme=club_privileges. Sub-store: Club Privilèges By Pluxee. Campaign: Hutchinson Tunisie - By Pluxee (2013 cartes) applied. All 5 tabs available."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "superadmin": "superadmin@ooredoo.tn / SuperAdmin@2025",
+    "collaborator": "imededdine.essefi@gmail.com / Test@2025"
+  },
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "All mobile KPI text truncation fixes verified. Key CSS patterns working: (1) Merchant KPIs: .merchants-kpi .kpi-title font-size: 8px, word-break: break-word at 600px breakpoint, (2) Users KPIs: .users-kpi .kpi-title font-size: 8px, word-break: break-word at 600px breakpoint, (3) Both grids use grid-template-columns: 1fr 1fr for 2-per-row layout, (4) Dates section uses flex-direction: row for inline display. Collaborator campaign filtering working correctly with Hutchinson Tunisie campaign applied."
+}

@@ -1,0 +1,52 @@
+{
+  "summary": "Tested 3 fixes for Club Privileges Sub-Store Dashboard: 1) Merchant KPIs bug fix - all 8 KPIs now showing correctly (totalPartners=576, activeMerchants=136, totalLocationsActive=549, activeMerchantRatio=23.6%, totalTransactions=2017, transactionsPerMerchant=14.8, topMerchantShare=PATHÉ 18.6%, diversity=Excellent 100). 2) Redis cache activated (CACHE_DRIVER=redis). 3) Pluxee campaign dropdown working - shows 3 campaigns when 'Club Privilèges By Pluxee' selected. Fixed minor UI bug: Diversity KPI was showing [object Object] instead of level/score.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_substore_merchants.py",
+    "/app/test_reports/pytest/pytest_substore_merchants.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/resources/views/sub-stores/dashboard.blade.php"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "admin": "superadmin@ooredoo.tn / SuperAdmin@2025"
+  },
+  "seed_data_creation": "No new seed data. Used existing production data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sub-Store Dashboard Merchant KPIs fully tested. All 8 KPIs verified: totalPartners (576), activeMerchants (136), totalLocationsActive (549), activeMerchantRatio (23.6%), totalTransactions (2017), transactionsPerMerchant (14.8), topMerchantShare (PATHÉ 18.6%), diversity (Excellent 100). Redis cache is active (CACHE_DRIVER=redis in .env). Pluxee campaign dropdown shows 3 campaigns. Fixed Diversity KPI display bug (was showing [object Object]).",
+  "features_verified": {
+    "GET /sub-stores/api/split/merchants?sub_store=ALL&start_date=2025-01-01&end_date=2025-12-31": "PASS - Returns all 8 KPIs",
+    "totalPartners.current": "PASS - Returns 576",
+    "activeMerchants.current": "PASS - Returns 136 (> 0)",
+    "totalTransactions.current": "PASS - Returns 2017 (> 0)",
+    "topMerchantShare.merchant_name": "PASS - Returns PATHÉ",
+    "diversity.level and diversity.score": "PASS - Returns level=Excellent, score=100",
+    "merchants array fields": "PASS - Has rank, name, category, transactions, share, delta, change",
+    "GET /sub-stores/api/sub-stores campaigns": "PASS - Returns campaigns field with Pluxee campaigns",
+    "Pluxee campaigns structure": "PASS - Has name, batches, cards fields",
+    "Redis cache performance": "PASS - 2nd call faster than 1st",
+    "Regression: GET /sub-stores/api/split/kpis": "PASS - Still works",
+    "Regression: GET /sub-stores/api/split/stores": "PASS - Still works",
+    "Frontend: Merchant tab 8 KPI cards": "PASS - All 8 KPIs display with values",
+    "Frontend: Pluxee campaign dropdown": "PASS - Shows 'Toutes les campagnes (3)' with 3 campaigns",
+    "Frontend: Diversity KPI display": "PASS - Shows 'Excellent (100)' (fixed from [object Object])"
+  },
+  "fixes_applied": {
+    "diversity_kpi_display": "Fixed in /app/resources/views/sub-stores/dashboard.blade.php - Changed to use rawDiversity.level and rawDiversity.score instead of normalizeKPI which was converting the object incorrectly"
+  }
+}

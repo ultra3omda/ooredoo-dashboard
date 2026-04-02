@@ -3,10 +3,18 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\InvitationController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\EklektikCronController;
+use App\Http\Controllers\Admin\TimweDiagnosticController;
+use App\Http\Controllers\Admin\TimweDiagnosticApiController;
+use App\Http\Controllers\Admin\MLDashboardController;
+use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\EklektikSyncTrackingController;
+use App\Http\Controllers\Admin\ClubPrivilegesSyncController;
+use App\Http\Controllers\Admin\PluxeeUserController;
 use App\Http\Controllers\SubStoreController;
 use App\Http\Controllers\Api\DataController;
 use App\Http\Controllers\Api\DataControllerOptimized;
@@ -88,17 +96,33 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/dashboard/transactions', [DataController::class, 'getTransactions'])->name('api.dashboard.transactions');
         Route::get('/api/dashboard/subscriptions', [DataController::class, 'getSubscriptions'])->name('api.dashboard.subscriptions');
         
+        // Endpoints split pour chargement progressif (nécessitent session web)
+        Route::get('/api/dashboard/split/kpis', [DataControllerOptimized::class, 'getKpisSplit'])->name('api.dashboard.split.kpis');
+        Route::get('/api/dashboard/split/merchants', [DataControllerOptimized::class, 'getMerchantsSplit'])->name('api.dashboard.split.merchants');
+        Route::get('/api/dashboard/split/transactions', [DataControllerOptimized::class, 'getTransactionsSplit'])->name('api.dashboard.split.transactions');
+        Route::get('/api/dashboard/split/subscriptions', [DataControllerOptimized::class, 'getSubscriptionsSplit'])->name('api.dashboard.split.subscriptions');
+        Route::get('/api/dashboard/split/ooredoo', [DataControllerOptimized::class, 'getOoredooStatsSplit'])->name('api.dashboard.split.ooredoo');
+        Route::get('/api/dashboard/split/timwe', [DataControllerOptimized::class, 'getTimweStatsSplit'])->name('api.dashboard.split.timwe');
+        Route::get('/api/dashboard/split/eklektik', [DataControllerOptimized::class, 'getEklektikStatsSplit'])->name('api.dashboard.split.eklektik');
+        
         // DÉSACTIVÉ POUR OPTIMISATION: API pour les transactions Timwe d'un client spécifique
         // Route::get('/api/timwe-client-transactions/{clientId}', [DataControllerOptimized::class, 'getClientTimweTransactions'])->name('api.timwe.client.transactions');
     
-    // Dashboard Sub-Stores (accès restreint)
+    // Dashboard Sub-Stores (acces restreint)
     Route::middleware(['check.dashboard:sub-stores'])->prefix('sub-stores')->name('sub-stores.')->group(function () {
         Route::get('/', [SubStoreController::class, 'index'])->name('dashboard');
         Route::get('/api/sub-stores', [SubStoreController::class, 'getSubStores'])->name('api.sub-stores');
-        Route::get('/api/dashboard/data', [SubStoreController::class, 'getDashboardData'])->name('api.dashboard.data');
-        Route::get('/api/users/data', [SubStoreController::class, 'getUsersData'])->name('api.users.data');
-        // Endpoint asynchrone pour expirations (léger et mis en cache)
         Route::get('/api/expirations', [SubStoreController::class, 'getExpirationsAsync'])->name('api.expirations');
+        // Split endpoints (parallel loading)
+        Route::get('/api/split/kpis', [SubStoreController::class, 'getKpisSplit'])->name('api.split.kpis');
+        Route::get('/api/split/stores', [SubStoreController::class, 'getStoresSplit'])->name('api.split.stores');
+        Route::get('/api/split/charts', [SubStoreController::class, 'getChartsSplit'])->name('api.split.charts');
+        Route::get('/api/split/merchants', [SubStoreController::class, 'getMerchantsSplit'])->name('api.split.merchants');
+        Route::get('/api/split/users', [SubStoreController::class, 'getUsersSplit'])->name('api.split.users');
+        Route::get('/api/split/campaigns', [SubStoreController::class, 'getCampaignsSplit'])->name('api.split.campaigns');
+        // Cache warmup trigger (SuperAdmin only)
+        Route::post('/api/warmup', [SubStoreController::class, 'triggerWarmup'])->name('api.warmup');
+        Route::get('/api/warmup-status', [SubStoreController::class, 'warmupStatus'])->name('api.warmup-status');
     });
 
     // Routes d'administration (Super Admin et Admin uniquement)
@@ -114,6 +138,13 @@ Route::middleware('auth')->group(function () {
         Route::post('/users/{user}/reset-password', [UserManagementController::class, 'resetPassword'])->name('users.reset-password');
         Route::post('/users/{user}/suspend', [UserManagementController::class, 'suspend'])->name('users.suspend');
         Route::post('/users/{user}/unsuspend', [UserManagementController::class, 'unsuspend'])->name('users.unsuspend');
+        Route::get('/users/permissions', [UserManagementController::class, 'permissions'])->name('users.permissions');
+        Route::post('/users/{user}/campaign-access', [UserManagementController::class, 'updateCampaignAccess'])->name('users.campaign-access');
+        Route::get('/users/available-campaigns', [UserManagementController::class, 'getAvailableCampaigns'])->name('users.available-campaigns');
+        
+        // Audit Logs
+        Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+        Route::get('/audit-logs/data', [AuditLogController::class, 'getData'])->name('audit-logs.data');
         
         // Invitations (admins seulement)
         Route::middleware('check.invitation')->group(function () {
@@ -123,6 +154,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/invitations/{invitation}/resend', [InvitationController::class, 'resend'])->name('invitations.resend');
             Route::patch('/invitations/{invitation}/cancel', [InvitationController::class, 'cancel'])->name('invitations.cancel');
             Route::delete('/invitations/{invitation}', [InvitationController::class, 'destroy'])->name('invitations.destroy');
+            Route::get('/invitations/campaigns', [InvitationController::class, 'getCampaigns'])->name('invitations.campaigns');
         });
         
         // Configuration du Cron Eklektik (Super Admin seulement)
@@ -136,6 +168,75 @@ Route::middleware('auth')->group(function () {
             Route::post('/eklektik-cron/test', [EklektikCronController::class, 'testCron'])->name('eklektik-cron.test');
             Route::post('/eklektik-cron/run', [EklektikCronController::class, 'runCron'])->name('eklektik-cron.run');
             Route::post('/eklektik-cron/reset', [EklektikCronController::class, 'resetToDefault'])->name('eklektik-cron.reset');
+        });
+
+        // Diagnostic Timwe (nom de route admin.timwe-diagnostic pour le bouton du dashboard)
+        Route::get('/timwe-diagnostic', [TimweDiagnosticController::class, 'index'])->name('timwe-diagnostic');
+        Route::get('/timwe-diagnostic/data', [TimweDiagnosticController::class, 'getDiagnosticData'])->name('timwe-diagnostic.data');
+        Route::get('/timwe-diagnostic/phone/{phone}/transactions', [TimweDiagnosticController::class, 'getPhoneTransactions'])->name('timwe-diagnostic.phone.transactions');
+        Route::get('/timwe-diagnostic/export', [TimweDiagnosticController::class, 'exportCsv'])->name('timwe-diagnostic.export');
+        // API rapide (endpoints séparés, < 200 ms)
+        Route::prefix('timwe-diagnostic/api')->name('timwe-diagnostic.api.')->group(function () {
+            Route::get('/summary', [TimweDiagnosticApiController::class, 'summary'])->name('summary');
+            Route::get('/funnel-kpis', [TimweDiagnosticApiController::class, 'funnelKpis'])->name('funnel-kpis');
+            Route::get('/delivery', [TimweDiagnosticApiController::class, 'delivery'])->name('delivery');
+            Route::get('/phones', [TimweDiagnosticApiController::class, 'phones'])->name('phones');
+            Route::get('/phones/{phone}/delivery-codes', [TimweDiagnosticApiController::class, 'phoneDeliveryCodes'])->name('phones.delivery-codes');
+            Route::get('/recent', [TimweDiagnosticApiController::class, 'recent'])->name('recent');
+            Route::match(['get', 'post'], '/lifetime', [TimweDiagnosticApiController::class, 'lifetime'])->name('lifetime');
+            Route::get('/billing-rate-evolution', [TimweDiagnosticApiController::class, 'billingRateEvolution'])->name('billing-rate-evolution');
+        });
+
+        // === ML DASHBOARD ROUTES === 
+        Route::prefix('ml-dashboard')->name('ml.')->group(function () {
+            Route::get('/', [MLDashboardController::class, 'index'])->name('dashboard');
+            Route::get('/data', [MLDashboardController::class, 'getDashboardData'])->name('data');
+            Route::post('/predict', [MLDashboardController::class, 'predictClient'])->name('predict');
+            Route::get('/client/{clientId}', [MLDashboardController::class, 'getClientDetails'])->name('client.details');
+            Route::post('/recommendations/generate', [MLDashboardController::class, 'generateRecommendations'])->name('recommendations.generate');
+            Route::post('/recommendations/status', [MLDashboardController::class, 'updateRecommendationStatus'])->name('recommendations.status');
+            Route::post('/recommendations/simulate', [MLDashboardController::class, 'simulateRecommendationImpact'])->name('recommendations.simulate');
+            Route::post('/features/extract', [MLDashboardController::class, 'extractFeatures'])->name('features.extract');
+            Route::post('/train', [MLDashboardController::class, 'trainModel'])->name('train');
+            Route::get('/task-status', [MLDashboardController::class, 'getTaskStatus'])->name('task.status');
+            Route::get('/insights', [MLDashboardController::class, 'getMLInsights'])->name('insights');
+            Route::post('/ab-test/start', [MLDashboardController::class, 'startABTest'])->name('ab-test.start');
+            Route::get('/ab-test/results/{testId}', [MLDashboardController::class, 'getABTestResults'])->name('ab-test.results');
+            Route::post('/ab-test/{testId}/end', [MLDashboardController::class, 'endABTest'])->name('ab-test.end');
+            Route::post('/report/generate', [MLDashboardController::class, 'generateReport'])->name('report.generate');
+            Route::get('/report/latest', [MLDashboardController::class, 'getLatestReport'])->name('report.latest');
+        });
+
+        // === ML MERCHANT RECOMMENDATIONS DASHBOARD ===
+        Route::prefix('merchant-recommendations')->name('merchant-reco.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'index'])->name('dashboard');
+            Route::post('/recommend', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'getRecommendations'])->name('recommend');
+            Route::get('/popular', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'getPopular'])->name('popular');
+            Route::post('/retrain', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'retrain'])->name('retrain');
+            Route::get('/health', [\App\Http\Controllers\Admin\MerchantRecommendationController::class, 'health'])->name('health');
+        });
+
+        // === PLUXEE USER MANAGEMENT ROUTES ===
+        Route::prefix('pluxee')->name('pluxee.')->group(function () {
+            Route::get('/users', [PluxeeUserController::class, 'index'])->name('users.index');
+            Route::get('/users/list', [PluxeeUserController::class, 'listUsers'])->name('users.list');
+            Route::post('/users/create', [PluxeeUserController::class, 'createUser'])->name('users.create');
+            Route::post('/users/{userId}/deactivate', [PluxeeUserController::class, 'deactivateUser'])->name('users.deactivate');
+            Route::post('/users/{userId}/activate', [PluxeeUserController::class, 'activateUser'])->name('users.activate');
+            Route::get('/campaigns', [PluxeeUserController::class, 'getCampaigns'])->name('campaigns');
+        });
+
+        // === AI AGENT ROUTES ===
+        Route::prefix('ai-agent')->name('ai-agent.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\AIAgentController::class, 'index'])->name('index');
+            Route::post('/ask', [\App\Http\Controllers\Admin\AIAgentController::class, 'ask'])->name('ask');
+            Route::get('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'getConversation'])->name('conversation');
+            Route::patch('/conversation/{sessionId}/title', [\App\Http\Controllers\Admin\AIAgentController::class, 'updateConversationTitle'])->name('conversation.title');
+            Route::delete('/conversation/{sessionId}', [\App\Http\Controllers\Admin\AIAgentController::class, 'deleteConversation'])->name('conversation.delete');
+            Route::get('/conversations', [\App\Http\Controllers\Admin\AIAgentController::class, 'getRecentConversations'])->name('conversations');
+            Route::get('/sessions', [\App\Http\Controllers\Admin\AIAgentController::class, 'getRecentSessions'])->name('sessions');
+            Route::get('/test', [\App\Http\Controllers\Admin\AIAgentController::class, 'test'])->name('test');
+            Route::get('/stats', [\App\Http\Controllers\Admin\AIAgentController::class, 'getStats'])->name('stats');
         });
         
         // Gestion des Synchronisations Eklektik (Super Admin seulement)
@@ -171,6 +272,7 @@ Route::get('/test', function () {
     return view('welcome');
 })->name('test');
 
-// Routes temporaires pour accéder à Eklektik sans authentification (à supprimer après utilisation)
-Route::get('/eklektik-sync-direct', [EklektikSyncController::class, 'index'])->name('eklektik.sync.direct');
-Route::get('/eklektik-sync-status-direct', [EklektikSyncController::class, 'status'])->name('eklektik.status.direct');
+// Monitoring dashboard (accessible aux admins authentifiés)
+Route::middleware('auth')->get('/monitoring', function () {
+    return view('monitoring.dashboard');
+})->name('monitoring.dashboard');

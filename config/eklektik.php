@@ -11,8 +11,8 @@ return [
     */
     'api' => [
         'base_url' => env('EKLEKTIK_API_URL', 'https://payment.eklectic.tn/API'),
-        'client_id' => env('EKLEKTIK_CLIENT_ID', '0a2e605d-88f6-11ec-9feb-fa163e3dd8b3'),
-        'client_secret' => env('EKLEKTIK_CLIENT_SECRET', 'ee60bb148a0e468a5053f9db41008780'),
+        'client_id' => env('EKLEKTIK_CLIENT_ID'),
+        'client_secret' => env('EKLEKTIK_CLIENT_SECRET'),
         'timeout' => env('EKLEKTIK_TIMEOUT', 30),
     ],
 
@@ -27,6 +27,8 @@ return [
     'stats' => [
         'base_url' => env('EKLEKTIK_STATS_URL', 'https://stats.eklectic.tn/getelements.php'),
         'timeout' => env('EKLEKTIK_STATS_TIMEOUT', 30),
+        // Désactiver la vérification SSL si cURL erre 60 (certificat) en local / Windows
+        'verify_ssl' => env('EKLEKTIK_VERIFY_SSL', true),
         
         // Accès par opérateur
         'credentials' => [

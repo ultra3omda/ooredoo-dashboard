@@ -15,35 +15,40 @@
         :root {
             @if($isOoredoo)
                 --brand-primary: #E30613;
-                --brand-secondary: #B91C1C;
-                --brand-accent: #FBBF24;
-                --brand-dark: #1f2937;
-                --bg: #f8fafc;
-                --card: #ffffff;
-                --muted: #64748b;
-                --success: #10b981;
-                --warning: #f59e0b;
-                --danger: #ef4444;
-                --accent: #3b82f6;
-                --border: #e2e8f0;
-                /* Backward compatibility */
-                --brand-red: var(--brand-primary);
+                --brand-secondary: #DC2626;
             @else
-                --brand-primary: #6B46C1;
-                --brand-secondary: #8B5CF6;
-                --brand-accent: #F59E0B;
-                --brand-dark: #1f2937;
-                --bg: #f8fafc;
-                --card: #ffffff;
-                --muted: #64748b;
-                --success: #10b981;
-                --warning: #f59e0b;
-                --danger: #ef4444;
-                --accent: #3b82f6;
-                --border: #e2e8f0;
-                /* Backward compatibility */
-                --brand-red: var(--brand-primary);
+                --brand-primary: #6C4BA0;
+                --brand-secondary: #D4A843;
             @endif
+            --brand-dark: #1a1a2e;
+            --bg: #f4f4f8;
+            --card: #ffffff;
+            --card-hover: #f0edf5;
+            --muted: #71717a;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --accent: #D4A843;
+            --border: #e2e0ea;
+            --brand-red: var(--brand-primary);
+            --text-primary: #1a1a2e;
+            --text-secondary: #52525b;
+            --input-bg: #ffffff;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .dark-mode {
+            --brand-dark: #FFFFFF;
+            --bg: #0D0A1A;
+            --card: #161131;
+            --card-hover: #1E1745;
+            --muted: #A1A1AA;
+            --border: #2A2350;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A1A1AA;
+            --input-bg: #1E1745;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
         }
         
         * { box-sizing: border-box; }
@@ -51,7 +56,7 @@
             margin: 0; 
             padding: 0; 
             background: var(--bg); 
-            color: var(--brand-dark); 
+            color: var(--text-primary); 
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
         }
@@ -111,7 +116,7 @@
         
         .btn-secondary {
             background: var(--bg);
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border: 1px solid var(--border);
         }
         
@@ -146,7 +151,7 @@
             padding: 16px;
             text-align: left;
             font-weight: 600;
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border-bottom: 1px solid var(--border);
         }
         
@@ -156,7 +161,7 @@
         }
         
         .table tr:hover {
-            background: #f9fafb;
+            background: var(--table-stripe);
         }
         
         .status-badge {
@@ -251,7 +256,7 @@
             padding: 8px 12px;
             border-radius: 6px;
             text-decoration: none;
-            color: var(--brand-dark);
+            color: var(--text-primary);
             border: 1px solid var(--border);
         }
         
@@ -282,36 +287,65 @@
         .breadcrumb a:hover {
             text-decoration: underline;
         }
+        
+        /* Responsive Admin - Mobile Card Layout */
+        @media (max-width: 768px) {
+            .container { padding: 12px 8px; }
+            .page-header { flex-direction: column; align-items: stretch; gap: 12px; }
+            .page-header h1 { font-size: 20px; text-align: center; }
+            .page-header .header-actions { justify-content: center; flex-wrap: wrap; gap: 8px; }
+            .page-header .header-actions a, .page-header .header-actions button { font-size: 13px; padding: 10px 16px; }
+            .breadcrumb { font-size: 12px; }
+            
+            /* Table -> Card layout on mobile */
+            .table thead { display: none; }
+            .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+            .table tr { 
+                padding: 16px; 
+                margin-bottom: 12px; 
+                border: 1px solid var(--border); 
+                border-radius: 10px; 
+                background: var(--card);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
+            .table td { 
+                padding: 4px 0; 
+                border: none;
+                font-size: 13px;
+            }
+            .table td:before {
+                content: attr(data-label);
+                display: block;
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 2px;
+                margin-top: 8px;
+            }
+            .table td:first-child:before { margin-top: 0; }
+            /* Hide last login column on mobile */
+            .table td.td-login { display: none; }
+            .table td:last-child > div { flex-direction: row; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+            /* Fix pagination overflow on mobile */
+            .pagination { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .pagination > nav { max-width: 100%; }
+            .pagination > nav > div { flex-wrap: wrap; justify-content: center; }
+            .pagination span, .pagination a { font-size: 12px; padding: 6px 10px; }
+        }
     </style>
 </head>
 <body>
+    @include('partials._admin-header')
     <div class="container">
-        <div class="breadcrumb">
-            @if(Auth::user()->canAccessOperatorsDashboard())
-                <a href="{{ route('dashboard') }}">Dashboard</a>
-                <span>→</span>
-            @else
-                <a href="{{ route('sub-stores.dashboard') }}">Sub-Stores Dashboard</a>
-                <span>→</span>
-            @endif
-            <span>Administration</span>
-            <span>→</span>
-            <span>Utilisateurs</span>
-        </div>
-        
-        <div class="header">
+        <div class="page-header" style="margin-top: 16px;">
             <h1>Gestion des Utilisateurs</h1>
             <div class="header-actions">
-                @if(Auth::user()->canAccessOperatorsDashboard())
-                    <a href="{{ route('dashboard') }}" class="btn btn-secondary">
-                        ← Retour au Dashboard
-                    </a>
-                @else
-                    <a href="{{ route('sub-stores.dashboard') }}" class="btn btn-secondary">
-                        ← Retour au Sub-Stores Dashboard
-                    </a>
-                @endif
                 @if(Auth::user()->isSuperAdmin() || Auth::user()->isAdmin())
+                    <a href="{{ route('admin.users.permissions') }}" class="btn" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);">
+                        <i class="fas fa-shield-alt"></i> Permissions Campagnes
+                    </a>
                     <a href="{{ route('admin.users.create') }}" class="btn btn-primary">
                         + Nouvel Utilisateur
                     </a>
@@ -332,6 +366,7 @@
         @endif
         
         <div class="card">
+            <div class="table-wrapper">
             <table class="table">
                 <thead>
                     <tr>
@@ -346,7 +381,7 @@
                 <tbody>
                     @forelse($users as $user)
                         <tr>
-                            <td>
+                            <td data-label="Utilisateur">
                                 <div>
                                     <div style="font-weight: 600;">{{ $user->name }}</div>
                                     <div style="font-size: 12px; color: var(--muted);">{{ $user->email }}</div>
@@ -355,7 +390,7 @@
                                     @endif
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Role">
                                 @if($user->role)
                                     <span class="role-badge role-{{ $user->role->name }}">
                                         {{ $user->role->display_name }}
@@ -364,7 +399,7 @@
                                     <span style="color: var(--muted);">Aucun rôle</span>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="Operateurs" class="td-login">
                                 <div class="operators-list">
                                     @forelse($user->operators as $operator)
                                         <span>
@@ -378,12 +413,12 @@
                                     @endforelse
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Statut">
                                 <span class="status-badge status-{{ $user->status }}">
                                     {{ ucfirst($user->status) }}
                                 </span>
                             </td>
-                            <td>
+                            <td data-label="Derniere connexion" class="td-login">
                                 @if($user->last_login_at)
                                     <div>{{ $user->last_login_at->format('d/m/Y H:i') }}</div>
                                     @if($user->last_login_ip)
@@ -423,6 +458,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </div>
         
         @if($users->hasPages())
@@ -431,5 +467,11 @@
             </div>
         @endif
     </div>
+    <script>
+    (function() {
+        const saved = localStorage.getItem('dashboard-theme');
+        if (saved === 'dark') document.documentElement.classList.add('dark-mode');
+    })();
+    </script>
 </body>
 </html>

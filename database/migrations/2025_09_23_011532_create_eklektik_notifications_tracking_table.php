@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('eklektik_notifications_tracking')) {
+            return;
+        }
         // Cette migration a été corrigée - elle crée maintenant la table notifications_tracking
         // La table transactions_tracking est créée dans une migration séparée
         Schema::create('eklektik_notifications_tracking', function (Blueprint $table) {

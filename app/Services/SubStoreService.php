@@ -237,6 +237,22 @@ class SubStoreService
      */
     public function getAvailableSubStoresForUser($user): array
     {
+        // Pluxee campaign user with restrictions: show their sub-store
+        if ($user->hasCampaignRestriction()) {
+            $primaryOperator = $user->primaryOperator();
+            if ($primaryOperator) {
+                $store = DB::table('stores')
+                    ->where('store_name', $primaryOperator->operator_name)
+                    ->where('store_active', 1)
+                    ->select('store_name as name', 'store_id')
+                    ->first();
+                if ($store) {
+                    return [(array) $store];
+                }
+                return [['name' => $primaryOperator->operator_name, 'store_id' => null]];
+            }
+        }
+
         // Super Admin : tous les sub-stores
         if ($user->isSuperAdmin()) {
             return $this->getSubStoresWithIds();
@@ -245,9 +261,15 @@ class SubStoreService
         // Admin Sub-Store ou Collaborateur : seulement leur sub-store assigné
         $primaryOperator = $user->primaryOperator();
         if ($primaryOperator && $this->isSubStoreOperator($primaryOperator->operator_name)) {
-            return [
-                ['name' => $primaryOperator->operator_name, 'store_id' => null]
-            ];
+            $store = DB::table('stores')
+                ->where('store_name', $primaryOperator->operator_name)
+                ->where('store_active', 1)
+                ->select('store_name as name', 'store_id')
+                ->first();
+            if ($store) {
+                return [(array) $store];
+            }
+            return [['name' => $primaryOperator->operator_name, 'store_id' => null]];
         }
         
         // Autres cas : chercher par opérateur assigné
@@ -274,6 +296,14 @@ class SubStoreService
      */
     public function getDefaultSubStoreForUser($user): ?string
     {
+        // User with campaign restriction: their sub-store
+        if ($user->hasCampaignRestriction()) {
+            $primaryOperator = $user->primaryOperator();
+            if ($primaryOperator) {
+                return $primaryOperator->operator_name;
+            }
+        }
+
         // Super Admin : ALL par défaut
         if ($user->isSuperAdmin()) {
             return 'ALL';

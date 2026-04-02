@@ -108,10 +108,16 @@ class SyncEklektikStats extends Command
             // Résumé concis
             $this->info("✅ Sync OK - {$results['total_synced']} enr. en {$duration}s");
             
-            // Erreurs seulement si présentes
+            // Afficher les erreurs (ex. SSL, HTTP) pour faciliter le diagnostic
             if (!empty($results['errors'])) {
-                $errorCount = count($results['errors']);
-                $this->warn("⚠️ {$errorCount} erreur(s)");
+                $this->warn('⚠️ ' . count($results['errors']) . ' erreur(s) :');
+                foreach ($results['errors'] as $err) {
+                    $this->line('   • ' . $err);
+                }
+                if (str_contains(implode(' ', $results['errors']), 'SSL certificate') || str_contains(implode(' ', $results['errors']), 'cURL error 60')) {
+                    $this->newLine();
+                    $this->line('   💡 Si erreur SSL (cURL 60) : ajoutez EKLEKTIK_VERIFY_SSL=false dans .env puis relancez.');
+                }
             }
 
         } catch (\Exception $e) {

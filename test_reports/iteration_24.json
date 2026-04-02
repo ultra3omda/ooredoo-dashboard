@@ -1,0 +1,80 @@
+{
+  "summary": "Backend API testing for Iteration 24 - All 18 tests PASSED. Verified: Widget P2 endpoints (JSON + HTML), Merchant Intelligence endpoints (analyze, digest, report, report/html), ML Recommendations endpoints, Health/Stats/Categories, Proxy catch-all, and server.py integrity (961 lines, no duplicates).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_24.py",
+    "/app/test_reports/pytest/pytest_iteration_24.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_24.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "ml_client_ids": "118580 (used for widget and recommendations testing)",
+    "api_url": "https://perf-test-ooredoo.preview.emergentagent.com"
+  },
+  "seed_data_creation": "No new seed data. Used existing production data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 24 verified all endpoints after server.py corruption fix. Server.py now has 961 lines (ends correctly around line 962). All Widget P2, Merchant Intelligence, and ML Recommendations endpoints working correctly. Proxy catch-all returns 502/503 as expected (PHP not running in preview).",
+  "features_verified": {
+    "GET /api/merchant-recommendations/widget/118580": "PASS - JSON widget with client_id, source='ml_model', items array",
+    "GET /api/merchant-recommendations/widget/118580?top_k=3": "PASS - respects top_k parameter",
+    "GET /api/merchant-recommendations/widget/118580?exclude_visited=true": "PASS - all items have visited=false",
+    "GET /api/merchant-recommendations/widget/118580/html": "PASS - embeddable HTML widget",
+    "GET /api/merchant-intelligence/analyze?days=30": "PASS - returns merchants with health_score, status, trend_7d_pct",
+    "GET /api/merchant-intelligence/digest?limit=5": "PASS - returns to_boost, to_watch, top_performers, stats",
+    "POST /api/merchant-intelligence/report (provider=gemini, model=gemini-2.5-flash)": "PASS - AI report generated with executive_summary",
+    "GET /api/merchant-intelligence/report/html": "PASS - HTML Intelligence report",
+    "POST /api/merchant-recommendations (client_id=118580)": "PASS - ML recommendations with explanation",
+    "GET /api/merchant-recommendations/explain/118580": "PASS - HTML explain report",
+    "GET /api/merchant-recommendations/health": "PASS - status='ready', model_loaded=true",
+    "GET /api/merchant-recommendations/stats": "PASS - returns interaction stats",
+    "GET /api/merchant-recommendations/categories": "PASS - returns categories list",
+    "GET / (proxy catch-all)": "PASS - returns 502 (PHP not running in preview, not 404)",
+    "GET /login (proxy catch-all)": "PASS - proxied correctly",
+    "server.py integrity": "PASS - 961 lines, no duplicate routes"
+  },
+  "api_response_samples": {
+    "widget_json": {
+      "client_id": 118580,
+      "source": "ml_model",
+      "count": 3
+    },
+    "merchant_intelligence_digest_stats": {
+      "performant": 19,
+      "a_surveiller": 52,
+      "a_booster": 3
+    },
+    "health_response": {
+      "status": "ready",
+      "model_loaded": true,
+      "fallback_available": true,
+      "trained_at": "2026-03-31T11:31:23.142588",
+      "n_train_samples": 111660,
+      "eval_results": {
+        "ndcg@5": 1.0,
+        "ndcg@10": 1.0
+      }
+    }
+  },
+  "server_py_verification": {
+    "line_count": 961,
+    "ends_with_proxy_catch_all": true,
+    "no_duplicate_code": true,
+    "decimal_serialization_fixed": true
+  }
+}
