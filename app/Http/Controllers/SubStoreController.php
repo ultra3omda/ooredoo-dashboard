@@ -294,7 +294,7 @@ class SubStoreController extends Controller
         try {
             $p = $this->normalizeSubStoreParams($request);
             $cacheKey = 'ss_split:kpis:' . md5(json_encode($p));
-            $data = Cache::remember($cacheKey, 3600, function () use ($p) {
+            $data = Cache::remember($cacheKey, 14400, function () use ($p) {
                 return $this->computeKpis($p);
             });
             return response()->json(['success' => true, 'section' => 'kpis', 'data' => $data, 'execution_time_ms' => round((microtime(true) - $start) * 1000)]);
@@ -314,7 +314,7 @@ class SubStoreController extends Controller
         try {
             $p = $this->normalizeSubStoreParams($request);
             $cacheKey = 'ss_split:stores:' . md5(json_encode($p));
-            $data = Cache::remember($cacheKey, 3600, function () use ($p) {
+            $data = Cache::remember($cacheKey, 14400, function () use ($p) {
                 return $this->computeTopSubStores($p['sub_store'], $p['start_date'], $p['end_date']);
             });
             $campaignFilter = $this->currentCampaign;
@@ -342,7 +342,7 @@ class SubStoreController extends Controller
         try {
             $p = $this->normalizeSubStoreParams($request);
             $cacheKey = 'ss_split:charts:' . md5(json_encode($p));
-            $data = Cache::remember($cacheKey, 3600, function () use ($p) {
+            $data = Cache::remember($cacheKey, 14400, function () use ($p) {
                 return [
                     'categoryDistribution' => $this->getCategoryDistribution($p['start_date'], $p['end_date'], $p['sub_store']),
                     'inscriptionsTrend' => $this->getInscriptionsTrend($p['start_date'], $p['end_date'], $p['sub_store']),
@@ -365,7 +365,7 @@ class SubStoreController extends Controller
         try {
             $p = $this->normalizeSubStoreParams($request);
             $cacheKey = 'ss_split:merchants:' . md5(json_encode($p));
-            $data = Cache::remember($cacheKey, 3600, function () use ($p) {
+            $data = Cache::remember($cacheKey, 14400, function () use ($p) {
                 return $this->getMerchantData($p['sub_store'], $p['start_date'], $p['end_date'], $p['comparison_start_date'], $p['comparison_end_date']);
             });
             return response()->json(['success' => true, 'section' => 'merchants', 'data' => $data, 'execution_time_ms' => round((microtime(true) - $start) * 1000)]);
@@ -390,7 +390,7 @@ class SubStoreController extends Controller
             if ($sd->diffInDays($ed) > 30) $sd = $ed->copy()->subDays(29);
 
             $cacheKey = 'ss_split:users:' . md5(json_encode($p));
-            $data = Cache::remember($cacheKey, 3600, function () use ($p, $sd, $ed) {
+            $data = Cache::remember($cacheKey, 14400, function () use ($p, $sd, $ed) {
                 return [
                     'users_kpis' => $this->getUsersKPIs($sd, $ed, Carbon::parse($p['comparison_start_date']), Carbon::parse($p['comparison_end_date']), $p['sub_store']),
                     'users' => $this->getUsersList($sd, $ed->endOfDay(), $p['sub_store'], 150),
@@ -1282,7 +1282,7 @@ class SubStoreController extends Controller
 
         $kp = function ($key, $cur) use ($comp) {
             $prev = $comp[$key] ?? $cur;
-            return ['current' => $cur, 'previous' => $prev, 'change' => $this->calculateUserChange($prev, $cur)];
+            return ['current' => $cur, 'previous' => $prev, 'change' => $this->calculateUserChange($cur, $prev)];
         };
 
         return [
@@ -1310,7 +1310,7 @@ class SubStoreController extends Controller
         $clientIds = $this->getCampaignClientIds();
 
         $kp = function ($cur, $prev) {
-            return ['current' => (int) $cur, 'previous' => (int) $prev, 'change' => $this->calculateUserChange($prev, $cur)];
+            return ['current' => (int) $cur, 'previous' => (int) $prev, 'change' => $this->calculateUserChange($cur, $prev)];
         };
 
         if (empty($clientIds)) {

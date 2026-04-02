@@ -44,6 +44,8 @@
             color: var(--brand-dark); 
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
         }
 
         .container { 
@@ -199,6 +201,8 @@
     /* Tab Content */
     .tab-content {
       display: none;
+      overflow-x: hidden;
+      max-width: 100%;
     }
     
     .tab-content.active {
@@ -1246,6 +1250,11 @@
 
     /* ===== MOBILE: Merchants & Users KPIs (AFTER base styles) ===== */
     @media (max-width: 600px) {
+      .container {
+        padding: 12px 8px;
+        overflow-x: hidden;
+      }
+
       .merchants-kpis-row { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
       .merchants-kpis-row .kpi-card { width: 100% !important; flex: 1 1 auto !important; }
       .merchants-kpi { 
@@ -1280,6 +1289,32 @@
       .overview-kpi .kpi-content { overflow: visible !important; }
       .overview-kpi .kpi-title { font-size: 10px !important; word-break: normal !important; overflow-wrap: normal !important; white-space: normal !important; hyphens: none !important; }
       .overview-kpi .kpi-value { font-size: 18px !important; }
+
+      .tab-content {
+        overflow-x: hidden !important;
+        max-width: 100vw;
+      }
+
+      .table-wrapper {
+        max-width: calc(100vw - 24px);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .enhanced-table {
+        min-width: 600px;
+        font-size: 12px;
+      }
+
+      .enhanced-table th,
+      .enhanced-table td {
+        padding: 8px 6px;
+        white-space: nowrap;
+      }
+
+      .chart-title {
+        font-size: 14px !important;
+      }
     }
 
     /* Sub-store specific styles */
@@ -2814,42 +2849,37 @@
             
     // Si on active l'onglet Merchant, utiliser les données en cache si disponibles
     if (tabName === 'merchant') {
-      debugLog('🏪 Activation onglet Merchant');
+      debugLog('Activation onglet Merchant');
       
-      // Attendre que l'onglet soit visible dans le DOM
       setTimeout(() => {
-        // Vérifier si on a des données Merchant en cache
         if (window.merchantKPIsData) {
-          debugLog('💾 Utilisation des données en cache pour Merchant');
-          // Forcer la mise à jour même si les données sont en cache
+          debugLog('Utilisation des donnees en cache pour Merchant');
           updateMerchantKPIs(window.merchantKPIsData);
+          if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
         } else {
-          debugLog('🔄 Pas de données Merchant en cache, rechargement nécessaire');
+          debugLog('Pas de donnees Merchant, rechargement...');
           loadDashboardData();
         }
-      }, 300); // Attendre que l'onglet soit visible
+      }, 200);
     }
     
     // Si on active l'onglet Users, utiliser les données en cache si disponibles
     if (tabName === 'users') {
-      debugLog('👥 Activation onglet Users');
+      debugLog('Activation onglet Users');
       
-      // Attendre que l'onglet soit visible dans le DOM
       setTimeout(() => {
-        // Vérifier si on a des données Users en cache
         if (window.usersKPIsData) {
-          debugLog('💾 Utilisation des données en cache pour Users');
-          // Forcer la mise à jour même si les données sont en cache
+          debugLog('Utilisation des donnees en cache pour Users');
           updateUsersKPIs(window.usersKPIsData.kpis);
           updateUsersTable(window.usersKPIsData.users);
+        } else if (window._usersLoading) {
+          debugLog('Users en cours de chargement, attente...');
         } else {
-          debugLog('🔄 Pas de données Users en cache, rechargement nécessaire');
-          // Créer les KPIs de chargement s'ils n'existent pas
+          debugLog('Pas de donnees Users, chargement...');
           createUsersLoadingKPIs();
-          // Charger les données utilisateurs
           loadUsersData();
         }
-      }, 300); // Attendre que l'onglet soit visible
+      }, 200);
     }
     // Si on active l'onglet Recommandations, charger les données ML
     if (tabName === 'recommendations') {
@@ -3150,14 +3180,33 @@
             signal: AbortSignal.timeout(180000)
           }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
 
-        // Fire KPIs first (fastest with batch queries), then the rest in parallel
-        const [kpis, stores, charts, merchants, users] = await Promise.allSettled([
+        // Fire only essential sections first (kpis, stores, charts)
+        // Merchants & Users are lazy-loaded when their tabs are clicked
+        const [kpis, stores, charts] = await Promise.allSettled([
           fetchSection('kpis'),
           fetchSection('stores'),
-          fetchSection('charts'),
+          fetchSection('charts')
+        ]);
+
+        // Pre-fetch merchants & users in background (low priority)
+        const lazyPromises = Promise.allSettled([
           fetchSection('merchants'),
           fetchSection('users')
-        ]);
+        ]).then(([merchants, users]) => {
+          if (merchants.status === 'fulfilled' && merchants.value.success) {
+            const md = merchants.value.data;
+            if (md.kpis) window.merchantKPIsData = md.kpis;
+            if (md.merchants) window.merchantsListData = md.merchants;
+            window._merchantsLoaded = true;
+            debugLog('Background merchants loaded:', merchants.value.execution_time_ms + 'ms');
+          }
+          if (users.status === 'fulfilled' && users.value.success) {
+            const ud = users.value.data;
+            if (ud.users_kpis) window.usersKPIsData = { kpis: ud.users_kpis, users: ud.users || [] };
+            window._usersLoaded = true;
+            debugLog('Background users loaded:', users.value.execution_time_ms + 'ms');
+          }
+        });
 
         window.lastDashboardLoadTime = Date.now();
         window.datesChanged = false;
@@ -3220,30 +3269,21 @@
           loadedSections++;
         }
 
-        // Merchants
-        if (merchants.status === 'fulfilled' && merchants.value.success) {
-          const md = merchants.value.data;
-          if (md.kpis) {
-            window.merchantKPIsData = md.kpis;
-            const activeTab = document.querySelector('.nav-tab.active');
-            if (activeTab && activeTab.textContent.includes('Merchant')) {
-              updateMerchantKPIs(md.kpis);
+        // Merchants & Users are loaded in background — update UI if their tabs are already visible
+        lazyPromises.then(() => {
+          const activeTab = document.querySelector('.nav-tab.active');
+          if (activeTab) {
+            const tabText = activeTab.textContent;
+            if (tabText.includes('Merchant') && window.merchantKPIsData) {
+              updateMerchantKPIs(window.merchantKPIsData);
+              if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
+            }
+            if (tabText.includes('Users') && window.usersKPIsData) {
+              updateUsersKPIs(window.usersKPIsData.kpis);
+              updateUsersTable(window.usersKPIsData.users);
             }
           }
-          if (md.merchants) updateMerchantTable(md.merchants);
-          loadedSections++;
-        }
-
-        // Users
-        if (users.status === 'fulfilled' && users.value.success) {
-          const ud = users.value.data;
-          if (ud.users_kpis) {
-            window.usersKPIsData = { kpis: ud.users_kpis, users: ud.users || [] };
-            updateUsersKPIs(ud.users_kpis);
-          }
-          if (ud.users) updateUsersTable(ud.users);
-          loadedSections++;
-        }
+        });
 
         // Expirations (separate lightweight call)
         try {
@@ -3264,7 +3304,7 @@
         hideGlobalKPIsDeltas();
         forceHideGlobalDeltas();
         const totalLoadTime = ((Date.now() - loadStartTime) / 1000).toFixed(1);
-        showNotification(`${loadedSections}/5 sections chargees en ${totalLoadTime}s pour ${subStore === 'ALL' ? 'tous sub-stores' : subStore}`, 'success');
+        showNotification(`${loadedSections}/3 sections principales chargees en ${totalLoadTime}s`, 'success');
 
       } catch (error) {
         debugError('Erreur chargement split:', error);

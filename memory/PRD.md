@@ -41,6 +41,10 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - DB credentials security, connection leak fixes, PHP-FPM version detection
 - "Toutes les campagnes" table fix: shows per-campaign breakdown with correct distributed cards
 - Journal d'Audit hidden for Admin/Collaborateur (SuperAdmin only)
+- Fixed calculateUserChange bug: percentage change was inverted (-100% → +100%)
+- Mobile scroll CSS fix for Users tab: overflow-x hidden, proper table-wrapper sizing
+- Performance: Cache TTL increased from 1h to 4h, lazy-loading for Merchants/Users tabs
+- Performance: Initial load reduced from 5 parallel requests to 3 essential + 2 background
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
