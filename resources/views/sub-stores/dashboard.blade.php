@@ -45,6 +45,7 @@
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
             overflow-x: hidden;
+            overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
 
@@ -163,10 +164,11 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 200;
       overflow-x: auto;
       scrollbar-width: none;
       -ms-overflow-style: none;
+      -webkit-overflow-scrolling: touch;
     }
     
     .nav-tabs::-webkit-scrollbar {

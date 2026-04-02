@@ -15,42 +15,25 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - **Admin Sub-Store (Pluxee)**: Sub-Stores dashboard, Users, Invitations, Audit Logs (own sub-store only)
 - **Collaborateur**: Sub-Stores dashboard (own campaign only), no admin pages
 
-## Performance Optimization (Avril 2026)
-### Pre-resolved Campaign Client IDs
-- `getCampaignClientIds()` executes campaign filter ONCE, caches for 30 minutes
-- Replaces 18 identical sub-queries with a single cached array lookup
-
-### Batch SQL Queries (Pluxee Path)
-- `computeKpisPluxeeBatch()`: 3 queries instead of 15+
-- `getUsersKPIsPluxeeBatch()`: 2 queries instead of 14
-- Uses CASE WHEN aggregation
-
-### SQL Indexes
-- Migration: `2026_04_01_230000_add_performance_indexes_substores.php`
-- 7 targeted indexes
-
 ## Implemented Features (ALL DONE)
 - Campaign Data Filtering, RBAC Permissions, KPI Renaming
-- emergentintegrations fallback to direct SDK, Gemini->OpenAI auto-fallback
-- DB credentials security, connection leak fixes, PHP-FPM version detection
+- emergentintegrations fallback, Gemini->OpenAI auto-fallback
 - Users Loss KPI via `deleted_clients` table
-- Journal d'Audit hidden for Admin/Collaborateur (SuperAdmin only)
-- Fixed calculateUserChange bug: percentage change was inverted
-- Mobile scroll CSS fix for Users tab
-- Performance: Cache TTL 4h, lazy-loading for Merchants/Users tabs
-- Cache Warming: `substores:warmup` CLI command + bouton SuperAdmin + cron scheduling
+- Journal d'Audit hidden for Admin/Collaborateur
+- Performance: Cache TTL 4h, lazy-loading, cache warming
 - RBAC campagnes auto-résolu via user_operators->stores->carte_recharge
-- Fix distributed KPI centralisé via getPluxeeDistributed()
-- **Fix KPI "Cartes Utilisées" (2 avril 2026)**: `totalSubscriptions` = `count($clientIds)` au lieu de `COUNT(client_abonnement_id)`. `cards_activated`/`newUsers` avec `COUNT(DISTINCT)`.
-- **Fix Graphique Expirations (2 avril 2026)**: Filtre `status != 'removed'` pour exclure les tentatives avortées (43 faux positifs). Plage étendue +12 mois pour montrer les expirations futures. Paramètre `campaign` transmis à l'API.
-- **Fix Catégories Évolution (2 avril 2026)**: Calcul de la comparaison avec période précédente pour le delta Evolution.
-- **Fix Loading uniforme (2 avril 2026)**: Tous les KPIs passent en "Chargement..." uniformément, deltas masqués pendant le chargement, données Merchant/Users réinitialisées lors du refresh.
-- **Campaign Dropdown Fallback (2 avril 2026)**: `updateCampaignDropdown()` maintenant async avec fallback via `/api/split/campaigns` si le cache initial est vide. Nouvel endpoint `getCampaignsSplit` ajouté.
+- Fix KPI "Cartes Utilisées": `count($clientIds)` au lieu de `COUNT(client_abonnement_id)`
+- Fix Graphique Expirations: `status != 'removed'` + plage +12 mois + filtre campagne
+- Fix Catégories Évolution: comparaison avec période précédente
+- Fix Loading uniforme: tous KPIs en "Chargement..." + deltas masqués
+- Campaign Dropdown Fallback: async + API `/api/split/campaigns`
+- **Fix Invitation Permissions (2 avril 2026)**: `getCampaigns()` filtre maintenant par les campagnes autorisées de l'admin (`getAllowedCampaigns()`). Validation backend ajoutée dans `store()` pour empêcher l'assignation de campagnes non autorisées.
+- **Fix Navigation Mobile (2 avril 2026)**: z-index nav-tabs augmenté à 200, `-webkit-overflow-scrolling: touch` ajouté, `overflow-y: auto` sur body.
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
-- Admin Pluxee: imedos001@gmail.com / Test@2025
-- Collaborateur: imededdine.essefi@gmail.com / Test@2025
+- Admin Pluxee: imedos001@gmail.com (user deleted from DB, needs re-invitation)
+- Collaborateur: imededdine.essefi@gmail.com / pca: ["Hutchinson Tunisie - By Pluxee"]
 
 ## Deployment Steps (VPS)
 1. git pull

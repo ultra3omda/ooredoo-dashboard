@@ -182,6 +182,17 @@ class InvitationController extends Controller
         // Process campaign access
         $campaignAccess = $request->input('campaign_access', []);
 
+        // Validate: admin can only assign campaigns they have access to
+        if (!$user->isSuperAdmin() && !empty($campaignAccess)) {
+            $userAllowed = $user->getAllowedCampaigns();
+            if (!empty($userAllowed)) {
+                $invalidCampaigns = array_diff($campaignAccess, $userAllowed);
+                if (!empty($invalidCampaigns)) {
+                    return back()->with('error', 'Vous ne pouvez pas assigner des campagnes auxquelles vous n\'avez pas accès: ' . implode(', ', $invalidCampaigns));
+                }
+            }
+        }
+
         try {
             $invitation = Invitation::create([
                 'email' => $request->email,
@@ -491,6 +502,7 @@ class InvitationController extends Controller
         }
 
         try {
+            $user = auth()->user();
             $storeId = DB::table('stores')
                 ->where('store_name', $storeName)
                 ->value('store_id');
@@ -499,12 +511,21 @@ class InvitationController extends Controller
                 return response()->json(['campaigns' => []]);
             }
 
-            $campaigns = DB::table('carte_recharge')
+            $query = DB::table('carte_recharge')
                 ->where('stores', $storeId)
                 ->select('campain_name', DB::raw('COUNT(*) as total_batches'), DB::raw('SUM(card_generated_number) as total_cards'))
                 ->groupBy('campain_name')
-                ->orderBy('campain_name')
-                ->get()
+                ->orderBy('campain_name');
+
+            // Filter by admin's own allowed campaigns (admin can only assign campaigns they have access to)
+            if ($user && !$user->isSuperAdmin()) {
+                $userAllowed = $user->getAllowedCampaigns();
+                if (!empty($userAllowed)) {
+                    $query->whereIn('campain_name', $userAllowed);
+                }
+            }
+
+            $campaigns = $query->get()
                 ->map(fn($c) => [
                     'name' => $c->campain_name,
                     'batches' => (int) $c->total_batches,
