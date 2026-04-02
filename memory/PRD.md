@@ -41,7 +41,7 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - DB credentials security, connection leak fixes, PHP-FPM version detection
 - Users Loss KPI: comptage des clients supprimés via table `deleted_clients`, affiché en Vue d'Ensemble + onglet Users
   - Hutchinson: 657 inscriptions + 7 loss = 664 total (equilibre confirmé)
-  - Toutes campagnes: 12 314 inscriptions + 265 loss = 12 579
+  - Toutes campagnes Pluxee: 658 inscriptions + 7 loss = 665
 - Journal d'Audit hidden for Admin/Collaborateur (SuperAdmin only)
 - Fixed calculateUserChange bug: percentage change was inverted (-100% → +100%)
 - Mobile scroll CSS fix for Users tab: overflow-x hidden, proper table-wrapper sizing
@@ -53,6 +53,7 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
   - Route `/sub-stores/api/warmup` (POST, SuperAdmin) + `/sub-stores/api/warmup-status` (GET)
 - RBAC campagnes auto-résolu: admin/collaborateur ne voit que ses campagnes via user_operators→stores→carte_recharge (sans pluxee_campaign_access explicite)
 - Fix distributed KPI centralisé via getPluxeeDistributed() avec filtre allowedCampaigns
+- **Fix KPI "Cartes Utilisées" (2 avril 2026)**: `totalSubscriptions` corrigé pour compter `count($clientIds)` (clients distincts avec cartes activées) au lieu de `COUNT(client_abonnement_id)` (lignes d'abonnement). Avant: 707, Après: 664/665. `cards_activated`/`newUsers` corrigés avec `COUNT(DISTINCT)` au lieu de `SUM`.
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025

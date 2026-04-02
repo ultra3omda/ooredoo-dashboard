@@ -567,8 +567,8 @@ class SubStoreController extends Controller
                     AND ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as active_users_cohorte_comp,
                 COUNT(DISTINCT CASE WHEN c.created_at BETWEEN ? AND ? THEN c.client_id END) as inscriptions_cohorte,
                 COUNT(DISTINCT CASE WHEN c.created_at BETWEEN ? AND ? THEN c.client_id END) as inscriptions_cohorte_comp,
-                SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as cards_activated,
-                SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as cards_activated_comp
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as cards_activated,
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as cards_activated_comp
             ", [$now, $now, $sd, $ed, $now, $csd, $ced, $sd, $ed, $csd, $ced, $sd, $ed, $csd, $ced])
             ->first();
 
@@ -601,7 +601,7 @@ class SubStoreController extends Controller
             'activeUsers'           => $kpiPair((int) $sub->active_users, $cwt),
             'activeUsersCohorte'    => $kpiPair((int) $sub->active_users_cohorte, (int) $tx->clients_with_tx_cohorte),
             'transactions'          => $kpiPair((int) $tx->total_transactions, (int) $tx->total_transactions),
-            'totalSubscriptions'    => $kpiPair((int) $sub->total_subscriptions, (int) $sub->total_subscriptions),
+            'totalSubscriptions'    => $kpiPair(count($clientIds), count($clientIds)),
             'renewalRate'           => $kpiPair((int) $sub->cards_activated, (int) $sub->cards_activated_comp),
             'clientsWithTransactions' => $kpiPair($cwt, $cwt),
             'inscriptionsCohorte'   => $kpiPair((int) $sub->inscriptions_cohorte, (int) $sub->inscriptions_cohorte_comp),
@@ -1400,8 +1400,8 @@ class SubStoreController extends Controller
                     AND ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as active_users_cohorte,
                 COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ?
                     AND ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as active_users_cohorte_comp,
-                SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as new_users,
-                SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as new_users_comp
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as new_users,
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as new_users_comp
             ", [$now, $now, $sdStr, $edStr, $now, $csdStr, $cedStr, $sdStr, $edStr, $csdStr, $cedStr])
             ->first();
 
@@ -1436,7 +1436,7 @@ class SubStoreController extends Controller
             'activeUsers'           => $kp($activeUsers, $activeUsers),
             'totalTransactions'     => $kp($totalTx, $totalTx),
             'avgTransactionsPerUser' => ['current' => $avgTxPerUser, 'previous' => 0, 'change' => 0],
-            'totalSubscriptions'    => $kp((int) $sub->total_subscriptions, (int) $sub->total_subscriptions),
+            'totalSubscriptions'    => $kp(count($clientIds), count($clientIds)),
             'newUsers'              => $kp((int) $sub->new_users, (int) $sub->new_users_comp),
             'transactionsCohorte'   => $kp((int) $tx->tx_cohorte, (int) $tx->tx_cohorte_comp),
             'retentionRate'         => $kp($retention, $retentionComp),
