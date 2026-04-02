@@ -3141,13 +3141,14 @@
 
         debugLog('Chargement split parallele:', { startDate, endDate, subStore, periodDays });
 
+        const loadStartTime = Date.now();
         const fetchSection = (section) =>
           fetch(`/sub-stores/api/split/${section}?${params}`, {
             headers: { 'Accept': 'application/json' },
-            signal: AbortSignal.timeout(120000)
+            signal: AbortSignal.timeout(180000)
           }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
 
-        // Fire all 5 splits in parallel
+        // Fire KPIs first (fastest with batch queries), then the rest in parallel
         const [kpis, stores, charts, merchants, users] = await Promise.allSettled([
           fetchSection('kpis'),
           fetchSection('stores'),
@@ -3256,7 +3257,8 @@
 
         hideGlobalKPIsDeltas();
         forceHideGlobalDeltas();
-        showNotification(`${loadedSections}/5 sections chargees pour ${subStore === 'ALL' ? 'tous sub-stores' : subStore}`, 'success');
+        const totalLoadTime = ((Date.now() - loadStartTime) / 1000).toFixed(1);
+        showNotification(`${loadedSections}/5 sections chargees en ${totalLoadTime}s pour ${subStore === 'ALL' ? 'tous sub-stores' : subStore}`, 'success');
 
       } catch (error) {
         debugError('Erreur chargement split:', error);

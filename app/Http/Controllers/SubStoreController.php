@@ -44,6 +44,39 @@ class SubStoreController extends Controller
             ->exists();
     }
 
+    // =========================================================================
+    // CAMPAIGN CLIENT IDS — Pre-resolved & Cached
+    // =========================================================================
+
+    private ?array $resolvedCampaignClientIds = null;
+
+    /**
+     * Resolve campaign client IDs ONCE and cache them for 30 minutes.
+     * This replaces 15+ identical sub-queries with a single cached lookup.
+     */
+    private function getCampaignClientIds(): array
+    {
+        if ($this->resolvedCampaignClientIds !== null) {
+            return $this->resolvedCampaignClientIds;
+        }
+        if (!$this->currentCampaign) {
+            $this->resolvedCampaignClientIds = [];
+            return [];
+        }
+        $cacheKey = 'campaign_cids:' . md5($this->currentCampaign);
+        $this->resolvedCampaignClientIds = Cache::remember($cacheKey, 1800, function () {
+            return DB::table('carte_recharge')
+                ->where('campain_name', $this->currentCampaign)
+                ->where('carte_recharge_used', 1)
+                ->whereNotNull('client_id')
+                ->where('client_id', '!=', '')
+                ->distinct()
+                ->pluck('client_id')
+                ->toArray();
+        });
+        return $this->resolvedCampaignClientIds;
+    }
+
     private function normalizeSubStoreParams(Request $request): array
     {
         $startDate = $request->input('start_date');
@@ -351,12 +384,19 @@ class SubStoreController extends Controller
     private function computeKpis(array $p): array
     {
         $ss = $p['sub_store'];
+        $isPluxee = $this->isPluxeeCampaign($ss);
+
+        // ── PLUXEE BATCH: 3 queries instead of 15+ ──
+        if ($isPluxee && $this->currentCampaign) {
+            return $this->computeKpisPluxeeBatch($p);
+        }
+
+        // ── STANDARD PATH (unchanged, individual cached methods) ──
         $sd = $p['start_date'];
         $ed = $p['end_date'];
         $csd = $p['comparison_start_date'];
         $ced = $p['comparison_end_date'];
 
-        // Current period
         $distributed       = $this->getDistributedCards($ss);
         $inscriptions      = $this->getInscriptionsWithCards($ss);
         $activeUsers       = $this->getActiveUsersWithCards($ss);
@@ -368,7 +408,6 @@ class SubStoreController extends Controller
         $cardsActivated     = $this->getCardsActivated($ss, $sd, $ed);
         $conversionRate     = $distributed > 0 ? round(($inscriptions / $distributed) * 100, 1) : 0;
 
-        // Comparison period
         $activeUsersCohorteComp = $this->getUsersWithCardsCohorteCount($ss, $csd, $ced);
         $clientsWithTransactionsComp = $this->getUsersWithCardsCount($ss);
         $inscriptionsCohorteComp = $this->getInscriptionsWithCardsCohorte($ss, $csd, $ced);
@@ -381,7 +420,7 @@ class SubStoreController extends Controller
         return [
             'distributed'        => $kpiPair($distributed, $distributed),
             'inscriptions'       => $kpiPair($inscriptions, $inscriptions),
-            'activeUsers'        => $kpiPair($activeUsers, $this->getUsersWithCardsCount($ss)),
+            'activeUsers'        => $kpiPair($activeUsers, $clientsWithTransactions),
             'activeUsersCohorte' => $kpiPair($activeUsersCohorte, $activeUsersCohorteComp),
             'transactions'       => $kpiPair($transactions, $transactions),
             'totalSubscriptions' => $kpiPair($totalSubscriptions, $totalSubscriptions),
@@ -389,6 +428,98 @@ class SubStoreController extends Controller
             'clientsWithTransactions' => $kpiPair($clientsWithTransactions, $clientsWithTransactionsComp),
             'inscriptionsCohorte' => $kpiPair($inscriptionsCohorte, $inscriptionsCohorteComp),
             'conversionRate'     => $kpiPair($conversionRate, $conversionRate),
+        ];
+    }
+
+    /**
+     * OPTIMISED BATCH: Compute ALL Pluxee KPIs in 3 SQL queries instead of 15+.
+     * 
+     * Query 1: Distributed cards (carte_recharge → SUM)
+     * Query 2: Subscription-based KPIs (client + client_abonnement → CASE WHEN)
+     * Query 3: Transaction-based KPIs (history → CASE WHEN)
+     */
+    private function computeKpisPluxeeBatch(array $p): array
+    {
+        $ss  = $p['sub_store'];
+        $sd  = Carbon::parse($p['start_date'])->startOfDay()->toDateTimeString();
+        $ed  = Carbon::parse($p['end_date'])->endOfDay()->toDateTimeString();
+        $csd = Carbon::parse($p['comparison_start_date'])->startOfDay()->toDateTimeString();
+        $ced = Carbon::parse($p['comparison_end_date'])->endOfDay()->toDateTimeString();
+        $now = Carbon::now()->toDateTimeString();
+
+        $kpiPair = function ($cur, $prev) {
+            return ['current' => (int) $cur, 'previous' => (int) $prev, 'change' => $this->calculatePercentageChange($cur, $prev)];
+        };
+
+        $clientIds = $this->getCampaignClientIds();
+
+        // ── Query 1: Distributed cards ──
+        $distributed = (int) DB::table('carte_recharge')
+            ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
+            ->where('stores.store_name', 'LIKE', "%$ss%")
+            ->where('carte_recharge.campain_name', $this->currentCampaign)
+            ->sum('carte_recharge.card_generated_number');
+
+        if (empty($clientIds)) {
+            $z = $kpiPair(0, 0);
+            return [
+                'distributed' => $kpiPair($distributed, $distributed),
+                'inscriptions' => $z, 'activeUsers' => $z, 'activeUsersCohorte' => $z,
+                'transactions' => $z, 'totalSubscriptions' => $z, 'renewalRate' => $z,
+                'clientsWithTransactions' => $z, 'inscriptionsCohorte' => $z,
+                'conversionRate' => $kpiPair(0, 0),
+            ];
+        }
+
+        // ── Query 2: Subscription-based KPIs (single query) ──
+        $sub = DB::table('client as c')
+            ->join('stores as s', 'c.sub_store', '=', 's.store_id')
+            ->leftJoin('client_abonnement as ca', 'c.client_id', '=', 'ca.client_id')
+            ->whereIn('c.client_id', $clientIds)
+            ->where('s.store_name', 'LIKE', "%$ss%")
+            ->selectRaw("
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_id IS NOT NULL THEN c.client_id END) as inscriptions,
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ? THEN c.client_id END) as active_users,
+                COUNT(ca.client_abonnement_id) as total_subscriptions,
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ?
+                    AND ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as active_users_cohorte,
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ?
+                    AND ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as active_users_cohorte_comp,
+                COUNT(DISTINCT CASE WHEN c.created_at BETWEEN ? AND ? THEN c.client_id END) as inscriptions_cohorte,
+                COUNT(DISTINCT CASE WHEN c.created_at BETWEEN ? AND ? THEN c.client_id END) as inscriptions_cohorte_comp,
+                SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as cards_activated,
+                SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as cards_activated_comp
+            ", [$now, $now, $sd, $ed, $now, $csd, $ced, $sd, $ed, $csd, $ced, $sd, $ed, $csd, $ced])
+            ->first();
+
+        // ── Query 3: Transaction-based KPIs (single query) ──
+        $tx = DB::table('history as h')
+            ->join('client as c', 'h.client_id', '=', 'c.client_id')
+            ->join('stores as s', 'c.sub_store', '=', 's.store_id')
+            ->whereIn('c.client_id', $clientIds)
+            ->where('s.store_name', 'LIKE', "%$ss%")
+            ->selectRaw("
+                COUNT(h.history_id) as total_transactions,
+                COUNT(DISTINCT c.client_id) as clients_with_transactions,
+                COUNT(DISTINCT CASE WHEN h.time BETWEEN ? AND ? THEN c.client_id END) as clients_with_tx_cohorte
+            ", [$csd, $ced])
+            ->first();
+
+        $inscriptions = (int) $sub->inscriptions;
+        $cwt = (int) $tx->clients_with_transactions;
+        $conversionRate = $distributed > 0 ? round(($inscriptions / $distributed) * 100, 1) : 0;
+
+        return [
+            'distributed'           => $kpiPair($distributed, $distributed),
+            'inscriptions'          => $kpiPair($inscriptions, $inscriptions),
+            'activeUsers'           => $kpiPair((int) $sub->active_users, $cwt),
+            'activeUsersCohorte'    => $kpiPair((int) $sub->active_users_cohorte, (int) $tx->clients_with_tx_cohorte),
+            'transactions'          => $kpiPair((int) $tx->total_transactions, (int) $tx->total_transactions),
+            'totalSubscriptions'    => $kpiPair((int) $sub->total_subscriptions, (int) $sub->total_subscriptions),
+            'renewalRate'           => $kpiPair((int) $sub->cards_activated, (int) $sub->cards_activated_comp),
+            'clientsWithTransactions' => $kpiPair($cwt, $cwt),
+            'inscriptionsCohorte'   => $kpiPair((int) $sub->inscriptions_cohorte, (int) $sub->inscriptions_cohorte_comp),
+            'conversionRate'        => $kpiPair($conversionRate, $conversionRate),
         ];
     }
 
@@ -449,6 +580,7 @@ class SubStoreController extends Controller
     private function computeCampaignRanking(string $ss): array
     {
         $campaign = $this->currentCampaign;
+        $clientIds = $this->getCampaignClientIds();
 
         // Get campaign distributed cards
         $distributed = (int) DB::table('carte_recharge')
@@ -457,28 +589,15 @@ class SubStoreController extends Controller
             ->where('carte_recharge.campain_name', $campaign)
             ->sum('carte_recharge.card_generated_number');
 
-        // Get clients who activated cards from this campaign (via carte_recharge.client_id)
-        $activatedClients = (int) DB::table('carte_recharge')
-            ->where('carte_recharge.campain_name', $campaign)
-            ->where('carte_recharge.carte_recharge_used', 1)
-            ->whereNotNull('carte_recharge.client_id')
-            ->where('carte_recharge.client_id', '!=', '')
-            ->distinct()
-            ->count('carte_recharge.client_id');
+        // Get activated clients count (from pre-resolved IDs)
+        $activatedClients = count($clientIds);
 
-        // Get transactions from activated clients of this campaign
+        // Get transactions from activated clients
         $transactions = 0;
         if ($activatedClients > 0) {
             $transactions = (int) DB::table('history')
                 ->join('client_abonnement', 'history.client_abonnement_id', '=', 'client_abonnement.client_abonnement_id')
-                ->whereIn('client_abonnement.client_id', function ($sub) use ($campaign) {
-                    $sub->select('carte_recharge.client_id')
-                        ->from('carte_recharge')
-                        ->where('carte_recharge.campain_name', $campaign)
-                        ->where('carte_recharge.carte_recharge_used', 1)
-                        ->whereNotNull('carte_recharge.client_id')
-                        ->where('carte_recharge.client_id', '!=', '');
-                })
+                ->whereIn('client_abonnement.client_id', $clientIds)
                 ->count();
         }
 
@@ -671,21 +790,18 @@ class SubStoreController extends Controller
     // =========================================================================
 
     /**
-     * Filter Pluxee clients by campaign through carte_recharge chain.
-     * When a specific campaign is selected, only include clients linked to that campaign's cards.
+     * Filter Pluxee clients by campaign using PRE-RESOLVED client IDs.
+     * Instead of running the same sub-query 15+ times, we use cached IDs.
      */
     private function applyPluxeeCampaignFilter($query, string $clientAlias = 'client')
     {
         if ($this->currentCampaign) {
-            $campaign = $this->currentCampaign;
-            $query->whereIn("$clientAlias.client_id", function ($sub) use ($campaign) {
-                $sub->select('carte_recharge.client_id')
-                    ->from('carte_recharge')
-                    ->where('carte_recharge.campain_name', $campaign)
-                    ->where('carte_recharge.carte_recharge_used', 1)
-                    ->whereNotNull('carte_recharge.client_id')
-                    ->where('carte_recharge.client_id', '!=', '');
-            });
+            $clientIds = $this->getCampaignClientIds();
+            if (!empty($clientIds)) {
+                $query->whereIn("$clientAlias.client_id", $clientIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
         }
         return $query;
     }
@@ -1058,6 +1174,14 @@ class SubStoreController extends Controller
 
     private function getUsersKPIs($sd, $ed, $csd, $ced, $ss)
     {
+        $isPluxee = $this->isPluxeeCampaign($ss);
+
+        // ── PLUXEE BATCH: 2 queries instead of 14 ──
+        if ($isPluxee && $this->currentCampaign) {
+            return $this->getUsersKPIsPluxeeBatch($sd, $ed, $csd, $ced, $ss);
+        }
+
+        // ── STANDARD PATH ──
         $totalUsers = $this->getInscriptionsWithCards($ss);
         $activeUsers = $this->getActiveUsersWithCards($ss);
         $activeUsersCohorte = $this->getActiveUsersWithCardsCohorte($ss, $sd, $ed);
@@ -1097,6 +1221,80 @@ class SubStoreController extends Controller
             'newUsers' => $kp('newUsers', $newUsers),
             'transactionsCohorte' => $kp('totalTransactionsCohorte', $totalTransactionsCohorte),
             'retentionRate' => $kp('retentionRate', $retention),
+        ];
+    }
+
+    /**
+     * OPTIMISED BATCH: Compute ALL Pluxee Users KPIs in 2 SQL queries.
+     */
+    private function getUsersKPIsPluxeeBatch($sd, $ed, $csd, $ced, $ss)
+    {
+        $sdStr  = Carbon::parse($sd)->startOfDay()->toDateTimeString();
+        $edStr  = Carbon::parse($ed)->endOfDay()->toDateTimeString();
+        $csdStr = $csd ? Carbon::parse($csd)->startOfDay()->toDateTimeString() : $sdStr;
+        $cedStr = $ced ? Carbon::parse($ced)->endOfDay()->toDateTimeString() : $edStr;
+        $now    = Carbon::now()->toDateTimeString();
+        $clientIds = $this->getCampaignClientIds();
+
+        $kp = function ($cur, $prev) {
+            return ['current' => (int) $cur, 'previous' => (int) $prev, 'change' => $this->calculateUserChange($prev, $cur)];
+        };
+
+        if (empty($clientIds)) {
+            $z = $kp(0, 0);
+            return ['totalUsers'=>$z,'activeUsers'=>$z,'totalTransactions'=>$z,
+                    'avgTransactionsPerUser'=>['current'=>0,'previous'=>0,'change'=>0],
+                    'totalSubscriptions'=>$z,'newUsers'=>$z,'transactionsCohorte'=>$z,'retentionRate'=>$z];
+        }
+
+        // Query 1: subscription-based
+        $sub = DB::table('client as c')
+            ->join('stores as s', 'c.sub_store', '=', 's.store_id')
+            ->leftJoin('client_abonnement as ca', 'c.client_id', '=', 'ca.client_id')
+            ->whereIn('c.client_id', $clientIds)
+            ->where('s.store_name', 'LIKE', "%$ss%")
+            ->selectRaw("
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_id IS NOT NULL THEN c.client_id END) as total_users,
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ? THEN c.client_id END) as active_users,
+                COUNT(ca.client_abonnement_id) as total_subscriptions,
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ?
+                    AND ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as active_users_cohorte,
+                COUNT(DISTINCT CASE WHEN ca.client_abonnement_expiration > ?
+                    AND ca.client_abonnement_creation BETWEEN ? AND ? THEN c.client_id END) as active_users_cohorte_comp,
+                SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as new_users,
+                SUM(CASE WHEN ca.client_abonnement_creation BETWEEN ? AND ? THEN 1 ELSE 0 END) as new_users_comp
+            ", [$now, $now, $sdStr, $edStr, $now, $csdStr, $cedStr, $sdStr, $edStr, $csdStr, $cedStr])
+            ->first();
+
+        // Query 2: transaction-based
+        $tx = DB::table('history as h')
+            ->join('client as c', 'h.client_id', '=', 'c.client_id')
+            ->join('stores as s', 'c.sub_store', '=', 's.store_id')
+            ->whereIn('c.client_id', $clientIds)
+            ->where('s.store_name', 'LIKE', "%$ss%")
+            ->selectRaw("
+                COUNT(h.history_id) as total_transactions,
+                COUNT(CASE WHEN h.time BETWEEN ? AND ? THEN 1 END) as tx_cohorte,
+                COUNT(CASE WHEN h.time BETWEEN ? AND ? THEN 1 END) as tx_cohorte_comp
+            ", [$sdStr, $edStr, $csdStr, $cedStr])
+            ->first();
+
+        $totalUsers = (int) $sub->total_users;
+        $activeUsers = (int) $sub->active_users;
+        $totalTx = (int) $tx->total_transactions;
+        $avgTxPerUser = $activeUsers > 0 ? round($totalTx / $activeUsers, 2) : 0;
+        $retention = $totalUsers > 0 ? round(($activeUsers / $totalUsers) * 100, 1) : 0;
+        $retentionComp = $totalUsers > 0 ? round($activeUsers / $totalUsers * 100, 1) : 0;
+
+        return [
+            'totalUsers'            => $kp($totalUsers, $totalUsers),
+            'activeUsers'           => $kp($activeUsers, $activeUsers),
+            'totalTransactions'     => $kp($totalTx, $totalTx),
+            'avgTransactionsPerUser' => ['current' => $avgTxPerUser, 'previous' => 0, 'change' => 0],
+            'totalSubscriptions'    => $kp((int) $sub->total_subscriptions, (int) $sub->total_subscriptions),
+            'newUsers'              => $kp((int) $sub->new_users, (int) $sub->new_users_comp),
+            'transactionsCohorte'   => $kp((int) $tx->tx_cohorte, (int) $tx->tx_cohorte_comp),
+            'retentionRate'         => $kp($retention, $retentionComp),
         ];
     }
 

@@ -14,39 +14,42 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - **SuperAdmin**: Full access (all dashboards, ML, Recommandations, Admin pages)
 - **Admin Sub-Store (Pluxee)**: Sub-Stores dashboard, Users, Invitations, Audit Logs (own sub-store only)
 - **Collaborateur**: Sub-Stores dashboard (own campaign only), no admin pages
-- **Recommandations ML / Dashboard ML**: SuperAdmin ONLY (hidden from menu + middleware protected)
+- **Recommandations ML / Dashboard ML**: SuperAdmin ONLY
 
-## KPI Definitions
-- **Distribue**: sum(card_generated_number) for campaign
-- **Inscriptions**: Clients with at least one abonnement + campaign filter
-- **Active Users**: Clients with non-expired abonnement + campaign filter
-- **Transactions**: Count of history entries for campaign clients
-- **Clients avec transactions**: Distinct clients with at least one transaction (Vue d'Ensemble)
-- **Taux de Conversion**: inscriptions / distribue * 100
+## Performance Optimization (Avril 2026)
+### Pre-resolved Campaign Client IDs
+- `getCampaignClientIds()` executes campaign filter ONCE, caches for 30 minutes
+- Replaces 18 identical sub-queries with a single cached array lookup
+- Property `$resolvedCampaignClientIds` prevents re-fetching within same request
+
+### Batch SQL Queries (Pluxee Path)
+- `computeKpisPluxeeBatch()`: 3 queries instead of 15+ (distributed, subscriptions, transactions)
+- `getUsersKPIsPluxeeBatch()`: 2 queries instead of 14 (subscriptions, transactions)
+- Uses CASE WHEN aggregation to compute multiple metrics in single query
+
+### SQL Indexes
+- Migration: `2026_04_01_230000_add_performance_indexes_substores.php`
+- 7 targeted indexes on carte_recharge, client_abonnement, history, client, carte_recharge_client
+
+### Frontend
+- Timeout increased to 180s for large datasets
+- Load time displayed in notification
 
 ## Implemented Features (ALL DONE)
-
-### Code Review & Bug Fix (Avril 2026)
-- **emergentintegrations fallback**: All 4 files (server.py, merchant_intelligence.py, digital_scoring.py, generate_report.py) now try emergentintegrations first, fall back to direct OpenAI/Gemini SDK
-- **Gemini→OpenAI auto-fallback**: All merchant intelligence routes try Gemini first, if error (e.g. "pattern mismatch"), automatically retry with OpenAI GPT-4o
-- **DB credentials security**: Removed hardcoded credentials from generate_report.py, reads from .env
-- **DB connection leak fix**: All MySQL connections wrapped in try/finally
-- **PHP-FPM version detection**: Lifespan auto-detects PHP 8.1 or 8.2
-- **Storage path fix**: Uses relative paths instead of hardcoded /app/
-- **RBAC Recommandations**: Restricted ML/Reco pages to SuperAdmin only (menu + controller middleware)
-- **Invitation flow**: Admin Pluxee can invite Collaborateurs with multi-campaign assignment
-
-### Campaign Data Filtering - COMPLETE
-- `applyPluxeeCampaignFilter` uses `carte_recharge.client_id`
-- SuperAdmin can filter by specific campaign via dropdown
-
-### KPI Renaming - COMPLETE
-- "Transactions Cohorte" → "Clients avec transactions" in Vue d'Ensemble
+- Campaign Data Filtering, RBAC Permissions, KPI Renaming, Code Review (7 bugs fixed)
+- emergentintegrations fallback to direct SDK, Gemini→OpenAI auto-fallback
+- DB credentials security, connection leak fixes, PHP-FPM version detection
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
 - Admin Pluxee: admin.pluxee@test.com / Test@2025
 - Collaborateur: imededdine.essefi@gmail.com / Test@2025
+
+## Deployment Steps (VPS)
+1. git pull
+2. php artisan migrate (for indexes)
+3. php artisan cache:clear
+4. sudo supervisorctl restart fastapi_dashboard_prod
 
 ## Backlog
 - Export PDF du dashboard par campagne (P1)
