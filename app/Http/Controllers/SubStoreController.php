@@ -338,6 +338,45 @@ class SubStoreController extends Controller
         }
     }
 
+    public function getCampaignsSplit(Request $request)
+    {
+        try {
+            $user = auth()->user();
+            $subStore = $request->input('sub_store', '');
+            $allowedCampaigns = $user->getAllowedCampaigns();
+
+            // Find the store_id for this sub-store
+            $store = DB::table('stores')
+                ->where('store_name', $subStore)
+                ->where('store_active', 1)
+                ->first();
+
+            if (!$store) {
+                return response()->json(['success' => true, 'data' => []]);
+            }
+
+            $query = DB::table('carte_recharge')
+                ->where('stores', $store->store_id)
+                ->select('campain_name', DB::raw('COUNT(*) as total_batches'), DB::raw('SUM(card_generated_number) as total_cards'))
+                ->groupBy('campain_name')
+                ->orderBy('campain_name');
+
+            if (!empty($allowedCampaigns)) {
+                $query->whereIn('campain_name', $allowedCampaigns);
+            }
+
+            $campaigns = $query->get()->map(fn($c) => [
+                'name' => $c->campain_name,
+                'batches' => (int) $c->total_batches,
+                'cards' => (int) $c->total_cards,
+            ])->toArray();
+
+            return response()->json(['success' => true, 'data' => $campaigns]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'data' => [], 'error' => $e->getMessage()], 500);
+        }
+    }
+
     // =========================================================================
     // SPLIT ENDPOINTS — Parallel loading (pattern DataControllerOptimized)
     // =========================================================================

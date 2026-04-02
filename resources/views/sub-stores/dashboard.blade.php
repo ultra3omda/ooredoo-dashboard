@@ -4106,9 +4106,8 @@
         
         debugLog('Sub-stores charges:', data.sub_stores.length, 'Restriction campagne:', hasCampaignRestriction);
 
-        // Store campaigns data for Pluxee dropdown
         window.pluxeeCampaigns = data.campaigns || {};
-        updateCampaignDropdown(select.value);
+        await updateCampaignDropdown(select.value);
 
         return data;
         
@@ -4119,7 +4118,7 @@
     }
 
     // Campaign dropdown for Pluxee sub-stores
-    function updateCampaignDropdown(selectedSubStore) {
+    async function updateCampaignDropdown(selectedSubStore) {
       const campaignSelect = document.getElementById('campaignSelect');
       const isPluxee = selectedSubStore && (selectedSubStore.toLowerCase().includes('pluxee') || selectedSubStore.toLowerCase().includes('privilèges by pluxee') || selectedSubStore.toLowerCase().includes('privileges by pluxee'));
       const campaigns = window.pluxeeCampaigns || {};
@@ -4132,6 +4131,24 @@
         if (selectedSubStore === storeName || (isPluxee && storeName.toLowerCase().includes('pluxee'))) {
           storeCampaigns = campList;
           break;
+        }
+      }
+      
+      // Fallback: if no campaigns found but this is a Pluxee store, fetch directly
+      if (isPluxee && storeCampaigns.length === 0) {
+        debugLog('⚠️ Aucune campagne en cache, tentative de récupération directe...');
+        try {
+          const resp = await fetch(`/sub-stores/api/split/campaigns?sub_store=${encodeURIComponent(selectedSubStore)}`);
+          const cdata = await resp.json();
+          if (cdata.success && cdata.data && cdata.data.length > 0) {
+            storeCampaigns = cdata.data;
+            // Cache for next time
+            if (!window.pluxeeCampaigns) window.pluxeeCampaigns = {};
+            window.pluxeeCampaigns[selectedSubStore] = storeCampaigns;
+            debugLog('✅ Campagnes récupérées directement:', storeCampaigns.length);
+          }
+        } catch (e) {
+          debugError('Erreur récupération campagnes:', e);
         }
       }
       
@@ -4673,10 +4690,10 @@
 
     // Event listeners
     // Seul le sub-store déclenche un rechargement automatique
-    document.getElementById('subStoreSelect').addEventListener('change', function() {
+    document.getElementById('subStoreSelect').addEventListener('change', async function() {
         debugLog('🏪 Sub-Store modifié, rechargement de toutes les données');
         // Update campaign dropdown for Pluxee
-        updateCampaignDropdown(this.value);
+        await updateCampaignDropdown(this.value);
         // Effacer tous les caches
         window.merchantKPIsData = null;
         window.usersKPIsData = null;
