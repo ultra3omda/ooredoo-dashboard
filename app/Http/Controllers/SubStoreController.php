@@ -317,9 +317,13 @@ class SubStoreController extends Controller
             $data = Cache::remember($cacheKey, 3600, function () use ($p) {
                 return $this->computeTopSubStores($p['sub_store'], $p['start_date'], $p['end_date']);
             });
+            $campaignFilter = $this->currentCampaign;
+            if (!$campaignFilter && $this->isPluxeeAllCampaigns) {
+                $campaignFilter = 'all';
+            }
             return response()->json([
                 'success' => true, 'section' => 'stores', 'data' => $data,
-                'campaign_filter' => $this->currentCampaign,
+                'campaign_filter' => $campaignFilter,
                 'execution_time_ms' => round((microtime(true) - $start) * 1000)
             ]);
         } catch (\Exception $e) {
@@ -560,6 +564,11 @@ class SubStoreController extends Controller
             return $this->computeCampaignRanking($ss);
         }
 
+        // When ALL campaigns mode is active, show per-campaign breakdown
+        if ($isPluxee && $this->isPluxeeAllCampaigns) {
+            return $this->computeAllCampaignsRanking($ss);
+        }
+
         $query = DB::table('stores')
             ->leftJoin('client', 'client.sub_store', '=', 'stores.store_id')
             ->leftJoin('client_abonnement', 'client_abonnement.client_id', '=', 'client.client_id')
@@ -636,6 +645,46 @@ class SubStoreController extends Controller
             ]
         ];
     }
+
+    /**
+     * All-campaigns ranking: show each campaign's stats within the Pluxee sub-store.
+     */
+    private function computeAllCampaignsRanking(string $ss): array
+    {
+        // Get all campaigns for this sub-store
+        $campaigns = DB::table('carte_recharge')
+            ->join('stores', function ($j) { $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)"); })
+            ->where('stores.store_name', 'LIKE', "%$ss%")
+            ->select('carte_recharge.campain_name', DB::raw('SUM(carte_recharge.card_generated_number) as distributed'))
+            ->groupBy('carte_recharge.campain_name')
+            ->orderByDesc('distributed')
+            ->get();
+
+        $results = [];
+        $rank = 1;
+        foreach ($campaigns as $c) {
+            // Get activated clients for this campaign
+            $activatedClients = (int) DB::table('carte_recharge')
+                ->where('campain_name', $c->campain_name)
+                ->where('carte_recharge_used', 1)
+                ->whereNotNull('client_id')
+                ->where('client_id', '!=', '')
+                ->distinct()
+                ->count('client_id');
+
+            $results[] = [
+                'rank' => $rank++,
+                'name' => $c->campain_name,
+                'type' => 'campagne',
+                'customers' => (int) $c->distributed,
+                'transactions' => $activatedClients,
+                'manager' => $ss,
+            ];
+        }
+
+        return $results;
+    }
+
 
     // =========================================================================
     // PRIVATE KPI METHODS — Standard (carte_recharge_client based)

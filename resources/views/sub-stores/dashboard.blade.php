@@ -1759,6 +1759,8 @@
                   @if(Auth::user()->canInviteCollaborators())
                   <a href="{{ route('admin.users.index') }}" class="admin-btn" style="display:block; margin:8px;">Utilisateurs</a>
                   <a href="{{ route('admin.invitations.index') }}" class="admin-btn" style="display:block; margin:8px;">Invitations</a>
+                  @endif
+                  @if(Auth::user()->isSuperAdmin())
                   <a href="{{ route('admin.audit-logs.index') }}" class="admin-btn" style="display:block; margin:8px;">Journal d'Audit</a>
                   @endif
                   <a href="{{ route('password.change') }}" class="admin-btn" style="display:block; margin:8px;">🔒 Mot de passe</a>
@@ -3175,7 +3177,11 @@
           const titleEl = document.getElementById('storesRankingTitle');
           const headerEl = document.getElementById('storesRankingHeader');
           if (stores.value.campaign_filter) {
-            if (titleEl) titleEl.textContent = `Classement - Campagne ${stores.value.campaign_filter}`;
+            if (stores.value.campaign_filter === 'all') {
+              if (titleEl) titleEl.textContent = 'Classement par Campagne - Toutes les campagnes';
+            } else {
+              if (titleEl) titleEl.textContent = `Classement - Campagne ${stores.value.campaign_filter}`;
+            }
             if (headerEl) {
               headerEl.innerHTML = `
                 <th>Rang</th>
