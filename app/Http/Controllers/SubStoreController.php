@@ -149,6 +149,18 @@ class SubStoreController extends Controller
         $isPluxee = ($subStore !== 'ALL') && $this->isPluxeeCampaign($subStore);
         if ($isPluxee && !$this->currentCampaign) {
             $this->isPluxeeAllCampaigns = true;
+            
+            // SuperAdmin has no restrictions: auto-resolve campaigns from this sub-store
+            if (empty($this->allowedCampaigns)) {
+                $this->allowedCampaigns = DB::table('carte_recharge')
+                    ->join('stores', function ($j) {
+                        $j->whereRaw("FIND_IN_SET(stores.store_id, carte_recharge.stores)");
+                    })
+                    ->where('stores.store_name', 'LIKE', "%{$subStore}%")
+                    ->distinct()
+                    ->pluck('carte_recharge.campain_name')
+                    ->toArray();
+            }
         }
 
         return [
