@@ -2179,6 +2179,14 @@
                 <div class="kpi-delta" id="users-retentionRateDelta" style="display: none;"></div>
               </div>
             </div>
+            <div class="card kpi-card users-kpi" style="border-left: 3px solid #ef4444;">
+              <div class="kpi-icon" style="color: #ef4444;">📉</div>
+              <div class="kpi-content">
+                <div class="kpi-title">Users Loss <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Clients supprimés ayant activé une carte de la campagne. Equilibre: Inscriptions + Users Loss = Total clients avec abonnement.">ⓘ</span></div>
+                <div class="kpi-value" id="users-usersLoss" data-testid="users-loss-value" style="color: #ef4444;">Loading...</div>
+                <div class="kpi-delta" id="users-usersLossDelta" style="display: none;"></div>
+              </div>
+            </div>
           </div>
 
           <!-- Users Table Section -->
@@ -2330,7 +2338,7 @@
         valueElement.textContent = kpiData.current + suffix;
         
         // Masquer les deltas des KPIs globaux
-        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate'];
+        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate', 'users-usersLoss'];
         const isGlobalKPI = globalKPIs.includes(id);
         
         // Gérer le delta si disponible
@@ -2373,6 +2381,7 @@
       updateSingleKPI('users-newUsers', normalizeKPI(usersData.newUsers));
       updateSingleKPI('users-transactionsCohorte', normalizeKPI(usersData.transactionsCohorte));
       updateSingleKPI('users-retentionRate', normalizeKPI(usersData.retentionRate), '%');
+      updateSingleKPI('users-usersLoss', normalizeKPI(usersData.usersLoss));
       
       debugLog('✅ Tous les KPIs Users ont été mis à jour');
     }
@@ -2576,7 +2585,8 @@
             { id: 'users-totalSubscriptions', title: 'Total Cartes Utilisées', icon: '🎯', tooltip: 'Nombre total de cartes de recharge utilisées par les utilisateurs (toutes périodes, même que CARTES UTILISÉES vue d\'ensemble).', showDelta: false },
             { id: 'users-newUsers', title: 'Cartes Activées', icon: '💳', tooltip: 'Nombre de cartes de recharge activées dans la période.' },
             { id: 'users-transactionsCohorte', title: 'Transactions (Cohorte)', icon: '💳', tooltip: 'Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée.' },
-            { id: 'users-retentionRate', title: 'Retention Rate', icon: '🔄', tooltip: 'Pourcentage d\'utilisateurs actifs par rapport au total (ACTIVE USERS / TOTAL USERS).', showDelta: false }
+            { id: 'users-retentionRate', title: 'Retention Rate', icon: '🔄', tooltip: 'Pourcentage d\'utilisateurs actifs par rapport au total (ACTIVE USERS / TOTAL USERS).', showDelta: false },
+            { id: 'users-usersLoss', title: 'Users Loss', icon: '📉', tooltip: 'Clients supprimés ayant activé une carte. Equilibre: Inscriptions + Users Loss = Total clients avec abonnement.', showDelta: false }
       ];
       
       kpisContainer.innerHTML = kpisData.map(kpi => `
@@ -2734,7 +2744,8 @@
         { id: 'clientsWithTransactions', title: 'CLIENTS AVEC TRANSACTIONS', tooltip: 'Nombre de clients ayant effectué au moins une transaction.' },
         { id: 'activeUsersCohorte', title: 'ACTIVE USERS COHORTE', tooltip: 'Utilisateurs actifs dans la période sélectionnée' },
         { id: 'conversionRate', title: 'TAUX DE CONVERSION', tooltip: 'Ratio inscriptions/distribué', showDelta: false },
-        { id: 'renewalRate', title: 'CARTES ACTIVÉES COHORTE', tooltip: 'Le nombre total de cartes de recharge activées dans la période' }
+        { id: 'renewalRate', title: 'CARTES ACTIVÉES COHORTE', tooltip: 'Le nombre total de cartes de recharge activées dans la période' },
+        { id: 'usersLoss', title: 'USERS LOSS', tooltip: 'Clients supprimés ayant activé une carte de la campagne (inscrits puis désinscrits)', showDelta: false }
       ];
       
       // Vider le contenu existant
@@ -2807,7 +2818,8 @@
         { id: 'transactionsCohorte', value: kpis.transactionsCohorte?.current || 0, suffix: '' },
         { id: 'activeUsersCohorte', value: kpis.activeUsersCohorte?.current || 0, suffix: '' },
         { id: 'conversionRate', value: kpis.conversionRate?.current || 0, suffix: '%' },
-        { id: 'renewalRate', value: kpis.renewalRate?.current || 0, suffix: '' }
+        { id: 'renewalRate', value: kpis.renewalRate?.current || 0, suffix: '' },
+        { id: 'usersLoss', value: kpis.usersLoss?.current || 0, suffix: '' }
       ];
       
       // Mettre à jour chaque KPI
@@ -4414,7 +4426,7 @@
       
       // Indicateur de chargement pour la vue d'ensemble
       const overviewKPIs = ['distributed', 'inscriptions', 'totalSubscriptions', 'transactions', 'activeUsers', 
-                           'inscriptionsCohorte', 'transactionsCohorte', 'activeUsersCohorte', 'conversionRate', 'renewalRate'];
+                           'inscriptionsCohorte', 'transactionsCohorte', 'activeUsersCohorte', 'conversionRate', 'renewalRate', 'usersLoss'];
       
       overviewKPIs.forEach(kpiId => {
         const valueElement = document.getElementById(kpiId);
@@ -4560,7 +4572,7 @@
         valueElement.textContent = kpiData.current + suffix;
         
         // Masquer les deltas des KPIs globaux
-        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate'];
+        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate', 'users-usersLoss'];
         const isGlobalKPI = globalKPIs.includes(id);
         
         // Gérer le delta si disponible
@@ -4603,6 +4615,7 @@
       updateSingleKPI('users-newUsers', normalizeKPI(usersData.newUsers));
       updateSingleKPI('users-transactionsCohorte', normalizeKPI(usersData.transactionsCohorte));
       updateSingleKPI('users-retentionRate', normalizeKPI(usersData.retentionRate), '%');
+      updateSingleKPI('users-usersLoss', normalizeKPI(usersData.usersLoss));
       
       debugLog('✅ Tous les KPIs Users ont été mis à jour');
     }
@@ -4620,7 +4633,7 @@
       const usersKPIs = [
         'users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 
         'users-avgTransactionsPerUser', 'users-totalSubscriptions', 
-        'users-newUsers', 'users-transactionsCohorte', 'users-retentionRate'
+        'users-newUsers', 'users-transactionsCohorte', 'users-retentionRate', 'users-usersLoss'
       ];
       
       usersKPIs.forEach(kpiId => {

@@ -39,7 +39,9 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - Campaign Data Filtering, RBAC Permissions, KPI Renaming, Code Review (7 bugs fixed)
 - emergentintegrations fallback to direct SDK, Gemini→OpenAI auto-fallback
 - DB credentials security, connection leak fixes, PHP-FPM version detection
-- "Toutes les campagnes" table fix: shows per-campaign breakdown with correct distributed cards
+- Users Loss KPI: comptage des clients supprimés via table `deleted_clients`, affiché en Vue d'Ensemble + onglet Users
+  - Hutchinson: 657 inscriptions + 7 loss = 664 total (equilibre confirmé)
+  - Toutes campagnes: 12 314 inscriptions + 265 loss = 12 579
 - Journal d'Audit hidden for Admin/Collaborateur (SuperAdmin only)
 - Fixed calculateUserChange bug: percentage change was inverted (-100% → +100%)
 - Mobile scroll CSS fix for Users tab: overflow-x hidden, proper table-wrapper sizing

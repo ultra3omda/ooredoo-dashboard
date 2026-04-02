@@ -576,6 +576,14 @@ class SubStoreController extends Controller
         $cwt = (int) $tx->clients_with_transactions;
         $conversionRate = $distributed > 0 ? round(($inscriptions / $distributed) * 100, 1) : 0;
 
+        // ── Query 4: Users Loss (deleted_clients with campaign cards) ──
+        $usersLoss = (int) DB::table('deleted_clients as dc')
+            ->join('carte_recharge as cr', 'cr.client_id', '=', 'dc.client_id')
+            ->whereIn('dc.client_id', $clientIds)
+            ->where('cr.carte_recharge_used', 1)
+            ->distinct()
+            ->count('dc.client_id');
+
         return [
             'distributed'           => $kpiPair($distributed, $distributed),
             'inscriptions'          => $kpiPair($inscriptions, $inscriptions),
@@ -587,6 +595,7 @@ class SubStoreController extends Controller
             'clientsWithTransactions' => $kpiPair($cwt, $cwt),
             'inscriptionsCohorte'   => $kpiPair((int) $sub->inscriptions_cohorte, (int) $sub->inscriptions_cohorte_comp),
             'conversionRate'        => $kpiPair($conversionRate, $conversionRate),
+            'usersLoss'             => $kpiPair($usersLoss, $usersLoss),
         ];
     }
 
@@ -1395,6 +1404,14 @@ class SubStoreController extends Controller
         $retention = $totalUsers > 0 ? round(($activeUsers / $totalUsers) * 100, 1) : 0;
         $retentionComp = $totalUsers > 0 ? round($activeUsers / $totalUsers * 100, 1) : 0;
 
+        // Users Loss (deleted_clients)
+        $usersLoss = (int) DB::table('deleted_clients as dc')
+            ->join('carte_recharge as cr', 'cr.client_id', '=', 'dc.client_id')
+            ->whereIn('dc.client_id', $clientIds)
+            ->where('cr.carte_recharge_used', 1)
+            ->distinct()
+            ->count('dc.client_id');
+
         return [
             'totalUsers'            => $kp($totalUsers, $totalUsers),
             'activeUsers'           => $kp($activeUsers, $activeUsers),
@@ -1404,6 +1421,7 @@ class SubStoreController extends Controller
             'newUsers'              => $kp((int) $sub->new_users, (int) $sub->new_users_comp),
             'transactionsCohorte'   => $kp((int) $tx->tx_cohorte, (int) $tx->tx_cohorte_comp),
             'retentionRate'         => $kp($retention, $retentionComp),
+            'usersLoss'             => $kp($usersLoss, $usersLoss),
         ];
     }
 
