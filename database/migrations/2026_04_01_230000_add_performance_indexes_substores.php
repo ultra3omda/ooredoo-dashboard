@@ -19,8 +19,9 @@ return new class extends Migration
     public function up(): void
     {
         // Index 1: Campaign client ID resolution (biggest impact)
-        // Covers: SELECT DISTINCT client_id FROM carte_recharge WHERE campain_name=? AND carte_recharge_used=1
-        $this->addIndexIfNotExists('carte_recharge', 'idx_cr_campaign_used_client', ['campain_name', 'carte_recharge_used', 'client_id']);
+        // Note: client_id is TEXT type, requires prefix length
+        $this->addIndexIfNotExists('carte_recharge', 'idx_cr_campaign_used_client', null,
+            '`campain_name`(100), `carte_recharge_used`, `client_id`(50)');
 
         // Index 2: Subscription expiration lookups
         // Covers: WHERE client_id IN (...) AND client_abonnement_expiration > NOW()
@@ -57,16 +58,19 @@ return new class extends Migration
         $this->dropIndexIfExists('carte_recharge_client', 'idx_crc_client');
     }
 
-    private function addIndexIfNotExists(string $table, string $indexName, array $columns): void
+    private function addIndexIfNotExists(string $table, string $indexName, ?array $columns, ?string $rawCols = null): void
     {
         try {
             $exists = DB::select("SHOW INDEX FROM `$table` WHERE Key_name = ?", [$indexName]);
             if (empty($exists)) {
-                $cols = implode(', ', array_map(fn($c) => "`$c`", $columns));
+                if ($rawCols) {
+                    $cols = $rawCols;
+                } else {
+                    $cols = implode(', ', array_map(fn($c) => "`$c`", $columns));
+                }
                 DB::statement("ALTER TABLE `$table` ADD INDEX `$indexName` ($cols)");
             }
         } catch (\Exception $e) {
-            // Table or column might not exist in some environments
             \Log::warning("Index creation skipped for $table.$indexName: " . $e->getMessage());
         }
     }
