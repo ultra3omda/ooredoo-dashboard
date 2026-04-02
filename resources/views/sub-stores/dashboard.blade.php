@@ -1887,6 +1887,11 @@
         <button class="btn btn-warning" onclick="showHelp()">
           <span>❓</span> Aide
                     </button>
+        @if(Auth::user()->isSuperAdmin())
+        <button class="btn" style="background:#059669;color:white;border:none;" onclick="triggerCacheWarmup()" id="warmupBtn" data-testid="warmup-btn" title="Pre-calculer le cache pour un chargement instantané">
+          <span>⚡</span> Warmup Cache
+        </button>
+        @endif
                 </div>
             </div>
 
@@ -4318,6 +4323,64 @@
       // Forcer l'actualisation de toutes les rubriques
       loadDashboardData();
     }
+
+    async function triggerCacheWarmup() {
+      const btn = document.getElementById('warmupBtn');
+      const subStore = document.getElementById('subStoreSelect').value;
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳</span> Warmup en cours...';
+      btn.style.opacity = '0.7';
+      
+      try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        const response = await fetch('/sub-stores/api/warmup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ sub_store: subStore !== 'ALL' ? subStore : null })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          showNotification('Cache warmup lance en arriere-plan pour ' + (data.sub_store || 'tous les sub-stores'), 'success');
+          btn.innerHTML = '<span>✅</span> Warmup lance';
+          
+          // Poll status
+          setTimeout(async () => {
+            try {
+              const statusResp = await fetch('/sub-stores/api/warmup-status');
+              const statusData = await statusResp.json();
+              if (statusData.last_warmup) {
+                const lw = statusData.last_warmup;
+                showNotification(
+                  'Dernier warmup: ' + lw.warmed + ' sections en ' + lw.duration_seconds + 's',
+                  'success'
+                );
+              }
+            } catch(e) {}
+            
+            btn.disabled = false;
+            btn.innerHTML = '<span>⚡</span> Warmup Cache';
+            btn.style.opacity = '1';
+          }, 30000);
+        } else {
+          showNotification('Erreur: ' + (data.error || 'Echec du warmup'), 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<span>⚡</span> Warmup Cache';
+          btn.style.opacity = '1';
+        }
+      } catch (error) {
+        showNotification('Erreur reseau: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<span>⚡</span> Warmup Cache';
+        btn.style.opacity = '1';
+      }
+    }
+
     
     // Fonction pour actualiser toutes les rubriques
     function refreshAllSections() {

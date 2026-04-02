@@ -119,6 +119,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/split/charts', [SubStoreController::class, 'getChartsSplit'])->name('api.split.charts');
         Route::get('/api/split/merchants', [SubStoreController::class, 'getMerchantsSplit'])->name('api.split.merchants');
         Route::get('/api/split/users', [SubStoreController::class, 'getUsersSplit'])->name('api.split.users');
+        // Cache warmup trigger (SuperAdmin only)
+        Route::post('/api/warmup', [SubStoreController::class, 'triggerWarmup'])->name('api.warmup');
+        Route::get('/api/warmup-status', [SubStoreController::class, 'warmupStatus'])->name('api.warmup-status');
     });
 
     // Routes d'administration (Super Admin et Admin uniquement)

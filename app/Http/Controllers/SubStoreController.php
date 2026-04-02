@@ -161,6 +161,7 @@ class SubStoreController extends Controller
     private function fastCacheResponse(Request $request, string $section)
     {
         try {
+            $fastStart = microtime(true);
             $params = $this->normalizeSubStoreParams($request);
             $rawKey = 'ss_raw:' . $section . ':' . md5(json_encode([
                 'start_date' => $params['start_date'],
@@ -170,6 +171,13 @@ class SubStoreController extends Controller
             ]));
             $cached = Cache::get($rawKey);
             if ($cached) {
+                // Replace original execution_time_ms with actual cache-hit time
+                $decoded = json_decode($cached, true);
+                if ($decoded) {
+                    $decoded['execution_time_ms'] = round((microtime(true) - $fastStart) * 1000);
+                    $decoded['cache_hit'] = true;
+                    return response()->json($decoded);
+                }
                 return response($cached, 200)->header('Content-Type', 'application/json');
             }
         } catch (\Exception $e) {}
@@ -215,6 +223,39 @@ class SubStoreController extends Controller
         $defaultSubStore = $this->subStoreService->getDefaultSubStoreForUser($user);
         return view('sub-stores.dashboard', compact('availableSubStores', 'defaultSubStore', 'user'));
     }
+
+    public function triggerWarmup(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->isSuperAdmin()) {
+            return response()->json(['error' => 'SuperAdmin uniquement'], 403);
+        }
+
+        $subStore = $request->input('sub_store');
+        $cmd = 'substores:warmup --force';
+        if ($subStore) {
+            $cmd .= " --sub-store=\"{$subStore}\"";
+        }
+
+        // Run in background
+        \Illuminate\Support\Facades\Artisan::queue($cmd);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Warmup lancé en arrière-plan',
+            'sub_store' => $subStore ?: 'ALL',
+        ]);
+    }
+
+    public function warmupStatus()
+    {
+        $status = Cache::get('monitoring:substores_last_warmup');
+        return response()->json([
+            'success' => true,
+            'last_warmup' => $status,
+        ]);
+    }
+
 
     public function getSubStores()
     {

@@ -45,6 +45,10 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - Mobile scroll CSS fix for Users tab: overflow-x hidden, proper table-wrapper sizing
 - Performance: Cache TTL increased from 1h to 4h, lazy-loading for Merchants/Users tabs
 - Performance: Initial load reduced from 5 parallel requests to 3 essential + 2 background
+- Cache Warming: `substores:warmup` CLI command + bouton SuperAdmin + cron scheduling (*/3h)
+  - Pre-calcule les 5 sections pour chaque sub-store et campagne
+  - Réduit le temps serveur de ~8.6s à ~530ms (16x plus rapide)
+  - Route `/sub-stores/api/warmup` (POST, SuperAdmin) + `/sub-stores/api/warmup-status` (GET)
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
