@@ -353,32 +353,58 @@
                             @enderror
                         </div>
                         
-                        <div class="form-group" id="operator_selection" style="display: none;">
-                            <label for="operator_name" class="form-label">Operateur *</label>
-                            <select id="operator_name" name="operator_name" class="form-select" data-testid="operator-select">
-                                <option value="">Selectionner un operateur</option>
+                        <div class="form-group full-width" id="operator_selection" style="display: none;">
+                            <label class="form-label">Operateur(s) *</label>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                                <span id="operator_counter" style="font-size:12px;color:var(--muted);">0 operateur(s) selectionne(s)</span>
+                                <div style="display:flex;gap:6px;">
+                                    <button type="button" onclick="selectAllOperators()" class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" data-testid="select-all-operators">Tout selectionner</button>
+                                    <button type="button" onclick="deselectAllOperators()" class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" data-testid="deselect-all-operators">Tout deselectionner</button>
+                                </div>
+                            </div>
+                            <div id="operator_checkboxes" data-testid="operator-checkboxes"
+                                style="max-height:280px;overflow-y:auto;border:1px solid var(--input-border);border-radius:8px;background:var(--input-bg);padding:4px;">
                                 @foreach($operators as $operatorKey => $operatorName)
-                                    <option value="{{ $operatorName }}" {{ old('operator_name') == $operatorName ? 'selected' : '' }}>
-                                        {{ $operatorName }}
-                                    </option>
+                                    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--input-border);cursor:pointer;transition:background 0.15s;"
+                                           onmouseover="this.style.background='rgba(107,70,193,0.06)'" onmouseout="this.style.background='transparent'">
+                                        <input type="checkbox" name="operator_names[]" value="{{ $operatorName }}" 
+                                               {{ is_array(old('operator_names')) && in_array($operatorName, old('operator_names')) ? 'checked' : '' }}
+                                               onchange="updateOperatorCounter()"
+                                               data-testid="operator-checkbox-{{ Str::slug($operatorName) }}"
+                                               style="width:18px;height:18px;accent-color:var(--brand-primary);flex-shrink:0;cursor:pointer;">
+                                        <span style="font-size:14px;font-weight:500;">{{ $operatorName }}</span>
+                                    </label>
                                 @endforeach
-                            </select>
-                            @error('operator_name')
+                            </div>
+                            @error('operator_names')
                                 <div class="form-error">{{ $message }}</div>
                             @enderror
                         </div>
                         
-                        <div class="form-group" id="substore_selection" style="display: none;">
-                            <label for="substore_name" class="form-label">Sub-Store *</label>
-                            <select id="substore_name" name="substore_name" class="form-select" onchange="loadCampaigns()" data-testid="substore-select">
-                                <option value="">Selectionner un sub-store</option>
+                        <div class="form-group full-width" id="substore_selection" style="display: none;">
+                            <label class="form-label">Sub-Store(s) *</label>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                                <span id="substore_counter" style="font-size:12px;color:var(--muted);">0 sub-store(s) selectionne(s)</span>
+                                <div style="display:flex;gap:6px;">
+                                    <button type="button" onclick="selectAllSubstores()" class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" data-testid="select-all-substores">Tout selectionner</button>
+                                    <button type="button" onclick="deselectAllSubstores()" class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" data-testid="deselect-all-substores">Tout deselectionner</button>
+                                </div>
+                            </div>
+                            <div id="substore_checkboxes" data-testid="substore-checkboxes"
+                                style="max-height:280px;overflow-y:auto;border:1px solid var(--input-border);border-radius:8px;background:var(--input-bg);padding:4px;">
                                 @foreach($subStores as $subStoreKey => $subStoreName)
-                                    <option value="{{ $subStoreName }}" {{ old('substore_name') == $subStoreName ? 'selected' : '' }}>
-                                        {{ $subStoreName }}
-                                    </option>
+                                    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--input-border);cursor:pointer;transition:background 0.15s;"
+                                           onmouseover="this.style.background='rgba(107,70,193,0.06)'" onmouseout="this.style.background='transparent'">
+                                        <input type="checkbox" name="substore_names[]" value="{{ $subStoreName }}"
+                                               {{ is_array(old('substore_names')) && in_array($subStoreName, old('substore_names')) ? 'checked' : '' }}
+                                               onchange="updateSubstoreCounter(); loadCampaignsForSelectedSubstores()"
+                                               data-testid="substore-checkbox-{{ Str::slug($subStoreName) }}"
+                                               style="width:18px;height:18px;accent-color:var(--brand-primary);flex-shrink:0;cursor:pointer;">
+                                        <span style="font-size:14px;font-weight:500;">{{ $subStoreName }}</span>
+                                    </label>
                                 @endforeach
-                            </select>
-                            @error('substore_name')
+                            </div>
+                            @error('substore_names')
                                 <div class="form-error">{{ $message }}</div>
                             @enderror
                         </div>
@@ -509,7 +535,6 @@
         }
 
         function checkCampaignVisibility() {
-            const substoreName = document.getElementById('substore_name');
             const campaignSection = document.getElementById('campaign_section');
             if (!campaignSection) return;
 
@@ -517,18 +542,16 @@
             const typeSelection = document.getElementById('type_selection');
             const currentType = typeSelection ? typeSelection.value : '';
 
-            // For sub-store type: show campaigns if sub-store is selected and role is eligible
-            if (substoreName && substoreName.value && (currentType === 'substore' || !typeSelection)) {
-                if (eligible) {
+            // For sub-store type: show campaigns if at least one sub-store is selected and role is eligible
+            if (currentType === 'substore' || !typeSelection) {
+                const checkedSubstores = document.querySelectorAll('#substore_checkboxes input[type="checkbox"]:checked');
+                const substoreName = document.getElementById('substore_name');
+                const hasSubstore = (checkedSubstores && checkedSubstores.length > 0) || (substoreName && substoreName.value);
+                
+                if (hasSubstore && eligible) {
                     campaignSection.style.display = 'block';
-                    const checkboxes = document.getElementById('campaign_checkboxes');
-                    if (checkboxes && checkboxes.querySelectorAll('input[type="checkbox"]').length === 0) {
-                        loadCampaigns();
-                    }
-                } else {
-                    campaignSection.style.display = 'none';
+                    return;
                 }
-                return;
             }
 
             campaignSection.style.display = 'none';
@@ -538,8 +561,6 @@
             const typeSelection = document.getElementById('type_selection');
             const operatorSelection = document.getElementById('operator_selection');
             const substoreSelection = document.getElementById('substore_selection');
-            const operatorName = document.getElementById('operator_name');
-            const substoreName = document.getElementById('substore_name');
             const campaignSection = document.getElementById('campaign_section');
             
             if (!typeSelection || !operatorSelection || !substoreSelection) {
@@ -550,21 +571,84 @@
             substoreSelection.style.display = 'none';
             if (campaignSection) campaignSection.style.display = 'none';
             
-            if (operatorName) {
-                operatorName.required = false;
-                operatorName.value = '';
-            }
-            if (substoreName) {
-                substoreName.required = false;
-                substoreName.value = '';
-            }
-            
             if (typeSelection.value === 'operator') {
                 operatorSelection.style.display = 'block';
-                if (operatorName) operatorName.required = true;
             } else if (typeSelection.value === 'substore') {
                 substoreSelection.style.display = 'block';
-                if (substoreName) substoreName.required = true;
+            }
+        }
+
+        function updateOperatorCounter() {
+            const counter = document.getElementById('operator_counter');
+            if (!counter) return;
+            const selected = document.querySelectorAll('#operator_checkboxes input[type="checkbox"]:checked').length;
+            counter.textContent = selected === 0 ? 'Aucun operateur selectionne' : `${selected} operateur(s) selectionne(s)`;
+        }
+
+        function selectAllOperators() {
+            document.querySelectorAll('#operator_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updateOperatorCounter();
+        }
+
+        function deselectAllOperators() {
+            document.querySelectorAll('#operator_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updateOperatorCounter();
+        }
+
+        function updateSubstoreCounter() {
+            const counter = document.getElementById('substore_counter');
+            if (!counter) return;
+            const selected = document.querySelectorAll('#substore_checkboxes input[type="checkbox"]:checked').length;
+            counter.textContent = selected === 0 ? 'Aucun sub-store selectionne' : `${selected} sub-store(s) selectionne(s)`;
+        }
+
+        function selectAllSubstores() {
+            document.querySelectorAll('#substore_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updateSubstoreCounter();
+            loadCampaignsForSelectedSubstores();
+        }
+
+        function deselectAllSubstores() {
+            document.querySelectorAll('#substore_checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updateSubstoreCounter();
+            loadCampaignsForSelectedSubstores();
+        }
+
+        async function loadCampaignsForSelectedSubstores() {
+            const campaignSection = document.getElementById('campaign_section');
+            const campaignCheckboxes = document.getElementById('campaign_checkboxes');
+            if (!campaignSection || !campaignCheckboxes) return;
+
+            const checkedSubstores = Array.from(document.querySelectorAll('#substore_checkboxes input[type="checkbox"]:checked')).map(cb => cb.value);
+            
+            if (checkedSubstores.length === 0 || !isCampaignEligibleRole()) {
+                campaignSection.style.display = 'none';
+                return;
+            }
+
+            campaignSection.style.display = 'block';
+            campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Chargement des campagnes...</div>';
+            document.getElementById('campaign_search').value = '';
+            document.getElementById('campaign_selected_tags').innerHTML = '';
+
+            try {
+                let allCampaignsResult = [];
+                for (const storeName of checkedSubstores) {
+                    const res = await fetch(`{{ route('admin.invitations.campaigns') }}?store_name=${encodeURIComponent(storeName)}`);
+                    const data = await res.json();
+                    if (data.campaigns) {
+                        allCampaignsResult = allCampaignsResult.concat(data.campaigns);
+                    }
+                }
+                allCampaigns = allCampaignsResult;
+                if (allCampaigns.length === 0) {
+                    campaignCheckboxes.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Aucune campagne trouvee.</div>';
+                } else {
+                    renderCampaignList(allCampaigns);
+                }
+                updateCampaignCounter();
+            } catch (e) {
+                campaignCheckboxes.innerHTML = `<div style="text-align:center;padding:20px;color:var(--danger);">Erreur: ${e.message}</div>`;
             }
         }
 

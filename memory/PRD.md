@@ -27,21 +27,22 @@ High-performance Laravel 10 dashboard for Club Privileges loyalty program. ML-po
 - Fix Catégories Évolution: comparaison avec période précédente
 - Fix Loading uniforme: tous KPIs en "Chargement..." + deltas masqués
 - Campaign Dropdown Fallback: async + API `/api/split/campaigns`
-- **Fix Invitation Permissions (2 avril 2026)**: `getCampaigns()` filtre maintenant par les campagnes autorisées de l'admin (`getAllowedCampaigns()`). Validation backend ajoutée dans `store()` pour empêcher l'assignation de campagnes non autorisées.
-- **Fix Navigation Mobile (2 avril 2026)**: z-index nav-tabs augmenté à 200, `-webkit-overflow-scrolling: touch` ajouté, `overflow-y: auto` sur body.
+- Fix Invitation Permissions: `getCampaigns()` filtre par campagnes autorisées de l'admin
+- CI/CD Production: `.github/workflows/deploy-prod.yml` → merge PR dans main → deploy `/var/www/dashboard_cp`
+- **Multi-select Opérateurs/Sub-stores (2 avril 2026)**: Les formulaires d'invitation et de création utilisateur utilisent maintenant des checkboxes au lieu de dropdowns simples. Le SuperAdmin peut sélectionner un ou plusieurs opérateurs/sub-stores avec "Tout sélectionner". Le backend crée un `UserOperator` par sélection. L'acceptation d'invitation crée aussi les multiples `UserOperator`.
 
 ## Test Accounts
 - SuperAdmin: superadmin@ooredoo.tn / SuperAdmin@2025
-- Admin Pluxee: imedos001@gmail.com (user deleted from DB, needs re-invitation)
 - Collaborateur: imededdine.essefi@gmail.com / pca: ["Hutchinson Tunisie - By Pluxee"]
 
 ## Deployment Steps (VPS)
 1. git pull
 2. php artisan migrate (for indexes)
-3. php artisan cache:clear (ou redis-cli -a hxtrJ74 FLUSHALL)
+3. php artisan cache:clear
 4. sudo supervisorctl restart fastapi_dashboard_prod
 
 ## Backlog
 - Export PDF du dashboard par campagne (P1)
-- CI/CD: Verify pipeline once user clears VPS disk space (P2)
+- CI/CD Preprod: Verify pipeline once user clears VPS disk space (P2)
 - Extract inline CSS from Blade templates into dedicated CSS files (P3)
+- Nettoyage des `user_operators` orphelins (user_id 42, 43, 47, 48, 50, 51, 52)
