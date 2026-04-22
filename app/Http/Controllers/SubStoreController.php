@@ -91,6 +91,11 @@ class SubStoreController extends Controller
      */
     private function distinctClientIdsForAllCampaigns(array $allowed): array
     {
+        // Sans liste de campagnes, ne jamais agréger « tous les clients du monde » (tables énormes + WHERE IN).
+        if (empty($allowed)) {
+            return [];
+        }
+
         $q1 = DB::table('carte_recharge')
             ->whereNotNull('client_id')
             ->where('client_id', '!=', '');
@@ -224,8 +229,10 @@ class SubStoreController extends Controller
             }
         }
 
-        // « Tous les sub-stores » sans campagne : agrégation globale (batch Pluxee + clientIds campagne)
-        if ($subStore === 'ALL' && !$this->currentCampaign) {
+        // « Tous les sub-stores » sans campagne : n'activer le mode Pluxee « toutes campagnes » QUE si l'utilisateur
+        // est restreint à une liste de campagnes. Sinon (ex. SuperAdmin, allowed vide) on chargeait TOUS les
+        // client_id de carte_recharge (+ carte_recharge_client) en mémoire puis des WHERE IN géants → timeouts.
+        if ($subStore === 'ALL' && !$this->currentCampaign && !empty($allowedCampaigns)) {
             $this->isPluxeeAllCampaigns = true;
         }
 
@@ -239,7 +246,7 @@ class SubStoreController extends Controller
             'period_days' => $periodDays,
             'allowed_campaigns' => $allowedCampaigns,
             'use_pluxee_batch' => $this->shouldUsePluxeeKpiBatch($subStore),
-            '_split_cache_version' => 6,
+            '_split_cache_version' => 7,
         ];
     }
 
@@ -253,7 +260,7 @@ class SubStoreController extends Controller
                 'end_date' => $params['end_date'],
                 'sub_store' => $params['sub_store'],
                 'campaign' => $params['campaign'],
-                'split_cache_v' => $params['_split_cache_version'] ?? 6,
+                'split_cache_v' => $params['_split_cache_version'] ?? 7,
             ]));
             $cached = Cache::get($rawKey);
             if ($cached) {
@@ -455,7 +462,8 @@ class SubStoreController extends Controller
         $fast = $this->fastCacheResponse($request, 'kpis');
         if ($fast) return $fast;
 
-        set_time_limit(120);
+        // Aligné sur le timeout fetch front (180s) + marge ; les logs montraient des fatal 120s sur requêtes lourdes
+        set_time_limit(300);
         $start = microtime(true);
         try {
             $p = $this->normalizeSubStoreParams($request);
@@ -475,7 +483,7 @@ class SubStoreController extends Controller
         $fast = $this->fastCacheResponse($request, 'stores');
         if ($fast) return $fast;
 
-        set_time_limit(60);
+        set_time_limit(300);
         $start = microtime(true);
         try {
             $p = $this->normalizeSubStoreParams($request);
@@ -503,7 +511,7 @@ class SubStoreController extends Controller
         $fast = $this->fastCacheResponse($request, 'charts');
         if ($fast) return $fast;
 
-        set_time_limit(60);
+        set_time_limit(300);
         $start = microtime(true);
         try {
             $p = $this->normalizeSubStoreParams($request);
@@ -547,7 +555,7 @@ class SubStoreController extends Controller
         $fast = $this->fastCacheResponse($request, 'merchants');
         if ($fast) return $fast;
 
-        set_time_limit(120);
+        set_time_limit(300);
         $start = microtime(true);
         try {
             $p = $this->normalizeSubStoreParams($request);
@@ -567,7 +575,7 @@ class SubStoreController extends Controller
         $fast = $this->fastCacheResponse($request, 'users');
         if ($fast) return $fast;
 
-        set_time_limit(180);
+        set_time_limit(300);
         $start = microtime(true);
         try {
             $p = $this->normalizeSubStoreParams($request);
@@ -1270,7 +1278,7 @@ class SubStoreController extends Controller
     private function getMerchantData(string $ss, string $sd, string $ed, string $csd, string $ced): array
     {
         try {
-            set_time_limit(120);
+            set_time_limit(300);
             $isPluxee = $this->isPluxeeCampaign($ss) || $this->shouldUsePluxeeKpiBatch($ss);
 
             $totalPartners = DB::table('partner')->where('partener_active', 1)->count();

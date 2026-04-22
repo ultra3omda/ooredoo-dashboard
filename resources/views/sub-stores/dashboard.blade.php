@@ -2850,6 +2850,14 @@
           debugLog('Utilisation des donnees en cache pour Merchant');
           updateMerchantKPIs(window.merchantKPIsData);
           if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
+        } else if (window._merchantsUsersPromise) {
+          debugLog('Merchant: attente du chargement merchants/users en cours...');
+          window._merchantsUsersPromise.then(() => {
+            if (window.merchantKPIsData) {
+              updateMerchantKPIs(window.merchantKPIsData);
+              if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
+            }
+          });
         } else {
           debugLog('Pas de donnees Merchant, rechargement...');
           loadDashboardData();
@@ -2868,6 +2876,18 @@
           updateUsersTable(window.usersKPIsData.users);
         } else if (window._usersLoading) {
           debugLog('Users en cours de chargement, attente...');
+        } else if (window._merchantsUsersPromise) {
+          debugLog('Users: attente du chargement merchants/users en cours...');
+          window._merchantsUsersPromise.then(() => {
+            if (window.usersKPIsData) {
+              updateUsersKPIs(window.usersKPIsData.kpis);
+              updateUsersTable(window.usersKPIsData.users);
+            } else {
+              debugLog('Pas de donnees Users après attente, rechargement...');
+              createUsersLoadingKPIs();
+              loadUsersData();
+            }
+          });
         } else {
           debugLog('Pas de donnees Users, chargement...');
           createUsersLoadingKPIs();
@@ -3181,6 +3201,40 @@
             signal: AbortSignal.timeout(180000)
           }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
 
+        // Merchants + users en parallèle du lot principal (évite d’attendre kpis/stores avant de lancer ces requêtes)
+        const lazyPromises = Promise.allSettled([
+          fetchSection('merchants'),
+          fetchSection('users')
+        ]).then(([merchants, users]) => {
+          try {
+            if (merchants.status === 'fulfilled' && merchants.value.success) {
+              const md = merchants.value.data;
+              if (md.kpis) window.merchantKPIsData = md.kpis;
+              if (md.merchants) window.merchantsListData = md.merchants;
+              window._merchantsLoaded = true;
+              debugLog('Background merchants loaded:', merchants.value.execution_time_ms + 'ms');
+            }
+            if (users.status === 'fulfilled' && users.value.success) {
+              const ud = users.value.data;
+              if (ud.users_kpis) window.usersKPIsData = { kpis: ud.users_kpis, users: ud.users || [] };
+              window._usersLoaded = true;
+              debugLog('Background users loaded:', users.value.execution_time_ms + 'ms');
+            }
+            // Toujours peindre les cartes / tableaux si les données sont là (l’onglet n’a pas besoin d’être actif)
+            if (window.merchantKPIsData) {
+              updateMerchantKPIs(window.merchantKPIsData);
+              if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
+            }
+            if (window.usersKPIsData) {
+              updateUsersKPIs(window.usersKPIsData.kpis);
+              updateUsersTable(window.usersKPIsData.users);
+            }
+          } catch (e) {
+            debugError('Erreur UI après split merchants/users:', e);
+          }
+        });
+        window._merchantsUsersPromise = lazyPromises;
+
         showExpirationsSkeleton();
         let expParams = `sub_store=${encodeURIComponent(subStore)}`;
         if (campaign) expParams += `&campaign=${encodeURIComponent(campaign)}`;
@@ -3195,26 +3249,6 @@
           fetchSection('charts'),
           expirationsPromise
         ]);
-
-        // Pre-fetch merchants & users in background (low priority)
-        const lazyPromises = Promise.allSettled([
-          fetchSection('merchants'),
-          fetchSection('users')
-        ]).then(([merchants, users]) => {
-          if (merchants.status === 'fulfilled' && merchants.value.success) {
-            const md = merchants.value.data;
-            if (md.kpis) window.merchantKPIsData = md.kpis;
-            if (md.merchants) window.merchantsListData = md.merchants;
-            window._merchantsLoaded = true;
-            debugLog('Background merchants loaded:', merchants.value.execution_time_ms + 'ms');
-          }
-          if (users.status === 'fulfilled' && users.value.success) {
-            const ud = users.value.data;
-            if (ud.users_kpis) window.usersKPIsData = { kpis: ud.users_kpis, users: ud.users || [] };
-            window._usersLoaded = true;
-            debugLog('Background users loaded:', users.value.execution_time_ms + 'ms');
-          }
-        });
 
         window.lastDashboardLoadTime = Date.now();
         window.datesChanged = false;
@@ -3276,22 +3310,6 @@
           }
           loadedSections++;
         }
-
-        // Merchants & Users are loaded in background — update UI if their tabs are already visible
-        lazyPromises.then(() => {
-          const activeTab = document.querySelector('.nav-tab.active');
-          if (activeTab) {
-            const tabText = activeTab.textContent;
-            if (tabText.includes('Merchant') && window.merchantKPIsData) {
-              updateMerchantKPIs(window.merchantKPIsData);
-              if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
-            }
-            if (tabText.includes('Users') && window.usersKPIsData) {
-              updateUsersKPIs(window.usersKPIsData.kpis);
-              updateUsersTable(window.usersKPIsData.users);
-            }
-          }
-        });
 
         if (expirations.status === 'fulfilled') {
           const edata = expirations.value;
@@ -3703,7 +3721,12 @@
       
       const diversityDetail = document.getElementById('merch-diversityDetail');
       if (diversityDetail) {
-        diversityDetail.textContent = diversity.current || 'Niveau de diversité';
+        if (rawDiversity.level) {
+          diversityDetail.textContent = `${rawDiversity.level} (${rawDiversity.score || 0})`;
+        } else {
+          const diversityNorm = normalizeKPI(kpis.diversity);
+          diversityDetail.textContent = diversityNorm.current || 'Niveau de diversité';
+        }
       }
     }
 
@@ -4412,15 +4435,23 @@
       // Recharger les données principales
       loadDashboardData();
       
-      // Forcer la mise à jour de l'onglet actif après le chargement
-      setTimeout(() => {
-        const activeTab = document.querySelector('.nav-link.active');
-        if (activeTab) {
-          const tabName = activeTab.getAttribute('onclick').match(/showTab\('([^']+)'\)/)[1];
-          debugLog('🔄 Actualisation de l\'onglet actif:', tabName);
-          showTab(tabName);
+      // Re-synchroniser l'onglet actif une fois merchants/users disponibles (le chargement peut être long)
+      const resyncActiveTab = () => {
+        const activeTab = document.querySelector('.nav-tab.active');
+        const onclick = activeTab && activeTab.getAttribute('onclick');
+        const m = onclick && onclick.match(/showTab\('([^']+)'\)/);
+        if (m) {
+          debugLog('🔄 Actualisation de l\'onglet actif:', m[1]);
+          showTab(m[1]);
         }
-      }, 1500); // Attendre 1.5 seconde pour que les données soient chargées
+      };
+      if (window._merchantsUsersPromise) {
+        window._merchantsUsersPromise.finally(() => {
+          setTimeout(resyncActiveTab, 0);
+        });
+      } else {
+        setTimeout(resyncActiveTab, 1500);
+      }
     }
     
     // Fonction pour afficher un indicateur de chargement dans les KPIs
