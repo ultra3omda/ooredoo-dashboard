@@ -11,9 +11,9 @@ from bs4 import BeautifulSoup
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Test credentials
-ADMIN_EMAIL = "superadmin@ooredoo.tn"
-ADMIN_PASSWORD = "SuperAdmin@2025"
+# Test credentials from environment
+ADMIN_EMAIL = os.getenv("TEST_ADMIN_EMAIL", "superadmin@ooredoo.tn")
+ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "SuperAdmin@2025")
 
 
 class TestSplitEndpoints:

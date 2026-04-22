@@ -15,9 +15,9 @@ from urllib.parse import urljoin
 # API URL from environment or default
 BASE_URL = "https://05e71150-e8ce-4b77-a854-80030459ae3b.preview.emergentagent.com"
 
-# Test credentials
-TEST_EMAIL = "superadmin@ooredoo.tn"
-TEST_PASSWORD = "SuperAdmin@2025"
+# Test credentials from environment
+TEST_EMAIL = os.getenv("TEST_ADMIN_EMAIL", "superadmin@ooredoo.tn")
+TEST_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "SuperAdmin@2025")
 
 
 class TestSession:

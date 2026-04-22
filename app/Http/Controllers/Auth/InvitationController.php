@@ -140,8 +140,12 @@ class InvitationController extends Controller
             'last_name' => 'required|string|max:255',
             'role_id' => 'required|exists:roles,id',
             'type_selection' => 'required|in:operator,substore',
-            'operator_name' => 'required_if:type_selection,operator|string|nullable',
-            'substore_name' => 'required_if:type_selection,substore|string|nullable',
+            'operator_names' => 'nullable|array',
+            'operator_names.*' => 'string|max:255',
+            'operator_name' => 'nullable|string|max:255',
+            'substore_names' => 'nullable|array',
+            'substore_names.*' => 'string|max:255',
+            'substore_name' => 'nullable|string|max:255',
             'campaign_access' => 'nullable|array',
             'campaign_access.*' => 'string|max:255',
             'message' => 'nullable|string|max:500'
@@ -154,15 +158,31 @@ class InvitationController extends Controller
             'role_id.required' => 'Le rôle est obligatoire.',
             'type_selection.required' => 'Le type est obligatoire.',
             'type_selection.in' => 'Le type doit être opérateur ou sub-store.',
-            'operator_name.required_if' => 'L\'opérateur est obligatoire quand le type est opérateur.',
-            'substore_name.required_if' => 'Le sub-store est obligatoire quand le type est sub-store.'
         ]);
 
         // Vérifier les permissions selon le type d'utilisateur
         $role = Role::find($request->role_id);
         
-        // Déterminer le nom de l'opérateur/sub-store selon le type sélectionné
-        $operatorName = $request->type_selection === 'operator' ? $request->operator_name : $request->substore_name;
+        // Déterminer les opérateurs/sub-stores (multi-select pour SuperAdmin)
+        $operatorNamesList = [];
+        if ($request->type_selection === 'operator') {
+            $operatorNamesList = $request->input('operator_names', []);
+            if (empty($operatorNamesList) && $request->operator_name) {
+                $operatorNamesList = [$request->operator_name];
+            }
+        } else {
+            $operatorNamesList = $request->input('substore_names', []);
+            if (empty($operatorNamesList) && $request->substore_name) {
+                $operatorNamesList = [$request->substore_name];
+            }
+        }
+
+        if (empty($operatorNamesList)) {
+            return back()->with('error', 'Veuillez sélectionner au moins un opérateur ou sub-store.');
+        }
+
+        // Use the first operator as the primary for the invitation record
+        $primaryOperator = $operatorNamesList[0];
         
         if ($user->isSuperAdmin()) {
             if (!in_array($role->name, ['admin', 'collaborator'])) {
@@ -174,8 +194,10 @@ class InvitationController extends Controller
             }
             
             $userOperators = $user->operators->pluck('operator_name');
-            if (!$userOperators->contains($operatorName)) {
-                return back()->with('error', 'Vous ne pouvez pas inviter pour cet opérateur/sub-store.');
+            foreach ($operatorNamesList as $opName) {
+                if (!$userOperators->contains($opName)) {
+                    return back()->with('error', "Vous ne pouvez pas inviter pour l'opérateur/sub-store: {$opName}");
+                }
             }
         }
 
@@ -199,7 +221,7 @@ class InvitationController extends Controller
                 'token' => Str::random(64),
                 'invited_by' => $user->id,
                 'role_id' => $request->role_id,
-                'operator_name' => $operatorName,
+                'operator_name' => $primaryOperator,
                 'first_name' => $request->first_name,
                 'last_name' => $request->last_name,
                 'status' => 'pending',
@@ -209,6 +231,7 @@ class InvitationController extends Controller
                     'invited_by_name' => $user->name,
                     'type_selection' => $request->type_selection,
                     'campaign_access' => $campaignAccess,
+                    'operator_names' => $operatorNamesList,
                 ]
             ]);
 
@@ -331,23 +354,25 @@ class InvitationController extends Controller
                 ]);
             }
 
-            // Vérifier si l'opérateur est déjà assigné
-            $existingOperator = UserOperator::where('user_id', $user->id)
-                                          ->where('operator_name', $invitation->operator_name)
-                                          ->first();
+            // Assigner les opérateurs/sub-stores (multi-select)
+            $additionalData = $invitation->additional_data ?? [];
+            $operatorNamesList = $additionalData['operator_names'] ?? [$invitation->operator_name];
             
-            if (!$existingOperator) {
-                // Assigner l'opérateur
-                UserOperator::create([
-                    'user_id' => $user->id,
-                    'operator_name' => $invitation->operator_name,
-                    'is_primary' => true,
-                    'assigned_by' => $invitation->invited_by
-                ]);
+            foreach ($operatorNamesList as $index => $opName) {
+                $existingOperator = UserOperator::where('user_id', $user->id)
+                                              ->where('operator_name', $opName)
+                                              ->first();
+                if (!$existingOperator) {
+                    UserOperator::create([
+                        'user_id' => $user->id,
+                        'operator_name' => $opName,
+                        'is_primary' => $index === 0,
+                        'assigned_by' => $invitation->invited_by
+                    ]);
+                }
             }
 
             // Apply campaign access restrictions if specified
-            $additionalData = $invitation->additional_data ?? [];
             $campaignAccess = $additionalData['campaign_access'] ?? [];
             if (!empty($campaignAccess)) {
                 // Store as JSON array in pluxee_campaign_access

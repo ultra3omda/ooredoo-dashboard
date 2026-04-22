@@ -2181,14 +2181,6 @@
                 <div class="kpi-delta" id="users-retentionRateDelta" style="display: none;"></div>
               </div>
             </div>
-            <div class="card kpi-card users-kpi" style="border-left: 3px solid #ef4444;">
-              <div class="kpi-icon" style="color: #ef4444;">📉</div>
-              <div class="kpi-content">
-                <div class="kpi-title">Users Loss <span style="margin-left:4px; cursor: help; color: var(--muted);" title="Clients supprimés ayant activé une carte de la campagne. Equilibre: Inscriptions + Users Loss = Total clients avec abonnement.">ⓘ</span></div>
-                <div class="kpi-value" id="users-usersLoss" data-testid="users-loss-value" style="color: #ef4444;">Loading...</div>
-                <div class="kpi-delta" id="users-usersLossDelta" style="display: none;"></div>
-              </div>
-            </div>
           </div>
 
           <!-- Users Table Section -->
@@ -2324,10 +2316,11 @@
     // Fonction helper globale pour normaliser les objets KPI
     function normalizeKPI(obj) {
       debugLog('🔧 normalizeKPI appelé avec:', obj);
-      if (obj && typeof obj.current !== 'undefined') {
-        return obj; // Retourner l'objet tel quel pour préserver les propriétés supplémentaires
+      if (obj != null && typeof obj === 'object' && typeof obj.current !== 'undefined') {
+        return obj;
       }
-      return { current: obj || 0, change: 0 };
+      const n = typeof obj === 'number' ? obj : parseFloat(obj);
+      return { current: Number.isFinite(n) ? n : 0, previous: 0, change: 0 };
     }
 
     // Fonction helper globale pour mettre à jour un KPI individuel
@@ -2340,7 +2333,7 @@
         valueElement.textContent = kpiData.current + suffix;
         
         // Masquer les deltas des KPIs globaux
-        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate', 'users-usersLoss'];
+        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate'];
         const isGlobalKPI = globalKPIs.includes(id);
         
         // Gérer le delta si disponible
@@ -2383,7 +2376,6 @@
       updateSingleKPI('users-newUsers', normalizeKPI(usersData.newUsers));
       updateSingleKPI('users-transactionsCohorte', normalizeKPI(usersData.transactionsCohorte));
       updateSingleKPI('users-retentionRate', normalizeKPI(usersData.retentionRate), '%');
-      updateSingleKPI('users-usersLoss', normalizeKPI(usersData.usersLoss));
       
       debugLog('✅ Tous les KPIs Users ont été mis à jour');
     }
@@ -2570,39 +2562,23 @@
     }
 
     function createUsersLoadingKPIs() {
-      debugLog('⏳ Création des KPIs Users de chargement');
-      
-      const kpisContainer = document.querySelector('.users-kpis-row');
-      if (!kpisContainer) {
-        debugWarn('⚠️ Container KPIs Users non trouvé');
-        return;
-      }
-      
-      // Toujours recréer les KPIs pour s'assurer qu'ils existent
-      const kpisData = [
-            { id: 'users-totalUsers', title: 'Total Users', icon: '👥', tooltip: 'Nombre total d\'utilisateurs inscrits avec cartes de recharge (même que INSCRIPTIONS vue d\'ensemble).', showDelta: false },
-            { id: 'users-activeUsers', title: 'Active Users', icon: '⚡', tooltip: 'Utilisateurs avec abonnements actifs dans la période sélectionnée (même logique que ACTIVE USERS COHORTE).', showDelta: false },
-            { id: 'users-totalTransactions', title: 'Total Transactions', icon: '💳', tooltip: 'Nombre total de transactions lifetime (toutes périodes, même que TRANSACTIONS vue d\'ensemble).', showDelta: false },
-            { id: 'users-avgTransactionsPerUser', title: 'Avg Transactions/User', icon: '📊', tooltip: 'Moyenne de transactions par utilisateur actif dans la période.', showDelta: false },
-            { id: 'users-totalSubscriptions', title: 'Total Cartes Utilisées', icon: '🎯', tooltip: 'Nombre total de cartes de recharge utilisées par les utilisateurs (toutes périodes, même que CARTES UTILISÉES vue d\'ensemble).', showDelta: false },
-            { id: 'users-newUsers', title: 'Cartes Activées', icon: '💳', tooltip: 'Nombre de cartes de recharge activées dans la période.' },
-            { id: 'users-transactionsCohorte', title: 'Transactions (Cohorte)', icon: '💳', tooltip: 'Nombre de transactions effectuées par les utilisateurs dans la période sélectionnée.' },
-            { id: 'users-retentionRate', title: 'Retention Rate', icon: '🔄', tooltip: 'Pourcentage d\'utilisateurs actifs par rapport au total (ACTIVE USERS / TOTAL USERS).', showDelta: false },
-            { id: 'users-usersLoss', title: 'Users Loss', icon: '📉', tooltip: 'Clients supprimés ayant activé une carte. Equilibre: Inscriptions + Users Loss = Total clients avec abonnement.', showDelta: false }
+      debugLog('⏳ KPIs Users — état chargement (sans recréer le DOM)');
+      const usersKPIs = [
+        'users-totalUsers', 'users-activeUsers', 'users-totalTransactions',
+        'users-avgTransactionsPerUser', 'users-totalSubscriptions',
+        'users-newUsers', 'users-transactionsCohorte', 'users-retentionRate'
       ];
-      
-      kpisContainer.innerHTML = kpisData.map(kpi => `
-        <div class="card kpi-card users-kpi">
-          <div class="kpi-icon">${kpi.icon}</div>
-          <div class="kpi-content">
-            <div class="kpi-title">${kpi.title} <span style="margin-left:4px; cursor: help; color: var(--muted);" title="${kpi.tooltip}">ⓘ</span></div>
-            <div class="kpi-value" id="${kpi.id}">⏳ Chargement...</div>
-            <div class="kpi-delta" id="${kpi.id}Delta" style="display: ${kpi.showDelta === false ? 'none' : 'block'};"></div>
-          </div>
-        </div>
-      `).join('');
-      
-      debugLog('✅ KPIs Users créés avec succès');
+      usersKPIs.forEach(kpiId => {
+        const valueElement = document.getElementById(kpiId);
+        if (valueElement) {
+          valueElement.innerHTML = '<span style="color: rgba(255,255,255,0.8);">⏳ Chargement...</span>';
+        }
+      });
+    }
+
+    function exportUsersTable() {
+      debugLog('📤 Export du tableau Users');
+      showNotification('Export des données utilisateurs en cours...', 'success');
     }
 
     async function loadUsersData() {
@@ -2746,8 +2722,7 @@
         { id: 'clientsWithTransactions', title: 'CLIENTS AVEC TRANSACTIONS', tooltip: 'Nombre de clients ayant effectué au moins une transaction.' },
         { id: 'activeUsersCohorte', title: 'ACTIVE USERS COHORTE', tooltip: 'Utilisateurs actifs dans la période sélectionnée' },
         { id: 'conversionRate', title: 'TAUX DE CONVERSION', tooltip: 'Ratio inscriptions/distribué', showDelta: false },
-        { id: 'renewalRate', title: 'CARTES ACTIVÉES COHORTE', tooltip: 'Le nombre total de cartes de recharge activées dans la période' },
-        { id: 'usersLoss', title: 'USERS LOSS', tooltip: 'Clients supprimés ayant activé une carte de la campagne (inscrits puis désinscrits)', showDelta: false }
+        { id: 'renewalRate', title: 'CARTES ACTIVÉES COHORTE', tooltip: 'Le nombre total de cartes de recharge activées dans la période' }
       ];
       
       // Vider le contenu existant
@@ -2821,8 +2796,7 @@
         { id: 'transactionsCohorte', value: kpis.transactionsCohorte?.current || 0, suffix: '' },
         { id: 'activeUsersCohorte', value: kpis.activeUsersCohorte?.current || 0, suffix: '' },
         { id: 'conversionRate', value: kpis.conversionRate?.current || 0, suffix: '%' },
-        { id: 'renewalRate', value: kpis.renewalRate?.current || 0, suffix: '' },
-        { id: 'usersLoss', value: kpis.usersLoss?.current || 0, suffix: '' }
+        { id: 'renewalRate', value: kpis.renewalRate?.current || 0, suffix: '' }
       ];
       
       // Mettre à jour chaque KPI
@@ -2876,6 +2850,14 @@
           debugLog('Utilisation des donnees en cache pour Merchant');
           updateMerchantKPIs(window.merchantKPIsData);
           if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
+        } else if (window._merchantsUsersPromise) {
+          debugLog('Merchant: attente du chargement merchants/users en cours...');
+          window._merchantsUsersPromise.then(() => {
+            if (window.merchantKPIsData) {
+              updateMerchantKPIs(window.merchantKPIsData);
+              if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
+            }
+          });
         } else {
           debugLog('Pas de donnees Merchant, rechargement...');
           loadDashboardData();
@@ -2894,6 +2876,18 @@
           updateUsersTable(window.usersKPIsData.users);
         } else if (window._usersLoading) {
           debugLog('Users en cours de chargement, attente...');
+        } else if (window._merchantsUsersPromise) {
+          debugLog('Users: attente du chargement merchants/users en cours...');
+          window._merchantsUsersPromise.then(() => {
+            if (window.usersKPIsData) {
+              updateUsersKPIs(window.usersKPIsData.kpis);
+              updateUsersTable(window.usersKPIsData.users);
+            } else {
+              debugLog('Pas de donnees Users après attente, rechargement...');
+              createUsersLoadingKPIs();
+              loadUsersData();
+            }
+          });
         } else {
           debugLog('Pas de donnees Users, chargement...');
           createUsersLoadingKPIs();
@@ -3207,33 +3201,54 @@
             signal: AbortSignal.timeout(180000)
           }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
 
-        // Fire only essential sections first (kpis, stores, charts)
-        // Merchants & Users are lazy-loaded when their tabs are clicked
-        const [kpis, stores, charts] = await Promise.allSettled([
-          fetchSection('kpis'),
-          fetchSection('stores'),
-          fetchSection('charts')
-        ]);
-
-        // Pre-fetch merchants & users in background (low priority)
+        // Merchants + users en parallèle du lot principal (évite d’attendre kpis/stores avant de lancer ces requêtes)
         const lazyPromises = Promise.allSettled([
           fetchSection('merchants'),
           fetchSection('users')
         ]).then(([merchants, users]) => {
-          if (merchants.status === 'fulfilled' && merchants.value.success) {
-            const md = merchants.value.data;
-            if (md.kpis) window.merchantKPIsData = md.kpis;
-            if (md.merchants) window.merchantsListData = md.merchants;
-            window._merchantsLoaded = true;
-            debugLog('Background merchants loaded:', merchants.value.execution_time_ms + 'ms');
-          }
-          if (users.status === 'fulfilled' && users.value.success) {
-            const ud = users.value.data;
-            if (ud.users_kpis) window.usersKPIsData = { kpis: ud.users_kpis, users: ud.users || [] };
-            window._usersLoaded = true;
-            debugLog('Background users loaded:', users.value.execution_time_ms + 'ms');
+          try {
+            if (merchants.status === 'fulfilled' && merchants.value.success) {
+              const md = merchants.value.data;
+              if (md.kpis) window.merchantKPIsData = md.kpis;
+              if (md.merchants) window.merchantsListData = md.merchants;
+              window._merchantsLoaded = true;
+              debugLog('Background merchants loaded:', merchants.value.execution_time_ms + 'ms');
+            }
+            if (users.status === 'fulfilled' && users.value.success) {
+              const ud = users.value.data;
+              if (ud.users_kpis) window.usersKPIsData = { kpis: ud.users_kpis, users: ud.users || [] };
+              window._usersLoaded = true;
+              debugLog('Background users loaded:', users.value.execution_time_ms + 'ms');
+            }
+            // Toujours peindre les cartes / tableaux si les données sont là (l’onglet n’a pas besoin d’être actif)
+            if (window.merchantKPIsData) {
+              updateMerchantKPIs(window.merchantKPIsData);
+              if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
+            }
+            if (window.usersKPIsData) {
+              updateUsersKPIs(window.usersKPIsData.kpis);
+              updateUsersTable(window.usersKPIsData.users);
+            }
+          } catch (e) {
+            debugError('Erreur UI après split merchants/users:', e);
           }
         });
+        window._merchantsUsersPromise = lazyPromises;
+
+        showExpirationsSkeleton();
+        let expParams = `sub_store=${encodeURIComponent(subStore)}`;
+        if (campaign) expParams += `&campaign=${encodeURIComponent(campaign)}`;
+        expParams += `&start_date=${startDate}&end_date=${endDate}`;
+        const expirationsPromise = fetch(`/sub-stores/api/expirations?${expParams}`, { headers: { Accept: 'application/json' } })
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+
+        // KPIs, stores, charts et expirations en parallèle (même logique « tout d’un coup » que l’opérateur)
+        const [kpis, stores, charts, expirations] = await Promise.allSettled([
+          fetchSection('kpis'),
+          fetchSection('stores'),
+          fetchSection('charts'),
+          expirationsPromise
+        ]);
 
         window.lastDashboardLoadTime = Date.now();
         window.datesChanged = false;
@@ -3296,40 +3311,18 @@
           loadedSections++;
         }
 
-        // Merchants & Users are loaded in background — update UI if their tabs are already visible
-        lazyPromises.then(() => {
-          const activeTab = document.querySelector('.nav-tab.active');
-          if (activeTab) {
-            const tabText = activeTab.textContent;
-            if (tabText.includes('Merchant') && window.merchantKPIsData) {
-              updateMerchantKPIs(window.merchantKPIsData);
-              if (window.merchantsListData) updateMerchantTable(window.merchantsListData);
-            }
-            if (tabText.includes('Users') && window.usersKPIsData) {
-              updateUsersKPIs(window.usersKPIsData.kpis);
-              updateUsersTable(window.usersKPIsData.users);
-            }
-          }
-        });
-
-        // Expirations (separate lightweight call)
-        try {
-          showExpirationsSkeleton();
-          let expParams = `sub_store=${encodeURIComponent(subStore)}`;
-          if (campaign) expParams += `&campaign=${encodeURIComponent(campaign)}`;
-          expParams += `&start_date=${startDate}&end_date=${endDate}`;
-          const eresp = await fetch(`/sub-stores/api/expirations?${expParams}`);
-          const edata = await eresp.json();
+        if (expirations.status === 'fulfilled') {
+          const edata = expirations.value;
           if (edata.expirationsByMonth && edata.expirationsByMonth.length > 0) {
             createExpirationsChart(edata.expirationsByMonth);
           } else {
             showNoDataMessage('expirationsChart', 'Aucune donnée d\'expiration disponible pour cette période');
           }
-          hideExpirationsSkeleton();
-        } catch (e) { 
+        } else {
+          debugWarn('Expirations: échec', expirations.reason);
           showNoDataMessage('expirationsChart', 'Erreur lors du chargement des expirations');
-          hideExpirationsSkeleton(); 
         }
+        hideExpirationsSkeleton();
 
         hideGlobalKPIsDeltas();
         forceHideGlobalDeltas();
@@ -3539,13 +3532,13 @@
       ];
 
       const kpisGrid = document.getElementById('kpisGrid');
-      
-      // Vérifier si les KPIs sont en cours de chargement
-      const isCurrentlyLoading = kpisGrid.querySelector('.kpi-value span[style*="Chargement"]');
-      
-      if (!isCurrentlyLoading) {
-        kpisGrid.innerHTML = '';
+      if (!kpisGrid) {
+        debugWarn('⚠️ kpisGrid introuvable');
+        return;
       }
+      // Toujours vider avant reconstruction : sinon les cartes « chargement » restent en premier
+      // et les doublons d\'id masquent les vraies valeurs (affichage bloqué à 0 ou « Chargement »).
+      kpisGrid.innerHTML = '';
 
       kpiCards.forEach(kpi => {
         const kpiCard = document.createElement('div');
@@ -3569,18 +3562,16 @@
         // Vérifier si le KPI a explicitement showDelta: false
         const shouldHideDelta = isGlobalKPI || kpi.showDelta === false;
         
-        // Formater la valeur - utiliser la valeur du KPI défini
-        let formattedValue = '0';
         const kpiValue = kpi.value;
-        
-        if (kpiValue !== undefined && kpiValue !== 0) {
-          if (kpi.id === 'conversionRate') {
-            formattedValue = kpiValue.toFixed(1) + '%';
-          } else if (kpi.id === 'renewalRate') {
-            formattedValue = formatNumber(kpiValue);
-          } else {
-            formattedValue = kpiValue.toLocaleString();
-          }
+        const num = Number(kpiValue);
+        const n = Number.isFinite(num) ? num : 0;
+        let formattedValue;
+        if (kpi.id === 'conversionRate') {
+          formattedValue = n.toFixed(1) + '%';
+        } else if (kpi.id === 'renewalRate') {
+          formattedValue = formatNumber(n);
+        } else {
+          formattedValue = new Intl.NumberFormat('fr-FR').format(n);
         }
         
         debugLog(`🔍 KPI ${kpi.id}: valeur = ${kpiValue}, formatée = ${formattedValue}`);
@@ -3730,7 +3721,12 @@
       
       const diversityDetail = document.getElementById('merch-diversityDetail');
       if (diversityDetail) {
-        diversityDetail.textContent = diversity.current || 'Niveau de diversité';
+        if (rawDiversity.level) {
+          diversityDetail.textContent = `${rawDiversity.level} (${rawDiversity.score || 0})`;
+        } else {
+          const diversityNorm = normalizeKPI(kpis.diversity);
+          diversityDetail.textContent = diversityNorm.current || 'Niveau de diversité';
+        }
       }
     }
 
@@ -4439,15 +4435,23 @@
       // Recharger les données principales
       loadDashboardData();
       
-      // Forcer la mise à jour de l'onglet actif après le chargement
-      setTimeout(() => {
-        const activeTab = document.querySelector('.nav-link.active');
-        if (activeTab) {
-          const tabName = activeTab.getAttribute('onclick').match(/showTab\('([^']+)'\)/)[1];
-          debugLog('🔄 Actualisation de l\'onglet actif:', tabName);
-          showTab(tabName);
+      // Re-synchroniser l'onglet actif une fois merchants/users disponibles (le chargement peut être long)
+      const resyncActiveTab = () => {
+        const activeTab = document.querySelector('.nav-tab.active');
+        const onclick = activeTab && activeTab.getAttribute('onclick');
+        const m = onclick && onclick.match(/showTab\('([^']+)'\)/);
+        if (m) {
+          debugLog('🔄 Actualisation de l\'onglet actif:', m[1]);
+          showTab(m[1]);
         }
-      }, 1500); // Attendre 1.5 seconde pour que les données soient chargées
+      };
+      if (window._merchantsUsersPromise) {
+        window._merchantsUsersPromise.finally(() => {
+          setTimeout(resyncActiveTab, 0);
+        });
+      } else {
+        setTimeout(resyncActiveTab, 1500);
+      }
     }
     
     // Fonction pour afficher un indicateur de chargement dans les KPIs
@@ -4456,7 +4460,7 @@
       
       // Indicateur de chargement pour la vue d'ensemble
       const overviewKPIs = ['distributed', 'inscriptions', 'totalSubscriptions', 'transactions', 'activeUsers', 
-                           'inscriptionsCohorte', 'clientsWithTransactions', 'transactionsCohorte', 'activeUsersCohorte', 'conversionRate', 'renewalRate', 'usersLoss'];
+                           'inscriptionsCohorte', 'clientsWithTransactions', 'transactionsCohorte', 'activeUsersCohorte', 'conversionRate', 'renewalRate'];
       
       overviewKPIs.forEach(kpiId => {
         const valueElement = document.getElementById(kpiId);
@@ -4582,103 +4586,6 @@
       // Export logic
       showNotification('Export en cours...', 'success');
     }
-
-    // Users Section Functions - Version 2.0
-    debugLog('🔧 Chargement des fonctions Users...');
-    
-    // Fonction helper globale pour normaliser les objets KPI
-    function normalizeKPI(obj) {
-      debugLog('🔧 normalizeKPI appelé avec:', obj);
-      if (obj && typeof obj.current !== 'undefined') {
-        return obj; // Retourner l'objet tel quel pour préserver les propriétés supplémentaires
-      }
-      return { current: obj || 0, change: 0 };
-    }
-
-    // Fonction helper globale pour mettre à jour un KPI individuel
-    function updateSingleKPI(id, kpiData, suffix = '') {
-      debugLog(`🔧 updateSingleKPI: ${id} = ${kpiData.current}${suffix}`);
-      const valueElement = document.getElementById(id);
-      const deltaElement = document.getElementById(id + 'Delta');
-      
-      if (valueElement) {
-        valueElement.textContent = kpiData.current + suffix;
-        
-        // Masquer les deltas des KPIs globaux
-        const globalKPIs = ['users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 'users-avgTransactionsPerUser', 'users-totalSubscriptions', 'users-retentionRate', 'users-usersLoss'];
-        const isGlobalKPI = globalKPIs.includes(id);
-        
-        // Gérer le delta si disponible
-        if (deltaElement && kpiData.change !== undefined && !isGlobalKPI) {
-          const change = parseFloat(kpiData.change);
-          if (!isNaN(change)) {
-            const changeText = change > 0 ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`;
-            deltaElement.textContent = `→ ${changeText}`;
-            deltaElement.className = `kpi-delta ${change >= 0 ? 'positive' : 'negative'}`;
-            deltaElement.style.display = 'block';
-          } else {
-            deltaElement.style.display = 'none';
-          }
-        } else if (deltaElement && isGlobalKPI) {
-          // Masquer le delta pour les KPIs globaux
-          deltaElement.style.display = 'none';
-        }
-      } else {
-        debugWarn(`⚠️ Élément KPI non trouvé: ${id}`);
-      }
-    }
-
-    function updateUsersKPIs(usersData) {
-      debugLog('👥 Mise à jour des KPIs Users:', usersData);
-      debugLog('🔧 normalizeKPI disponible:', typeof normalizeKPI);
-      debugLog('🔧 updateSingleKPI disponible:', typeof updateSingleKPI);
-      
-      if (!usersData) {
-        debugLog('❌ Pas de données Users');
-        return;
-      }
-      
-      // Mettre à jour les KPIs Users
-      debugLog('🔧 Appel de normalizeKPI pour totalUsers...');
-      updateSingleKPI('users-totalUsers', normalizeKPI(usersData.totalUsers));
-      updateSingleKPI('users-activeUsers', normalizeKPI(usersData.activeUsers));
-      updateSingleKPI('users-totalTransactions', normalizeKPI(usersData.totalTransactions));
-      updateSingleKPI('users-avgTransactionsPerUser', normalizeKPI(usersData.avgTransactionsPerUser));
-      updateSingleKPI('users-totalSubscriptions', normalizeKPI(usersData.totalSubscriptions));
-      updateSingleKPI('users-newUsers', normalizeKPI(usersData.newUsers));
-      updateSingleKPI('users-transactionsCohorte', normalizeKPI(usersData.transactionsCohorte));
-      updateSingleKPI('users-retentionRate', normalizeKPI(usersData.retentionRate), '%');
-      updateSingleKPI('users-usersLoss', normalizeKPI(usersData.usersLoss));
-      
-      debugLog('✅ Tous les KPIs Users ont été mis à jour');
-    }
-
-
-    function exportUsersTable() {
-      debugLog('📤 Export du tableau Users');
-      showNotification('Export des données utilisateurs en cours...', 'success');
-      // TODO: Implémenter l'export CSV/Excel
-    }
-
-    function createUsersLoadingKPIs() {
-      debugLog('⏳ Création des KPIs Users de chargement');
-      
-      const usersKPIs = [
-        'users-totalUsers', 'users-activeUsers', 'users-totalTransactions', 
-        'users-avgTransactionsPerUser', 'users-totalSubscriptions', 
-        'users-newUsers', 'users-transactionsCohorte', 'users-retentionRate', 'users-usersLoss'
-      ];
-      
-      usersKPIs.forEach(kpiId => {
-        const valueElement = document.getElementById(kpiId);
-        if (valueElement) {
-          valueElement.innerHTML = '<span style="color: rgba(255,255,255,0.8);">⏳ Chargement...</span>';
-          debugLog(`✅ KPI User ${kpiId} mis en chargement`);
-        }
-      });
-    }
-
-    // loadUsersData is now handled by the split endpoint in loadDashboardData()
 
     function exportTable() {
       // Table export logic

@@ -965,7 +965,7 @@ import random as _random
 
 def _get_ab_group(client_id: int) -> str:
     """Deterministic A/B assignment based on client_id hash."""
-    h = hashlib.md5(f"ab_test_v1_{client_id}".encode()).hexdigest()
+    h = hashlib.sha256(f"ab_test_v1_{client_id}".encode()).hexdigest()
     return 'ml_model' if int(h[:8], 16) % 2 == 0 else 'popularity'
 
 

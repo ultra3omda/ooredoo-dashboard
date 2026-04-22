@@ -11,13 +11,13 @@ from bs4 import BeautifulSoup
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://perf-test-ooredoo.preview.emergentagent.com').rstrip('/')
 
-# Test credentials
-ADMIN_EMAIL = "superadmin@ooredoo.tn"
-ADMIN_PASSWORD = "SuperAdmin@2025"
-PLUXEE_RAMADAN_EMAIL = "pluxee.ramadan@test.oo"
-PLUXEE_RAMADAN_PASSWORD = "Pluxee@2025!"
-PLUXEE_ETE_EMAIL = "pluxee.ete@test.oo"
-PLUXEE_ETE_PASSWORD = "Pluxee@2025!"
+# Test credentials from environment
+ADMIN_EMAIL = os.getenv("TEST_ADMIN_EMAIL", "superadmin@ooredoo.tn")
+ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "SuperAdmin@2025")
+PLUXEE_RAMADAN_EMAIL = os.getenv("TEST_PLUXEE_RAMADAN_EMAIL", "pluxee.ramadan@test.oo")
+PLUXEE_RAMADAN_PASSWORD = os.getenv("TEST_PLUXEE_RAMADAN_PASSWORD", "Pluxee@2025!")
+PLUXEE_ETE_EMAIL = os.getenv("TEST_PLUXEE_ETE_EMAIL", "pluxee.ete@test.oo")
+PLUXEE_ETE_PASSWORD = os.getenv("TEST_PLUXEE_ETE_PASSWORD", "Pluxee@2025!")
 
 
 class TestSession:

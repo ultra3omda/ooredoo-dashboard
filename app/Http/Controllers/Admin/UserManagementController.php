@@ -139,8 +139,12 @@ class UserManagementController extends Controller
             'role_id' => 'required|exists:roles,id',
             'phone' => 'nullable|string|max:20',
             'type_selection' => 'required|in:operator,substore',
-            'operator_name' => 'required_if:type_selection,operator|string|nullable',
-            'substore_name' => 'required_if:type_selection,substore|string|nullable',
+            'operator_names' => 'nullable|array',
+            'operator_names.*' => 'string|max:255',
+            'operator_name' => 'nullable|string|max:255',
+            'substore_names' => 'nullable|array',
+            'substore_names.*' => 'string|max:255',
+            'substore_name' => 'nullable|string|max:255',
             'campaign_access' => 'nullable|array',
             'campaign_access.*' => 'string|max:255',
         ], [
@@ -155,8 +159,6 @@ class UserManagementController extends Controller
             'role_id.exists' => 'Le rôle sélectionné n\'existe pas.',
             'type_selection.required' => 'Le type est obligatoire.',
             'type_selection.in' => 'Le type doit être opérateur ou sub-store.',
-            'operator_name.required_if' => 'L\'opérateur est obligatoire quand le type est opérateur.',
-            'substore_name.required_if' => 'Le sub-store est obligatoire quand le type est sub-store.',
         ]);
 
         // Vérifier les permissions
@@ -165,8 +167,23 @@ class UserManagementController extends Controller
             return back()->with('error', 'Vous ne pouvez créer que des collaborateurs.');
         }
 
-        // Déterminer le nom de l'opérateur/sub-store selon le type sélectionné
-        $operatorName = $request->type_selection === 'operator' ? $request->operator_name : $request->substore_name;
+        // Déterminer les noms des opérateurs/sub-stores (multi-select pour SuperAdmin, single pour les autres)
+        $operatorNamesList = [];
+        if ($request->type_selection === 'operator') {
+            $operatorNamesList = $request->input('operator_names', []);
+            if (empty($operatorNamesList) && $request->operator_name) {
+                $operatorNamesList = [$request->operator_name];
+            }
+        } else {
+            $operatorNamesList = $request->input('substore_names', []);
+            if (empty($operatorNamesList) && $request->substore_name) {
+                $operatorNamesList = [$request->substore_name];
+            }
+        }
+
+        if (empty($operatorNamesList)) {
+            return back()->with('error', 'Veuillez sélectionner au moins un opérateur ou sub-store.');
+        }
 
         DB::beginTransaction();
         try {
@@ -183,13 +200,15 @@ class UserManagementController extends Controller
                 'created_by' => $user->id
             ]);
 
-            // Assigner l'opérateur/sub-store
-            UserOperator::create([
-                'user_id' => $newUser->id,
-                'operator_name' => $operatorName,
-                'is_primary' => true,
-                'assigned_by' => $user->id
-            ]);
+            // Assigner les opérateurs/sub-stores (multi-select)
+            foreach ($operatorNamesList as $index => $opName) {
+                UserOperator::create([
+                    'user_id' => $newUser->id,
+                    'operator_name' => $opName,
+                    'is_primary' => $index === 0,
+                    'assigned_by' => $user->id
+                ]);
+            }
 
             // Appliquer les restrictions de campagne si spécifiées
             $campaignAccess = $request->input('campaign_access', []);

@@ -1,5 +1,7 @@
 # Guide de Déploiement - Synchronisation Club Privilèges
 
+> Dernière mise à jour : 13 avril 2026 - CI/CD Production activé
+
 ## 📋 Vue d'ensemble
 
 Ce guide décrit le déploiement de la nouvelle fonctionnalité de synchronisation automatique Club Privilèges sur le serveur Ubuntu de préproduction.

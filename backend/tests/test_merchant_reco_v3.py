@@ -30,7 +30,7 @@ class TestMLModelRecommendations:
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         data = response.json()
         
-        assert data["success"] is True
+        assert data["success"] == True
         assert data["client_id"] == 118580
         assert data["source"] == "ml_model", f"Expected 'ml_model', got '{data['source']}'"
         assert "recommendations" in data
@@ -142,7 +142,7 @@ class TestFallbackRecommendations:
         assert response.status_code == 200
         data = response.json()
         
-        assert data["success"] is True
+        assert data["success"] == True
         assert data["source"] == "fallback_popularity", f"Expected 'fallback_popularity', got '{data['source']}'"
         assert len(data["recommendations"]) > 0
         print(f"✓ Client 0: source={data['source']}, count={len(data['recommendations'])}")
@@ -156,7 +156,7 @@ class TestFallbackRecommendations:
         assert response.status_code == 200
         data = response.json()
         
-        assert data["success"] is True
+        assert data["success"] == True
         assert data["source"] == "fallback_popularity", f"Expected 'fallback_popularity', got '{data['source']}'"
         print(f"✓ Client 1: source={data['source']}")
     
@@ -214,11 +214,11 @@ class TestExcludeVisitedFilter:
         assert response.status_code == 200
         data = response.json()
         
-        assert data["success"] is True
+        assert data["success"] == True
         
         # All recommendations should have already_visited=False
         for rec in data["recommendations"]:
-            assert rec["already_visited"] is False, f"Merchant {rec['partner_id']} should not be visited"
+            assert rec["already_visited"] == False, f"Merchant {rec['partner_id']} should not be visited"
             assert rec["visit_count"] == 0, f"Merchant {rec['partner_id']} visit_count should be 0"
         
         print(f"✓ exclude_visited=true: {len(data['recommendations'])} unvisited merchants returned")
@@ -306,7 +306,7 @@ class TestHealthEndpoint:
         data = response.json()
         
         assert data["status"] == "ready", f"Expected status='ready', got '{data['status']}'"
-        assert data["model_loaded"] is True, f"Expected model_loaded=true, got {data['model_loaded']}"
+        assert data["model_loaded"] == True, f"Expected model_loaded=true, got {data['model_loaded']}"
         assert "fallback_available" in data
         
         print(f"✓ Health: status={data['status']}, model_loaded={data['model_loaded']}, fallback={data['fallback_available']}")
@@ -398,7 +398,7 @@ class TestErrorHandling:
         )
         assert response.status_code == 400
         data = response.json()
-        assert data["success"] is False
+        assert data["success"] == False
         print("✓ Missing client_id returns 400")
     
     def test_invalid_client_id_type(self):
@@ -410,7 +410,7 @@ class TestErrorHandling:
         # Should return 400 or 500 with error message
         assert response.status_code in [400, 500]
         data = response.json()
-        assert data["success"] is False
+        assert data["success"] == False
         print(f"✓ Invalid client_id type handled: status={response.status_code}")
 
 

@@ -8,9 +8,9 @@ import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://perf-test-ooredoo.preview.emergentagent.com').rstrip('/')
 
-# Test credentials
-TEST_EMAIL = "superadmin@ooredoo.tn"
-TEST_PASSWORD = "SuperAdmin@2025"
+# Test credentials from environment
+TEST_EMAIL = os.getenv("TEST_ADMIN_EMAIL", "superadmin@ooredoo.tn")
+TEST_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "SuperAdmin@2025")
 
 
 class TestMLDashboardAPI:
