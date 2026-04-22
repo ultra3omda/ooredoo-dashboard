@@ -134,7 +134,7 @@ class WarmupSubStoresSplitCommand extends Command
                                     'end_date' => $params['end_date'],
                                     'sub_store' => $params['sub_store'],
                                     'campaign' => $params['campaign'] ?? null,
-                                    'split_cache_v' => 5,
+                                    'split_cache_v' => 6,
                                 ]));
                                 Cache::put($rawKey, $body, $ttl);
 
