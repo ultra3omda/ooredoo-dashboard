@@ -85,7 +85,7 @@ class Kernel extends ConsoleKernel
                 ->appendOutputTo(storage_path('logs/substores-warmup.log'));
             
             // Matérialisation des KPIs quotidiens - Chaque jour à 3h00 (365 jours)
-            $schedule->command('dashboard:materialize --days=7')
+            $schedule->command('dashboard:materialize --days=7 --force')
                 ->dailyAt('03:00')
                 ->withoutOverlapping()
                 ->runInBackground()
@@ -99,7 +99,7 @@ class Kernel extends ConsoleKernel
                 ->appendOutputTo(storage_path('logs/dashboard-materialize-full.log'));
 
             // Matérialisation des subscriptions quotidiennes - Chaque jour à 3h15
-            $schedule->command('dashboard:materialize-subscriptions --days=7')
+            $schedule->command('dashboard:materialize-subscriptions --days=7 --force')
                 ->dailyAt('03:15')
                 ->withoutOverlapping()
                 ->runInBackground()
@@ -113,7 +113,10 @@ class Kernel extends ConsoleKernel
                 ->appendOutputTo(storage_path('logs/subscription-materialize-full.log'));
 
             // Matérialisation des transactions quotidiennes - Chaque jour à 3h30
-            $schedule->command('dashboard:materialize-transactions --days=7')
+            // --force : sans lui, la commande saute les dates déjà présentes, donc
+            // un jour calculé à 0 (source en retard) le reste jusqu'au run forcé
+            // du dimanche. La fenêtre récente doit être recalculée chaque nuit.
+            $schedule->command('dashboard:materialize-transactions --days=7 --force')
                 ->dailyAt('03:30')
                 ->withoutOverlapping()
                 ->runInBackground()

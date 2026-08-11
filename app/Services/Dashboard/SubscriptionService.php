@@ -9,10 +9,11 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use App\Traits\OperatorHelper;
 use App\Traits\TransactionHelper;
+use App\Traits\MaterializedCoverage;
 
 class SubscriptionService
 {
-    use OperatorHelper, TransactionHelper;
+    use OperatorHelper, TransactionHelper, MaterializedCoverage;
 
     protected StatisticsService $statisticsService;
 
@@ -129,19 +130,15 @@ class SubscriptionService
 
     private function hasMaterializedCoverage(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): bool
     {
-        try {
-            $expectedDays = $startBound->diffInDays($endExclusive);
-            if ($expectedDays <= 0) return false;
-            $count = DB::table('subscription_daily_stats')
-                ->where('stat_date', '>=', $startBound->toDateString())
-                ->where('stat_date', '<', $endExclusive->toDateString())
-                ->where(function ($q) use ($operatorId) {
-                    if ($operatorId === null) $q->whereNull('operator_id');
-                    else $q->where('operator_id', $operatorId);
-                })
-                ->count();
-            return ($count / $expectedDays) >= 0.8;
-        } catch (\Exception $e) { return false; }
+        $scoped = DB::table('subscription_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->where(function ($q) use ($operatorId) {
+                if ($operatorId === null) $q->whereNull('operator_id');
+                else $q->where('operator_id', $operatorId);
+            });
+
+        return $this->hasFreshMaterializedCoverage($scoped, $startBound, $endExclusive);
     }
 
     private function getSubscriptionsDataMaterialized(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, ?int $operatorId, ?Carbon $compStartBound, ?Carbon $compEndExclusive, float $methodStart): array
