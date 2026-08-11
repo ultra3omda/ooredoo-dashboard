@@ -6,10 +6,11 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Traits\OperatorHelper;
+use App\Traits\MaterializedCoverage;
 
 class TransactionService
 {
-    use OperatorHelper;
+    use OperatorHelper, MaterializedCoverage;
 
     public function getTransactions(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
     {
@@ -26,18 +27,12 @@ class TransactionService
 
     public function hasTransactionMaterializedCoverage(Carbon $startBound, Carbon $endExclusive): bool
     {
-        try {
-            $expectedDays = $startBound->diffInDays($endExclusive);
-            if ($expectedDays <= 0) return false;
-            $count = DB::table('transaction_daily_stats')
-                ->where('stat_date', '>=', $startBound->toDateString())
-                ->where('stat_date', '<', $endExclusive->toDateString())
-                ->whereNull('operator_id')
-                ->count();
-            return ($count / $expectedDays) >= 0.8;
-        } catch (\Exception $e) {
-            return false;
-        }
+        $scoped = DB::table('transaction_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->whereNull('operator_id');
+
+        return $this->hasFreshMaterializedCoverage($scoped, $startBound, $endExclusive);
     }
 
     private function getTransactionsDataMaterialized(Carbon $startBound, Carbon $endExclusive): array
@@ -145,8 +140,7 @@ class TransactionService
         $startDate = $startBound->copy();
         $endDate = $endExclusive->copy()->subDay();
         $dailyVolume = [];
-        $intervalDays = max(1, intval($periodDays / 30));
-        
+
         if ($granularity === 'month') {
             $cursor = $startDate->copy()->firstOfMonth();
             while ($cursor->lte($endDate)) {
@@ -161,7 +155,11 @@ class TransactionService
                 $dateStr = $cursor->toDateString();
                 $dayTransactions = $transactionsRaw[$dateStr] ?? null;
                 $dailyVolume[] = ['date' => $dateStr, 'transactions' => $dayTransactions ? (int)$dayTransactions->transactions : 0, 'users' => $dayTransactions ? (int)$dayTransactions->users : 0];
-                $cursor->addDays($intervalDays);
+                // Un jour à la fois : ce sont des comptages, sauter un jour en
+                // retirerait purement les transactions du graphe (le chemin
+                // matérialisé n'a jamais sauté de jour, d'où deux courbes
+                // différentes pour une même période).
+                $cursor->addDay();
             }
         }
         

@@ -2,6 +2,14 @@
     $theme = $theme ?? 'club_privileges';
     $isOoredoo = $theme === 'ooredoo';
     $isClubPrivileges = $theme === 'club_privileges';
+
+    // Suffixe de version basé sur la date de modification du fichier : sans lui,
+    // le navigateur (et le cache nginx) continue de servir l'ancien JS après un
+    // déploiement, et le code livré n'est jamais exécuté.
+    $asset = function (string $path) {
+        $full = public_path(ltrim($path, '/'));
+        return $path . '?v=' . (is_file($full) ? filemtime($full) : '1');
+    };
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -150,7 +158,7 @@
     </div>
     @endif
 
-    <script src="/js/dashboard/filters.js"></script>
+    <script src="{{ $asset('/js/dashboard/filters.js') }}"></script>
 
     <!-- Enhanced Date & Filters Bar -->
     <div class="enhanced-filters-bar">
@@ -475,7 +483,7 @@
             <option value="50">50 par page</option>
             <option value="100">100 par page</option>
           </select>
-          <button class="export-btn">Exporter</button>
+          <button class="export-btn" onclick="exportSubscriptionsToCSV()">Exporter</button>
         </div>
         </div>
         <div class="table-container table-wrapper">
@@ -1542,15 +1550,15 @@
   </div>
 
   <!-- Modules JS extraits pour maintenabilité -->
-  <script src="/js/dashboard/utils.js"></script>
-  <script src="/js/dashboard/eklektik.js"></script>
-  <script src="/js/dashboard/charts.js"></script>
-  <script src="/js/dashboard/timwe.js"></script>
-  <script src="/js/dashboard/ooredoo.js"></script>
-  <script src="/js/dashboard/tables.js"></script>
-  <script src="/js/dashboard/reporting.js"></script>
+  <script src="{{ $asset('/js/dashboard/utils.js') }}"></script>
+  <script src="{{ $asset('/js/dashboard/eklektik.js') }}"></script>
+  <script src="{{ $asset('/js/dashboard/charts.js') }}"></script>
+  <script src="{{ $asset('/js/dashboard/timwe.js') }}"></script>
+  <script src="{{ $asset('/js/dashboard/ooredoo.js') }}"></script>
+  <script src="{{ $asset('/js/dashboard/tables.js') }}"></script>
+  <script src="{{ $asset('/js/dashboard/reporting.js') }}"></script>
 
-  <script src="/js/dashboard/main.js"></script>
+  <script src="{{ $asset('/js/dashboard/main.js') }}"></script>
 
   <!-- DÉSACTIVÉ POUR OPTIMISATION: Modal pour afficher les détails des transactions d'un client -->
   <!-- Ce modal a été désactivé définitivement pour améliorer les performances du dashboard -->
@@ -1685,7 +1693,7 @@
     .ai-dot3 { animation-delay: 300ms; }
   </style>
 
-  <script src="/js/dashboard/ai-reporting.js"></script>
+  <script src="{{ $asset('/js/dashboard/ai-reporting.js') }}"></script>
 
 </body>
 </html>

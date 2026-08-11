@@ -9,11 +9,12 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use App\Traits\OperatorHelper;
 use App\Traits\TransactionHelper;
+use App\Traits\MaterializedCoverage;
 use App\Models\TimweDailyStat;
 
 class KPIService
 {
-    use OperatorHelper, TransactionHelper;
+    use OperatorHelper, TransactionHelper, MaterializedCoverage;
 
     protected MerchantService $merchantService;
 
@@ -77,37 +78,25 @@ class KPIService
 
     private function hasTransactionMaterializedCoverage(Carbon $startBound, Carbon $endExclusive): bool
     {
-        try {
-            $expectedDays = $startBound->diffInDays($endExclusive);
-            if ($expectedDays <= 0) return false;
-            $count = DB::table('transaction_daily_stats')
-                ->where('stat_date', '>=', $startBound->toDateString())
-                ->where('stat_date', '<', $endExclusive->toDateString())
-                ->whereNull('operator_id')
-                ->count();
-            return ($count / $expectedDays) >= 0.8;
-        } catch (\Exception $e) {
-            return false;
-        }
+        $scoped = DB::table('transaction_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->whereNull('operator_id');
+
+        return $this->hasFreshMaterializedCoverage($scoped, $startBound, $endExclusive);
     }
 
     private function hasMaterializedCoverage(Carbon $startBound, Carbon $endExclusive, ?int $operatorId): bool
     {
-        try {
-            $expectedDays = $startBound->diffInDays($endExclusive);
-            if ($expectedDays <= 0) return false;
-            $count = DB::table('subscription_daily_stats')
-                ->where('stat_date', '>=', $startBound->toDateString())
-                ->where('stat_date', '<', $endExclusive->toDateString())
-                ->where(function ($q) use ($operatorId) {
-                    if ($operatorId === null) $q->whereNull('operator_id');
-                    else $q->where('operator_id', $operatorId);
-                })
-                ->count();
-            return ($count / $expectedDays) >= 0.8;
-        } catch (\Exception $e) {
-            return false;
-        }
+        $scoped = DB::table('subscription_daily_stats')
+            ->where('stat_date', '>=', $startBound->toDateString())
+            ->where('stat_date', '<', $endExclusive->toDateString())
+            ->where(function ($q) use ($operatorId) {
+                if ($operatorId === null) $q->whereNull('operator_id');
+                else $q->where('operator_id', $operatorId);
+            });
+
+        return $this->hasFreshMaterializedCoverage($scoped, $startBound, $endExclusive);
     }
 
     private function buildKPIsFromDashboardDailyStats(Carbon $startBound, Carbon $endExclusive, Carbon $compStartBound, Carbon $compEndExclusive, string $startDate, string $endDate, string $compStartDate, string $compEndDate, ?int $operatorId, string $selectedOperator): ?array

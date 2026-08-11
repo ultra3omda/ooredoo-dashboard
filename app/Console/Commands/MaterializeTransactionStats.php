@@ -173,9 +173,22 @@ class MaterializeTransactionStats extends Command
             $tx = $txMap[$d] ?? ['count' => 0, 'users' => 0];
             $cohort = $cohortMap[$d] ?? ['count' => 0, 'users' => 0];
 
-            DB::table('transaction_daily_stats')->updateOrInsert(
-                ['stat_date' => $d, 'operator_id' => null],
-                [
+            // Remplacement explicite plutôt qu'updateOrInsert : l'index UNIQUE
+            // (stat_date, operator_id) ne contraint pas les NULL sous MySQL, donc
+            // des doublons ont pu s'accumuler pour operator_id NULL — et
+            // updateOrInsert() ne corrige qu'UNE ligne (->limit(1)->update()),
+            // laissant les autres avec des valeurs périmées que la lecture
+            // additionne ensuite. Le delete+insert garantit une ligne unique et
+            // nettoie au passage les doublons déjà présents.
+            DB::transaction(function () use ($d, $tx, $cohort, $merchantMap, $byOpMap, $byPlanMap) {
+                DB::table('transaction_daily_stats')
+                    ->where('stat_date', $d)
+                    ->whereNull('operator_id')
+                    ->delete();
+
+                DB::table('transaction_daily_stats')->insert([
+                    'stat_date' => $d,
+                    'operator_id' => null,
                     'transaction_count' => $tx['count'],
                     'distinct_users' => $tx['users'],
                     'cohort_transaction_count' => $cohort['count'],
@@ -184,8 +197,8 @@ class MaterializeTransactionStats extends Command
                     'by_operator' => json_encode($byOpMap[$d] ?? []),
                     'by_plan' => json_encode($byPlanMap[$d] ?? []),
                     'computed_at' => now(),
-                ]
-            );
+                ]);
+            });
             $inserted++;
         }
 

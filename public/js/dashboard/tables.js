@@ -247,57 +247,70 @@ function updateMerchantsTable(merchants) {
   renderMerchantsPage();
 }
 
-// Variables globales pour la pagination des abonnements
-let allSubscriptionDetails = [];
+// Variables globales pour la pagination des abonnements.
+// La pagination est faite par le serveur : le navigateur ne détient qu'une page
+// à la fois, ce qui permet de parcourir toute la période sans plafond.
 let currentSubscriptionPage = 1;
 let subscriptionsPerPage = 25;
+let subscriptionsTotal = 0;
+let subscriptionsLastPage = 1;
 
-// Update subscriptions table with details
-function updateSubscriptionsTable(subscriptions) {
+// Filtres courants, partagés par le tableau et par l'export.
+function buildSubscriptionsQueryParams() {
+  const params = new URLSearchParams();
+  const startDate = document.getElementById('start-date')?.value;
+  const endDate = document.getElementById('end-date')?.value;
+  if (startDate && endDate) {
+    params.append('start_date', startDate);
+    params.append('end_date', endDate);
+  }
+  params.append('operator', resolveSelectedOperatorParam());
+  return params;
+}
+
+async function loadSubscriptionsPage(page) {
   const tbody = document.getElementById('subs-details-body');
   if (!tbody) return;
-  
-  // Afficher indicateur de chargement spécifique
-  tbody.innerHTML = '<tr><td colspan="6" class="loading">🔄 Chargement des détails...</td></tr>';
-  
-  // Gestion de la nouvelle structure avec meta
-  let detailsData = [];
-  let meta = null;
-  
-  if (subscriptions && subscriptions.details) {
-    if (Array.isArray(subscriptions.details)) {
-      // Ancienne structure (compatibilité)
-      detailsData = subscriptions.details;
-    } else if (subscriptions.details.data && Array.isArray(subscriptions.details.data)) {
-      // Nouvelle structure avec meta
-      detailsData = subscriptions.details.data;
-      meta = subscriptions.details.meta;
-    } else if (subscriptions.details.data === undefined && Object.keys(subscriptions.details).length > 0) {
-      // Si c'est un objet avec des propriétés mais pas de .data, peut-être que c'est déjà un tableau d'objets
-      const testItem = subscriptions.details[0] || subscriptions.details;
-      if (testItem && (testItem.first_name !== undefined || testItem.client_prenom !== undefined)) {
-        detailsData = Array.isArray(subscriptions.details) ? subscriptions.details : [subscriptions.details];
-      }
-    }
+
+  tbody.innerHTML = '<tr><td colspan="7" class="loading">🔄 Chargement des détails...</td></tr>';
+
+  const params = buildSubscriptionsQueryParams();
+  params.append('page', page);
+  params.append('per_page', subscriptionsPerPage);
+
+  const startedAt = performance.now();
+  try {
+    const response = await fetch(`/api/dashboard/subscriptions-page?${params.toString()}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const json = await response.json();
+    if (!json.success) throw new Error(json.error || 'réponse en échec');
+
+    currentSubscriptionPage = json.meta.page;
+    subscriptionsTotal = json.meta.total;
+    subscriptionsLastPage = Math.max(1, json.meta.last_page);
+
+    renderSubscriptionsPage(json.data);
+    updateSubscriptionsPagination();
+    updateSubscriptionTableInfo({
+      total_count: subscriptionsTotal,
+      execution_time_ms: Math.round(performance.now() - startedAt)
+    });
+  } catch (error) {
+    console.error('Chargement de la page abonnements:', error);
+    tbody.innerHTML = `<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Erreur de chargement : ${error.message}</td></tr>`;
   }
-  
-  // Si pas de données, afficher le message
-  if (!detailsData || detailsData.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
-    return;
-  }
-  
-  // Simule un petit délai pour montrer le chargement
-  setTimeout(() => {
-    allSubscriptionDetails = detailsData;
-    currentSubscriptionPage = 1;
-    renderSubscriptionsPage();
-    
-    // Afficher les informations de performance
-    if (meta) {
-      updateSubscriptionTableInfo(meta);
-    }
-  }, 100);
+}
+
+// Point d'entrée appelé quand la section "subscriptions" du dashboard arrive.
+//
+// Le payload de cette section transporte des détails plafonnés à 1000 lignes :
+// on ne s'en sert plus. Le tableau demande directement sa page au serveur, ce
+// qui lui donne accès à l'intégralité de la période.
+function updateSubscriptionsTable(subscriptions) {
+  loadSubscriptionsPage(1);
 }
 
 function updateSubscriptionTableInfo(meta) {
@@ -313,40 +326,53 @@ function updateSubscriptionTableInfo(meta) {
   }
 }
 
-function renderSubscriptionsPage() {
+// Normalise une ligne d'abonnement (formats Laravel ou tableaux associatifs)
+// Utilisée à la fois par le rendu du tableau et par l'export CSV.
+function normalizeSubscriptionRow(row) {
+  const firstName = row.first_name || row.client_prenom || '';
+  const lastName = row.last_name || row.client_nom || '';
+  const activationDate = row.activation_date || row.client_abonnement_creation || null;
+  const endDate = row.end_date || row.client_abonnement_expiration || null;
+  const formatDate = (value) =>
+    value ? (typeof value === 'string' ? value.substring(0, 10) : value) : '-';
+
+  return {
+    fullName: `${firstName} ${lastName}`.trim() || '-',
+    phone: row.phone || row.client_telephone || '-',
+    operator: row.operator || row.country_payments_methods_name || '-',
+    plan: row.plan || '-',
+    clientId: row.client_id || null,
+    activationDate: formatDate(activationDate),
+    endDate: formatDate(endDate)
+  };
+}
+
+function renderSubscriptionsPage(pageData) {
   const tbody = document.getElementById('subs-details-body');
   if (!tbody) return;
-  
-  const startIndex = (currentSubscriptionPage - 1) * subscriptionsPerPage;
-  const endIndex = startIndex + subscriptionsPerPage;
-  const pageData = allSubscriptionDetails.slice(startIndex, endIndex);
-  
+
   if (!pageData || pageData.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
     return;
   }
-  
-  tbody.innerHTML = pageData.map(row => {
-    // Gérer différents formats de données (objets Laravel ou tableaux associatifs)
-    const firstName = row.first_name || row.client_prenom || '';
-    const lastName = row.last_name || row.client_nom || '';
-    const fullName = `${firstName} ${lastName}`.trim() || '-';
-    const phone = row.phone || row.client_telephone || '-';
-    const operator = row.operator || row.country_payments_methods_name || '-';
-    const plan = row.plan || '-';
-    const clientId = row.client_id || null;
-    const planBadgeClass = 
+
+  tbody.innerHTML = pageData.map(rawRow => {
+    const {
+      fullName,
+      phone,
+      operator,
+      plan,
+      clientId,
+      activationDate: formattedActivation,
+      endDate: formattedEnd
+    } = normalizeSubscriptionRow(rawRow);
+
+    const planBadgeClass =
       plan === 'Trial' ? 'badge-primary' :
       plan === 'Journalier' ? 'badge-warning' :
       plan === 'Mensuel' ? 'badge-info' :
       plan === 'Annuel' ? 'badge-success' : 'badge-secondary';
-    
-    // Formater les dates
-    const activationDate = row.activation_date || row.client_abonnement_creation || null;
-    const endDate = row.end_date || row.client_abonnement_expiration || null;
-    const formattedActivation = activationDate ? (typeof activationDate === 'string' ? activationDate.substring(0, 10) : activationDate) : '-';
-    const formattedEnd = endDate ? (typeof endDate === 'string' ? endDate.substring(0, 10) : endDate) : '-';
-    
+
     // Bouton détails (seulement si client_id est disponible)
     // Échapper les apostrophes dans le nom pour éviter les erreurs JavaScript
     const escapedName = fullName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -371,10 +397,18 @@ function renderSubscriptionsPage() {
 }
 
 function updateSubscriptionsPagination() {
-  const totalPages = Math.ceil(allSubscriptionDetails.length / subscriptionsPerPage);
+  const totalPages = subscriptionsLastPage;
   const pagination = document.querySelector('.subscriptions-pagination');
-  
-  if (pagination && totalPages > 1) {
+  if (!pagination) return;
+
+  if (totalPages <= 1) {
+    // Une seule page : on affiche quand même le total, sinon l'utilisateur n'a
+    // aucun moyen de savoir combien de lignes la période contient.
+    pagination.innerHTML = `<div class="pagination-info">${subscriptionsTotal} élément${subscriptionsTotal > 1 ? 's' : ''}</div>`;
+    return;
+  }
+
+  {
     let paginationHTML = '<div class="pagination-controls">';
     
     // Previous button
@@ -396,20 +430,47 @@ function updateSubscriptionsPagination() {
       paginationHTML += `<button onclick="changeSubscriptionPage(${currentSubscriptionPage + 1})" class="pagination-btn">Suivant ›</button>`;
     }
     
-    paginationHTML += `</div><div class="pagination-info">Page ${currentSubscriptionPage} sur ${totalPages} (${allSubscriptionDetails.length} éléments)</div>`;
+    paginationHTML += `</div><div class="pagination-info">Page ${currentSubscriptionPage} sur ${totalPages} (${subscriptionsTotal} éléments)</div>`;
     pagination.innerHTML = paginationHTML;
   }
 }
 
 function changeSubscriptionPage(page) {
-  currentSubscriptionPage = page;
-  renderSubscriptionsPage();
+  loadSubscriptionsPage(page);
 }
 
 function changeSubscriptionsPerPage(perPage) {
   subscriptionsPerPage = parseInt(perPage);
-  currentSubscriptionPage = 1;
-  renderSubscriptionsPage();
+  loadSubscriptionsPage(1);
+}
+
+// Résout le paramètre `operator` à envoyer à l'API à partir de la sélection
+// courante (variable globale partagée avec le reste du dashboard).
+function resolveSelectedOperatorParam() {
+  if (typeof selectedOperators === 'undefined' || !Array.isArray(selectedOperators) || selectedOperators.length === 0) {
+    return 'ALL';
+  }
+  return selectedOperators.includes('ALL') ? 'ALL' : selectedOperators.join(',');
+}
+
+// Exporte TOUS les abonnements de la période sélectionnée.
+//
+// L'export est délégué au serveur : le tableau affiché est plafonné à 1000
+// lignes, donc générer le CSV depuis les données déjà chargées tronquerait
+// silencieusement le résultat. L'endpoint streame l'intégralité des lignes.
+function exportSubscriptionsToCSV() {
+  const params = buildSubscriptionsQueryParams();
+
+  // Ancre invisible plutôt qu'un fetch + Blob : le navigateur écrit le flux
+  // directement sur le disque, sans charger tout le CSV en mémoire.
+  // Le nom du fichier vient de l'en-tête Content-Disposition du serveur.
+  const link = document.createElement('a');
+  link.setAttribute('href', `/api/dashboard/export/subscriptions?${params.toString()}`);
+  link.setAttribute('download', '');
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // Fonction pour afficher les détails des abonnements d'un utilisateur

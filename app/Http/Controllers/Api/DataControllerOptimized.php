@@ -7,6 +7,7 @@ use App\Services\DashboardService;
 use App\Services\CacheService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -14,6 +15,15 @@ use Carbon\Carbon;
 
 class DataControllerOptimized extends Controller
 {
+    /**
+     * Version des clés de cache des endpoints split.
+     * À incrémenter dès que la FORME ou le CALCUL d'un payload change : sans ça,
+     * un déploiement n'invalide rien et les anciennes réponses continuent d'être
+     * servies jusqu'à expiration du TTL.
+     * Doit rester synchronisée avec WarmupSplitEndpoints::SPLIT_CACHE_VERSION.
+     */
+    public const SPLIT_CACHE_VERSION = 8;
+
     private DashboardService $dashboardService;
     private CacheService $cacheService;
     
@@ -40,14 +50,14 @@ class DataControllerOptimized extends Controller
                 'end_date' => $params['end_date'],
                 'operator' => $params['operator'],
             ];
-            $rawKey = 'split_raw:' . $section . ':' . md5(json_encode($simpleKey));
+            $rawKey = 'split_raw:v' . self::SPLIT_CACHE_VERSION . ':' . $section . ':' . md5(json_encode($simpleKey));
             $cached = Cache::get($rawKey);
             if ($cached) {
                 return response($cached, 200)->header('Content-Type', 'application/json');
             }
             
             // Fallback: try full params key (legacy)
-            $fullKey = 'split_raw:' . $section . ':' . md5(json_encode($params));
+            $fullKey = 'split_raw:v' . self::SPLIT_CACHE_VERSION . ':' . $section . ':' . md5(json_encode($params));
             $cached = Cache::get($fullKey);
             if ($cached) {
                 return response($cached, 200)->header('Content-Type', 'application/json');
@@ -521,7 +531,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:kpis:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':kpis:' . md5(json_encode($params));
             $kpis = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 return $this->dashboardService->getKPIsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
             });
@@ -557,7 +567,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:merchants:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':merchants:' . md5(json_encode($params));
             $merchants = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 return $this->dashboardService->getMerchantsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
             });
@@ -592,7 +602,7 @@ class DataControllerOptimized extends Controller
             $startBound = Carbon::parse($params['start_date'])->startOfDay();
             $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:transactions:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':transactions:' . md5(json_encode($params));
             $transactions = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $params) {
                 return $this->dashboardService->getTransactionsDataPublic($startBound, $endExclusive, $params['operator']);
             });
@@ -628,7 +638,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:subscriptions:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':subscriptions:' . md5(json_encode($params));
             $subscriptions = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $params, $compStartBound, $compEndExclusive) {
                 return $this->dashboardService->getSubscriptionsDataPublic($startBound, $endExclusive, $params['operator'], $compStartBound, $compEndExclusive);
             });
@@ -644,6 +654,117 @@ class DataControllerOptimized extends Controller
         }
     }
     
+    /**
+     * Export CSV de l'INTÉGRALITÉ des abonnements de la période sélectionnée.
+     *
+     * Contrairement au tableau affiché (plafonné à 1000 lignes par
+     * getSubscriptionDetails), cet export ne pose aucune limite : les lignes
+     * sont lues via un curseur et écrites au fil de l'eau sur la sortie, donc
+     * ni la mémoire PHP ni celle du navigateur ne montent avec le volume.
+     */
+    public function exportSubscriptions(Request $request): StreamedResponse
+    {
+        // Un export intégral peut être long : pas de limite de temps ici.
+        set_time_limit(0);
+
+        $params = $this->validateAndNormalizeParams($request);
+        $user = auth()->user();
+        $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+
+        $startBound = Carbon::parse($params['start_date'])->startOfDay();
+        $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+
+        $filename = "abonnements_{$params['start_date']}_{$params['end_date']}.csv";
+
+        return response()->streamDownload(function () use ($startBound, $endExclusive, $params) {
+            $out = fopen('php://output', 'w');
+
+            // BOM UTF-8 : sans lui Excel affiche mal les accents.
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['Client', 'Téléphone', 'Opérateur', 'Plan', 'Date Activation', 'Date Fin']);
+
+            $rowCount = 0;
+            foreach ($this->dashboardService->streamSubscriptionDetailsPublic($startBound, $endExclusive, $params['operator']) as $row) {
+                $fullName = trim(($row->first_name ?? '') . ' ' . ($row->last_name ?? ''));
+
+                fputcsv($out, [
+                    $fullName !== '' ? $fullName : '-',
+                    $row->phone ?? '-',
+                    $row->operator ?? '-',
+                    $row->plan ?? '-',
+                    $this->formatExportDate($row->activation_date ?? null),
+                    $this->formatExportDate($row->end_date ?? null),
+                ]);
+
+                // Pousser vers le client régulièrement plutôt que de tout garder en tampon.
+                if (++$rowCount % 500 === 0) {
+                    flush();
+                }
+            }
+
+            fclose($out);
+            Log::info("exportSubscriptions - {$rowCount} lignes exportées (operator={$params['operator']})");
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Cache-Control' => 'no-store, no-cache',
+        ]);
+    }
+
+    /**
+     * Une page du tableau des abonnements.
+     *
+     * Le tableau n'est plus alimenté par le payload de la section subscriptions
+     * (plafonné à 1000 lignes) : il demande sa page au serveur, ce qui lui donne
+     * accès à la totalité de la période sans alourdir le chargement initial.
+     */
+    public function getSubscriptionsPage(Request $request): JsonResponse
+    {
+        set_time_limit(120);
+
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+
+            $page = max(1, (int) $request->input('page', 1));
+            // Borné pour qu'un paramètre fabriqué à la main ne puisse pas
+            // demander 1 million de lignes d'un coup.
+            $perPage = min(200, max(1, (int) $request->input('per_page', 25)));
+
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+
+            $result = $this->dashboardService->paginateSubscriptionDetailsPublic(
+                $startBound,
+                $endExclusive,
+                $params['operator'],
+                $page,
+                $perPage
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $result['data'],
+                'meta' => $result['meta'],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('getSubscriptionsPage: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Tronque une date SQL ("2026-01-15 08:30:00") au jour ("2026-01-15").
+     */
+    private function formatExportDate($value): string
+    {
+        if (empty($value)) {
+            return '-';
+        }
+
+        return substr((string)$value, 0, 10);
+    }
+
     /**
      * Ooredoo stats seuls (rapide ~1s)
      */
@@ -662,7 +783,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:ooredoo:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':ooredoo:' . md5(json_encode($params));
             $ooredooStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive) {
                 $daily = $this->dashboardService->getOoredooDailyStatisticsPublic($startBound, $endExclusive);
                 $dailyComp = $this->dashboardService->getOoredooDailyStatisticsPublic($compStartBound, $compEndExclusive);
@@ -705,7 +826,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:timwe:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':timwe:' . md5(json_encode($params));
             $timweStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 $daily = $this->dashboardService->getDailyStatistics($startBound, $endExclusive, $params['operator']);
                 $dailyComp = $this->dashboardService->getDailyStatistics($compStartBound, $compEndExclusive, $params['operator']);
@@ -740,7 +861,7 @@ class DataControllerOptimized extends Controller
             $startBound = Carbon::parse($params['start_date'])->startOfDay();
             $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:eklektik:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':eklektik:' . md5(json_encode($params));
             $eklektikStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive) {
                 $daily = \App\Models\EklektikStatsDaily::where('date', '>=', $startBound->toDateString())
                     ->where('date', '<', $endExclusive->toDateString())
