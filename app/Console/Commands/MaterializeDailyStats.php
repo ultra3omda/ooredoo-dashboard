@@ -68,13 +68,29 @@ class MaterializeDailyStats extends Command
                 try {
                     $stats = $this->computeDayStats($dayStart, $dayEnd, $opId);
 
-                    DB::table('dashboard_daily_stats')->updateOrInsert(
-                        [
-                            'stat_date' => $dateStr,
-                            'operator_id' => $opId,
-                        ],
-                        array_merge($stats, ['computed_at' => now()])
-                    );
+                    // Remplacement explicite plutôt qu'updateOrInsert : sous MySQL
+                    // l'index UNIQUE ne contraint pas les NULL, donc des doublons
+                    // peuvent exister pour operator_id NULL, et updateOrInsert()
+                    // n'en corrige qu'une seule (->limit(1)->update()). La lecture
+                    // additionnant les lignes, les doublons périmés faussent le
+                    // résultat. Le delete+insert garantit une ligne unique.
+                    DB::transaction(function () use ($dateStr, $opId, $stats) {
+                        DB::table('dashboard_daily_stats')
+                            ->where('stat_date', $dateStr)
+                            ->where(function ($q) use ($opId) {
+                                if ($opId === null) {
+                                    $q->whereNull('operator_id');
+                                } else {
+                                    $q->where('operator_id', $opId);
+                                }
+                            })
+                            ->delete();
+
+                        DB::table('dashboard_daily_stats')->insert(array_merge(
+                            $stats,
+                            ['stat_date' => $dateStr, 'operator_id' => $opId, 'computed_at' => now()]
+                        ));
+                    });
                     $totalInserted++;
                 } catch (\Exception $e) {
                     Log::warning("Materialize failed for {$dateStr} op={$opId}: " . $e->getMessage());

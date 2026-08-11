@@ -276,10 +276,25 @@ class MaterializeSubscriptionStats extends Command
     private function upsertBatch(array $batch): void
     {
         foreach ($batch as $row) {
-            DB::table('subscription_daily_stats')->updateOrInsert(
-                ['stat_date' => $row['stat_date'], 'operator_id' => $row['operator_id']],
-                $row
-            );
+            // Remplacement explicite plutôt qu'updateOrInsert : sous MySQL l'index
+            // UNIQUE ne contraint pas les NULL, donc des doublons peuvent exister
+            // pour operator_id NULL, et updateOrInsert() n'en corrige qu'une seule
+            // (->limit(1)->update()). La lecture additionnant les lignes, les
+            // doublons périmés faussent le résultat.
+            DB::transaction(function () use ($row) {
+                DB::table('subscription_daily_stats')
+                    ->where('stat_date', $row['stat_date'])
+                    ->where(function ($q) use ($row) {
+                        if ($row['operator_id'] === null) {
+                            $q->whereNull('operator_id');
+                        } else {
+                            $q->where('operator_id', $row['operator_id']);
+                        }
+                    })
+                    ->delete();
+
+                DB::table('subscription_daily_stats')->insert($row);
+            });
         }
     }
 
