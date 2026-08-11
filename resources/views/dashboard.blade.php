@@ -475,7 +475,7 @@
             <option value="50">50 par page</option>
             <option value="100">100 par page</option>
           </select>
-          <button class="export-btn">Exporter</button>
+          <button class="export-btn" onclick="exportSubscriptionsToCSV()">Exporter</button>
         </div>
         </div>
         <div class="table-container table-wrapper">

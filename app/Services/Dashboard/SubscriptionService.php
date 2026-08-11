@@ -495,31 +495,53 @@ class SubscriptionService
         } catch (\Exception $e) { return []; }
     }
 
-    private function getSubscriptionDetails(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
+    /**
+     * Construit la requête des détails d'abonnements (sans LIMIT ni pagination).
+     * Partagée par l'affichage du tableau (plafonné) et par l'export CSV (intégral).
+     */
+    private function buildSubscriptionDetailsQuery(Carbon $startBound, Carbon $endExclusive, string $selectedOperator)
     {
-        try {
-            $periodDays = $startBound->diffInDays($endExclusive);
-            $limit = min(1000, max(100, intval($periodDays * 10)));
-            
-            $query = DB::table('client_abonnement as ca')->leftJoin('client as c', 'ca.client_id', '=', 'c.client_id')
+        $query = DB::table('client_abonnement as ca')->leftJoin('client as c', 'ca.client_id', '=', 'c.client_id')
                 ->select(['ca.client_id', 'c.client_prenom as first_name', 'c.client_nom as last_name', 'c.client_telephone as phone', 'ca.client_abonnement_creation as activation_date', 'ca.client_abonnement_expiration as end_date',
                     DB::raw("CASE WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) <= 3 THEN 'Trial' WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) = 1 THEN 'Journalier' WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) BETWEEN 20 AND 40 THEN 'Mensuel' WHEN DATEDIFF(ca.client_abonnement_expiration, ca.client_abonnement_creation) >= 330 THEN 'Annuel' ELSE 'Autre' END as plan")])
                 ->where(function($q) use ($startBound, $endExclusive) {
                     $q->where(function($subQ) use ($startBound, $endExclusive) { $subQ->where('ca.client_abonnement_creation', '>=', $startBound)->where('ca.client_abonnement_creation', '<', $endExclusive); })
                       ->orWhere(function($subQ) use ($endExclusive) { $subQ->whereNull('ca.client_abonnement_expiration')->orWhere('ca.client_abonnement_expiration', '>=', $endExclusive); });
                 });
-            
-            if ($selectedOperator !== 'ALL' && !empty($selectedOperator)) {
-                $query->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id');
-                $query->addSelect('cpm.country_payments_methods_name as operator');
-                $this->applyOperatorFilter($query, $selectedOperator);
-            } else {
-                $query->addSelect(DB::raw("(SELECT cpm2.country_payments_methods_name FROM country_payments_methods cpm2 WHERE cpm2.country_payments_methods_id = ca.country_payments_methods_id LIMIT 1) as operator"));
-            }
-            
-            $results = $query->orderByDesc('ca.client_abonnement_creation')->limit($limit)->get();
+
+        if ($selectedOperator !== 'ALL' && !empty($selectedOperator)) {
+            $query->join('country_payments_methods as cpm', 'ca.country_payments_methods_id', '=', 'cpm.country_payments_methods_id');
+            $query->addSelect('cpm.country_payments_methods_name as operator');
+            $this->applyOperatorFilter($query, $selectedOperator);
+        } else {
+            $query->addSelect(DB::raw("(SELECT cpm2.country_payments_methods_name FROM country_payments_methods cpm2 WHERE cpm2.country_payments_methods_id = ca.country_payments_methods_id LIMIT 1) as operator"));
+        }
+
+        return $query->orderByDesc('ca.client_abonnement_creation');
+    }
+
+    private function getSubscriptionDetails(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
+    {
+        try {
+            $periodDays = $startBound->diffInDays($endExclusive);
+            $limit = min(1000, max(100, intval($periodDays * 10)));
+
+            $results = $this->buildSubscriptionDetailsQuery($startBound, $endExclusive, $selectedOperator)->limit($limit)->get();
             return ['data' => $results->map(fn($item) => (array)$item)->toArray(), 'meta' => ['total_count' => -1, 'displayed_count' => $results->count(), 'limit' => $limit, 'period' => $startBound->toDateString() . ' - ' . $endExclusive->copy()->subDay()->toDateString()]];
         } catch (\Exception $e) { return ['data' => [], 'meta' => ['total_count' => 0, 'error' => $e->getMessage()]]; }
+    }
+
+    /**
+     * Parcourt l'INTÉGRALITÉ des abonnements de la période, sans plafond.
+     * Utilise un curseur : les lignes sont consommées une à une, la mémoire PHP
+     * ne croît pas avec la taille du résultat, ce qui permet d'exporter des
+     * centaines de milliers de lignes.
+     *
+     * @return \Generator<object>
+     */
+    public function streamSubscriptionDetails(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): \Generator
+    {
+        yield from $this->buildSubscriptionDetailsQuery($startBound, $endExclusive, $selectedOperator)->cursor();
     }
 
     private function calculateActivationsByPaymentMethod(Carbon $startBound, Carbon $endExclusive, string $operatorFilter): array

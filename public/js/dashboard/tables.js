@@ -313,40 +313,57 @@ function updateSubscriptionTableInfo(meta) {
   }
 }
 
+// Normalise une ligne d'abonnement (formats Laravel ou tableaux associatifs)
+// Utilisée à la fois par le rendu du tableau et par l'export CSV.
+function normalizeSubscriptionRow(row) {
+  const firstName = row.first_name || row.client_prenom || '';
+  const lastName = row.last_name || row.client_nom || '';
+  const activationDate = row.activation_date || row.client_abonnement_creation || null;
+  const endDate = row.end_date || row.client_abonnement_expiration || null;
+  const formatDate = (value) =>
+    value ? (typeof value === 'string' ? value.substring(0, 10) : value) : '-';
+
+  return {
+    fullName: `${firstName} ${lastName}`.trim() || '-',
+    phone: row.phone || row.client_telephone || '-',
+    operator: row.operator || row.country_payments_methods_name || '-',
+    plan: row.plan || '-',
+    clientId: row.client_id || null,
+    activationDate: formatDate(activationDate),
+    endDate: formatDate(endDate)
+  };
+}
+
 function renderSubscriptionsPage() {
   const tbody = document.getElementById('subs-details-body');
   if (!tbody) return;
-  
+
   const startIndex = (currentSubscriptionPage - 1) * subscriptionsPerPage;
   const endIndex = startIndex + subscriptionsPerPage;
   const pageData = allSubscriptionDetails.slice(startIndex, endIndex);
-  
+
   if (!pageData || pageData.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="no-data" style="text-align: center; padding: 40px; color: var(--muted);">Aucune donnée disponible</td></tr>';
     return;
   }
-  
-  tbody.innerHTML = pageData.map(row => {
-    // Gérer différents formats de données (objets Laravel ou tableaux associatifs)
-    const firstName = row.first_name || row.client_prenom || '';
-    const lastName = row.last_name || row.client_nom || '';
-    const fullName = `${firstName} ${lastName}`.trim() || '-';
-    const phone = row.phone || row.client_telephone || '-';
-    const operator = row.operator || row.country_payments_methods_name || '-';
-    const plan = row.plan || '-';
-    const clientId = row.client_id || null;
-    const planBadgeClass = 
+
+  tbody.innerHTML = pageData.map(rawRow => {
+    const {
+      fullName,
+      phone,
+      operator,
+      plan,
+      clientId,
+      activationDate: formattedActivation,
+      endDate: formattedEnd
+    } = normalizeSubscriptionRow(rawRow);
+
+    const planBadgeClass =
       plan === 'Trial' ? 'badge-primary' :
       plan === 'Journalier' ? 'badge-warning' :
       plan === 'Mensuel' ? 'badge-info' :
       plan === 'Annuel' ? 'badge-success' : 'badge-secondary';
-    
-    // Formater les dates
-    const activationDate = row.activation_date || row.client_abonnement_creation || null;
-    const endDate = row.end_date || row.client_abonnement_expiration || null;
-    const formattedActivation = activationDate ? (typeof activationDate === 'string' ? activationDate.substring(0, 10) : activationDate) : '-';
-    const formattedEnd = endDate ? (typeof endDate === 'string' ? endDate.substring(0, 10) : endDate) : '-';
-    
+
     // Bouton détails (seulement si client_id est disponible)
     // Échapper les apostrophes dans le nom pour éviter les erreurs JavaScript
     const escapedName = fullName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -410,6 +427,43 @@ function changeSubscriptionsPerPage(perPage) {
   subscriptionsPerPage = parseInt(perPage);
   currentSubscriptionPage = 1;
   renderSubscriptionsPage();
+}
+
+// Résout le paramètre `operator` à envoyer à l'API à partir de la sélection
+// courante (variable globale partagée avec le reste du dashboard).
+function resolveSelectedOperatorParam() {
+  if (typeof selectedOperators === 'undefined' || !Array.isArray(selectedOperators) || selectedOperators.length === 0) {
+    return 'ALL';
+  }
+  return selectedOperators.includes('ALL') ? 'ALL' : selectedOperators.join(',');
+}
+
+// Exporte TOUS les abonnements de la période sélectionnée.
+//
+// L'export est délégué au serveur : le tableau affiché est plafonné à 1000
+// lignes, donc générer le CSV depuis les données déjà chargées tronquerait
+// silencieusement le résultat. L'endpoint streame l'intégralité des lignes.
+function exportSubscriptionsToCSV() {
+  const startDate = document.getElementById('start-date')?.value;
+  const endDate = document.getElementById('end-date')?.value;
+
+  const params = new URLSearchParams();
+  if (startDate && endDate) {
+    params.append('start_date', startDate);
+    params.append('end_date', endDate);
+  }
+  params.append('operator', resolveSelectedOperatorParam());
+
+  // Ancre invisible plutôt qu'un fetch + Blob : le navigateur écrit le flux
+  // directement sur le disque, sans charger tout le CSV en mémoire.
+  // Le nom du fichier vient de l'en-tête Content-Disposition du serveur.
+  const link = document.createElement('a');
+  link.setAttribute('href', `/api/dashboard/export/subscriptions?${params.toString()}`);
+  link.setAttribute('download', '');
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // Fonction pour afficher les détails des abonnements d'un utilisateur

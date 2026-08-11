@@ -7,6 +7,7 @@ use App\Services\DashboardService;
 use App\Services\CacheService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -644,6 +645,74 @@ class DataControllerOptimized extends Controller
         }
     }
     
+    /**
+     * Export CSV de l'INTÉGRALITÉ des abonnements de la période sélectionnée.
+     *
+     * Contrairement au tableau affiché (plafonné à 1000 lignes par
+     * getSubscriptionDetails), cet export ne pose aucune limite : les lignes
+     * sont lues via un curseur et écrites au fil de l'eau sur la sortie, donc
+     * ni la mémoire PHP ni celle du navigateur ne montent avec le volume.
+     */
+    public function exportSubscriptions(Request $request): StreamedResponse
+    {
+        // Un export intégral peut être long : pas de limite de temps ici.
+        set_time_limit(0);
+
+        $params = $this->validateAndNormalizeParams($request);
+        $user = auth()->user();
+        $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+
+        $startBound = Carbon::parse($params['start_date'])->startOfDay();
+        $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+
+        $filename = "abonnements_{$params['start_date']}_{$params['end_date']}.csv";
+
+        return response()->streamDownload(function () use ($startBound, $endExclusive, $params) {
+            $out = fopen('php://output', 'w');
+
+            // BOM UTF-8 : sans lui Excel affiche mal les accents.
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['Client', 'Téléphone', 'Opérateur', 'Plan', 'Date Activation', 'Date Fin']);
+
+            $rowCount = 0;
+            foreach ($this->dashboardService->streamSubscriptionDetailsPublic($startBound, $endExclusive, $params['operator']) as $row) {
+                $fullName = trim(($row->first_name ?? '') . ' ' . ($row->last_name ?? ''));
+
+                fputcsv($out, [
+                    $fullName !== '' ? $fullName : '-',
+                    $row->phone ?? '-',
+                    $row->operator ?? '-',
+                    $row->plan ?? '-',
+                    $this->formatExportDate($row->activation_date ?? null),
+                    $this->formatExportDate($row->end_date ?? null),
+                ]);
+
+                // Pousser vers le client régulièrement plutôt que de tout garder en tampon.
+                if (++$rowCount % 500 === 0) {
+                    flush();
+                }
+            }
+
+            fclose($out);
+            Log::info("exportSubscriptions - {$rowCount} lignes exportées (operator={$params['operator']})");
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Cache-Control' => 'no-store, no-cache',
+        ]);
+    }
+
+    /**
+     * Tronque une date SQL ("2026-01-15 08:30:00") au jour ("2026-01-15").
+     */
+    private function formatExportDate($value): string
+    {
+        if (empty($value)) {
+            return '-';
+        }
+
+        return substr((string)$value, 0, 10);
+    }
+
     /**
      * Ooredoo stats seuls (rapide ~1s)
      */
