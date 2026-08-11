@@ -15,6 +15,15 @@ use Carbon\Carbon;
 
 class DataControllerOptimized extends Controller
 {
+    /**
+     * Version des clés de cache des endpoints split.
+     * À incrémenter dès que la FORME ou le CALCUL d'un payload change : sans ça,
+     * un déploiement n'invalide rien et les anciennes réponses continuent d'être
+     * servies jusqu'à expiration du TTL.
+     * Doit rester synchronisée avec WarmupSplitEndpoints::SPLIT_CACHE_VERSION.
+     */
+    public const SPLIT_CACHE_VERSION = 8;
+
     private DashboardService $dashboardService;
     private CacheService $cacheService;
     
@@ -41,14 +50,14 @@ class DataControllerOptimized extends Controller
                 'end_date' => $params['end_date'],
                 'operator' => $params['operator'],
             ];
-            $rawKey = 'split_raw:' . $section . ':' . md5(json_encode($simpleKey));
+            $rawKey = 'split_raw:v' . self::SPLIT_CACHE_VERSION . ':' . $section . ':' . md5(json_encode($simpleKey));
             $cached = Cache::get($rawKey);
             if ($cached) {
                 return response($cached, 200)->header('Content-Type', 'application/json');
             }
             
             // Fallback: try full params key (legacy)
-            $fullKey = 'split_raw:' . $section . ':' . md5(json_encode($params));
+            $fullKey = 'split_raw:v' . self::SPLIT_CACHE_VERSION . ':' . $section . ':' . md5(json_encode($params));
             $cached = Cache::get($fullKey);
             if ($cached) {
                 return response($cached, 200)->header('Content-Type', 'application/json');
@@ -522,7 +531,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:kpis:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':kpis:' . md5(json_encode($params));
             $kpis = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 return $this->dashboardService->getKPIsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
             });
@@ -558,7 +567,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:merchants:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':merchants:' . md5(json_encode($params));
             $merchants = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 return $this->dashboardService->getMerchantsOptimizedPublic($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params['operator']);
             });
@@ -593,7 +602,7 @@ class DataControllerOptimized extends Controller
             $startBound = Carbon::parse($params['start_date'])->startOfDay();
             $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:transactions:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':transactions:' . md5(json_encode($params));
             $transactions = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $params) {
                 return $this->dashboardService->getTransactionsDataPublic($startBound, $endExclusive, $params['operator']);
             });
@@ -629,7 +638,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:subscriptions:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':subscriptions:' . md5(json_encode($params));
             $subscriptions = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $params, $compStartBound, $compEndExclusive) {
                 return $this->dashboardService->getSubscriptionsDataPublic($startBound, $endExclusive, $params['operator'], $compStartBound, $compEndExclusive);
             });
@@ -731,7 +740,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:ooredoo:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':ooredoo:' . md5(json_encode($params));
             $ooredooStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive) {
                 $daily = $this->dashboardService->getOoredooDailyStatisticsPublic($startBound, $endExclusive);
                 $dailyComp = $this->dashboardService->getOoredooDailyStatisticsPublic($compStartBound, $compEndExclusive);
@@ -774,7 +783,7 @@ class DataControllerOptimized extends Controller
             $compStartBound = Carbon::parse($params['comparison_start_date'])->startOfDay();
             $compEndExclusive = Carbon::parse($params['comparison_end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:timwe:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':timwe:' . md5(json_encode($params));
             $timweStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive, $compStartBound, $compEndExclusive, $params) {
                 $daily = $this->dashboardService->getDailyStatistics($startBound, $endExclusive, $params['operator']);
                 $dailyComp = $this->dashboardService->getDailyStatistics($compStartBound, $compEndExclusive, $params['operator']);
@@ -809,7 +818,7 @@ class DataControllerOptimized extends Controller
             $startBound = Carbon::parse($params['start_date'])->startOfDay();
             $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
             
-            $cacheKey = 'split:eklektik:' . md5(json_encode($params));
+            $cacheKey = 'split:v' . self::SPLIT_CACHE_VERSION . ':eklektik:' . md5(json_encode($params));
             $eklektikStats = Cache::remember($cacheKey, 3600, function() use ($startBound, $endExclusive) {
                 $daily = \App\Models\EklektikStatsDaily::where('date', '>=', $startBound->toDateString())
                     ->where('date', '<', $endExclusive->toDateString())

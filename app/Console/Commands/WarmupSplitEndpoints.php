@@ -11,6 +11,12 @@ use App\Services\DashboardService;
 
 class WarmupSplitEndpoints extends Command
 {
+    /**
+     * Doit rester identique à DataControllerOptimized::SPLIT_CACHE_VERSION,
+     * sinon le warmup écrit dans des clés que le contrôleur ne lit jamais.
+     */
+    public const SPLIT_CACHE_VERSION = \App\Http\Controllers\Api\DataControllerOptimized::SPLIT_CACHE_VERSION;
+
     protected $signature = 'dashboard:warmup-split
         {--periods=14d,1M,6M,12M,lifetime : Comma-separated period labels}
         {--operator=ALL : Operator to warm up}
@@ -94,7 +100,7 @@ class WarmupSplitEndpoints extends Command
                     ]);
                     
                     // Store with full params key (legacy)
-                    $rawKeyFull = 'split_raw:' . $ep . ':' . md5(json_encode($params));
+                    $rawKeyFull = 'split_raw:v' . self::SPLIT_CACHE_VERSION . ':' . $ep . ':' . md5(json_encode($params));
                     Cache::put($rawKeyFull, $fullResponse, $ttl);
                     
                     // Store with simplified key (start_date + end_date + operator only)
@@ -103,7 +109,7 @@ class WarmupSplitEndpoints extends Command
                         'end_date' => $params['end_date'],
                         'operator' => $params['operator'],
                     ];
-                    $rawKeySimple = 'split_raw:' . $ep . ':' . md5(json_encode($simpleKey));
+                    $rawKeySimple = 'split_raw:v' . self::SPLIT_CACHE_VERSION . ':' . $ep . ':' . md5(json_encode($simpleKey));
                     Cache::put($rawKeySimple, $fullResponse, $ttl);
                     
                     $elapsed = round((microtime(true) - $epStart) * 1000);
