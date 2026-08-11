@@ -155,6 +155,14 @@ class DashboardService
         return $this->subscriptionService->streamSubscriptionDetails($startBound, $endExclusive, $selectedOperator);
     }
 
+    /**
+     * Une page du tableau des abonnements, paginée côté serveur.
+     */
+    public function paginateSubscriptionDetailsPublic(Carbon $startBound, Carbon $endExclusive, string $selectedOperator, int $page, int $perPage): array
+    {
+        return $this->subscriptionService->paginateSubscriptionDetails($startBound, $endExclusive, $selectedOperator, $page, $perPage);
+    }
+
     public function getUserSubscriptions(int $clientId): array
     {
         return $this->subscriptionService->getUserSubscriptions($clientId);

@@ -711,6 +711,49 @@ class DataControllerOptimized extends Controller
     }
 
     /**
+     * Une page du tableau des abonnements.
+     *
+     * Le tableau n'est plus alimenté par le payload de la section subscriptions
+     * (plafonné à 1000 lignes) : il demande sa page au serveur, ce qui lui donne
+     * accès à la totalité de la période sans alourdir le chargement initial.
+     */
+    public function getSubscriptionsPage(Request $request): JsonResponse
+    {
+        set_time_limit(120);
+
+        try {
+            $params = $this->validateAndNormalizeParams($request);
+            $user = auth()->user();
+            $params['operator'] = $this->validateOperatorAccess($user, $params['operator']);
+
+            $page = max(1, (int) $request->input('page', 1));
+            // Borné pour qu'un paramètre fabriqué à la main ne puisse pas
+            // demander 1 million de lignes d'un coup.
+            $perPage = min(200, max(1, (int) $request->input('per_page', 25)));
+
+            $startBound = Carbon::parse($params['start_date'])->startOfDay();
+            $endExclusive = Carbon::parse($params['end_date'])->addDay()->startOfDay();
+
+            $result = $this->dashboardService->paginateSubscriptionDetailsPublic(
+                $startBound,
+                $endExclusive,
+                $params['operator'],
+                $page,
+                $perPage
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $result['data'],
+                'meta' => $result['meta'],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('getSubscriptionsPage: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Tronque une date SQL ("2026-01-15 08:30:00") au jour ("2026-01-15").
      */
     private function formatExportDate($value): string

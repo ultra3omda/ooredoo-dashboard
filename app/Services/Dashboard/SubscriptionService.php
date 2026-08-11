@@ -514,7 +514,14 @@ class SubscriptionService
             $query->addSelect(DB::raw("(SELECT cpm2.country_payments_methods_name FROM country_payments_methods cpm2 WHERE cpm2.country_payments_methods_id = ca.country_payments_methods_id LIMIT 1) as operator"));
         }
 
-        return $query->orderByDesc('ca.client_abonnement_creation');
+        // Départage obligatoire : des milliers d'abonnements partagent la même
+        // date de création. Sans second critère, MySQL est libre de renvoyer ces
+        // lignes dans un ordre différent d'une requête à l'autre, et la
+        // pagination serveur afficherait alors des doublons ou sauterait des
+        // lignes entre deux pages.
+        return $query
+            ->orderByDesc('ca.client_abonnement_creation')
+            ->orderByDesc('ca.client_abonnement_id');
     }
 
     private function getSubscriptionDetails(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): array
@@ -539,6 +546,46 @@ class SubscriptionService
     public function streamSubscriptionDetails(Carbon $startBound, Carbon $endExclusive, string $selectedOperator): \Generator
     {
         yield from $this->buildSubscriptionDetailsQuery($startBound, $endExclusive, $selectedOperator)->cursor();
+    }
+
+    /**
+     * Une page du tableau des abonnements, découpée côté serveur.
+     *
+     * Remplace l'ancien fonctionnement où l'intégralité des lignes (plafonnée à
+     * 1000) était envoyée au navigateur qui paginait ensuite en mémoire : le
+     * tableau peut désormais parcourir la totalité de la période sans que le
+     * payload grossisse.
+     */
+    public function paginateSubscriptionDetails(
+        Carbon $startBound,
+        Carbon $endExclusive,
+        string $selectedOperator,
+        int $page,
+        int $perPage
+    ): array {
+        $query = $this->buildSubscriptionDetailsQuery($startBound, $endExclusive, $selectedOperator);
+
+        // Le COUNT est coûteux sur de longues périodes et ne change pas d'une
+        // page à l'autre : on le mémorise le temps de parcourir le tableau.
+        $countKey = 'subs_details_count:' . md5(json_encode([
+            $startBound->toDateString(),
+            $endExclusive->toDateString(),
+            $selectedOperator,
+        ]));
+        $total = (int) Cache::remember($countKey, 300, fn() => (clone $query)->count());
+
+        $rows = $query->forPage($page, $perPage)->get();
+
+        return [
+            'data' => $rows->map(fn($item) => (array) $item)->toArray(),
+            'meta' => [
+                'total' => $total,
+                'page' => $page,
+                'per_page' => $perPage,
+                'last_page' => $perPage > 0 ? (int) ceil($total / $perPage) : 1,
+                'period' => $startBound->toDateString() . ' - ' . $endExclusive->copy()->subDay()->toDateString(),
+            ],
+        ];
     }
 
     private function calculateActivationsByPaymentMethod(Carbon $startBound, Carbon $endExclusive, string $operatorFilter): array

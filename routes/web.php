@@ -97,6 +97,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/dashboard/subscriptions', [DataController::class, 'getSubscriptions'])->name('api.dashboard.subscriptions');
         
         // Endpoints split pour chargement progressif (nécessitent session web)
+        // Tableau des abonnements paginé côté serveur (accès à toute la période)
+        Route::get('/api/dashboard/subscriptions-page', [DataControllerOptimized::class, 'getSubscriptionsPage'])->name('api.dashboard.subscriptions.page');
+
         // Export CSV intégral des abonnements (aucun plafond, réponse streamée)
         Route::get('/api/dashboard/export/subscriptions', [DataControllerOptimized::class, 'exportSubscriptions'])->name('api.dashboard.export.subscriptions');
 
